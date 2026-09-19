@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\api\RestaurantOrder.Api.csproj" />
+    <ProjectReference Include="..\..\apps\worker\RestaurantOrder.Worker.csproj" />
   </ItemGroup>
 
 </Project>

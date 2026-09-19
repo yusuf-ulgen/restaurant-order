@@ -7,52 +7,79 @@ To guarantee 99.99% availability during peak lunch and dinner services, producti
 ```
 [ Ingress / Load Balancer ]
             │
-            ├────── (Active 100% Traffic) ─────► [ SLOT BLUE (v1.2.0) ]
+            ├────── (Active 100% Traffic) ─────► [ SLOT BLUE  (v1.2.0 - Port 5001) ]
             │
-            └────── (Idle / Internal Smoke) ───► [ SLOT GREEN (v1.3.0) ]
+            └────── (Idle / Internal Smoke) ───► [ SLOT GREEN (v1.3.0 - Port 5002) ]
 ```
 
----
-
-## 2. Step-by-Step Deployment Procedure
-
-### Phase 1: Pre-Deployment Preparation
-1. Verify the current active slot (e.g., `Blue` is serving production traffic).
-2. Confirm the database is backward-compatible with the incoming version (see [docs/DELIVERY.md](file:///d:/freelance/restaurant-order/docs/DELIVERY.md)).
-3. Check system health dashboards: ensure error rates are `< 0.05%` and DB connection pools are healthy.
-
-### Phase 2: Deploy to Idle Slot (Green)
-1. Deploy the release artifact to the idle slot (`Green`).
-2. Run automated container health checks:
-   - `GET /health/liveness` -> `200 OK`
-   - `GET /health/readiness` -> `200 OK` (verifies DB, Redis, and socket listeners).
-
-### Phase 3: Internal Smoke Testing on Idle Slot
-Execute automated smoke tests against the private internal URL of the idle slot (`https://green.internal.restaurant-order`):
-- [ ] Authenticate staff member with PIN.
-- [ ] Create a test order and verify KDS ticket emission.
-- [ ] Verify test ESC/POS print job spooling.
-- [ ] Verify bill calculation and tax breakdown.
-
-### Phase 4: Traffic Cutover
-1. Update the load balancer / reverse proxy upstream pool to route 100% of production traffic to `Green`.
-2. Confirm traffic shift on ingress metrics within 30 seconds.
-
-### Phase 5: Post-Cutover Observation (15 Minutes)
-- Monitor real-time error rates, WebSocket connection count, and payment gateway responses.
-- If error rate exceeds `0.5%` or KDS tickets fail to load, initiate immediate rollback.
+Both slots run the **exact same immutable container image digest** (`IMAGE_DIGEST`), isolating state via environment variables.
 
 ---
 
-## 3. Immediate Rollback Runbook (< 60 Seconds)
+## 2. Worker Safety & Concurrent Execution Guard
 
-If any critical failure occurs post-cutover:
+When Blue and Green containers run concurrently during deployment overlap, background workers must **not** duplicate work:
 
-1. **Switch Ingress Immediately:**
-   Revert the load balancer upstream configuration back to `Blue` with one command.
-2. **Verify Blue Traffic:**
-   Confirm production requests are hitting `Blue` and returning `200 OK`.
-3. **Isolate Green:**
-   Keep `Green` alive for forensic log analysis and memory dump collection.
-4. **Declare Incident:**
-   Follow [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md) for Sev-1 / Sev-2 notifications.
+1. **Activation Guard (`IWorkerActivationGuard`):**
+   - Each worker instance receives its `DEPLOYMENT_COLOR` and the current `ACTIVE_DEPLOYMENT_SLOT`.
+   - If `DEPLOYMENT_COLOR == ACTIVE_DEPLOYMENT_SLOT`, the worker enters `Active` state and processes queues.
+   - If `DEPLOYMENT_COLOR != ACTIVE_DEPLOYMENT_SLOT`, the worker enters `Standby` state: queue consumption, cron schedules, and thermal print spools are paused.
+2. **Fail-Closed Behavior:**
+   - In Staging and Production, if `DEPLOYMENT_COLOR` or `ACTIVE_DEPLOYMENT_SLOT` is unconfigured or invalid, the worker immediately fails closed (`Status = Error`) and refuses to execute work.
+3. **Distributed Lease Contract (`IWorkerLeaseManager`):**
+   - Dynamic lease management across worker replicas requires an external distributed lock provider (`[Requires Distributed Lease Provider: Redis Redlock or Postgres Advisory Lock]`).
+   - If lease renewal fails, the worker fails closed immediately.
+4. **Idempotency Requirement:**
+   - All background jobs (order state transitions, billing updates, push notifications) must enforce idempotency keys to guarantee at-most-once side effects.
+
+---
+
+## 3. Automated Blue-Green Operational Commands
+
+All operational commands run in **dry-run mode by default**. No live traffic is shifted without explicit operator confirmation flags (`--confirm-cutover`, `--execute`).
+
+### 3.1. Complete Pipeline (Orchestrator)
+
+```bash
+# Safe dry-run check (Recommended before any deployment)
+pnpm blue-green:check
+# Or directly:
+node scripts/blue-green/orchestrator.mjs --dry-run
+
+# Live production execution (Requires operator confirmation)
+node scripts/blue-green/orchestrator.mjs --execute --confirm-cutover
+```
+
+### 3.2. Individual Command Boundaries
+
+| Stage | Command | Description |
+| :--- | :--- | :--- |
+| **1. Preflight** | `node scripts/blue-green/preflight.mjs` | Validates slots, compose files, and image digest |
+| **2. Config Validate**| `node scripts/blue-green/config-validate.mjs` | Validates environment contracts and security rules |
+| **3. Migration Check**| `node scripts/blue-green/migration-check.mjs` | Verifies Expand-Migrate-Contract compliance |
+| **4. Deploy Inactive**| `node scripts/blue-green/deploy-inactive.mjs` | Launches idle slot containers (dry-run default) |
+| **5. Health Check** | `node scripts/blue-green/health-check.mjs` | Probes `/health/live` and `/health/ready` |
+| **6. Warmup** | `node scripts/blue-green/warmup.mjs` | Exercises endpoints to warm JIT & connection pools |
+| **7. Smoke** | `node scripts/blue-green/smoke.mjs` | Runs non-mutating smoke tests on idle slot |
+| **8. Cutover** | `node scripts/blue-green/cutover.mjs --confirm-cutover` | Shifts live traffic upstream to new slot |
+| **9. Observe** | `node scripts/blue-green/observe.mjs` | Monitors post-cutover metrics (< 0.05% error rate) |
+| **10. Drain Old** | `node scripts/blue-green/drain-old.mjs` | Drains connections and stops retired slot |
+
+---
+
+## 4. Immediate Emergency Rollback (< 60 Seconds)
+
+If post-cutover observation reveals errors exceeding `0.05%` or KDS disruption:
+
+```bash
+# Safe dry-run rollback plan
+node scripts/blue-green/rollback.mjs --dry-run
+
+# Live emergency rollback
+node scripts/blue-green/rollback.mjs --execute --confirm-rollback
+```
+
+### 4.1. Rollback Invariants
+1. **Immediate Ingress Switch:** Reverts traffic back to the previous safe slot within 60 seconds.
+2. **Forensic Preservation:** The failed slot container is **retained in isolated mode** for memory dump extraction and log analysis.
+3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md).

@@ -14,5 +14,11 @@ RUN pnpm --filter ${APP_NAME} build
 FROM nginx:alpine AS final
 ARG APP_NAME=customer-web
 COPY --from=build /app/apps/${APP_NAME}/dist /usr/share/nginx/html
-EXPOSE 80
+
+# Hardened unprivileged nginx execution
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html
+USER nginx
+
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

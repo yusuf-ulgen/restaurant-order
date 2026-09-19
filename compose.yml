@@ -1,0 +1,44 @@
+# ==============================================================================
+# BASE DOCKER COMPOSE CONFIGURATION (compose.yml)
+# ==============================================================================
+# Shared base service definitions, security controls, and networking contracts.
+# Environment-specific overrides:
+#   - Development:       compose.dev.yml
+#   - Staging:           compose.staging.yml
+#   - Production Blue:   compose.prod.blue.yml
+#   - Production Green:  compose.prod.green.yml
+# ==============================================================================
+
+services:
+  api:
+    image: ${API_IMAGE:-restaurant-order-api}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health/live || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  worker:
+    image: ${WORKER_IMAGE:-restaurant-order-worker}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+
+networks:
+  app_internal:
+    driver: bridge
+    name: restaurant_order_net

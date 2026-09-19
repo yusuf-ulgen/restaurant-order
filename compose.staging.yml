@@ -1,0 +1,76 @@
+# ==============================================================================
+# STAGING DOCKER COMPOSE OVERRIDE (compose.staging.yml)
+# ==============================================================================
+# Usage: docker compose -f compose.yml -f compose.staging.yml up -d
+# Database & Redis ports are strictly internal and NOT bound to the host.
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurant-order-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant_order_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging_secure_pass_placeholder}
+    # No public port binding! Internal network only.
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-restaurant_order_staging}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: restaurant-order-redis-staging
+    restart: unless-stopped
+    # No public port binding! Internal network only.
+    volumes:
+      - redis_staging_data:/data
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    container_name: restaurant-order-api-staging
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      DATABASE_URL: ${DATABASE_URL:-Host=postgres;Port=5432;Database=restaurant_order_staging;Username=postgres;Password=staging_secure_pass_placeholder}
+      REDIS_URL: ${REDIS_URL:-redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-staging-jwt-secret-placeholder-32-chars!}
+      DEPLOYMENT_COLOR: ${DEPLOYMENT_COLOR:-blue}
+      PORT: 5000
+    ports:
+      - "${API_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    container_name: restaurant-order-worker-staging
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      DATABASE_URL: ${DATABASE_URL:-Host=postgres;Port=5432;Database=restaurant_order_staging;Username=postgres;Password=staging_secure_pass_placeholder}
+      REDIS_URL: ${REDIS_URL:-redis:6379}
+      DEPLOYMENT_COLOR: ${DEPLOYMENT_COLOR:-blue}
+      ACTIVE_DEPLOYMENT_SLOT: ${ACTIVE_DEPLOYMENT_SLOT:-blue}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_staging_data:
+  redis_staging_data:

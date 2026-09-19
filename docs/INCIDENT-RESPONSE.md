@@ -25,7 +25,11 @@
 
 ### 2.2. Incident War Room & Escalation
 - For **Sev-1** and **Sev-2** incidents, an emergency audio/chat bridge is opened immediately.
-- If an active release caused the incident, the immediate default action is **Blue-Green Rollback** (see [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md)).
+- If an active release caused the incident, the immediate default containment action is **Blue-Green Rollback**:
+  ```bash
+  node scripts/blue-green/rollback.mjs --execute --confirm-rollback
+  ```
+- See [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md) for full execution parameters and forensic retention details.
 
 ---
 

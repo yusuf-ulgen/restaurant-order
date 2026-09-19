@@ -15,7 +15,9 @@
     "test": "dotnet test && pnpm --filter @restaurant-order/ui test",
     "test:e2e": "pnpm --filter e2e-tests test",
     "build": "pnpm -r build",
-    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs",
+    "blue-green:check": "node scripts/blue-green/orchestrator.mjs --dry-run",
+    "blue-green:test": "node --test scripts/tests/blue-green.test.mjs",
+    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs",
     "verify": "pnpm verify:gates && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
