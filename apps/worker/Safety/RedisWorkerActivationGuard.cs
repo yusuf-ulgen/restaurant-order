@@ -20,12 +20,13 @@ public class RedisWorkerActivationGuard : IWorkerActivationGuard, IDisposable
     private readonly ILogger<RedisWorkerActivationGuard> _logger;
     private IConnectionMultiplexer? _multiplexer;
     private readonly bool _ownsMultiplexer;
+    private readonly string? _explicitSlotColor;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private string _cachedActiveSlot = "unconfigured";
     private WorkerActivationStatus _cachedStatus = WorkerActivationStatus.Standby;
     private string _lastLoggedState = "";
 
-    public string SlotColor => ResolveSlotColor();
+    public string SlotColor => _explicitSlotColor ?? ResolveSlotColor();
 
     public string ActiveSlot => _cachedActiveSlot;
 
@@ -53,7 +54,7 @@ public class RedisWorkerActivationGuard : IWorkerActivationGuard, IDisposable
         string slotColor = "blue")
         : this(null!, null!, logger, multiplexer)
     {
-        _cachedActiveSlot = slotColor;
+        _explicitSlotColor = slotColor;
     }
 
     public async Task<bool> IsActiveSlotAsync(CancellationToken cancellationToken = default)
