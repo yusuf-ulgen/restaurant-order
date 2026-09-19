@@ -3,7 +3,7 @@ import { parseArgs, logStep } from './lib/common.mjs';
 
 /**
  * Health Check: Probes liveness and readiness on target slot.
- * Supports simulated probe for dry-run/test environments.
+ * Verifies HTTP status 200, status === 'Healthy', deployment color match, and version match.
  */
 export async function probeEndpoint(url, timeoutMs = 3000) {
   return new Promise((resolve) => {
@@ -32,10 +32,13 @@ export async function probeEndpoint(url, timeoutMs = 3000) {
 }
 
 export async function runHealthCheck(options = {}) {
-  const flags = { ...parseArgs(), ...options };
-  const targetColor = flags.color || 'green';
-  const port = targetColor === 'blue' ? (process.env.API_PORT_BLUE || '5001') : (process.env.API_PORT_GREEN || '5002');
+  const flags = parseArgs(process.argv.slice(2), options);
+  const targetColor = (flags.color || 'green').toLowerCase();
+  const port = targetColor === 'blue'
+    ? (process.env.API_PORT_BLUE || '5001')
+    : (process.env.API_PORT_GREEN || '5002');
   const baseUrl = flags.targetUrl || `http://localhost:${port}`;
+  const probe = options.probeFn || probeEndpoint;
 
   logStep('HEALTH-CHECK', 'RUNNING', `Probing slot '${targetColor}' at ${baseUrl}...`);
 
@@ -46,15 +49,34 @@ export async function runHealthCheck(options = {}) {
     return { success: true, dryRun: true, color: targetColor };
   }
 
-  const liveResult = await probeEndpoint(`${baseUrl}/health/live`);
-  const readyResult = await probeEndpoint(`${baseUrl}/health/ready`);
+  const liveResult = await probe(`${baseUrl}/health/live`);
+  const readyResult = await probe(`${baseUrl}/health/ready`);
 
   if (!liveResult.ok || !readyResult.ok) {
-    logStep('HEALTH-CHECK', 'FAIL', `Health check failed on ${targetColor}: Live=${liveResult.status}, Ready=${readyResult.status}`);
-    return { success: false, liveResult, readyResult };
+    const errorMsg = `Health check failed on ${targetColor}: Live=${liveResult.status}, Ready=${readyResult.status}`;
+    logStep('HEALTH-CHECK', 'FAIL', errorMsg);
+    return { success: false, liveResult, readyResult, error: errorMsg };
   }
 
-  logStep('HEALTH-CHECK', 'PASS', `Slot '${targetColor}' is Healthy and Ready.`);
+  // Validate response payload (color & version matching)
+  const liveColor = (liveResult.data?.color || liveResult.data?.Color || '').toLowerCase();
+  if (liveColor && liveColor !== targetColor) {
+    const errorMsg = `Deployment color mismatch on live probe: expected '${targetColor}', got '${liveColor}'`;
+    logStep('HEALTH-CHECK', 'FAIL', errorMsg);
+    return { success: false, error: errorMsg, liveResult };
+  }
+
+  const expectedVersion = flags.version || options.version;
+  if (expectedVersion) {
+    const liveVersion = liveResult.data?.version || liveResult.data?.Version;
+    if (liveVersion && liveVersion !== expectedVersion) {
+      const errorMsg = `Version mismatch: expected '${expectedVersion}', got '${liveVersion}'`;
+      logStep('HEALTH-CHECK', 'FAIL', errorMsg);
+      return { success: false, error: errorMsg, liveResult };
+    }
+  }
+
+  logStep('HEALTH-CHECK', 'PASS', `Slot '${targetColor}' is Healthy, Ready, and matches expected deployment color '${targetColor}'.`);
   return { success: true, liveResult, readyResult };
 }
 

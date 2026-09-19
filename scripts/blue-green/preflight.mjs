@@ -1,14 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs, logStep, getInactiveColor } from './lib/common.mjs';
+import { resolveDigests } from './lib/manifest.mjs';
 
 /**
  * Preflight Check: Validates prerequisites before deploying to the inactive slot.
  * Ensures active and inactive colors are well-defined and distinct,
- * and validates image digest integrity.
+ * validates immutable image digests for API and Worker, and prohibits 'latest'.
  */
 export function runPreflight(options = {}) {
-  const flags = { ...parseArgs(), ...options };
+  const flags = parseArgs(process.argv.slice(2), options);
   const rootDir = process.cwd();
   const errors = [];
 
@@ -46,21 +47,46 @@ export function runPreflight(options = {}) {
     }
   }
 
-  // 3. Image Digest Parity Verification
-  const imageDigest = flags.imageDigest || process.env.IMAGE_DIGEST;
-  if (!imageDigest && flags.execute) {
-    errors.push('IMAGE_DIGEST must be specified when executing a production release.');
+  // 3. Image Digest & Manifest Parity Verification
+  const digestResult = resolveDigests({
+    apiImageDigest: flags.apiImageDigest,
+    workerImageDigest: flags.workerImageDigest,
+    imageDigest: flags.imageDigest,
+    manifestPath: flags.manifestPath,
+    execute: flags.execute,
+  });
+
+  if (flags.execute) {
+    if (!digestResult.success) {
+      errors.push(...digestResult.errors);
+    }
   }
 
   if (errors.length > 0) {
     for (const err of errors) {
       logStep('PREFLIGHT', 'FAIL', err);
     }
-    return { success: false, errors, activeColor, targetColor };
+    return {
+      success: false,
+      errors,
+      activeColor,
+      targetColor,
+      digests: digestResult,
+    };
   }
 
-  logStep('PREFLIGHT', 'PASS', `Active slot is '${activeColor}'. Target deployment slot is '${targetColor}'. Prerequisites satisfied.`);
-  return { success: true, activeColor, targetColor, imageDigest };
+  logStep(
+    'PREFLIGHT',
+    'PASS',
+    `Active slot is '${activeColor}'. Target slot is '${targetColor}'. Digests validated.`
+  );
+
+  return {
+    success: true,
+    activeColor,
+    targetColor,
+    digests: digestResult,
+  };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('preflight.mjs')) {

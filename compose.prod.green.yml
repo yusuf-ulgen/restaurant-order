@@ -3,11 +3,13 @@
 # ==============================================================================
 # Usage: docker compose -f compose.yml -f compose.prod.green.yml up -d
 # Green slot runs on port 5002 for zero-conflict concurrent blue-green deployment.
+# Immutable image digest pinning: uses @sha256:digest instead of tags.
 # Production DB and Redis are managed external services; no container ports exposed.
 # ==============================================================================
 
 services:
   api:
+    image: ${API_IMAGE:-restaurant-order-api}@${API_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
     container_name: restaurant-order-api-green
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -20,6 +22,7 @@ services:
       - "${API_PORT_GREEN:-5002}:5000"
 
   worker:
+    image: ${WORKER_IMAGE:-restaurant-order-worker}@${WORKER_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
     container_name: restaurant-order-worker-green
     environment:
       ASPNETCORE_ENVIRONMENT: Production

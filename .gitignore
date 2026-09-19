@@ -32,6 +32,12 @@ blob-report/
 *.cobertura.xml
 coverage.json
 
+# Deployment State & Journal
+.deployment-state.json
+.deployment-journal.jsonl
+.test-nginx/
+
 # OS Specific
 .DS_Store
 Thumbs.db
+

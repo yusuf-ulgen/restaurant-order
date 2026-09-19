@@ -25,8 +25,8 @@
     "build:frontend": "pnpm -r build",
     "build": "pnpm build:backend && pnpm build:frontend",
     "blue-green:check": "node scripts/blue-green/orchestrator.mjs --dry-run",
-    "blue-green:test": "node --test scripts/tests/blue-green.test.mjs",
-    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs",
+    "blue-green:test": "node --test scripts/tests/blue-green.test.mjs scripts/tests/blue-green-flow.test.mjs",
+    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-flow.test.mjs",
     "verify": "pnpm verify:gates && pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e && pnpm build"
   },
   "devDependencies": {

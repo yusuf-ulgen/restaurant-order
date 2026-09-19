@@ -1,35 +1,107 @@
 import { parseArgs, logStep, getInactiveColor } from './lib/common.mjs';
+import { defaultCommandRunner } from './lib/command-runner.mjs';
 
 /**
- * Deploy Inactive Color: Deploys containers to the idle/inactive slot.
- * Enforces dry-run by default.
+ * Deploy Inactive Color: Deploys containers to the idle/inactive slot using Docker Compose.
+ * Enforces recreation (--force-recreate) so new images take effect,
+ * verifies container state, and waits for container health.
  */
-export function runDeployInactive(options = {}) {
-  const flags = { ...parseArgs(), ...options };
+export async function runDeployInactive(options = {}) {
+  const flags = parseArgs(process.argv.slice(2), options);
+  const runner = options.runner || defaultCommandRunner;
   const activeColor = (process.env.ACTIVE_DEPLOYMENT_SLOT || 'blue').toLowerCase();
   const targetColor = flags.color || getInactiveColor(activeColor);
 
   logStep('DEPLOY-INACTIVE', 'RUNNING', `Preparing deployment to inactive slot '${targetColor}'...`);
 
   if (targetColor === activeColor) {
-    logStep('DEPLOY-INACTIVE', 'FAIL', `Cannot deploy to active slot '${activeColor}'. Must deploy to idle slot.`);
-    return { success: false, error: 'Target color matches active color' };
+    const errorMsg = `Cannot deploy to active slot '${activeColor}'. Must deploy to idle slot.`;
+    logStep('DEPLOY-INACTIVE', 'FAIL', errorMsg);
+    return { success: false, error: errorMsg };
   }
 
-  const composeCommand = `docker compose -f compose.yml -f compose.prod.${targetColor}.yml up -d --no-recreate`;
+  const composeArgs = [
+    'compose',
+    '-f', 'compose.yml',
+    '-f', `compose.prod.${targetColor}.yml`,
+    'up', '-d',
+    '--force-recreate',
+  ];
+
+  const composeCommand = `docker ${composeArgs.join(' ')}`;
 
   if (flags.dryRun) {
     logStep('DEPLOY-INACTIVE', 'DRY-RUN', `[SIMULATED] Would execute: ${composeCommand}`);
+    logStep('DEPLOY-INACTIVE', 'DRY-RUN', `[SIMULATED] Would poll health on restaurant-order-api-${targetColor}`);
     logStep('DEPLOY-INACTIVE', 'PASS', `Dry-run completed successfully for slot '${targetColor}'.`);
     return { success: true, dryRun: true, targetColor, composeCommand };
   }
 
-  logStep('DEPLOY-INACTIVE', 'PASS', `Deployed inactive slot '${targetColor}' successfully.`);
-  return { success: true, dryRun: false, targetColor, composeCommand };
+  // 1. Execute docker compose up
+  logStep('DEPLOY-INACTIVE', 'RUNNING', `Executing: ${composeCommand}`);
+  const upResult = await runner.run('docker', composeArgs);
+
+  if (!upResult.success) {
+    const errorMsg = `Docker compose up failed for slot '${targetColor}': ${upResult.stderr || upResult.stdout}`;
+    logStep('DEPLOY-INACTIVE', 'FAIL', errorMsg);
+    return { success: false, error: errorMsg, result: upResult };
+  }
+
+  // 2. Poll container health status
+  const containerName = `restaurant-order-api-${targetColor}`;
+  const timeoutMs = options.timeoutMs ?? 60000;
+  const pollIntervalMs = options.pollIntervalMs ?? 2000;
+  const startTime = Date.now();
+  let isHealthy = false;
+  let lastStatus = 'unknown';
+
+  logStep('DEPLOY-INACTIVE', 'RUNNING', `Waiting for container '${containerName}' to become healthy (timeout: ${timeoutMs}ms)...`);
+
+  while (Date.now() - startTime < timeoutMs) {
+    const inspectResult = await runner.run('docker', [
+      'inspect',
+      '--format',
+      '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}',
+      containerName,
+    ]);
+
+    if (inspectResult.success) {
+      const output = inspectResult.stdout.trim();
+      const [stateStatus, healthStatus] = output.split('|');
+      lastStatus = `${stateStatus} (${healthStatus})`;
+
+      if (stateStatus === 'running' && (healthStatus === 'healthy' || healthStatus === 'no-healthcheck')) {
+        isHealthy = true;
+        break;
+      }
+
+      if (stateStatus === 'exited' || stateStatus === 'dead') {
+        const errorMsg = `Container '${containerName}' terminated unexpectedly with state: ${stateStatus}`;
+        logStep('DEPLOY-INACTIVE', 'FAIL', errorMsg);
+        return { success: false, error: errorMsg, lastStatus };
+      }
+    }
+
+    if (options.skipHealthPoll) {
+      isHealthy = true;
+      break;
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  if (!isHealthy) {
+    const errorMsg = `Timeout waiting for '${containerName}' to become healthy. Last status: ${lastStatus}`;
+    logStep('DEPLOY-INACTIVE', 'FAIL', errorMsg);
+    return { success: false, error: errorMsg, lastStatus };
+  }
+
+  logStep('DEPLOY-INACTIVE', 'PASS', `Deployed inactive slot '${targetColor}' successfully. Container is healthy.`);
+  return { success: true, dryRun: false, targetColor, composeCommand, containerStatus: lastStatus };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('deploy-inactive.mjs')) {
-  const result = runDeployInactive();
+  const result = await runDeployInactive();
   if (!result.success) {
     process.exit(1);
   }

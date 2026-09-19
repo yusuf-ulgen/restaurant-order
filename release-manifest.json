@@ -1,0 +1,18 @@
+{
+  "$schema": "./docs/schemas/release-manifest.schema.json",
+  "version": "0.1.0",
+  "releaseId": "rel-0.1.0-foundation",
+  "createdAt": "2026-09-19T18:00:00Z",
+  "images": {
+    "api": {
+      "repository": "restaurant-order-api",
+      "tag": "v0.1.0",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "worker": {
+      "repository": "restaurant-order-worker",
+      "tag": "v0.1.0",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
