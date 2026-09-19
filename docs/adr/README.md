@@ -23,18 +23,16 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 
 ---
 
-## 3. Pending & Planned ADRs
+## 3. Decision Records
 
 | ADR ID | Title | Status | Primary Focus |
 | :--- | :--- | :--- | :--- |
-| `ADR-001` | Architecture Pattern: Modular Monolith vs Microservices | `PROPOSED` | System modularity & deployment boundaries |
-| `ADR-002` | Backend Language & Runtime Selection | `PROPOSED` | Node.js (TypeScript) vs Go |
-| `ADR-003` | Multi-Tenant Data Isolation Strategy | `PROPOSED` | PostgreSQL Row-Level Security vs Schema-per-tenant |
-| `ADR-004` | Frontend Web & Mobile Application Framework | `PROPOSED` | React/Next.js vs Vite SPA across 5 surfaces |
-| `ADR-005` | Realtime Event Transport Architecture | `PROPOSED` | WebSockets vs Server-Sent Events (SSE) |
-| `ADR-006` | Distributed Caching & Pub/Sub Broker | `PROPOSED` | Redis vs In-Memory Pub/Sub |
-| `ADR-007` | ESC/POS Thermal Printing Integration Pattern | `PROPOSED` | Local Branch Print Agent vs Cloud Direct Socket |
-| `ADR-008` | Digital Payment Gateway Integration Strategy | `PROPOSED` | Multi-gateway abstraction layer |
+| [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) | Core Technology Stack & Monorepo Foundation | `ACCEPTED` | React 19, .NET 10, Modular Monolith, SignalR, Redis, Postgres |
+| [ADR-0002](file:///d:/freelance/restaurant-order/docs/adr/0002-persistence-selection.md) | Data Persistence Library Selection | `PROPOSED` | Comparative evaluation of EF Core, Dapper, and Marten |
+| `ADR-0003` | Multi-Tenant Data Isolation Strategy | `PROPOSED` | PostgreSQL Row-Level Security vs Schema-per-tenant |
+| `ADR-0004` | Realtime Event Transport Architecture | `PROPOSED` | SignalR Hubs & Redis Backplane Design |
+| `ADR-0005` | ESC/POS Thermal Printing Integration Pattern | `PROPOSED` | Local Branch Print Agent vs Cloud Direct Socket |
+| `ADR-0006` | Digital Payment Gateway Integration Strategy | `PROPOSED` | Multi-gateway abstraction layer |
 
 ---
 

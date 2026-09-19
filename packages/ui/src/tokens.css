@@ -1,0 +1,39 @@
+:root {
+  /* Brand Palette */
+  --ro-color-primary: #e63946;
+  --ro-color-primary-hover: #d62828;
+  --ro-color-secondary: #1d3557;
+  --ro-color-accent: #457b9d;
+
+  /* Neutral & Base */
+  --ro-color-bg: #f8f9fa;
+  --ro-color-surface: #ffffff;
+  --ro-color-text: #1a1a1a;
+  --ro-color-text-muted: #6c757d;
+  --ro-color-border: #e9ecef;
+
+  /* Semantic Status */
+  --ro-color-success: #2a9d8f;
+  --ro-color-warning: #e76f51;
+  --ro-color-danger: #d90429;
+  --ro-color-info: #0077b6;
+
+  /* Typography */
+  --ro-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ro-font-mono: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Sizing & Radius */
+  --ro-radius-sm: 4px;
+  --ro-radius-md: 8px;
+  --ro-radius-lg: 12px;
+  --ro-radius-full: 9999px;
+
+  /* Shadows */
+  --ro-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ro-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --ro-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --ro-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ro-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}

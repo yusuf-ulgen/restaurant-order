@@ -8,27 +8,41 @@ The repository will be structured as a modular workspace cleanly separating core
 restaurant-order/
 ├── AGENTS.md                          # Master binding agent & contributor instructions
 ├── README.md                          # Repository overview & quick start
+├── pnpm-workspace.yaml                # Monorepo workspace configuration
+├── package.json                       # Root scripts and dev tooling
+├── pnpm-lock.yaml                     # Single unified lockfile
+├── RestaurantOrder.sln                # .NET 10 unified solution
+├── global.json                        # .NET 10 SDK pin
+├── .editorconfig                      # Multi-language formatting standards
+├── .gitignore                         # Git exclusion rules
+├── .env.example                       # Local environment variables template
 ├── docs/                              # Architecture, domain, product & operations docs
-│   ├── adr/                           # Architecture Decision Records
+│   ├── adr/                           # Architecture Decision Records (ADR-0001, ADR-0002)
 │   ├── runbooks/                      # Operations & deployment runbooks
 │   └── templates/                     # ADR, feature, and incident templates
-├── apps/                              # [Planned / Phase 1] Surface applications
-│   ├── customer-qr-web/               # Surface 1: Mobile-first QR guest web app
-│   ├── waiter-mobile/                 # Surface 2: Waiter & floor operations web app
-│   ├── kitchen-kds/                   # Surface 3: Kitchen & Bar display system
-│   ├── restaurant-admin/              # Surface 4: Restaurant & branch management portal
-│   └── super-admin/                   # Surface 5: Platform multi-tenant control plane
-├── packages/                          # [Planned / Phase 1] Shared libraries
-│   ├── domain/                        # Core domain models, state machines & validation
-│   ├── database/                      # DB schema, migrations & RLS policies
-│   ├── api-client/                    # Typed API client SDK & contracts
-│   ├── ui-components/                 # Shared design system components & styles
-│   ├── realtime-events/               # Shared event types & payload schemas
-│   └── printer-protocol/              # ESC/POS command builder & network drivers
-└── tools/                             # [Planned / Phase 1] Local dev & verification tools
+├── apps/                              # Surface applications & backend hosts
+│   ├── customer-web/                  # Surface 1: Responsive PWA QR guest web app (React 19 + Vite)
+│   ├── operations-web/                # Surface 2: Waiter & operations web app (React 19 + Vite)
+│   ├── admin-web/                     # Surface 4 & 5: Restaurant & Super Admin portal (React 19 + Vite)
+│   ├── api/                           # ASP.NET Core 10 Modular Monolith REST API
+│   └── worker/                        # .NET 10 Background Worker Host
+├── packages/                          # Shared monorepo packages
+│   ├── ui/                            # Design tokens & core shared UI components (React 19)
+│   ├── contracts/                     # OpenAPI contract boundary & shared DTO types
+│   └── config/                        # Shared TypeScript, ESLint & toolchain configurations
+├── tests/                             # Quality & verification suites
+│   ├── architecture/                  # .NET architecture boundary tests
+│   ├── integration/                   # ASP.NET Core integration tests (/health endpoints)
+│   └── e2e/                           # Playwright end-to-end test suite
+├── deploy/                            # Containerization & local infrastructure
+│   ├── docker-compose.yml             # Local PostgreSQL 16 & Redis 7 services
+│   └── docker/                        # Multi-stage Dockerfiles (api, worker, web)
+└── scripts/                           # Tooling & verification scripts
+    ├── verify.ps1                     # Full monorepo verification pipeline
+    └── dev.ps1                        # Local development environment launcher
 ```
 
-> **Phase 0 Notice:** In this initial foundation phase, no application code, package manifests (`package.json`), Docker configurations, or CI workflows are created.
+> **Foundation Status:** The monorepo technical foundation is scaffolded with React 19 frontend shells, ASP.NET Core 10 API starter endpoints (`/health/live`, `/health/ready`), .NET 10 background worker host, and shared TypeScript configuration and UI packages. No business domain logic or premature database schema has been added yet.
 
 ---
 

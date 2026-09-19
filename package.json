@@ -1,0 +1,30 @@
+{
+  "name": "restaurant-order",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "dev:customer": "pnpm --filter customer-web dev",
+    "dev:operations": "pnpm --filter operations-web dev",
+    "dev:admin": "pnpm --filter admin-web dev",
+    "dev": "pnpm --filter \"./apps/*-web\" --parallel dev",
+    "lint": "eslint \"apps/*/src/**/*.{ts,tsx}\" \"packages/*/src/**/*.{ts,tsx}\"",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test:unit": "dotnet test",
+    "test": "dotnet test",
+    "test:e2e": "pnpm --filter e2e-tests test",
+    "build": "pnpm -r build",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "eslint": "^9.21.0",
+    "globals": "^16.0.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0"
+  }
+}

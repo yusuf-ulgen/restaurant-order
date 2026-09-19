@@ -77,18 +77,22 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 
 ---
 
-## 3. Technology Stack Decisions (Status: Proposed / TBD)
+## 3. Technology Stack Decisions (Status: ADR Governed)
 
-| Component | Proposed Technology | Decision Status | ADR Reference |
+| Component | Selected / Proposed Technology | Decision Status | ADR Reference |
 | :--- | :--- | :--- | :--- |
-| **Backend Architecture** | Modular Monolith (Clean Architecture) | `[Proposed / ADR Required]` | `ADR-001` (Pending) |
-| **Backend Runtime** | Node.js (TypeScript) or Go | `[Proposed / ADR Required]` | `ADR-002` (Pending) |
-| **Database Engine** | PostgreSQL with Row-Level Security (RLS) | `[Proposed / ADR Required]` | `ADR-003` (Pending) |
-| **Frontend Web Framework**| React / Next.js or Vite SPA | `[Proposed / ADR Required]` | `ADR-004` (Pending) |
-| **Realtime Transport** | WebSockets via Socket.io or Native WS | `[Proposed / ADR Required]` | `ADR-005` (Pending) |
-| **Cache & Event Bus** | Redis | `[Proposed / ADR Required]` | `ADR-006` (Pending) |
-| **Thermal Printing Bridge**| Node/Go local socket daemon or direct IP | `[Proposed / ADR Required]` | `ADR-007` (Pending) |
-| **Payment Gateway** | Multi-provider adapter (Stripe, Iyzico, etc.) | `[Proposed / ADR Required]` | `ADR-008` (Pending) |
+| **Monorepo & Package Manager**| `pnpm` workspaces + single root lockfile | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Backend Architecture** | Modular Monolith (Clean Architecture) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Backend Runtime** | .NET 10 ASP.NET Core | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Frontend Framework** | React 19 + Vite (TypeScript strict, PWA-first)| `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Realtime Transport** | ASP.NET Core SignalR | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Cache & Realtime Broker** | Redis 7 | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Database Engine** | PostgreSQL 16 (Multi-tenant RLS) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Background Processing** | Separate Worker Host (`apps/worker`) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Containers & Local Dev** | Docker & Docker Compose | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
+| **Data Persistence Library**| EF Core 10 vs Dapper vs Marten | `PROPOSED` | [ADR-0002](file:///d:/freelance/restaurant-order/docs/adr/0002-persistence-selection.md) |
+| **Thermal Printing Bridge** | Node/Go local socket daemon or direct IP | `[Proposed / ADR Required]` | `ADR-0005` (Pending) |
+| **Payment Gateway** | Multi-provider adapter (Stripe, Iyzico, etc.) | `[Proposed / ADR Required]` | `ADR-0006` (Pending) |
 
 ---
 
