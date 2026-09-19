@@ -1,0 +1,88 @@
+name: CI Quality & Verification Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  quality-and-verification:
+    name: Repository Quality Gates & Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+          run_install: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install pnpm Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gate 1: Repository Policy (File Size Limits)
+      - name: Gate 1 - File Size Limits (450 Warning / 600 Ceiling)
+        run: node scripts/check-file-size.mjs
+
+      # Gate 2: Documentation & Link Integrity
+      - name: Gate 2 - Documentation & Link Validation
+        run: node scripts/check-docs.mjs
+
+      # Gate 3: Secret Scanning
+      - name: Gate 3 - Secret & Credential Scanning
+        run: node scripts/check-secrets.mjs
+
+      # Gate 4: Code Formatting / Standards & Gate Unit Tests
+      - name: Gate 4 - Quality Gate Scripts Unit Tests
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs
+
+      # Gate 5: ESLint
+      - name: Gate 5 - ESLint
+        run: pnpm lint
+
+      # Gate 6: TypeScript Strict Typecheck
+      - name: Gate 6 - TypeScript Typecheck
+        run: pnpm typecheck
+
+      # Gate 7: Architecture Tests
+      - name: Gate 7 - .NET Architecture Boundary Tests
+        run: dotnet test tests/architecture/RestaurantOrder.ArchitectureTests.csproj -c Release
+
+      # Gate 8: Unit & Integration Tests
+      - name: Gate 8a - .NET Unit Tests
+        run: dotnet test tests/unit/RestaurantOrder.UnitTests.csproj -c Release
+
+      - name: Gate 8b - .NET Integration Tests
+        run: dotnet test tests/integration/RestaurantOrder.IntegrationTests.csproj -c Release
+
+      - name: Gate 8c - Frontend Component Tests (Vitest)
+        run: pnpm --filter @restaurant-order/ui test
+
+      # Gate 9: Production Build
+      - name: Gate 9a - .NET Solution Build
+        run: dotnet build RestaurantOrder.sln -c Release --no-restore
+
+      - name: Gate 9b - Frontend Applications Build
+        run: pnpm build
+
+      # Gate 10: Docker Compose Validation
+      - name: Gate 10 - Docker Compose Config Validation
+        run: docker compose -f deploy/docker-compose.yml config

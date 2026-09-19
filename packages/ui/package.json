@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "test": "echo \"@restaurant-order/ui: no unit tests yet\""
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.0.0",

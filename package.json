@@ -11,20 +11,25 @@
     "dev": "pnpm --filter \"./apps/*-web\" --parallel dev",
     "lint": "eslint \"apps/*/src/**/*.{ts,tsx}\" \"packages/*/src/**/*.{ts,tsx}\"",
     "typecheck": "pnpm -r --parallel typecheck",
-    "test:unit": "dotnet test",
-    "test": "dotnet test",
+    "test:unit": "dotnet test tests/unit/RestaurantOrder.UnitTests.csproj && pnpm --filter @restaurant-order/ui test",
+    "test": "dotnet test && pnpm --filter @restaurant-order/ui test",
     "test:e2e": "pnpm --filter e2e-tests test",
     "build": "pnpm -r build",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs",
+    "verify": "pnpm verify:gates && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
     "@types/node": "^22.13.9",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "eslint": "^9.21.0",
     "globals": "^16.0.0",
+    "jsdom": "^26.0.0",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.26.0"
+    "typescript-eslint": "^8.26.0",
+    "vitest": "^3.0.7"
   }
 }

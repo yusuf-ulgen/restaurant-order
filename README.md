@@ -77,12 +77,41 @@ Detailed technical and domain documentation is organized under the [`docs/`](fil
 
 ---
 
-## 5. Contributor & Agent Guidelines
+## 5. Automated Quality Gates & Verification Commands
+
+The repository enforces strict, non-negotiable automated quality gates before any code is merged:
+
+```bash
+# 1. Run all automated quality gates (file size, doc links, secret scanning, gate tests)
+pnpm verify:gates
+
+# 2. Run TypeScript strict typecheck across all workspace packages and apps
+pnpm typecheck
+
+# 3. Run ESLint across all frontend applications and packages
+pnpm lint
+
+# 4. Run all backend and frontend unit/integration tests
+pnpm test
+
+# 5. Build all frontend packages and applications
+pnpm build
+
+# 6. Run full verification pipeline (gates + lint + typecheck + test + build)
+pnpm verify
+
+# 7. Validate local Docker Compose configuration
+docker compose -f deploy/docker-compose.yml config
+```
+
+---
+
+## 6. Contributor & Agent Guidelines
 
 All AI agents and developers working on this project must strictly comply with [AGENTS.md](file:///d:/freelance/restaurant-order/AGENTS.md). 
 
 Key mandatory guidelines:
-- **Line Count Limits:** Warning at 450 lines, strict hard ceiling at 600 lines for any human-authored file.
+- **Line Count Limits:** Warning at 450 lines, strict hard ceiling at 600 lines for any human-authored file (verified via `node scripts/check-file-size.mjs`).
 - **Verification First:** Never report a task as PASS without executing and validating tests.
-- **Zero Secrets:** No secrets, credentials, or real customer data in code or logs.
+- **Zero Secrets:** No secrets, credentials, or real customer data in code or logs (verified via `node scripts/check-secrets.mjs`).
 - **No Premature Assumptions:** Architectural and stack choices remain marked as `[Proposed / ADR Required]` until officially adopted.

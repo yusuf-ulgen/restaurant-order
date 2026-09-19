@@ -58,3 +58,39 @@ The following features are classified as **Critical Paths**. Any PR touching the
 
 - **Strict Zero-PII Rule:** Real customer names, phone numbers, credit card numbers, or live payment credentials must **never** be used in test files.
 - Tests must utilize synthetic data factories (e.g., deterministic faker fixtures) with realistic restaurant domain data.
+
+---
+
+## 5. Branch & Invariant Coverage Requirements
+
+For all critical business logic, the following automated coverage thresholds are enforced in configuration and CI gates:
+- **Domain Entities & Calculations:** Minimum **90% branch coverage** and **95% statement coverage**.
+- **State Machines & Transitions:** **100% transition coverage** (every valid transition and every guarded invalid transition must have explicit tests).
+- **RBAC Matrix Enforcement:** **100% role-permission coverage** across all 8 roles.
+
+---
+
+## 6. Verification Commands Quick Reference
+
+```bash
+# Run all quality gates (file size, doc links, secret scanning, gate tests)
+pnpm verify:gates
+
+# Run backend unit tests
+dotnet test tests/unit/RestaurantOrder.UnitTests.csproj
+
+# Run backend architecture boundary tests
+dotnet test tests/architecture/RestaurantOrder.ArchitectureTests.csproj
+
+# Run backend integration tests
+dotnet test tests/integration/RestaurantOrder.IntegrationTests.csproj
+
+# Run frontend component tests
+pnpm --filter @restaurant-order/ui test
+
+# Run all test suites across the monorepo
+pnpm test
+
+# Run full verification pipeline
+pnpm verify
+```
