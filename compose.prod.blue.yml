@@ -2,9 +2,10 @@
 # PRODUCTION SLOT BLUE DOCKER COMPOSE OVERRIDE (compose.prod.blue.yml)
 # ==============================================================================
 # Usage: docker compose -f compose.yml -f compose.prod.blue.yml up -d
-# Blue slot runs on port 5001 for zero-conflict concurrent blue-green deployment.
+# Blue slot runs on port 5001 (API) and 3001-3003 (Web) for zero-conflict concurrent blue-green.
 # Immutable image digest pinning: uses @sha256:digest instead of tags.
 # Production DB and Redis are managed external services; no container ports exposed.
+# Web frontends receive NO backend secrets; only public build variables.
 # ==============================================================================
 
 services:
@@ -30,3 +31,21 @@ services:
       REDIS_URL: ${REDIS_URL}
       DEPLOYMENT_COLOR: blue
       ACTIVE_DEPLOYMENT_SLOT: ${ACTIVE_DEPLOYMENT_SLOT:-blue}
+
+  customer-web:
+    image: ${CUSTOMER_WEB_IMAGE:-restaurant-order-customer-web}@${CUSTOMER_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    container_name: restaurant-order-customer-web-blue
+    ports:
+      - "${CUSTOMER_WEB_PORT_BLUE:-3001}:8080"
+
+  operations-web:
+    image: ${OPERATIONS_WEB_IMAGE:-restaurant-order-operations-web}@${OPERATIONS_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    container_name: restaurant-order-operations-web-blue
+    ports:
+      - "${OPERATIONS_WEB_PORT_BLUE:-3002}:8080"
+
+  admin-web:
+    image: ${ADMIN_WEB_IMAGE:-restaurant-order-admin-web}@${ADMIN_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    container_name: restaurant-order-admin-web-blue
+    ports:
+      - "${ADMIN_WEB_PORT_BLUE:-3003}:8080"

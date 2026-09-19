@@ -3,6 +3,7 @@
 # ==============================================================================
 # Usage: docker compose -f compose.yml -f compose.dev.yml up -d
 # Exposes local PostgreSQL and Redis ports for developer convenience.
+# Web frontends run on ports 3000, 3001, 3002.
 # ==============================================================================
 
 services:
@@ -71,6 +72,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  customer-web:
+    container_name: restaurant-order-customer-web-dev
+    ports:
+      - "3000:8080"
+
+  operations-web:
+    container_name: restaurant-order-operations-web-dev
+    ports:
+      - "3001:8080"
+
+  admin-web:
+    container_name: restaurant-order-admin-web-dev
+    ports:
+      - "3002:8080"
 
 volumes:
   postgres_dev_data:

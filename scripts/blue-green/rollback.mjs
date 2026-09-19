@@ -29,6 +29,15 @@ export async function runRollback(options = {}) {
   const safePort = safeSlot === 'blue'
     ? (process.env.API_PORT_BLUE || 5001)
     : (process.env.API_PORT_GREEN || 5002);
+  const safeCustPort = safeSlot === 'blue'
+    ? (process.env.CUSTOMER_WEB_PORT_BLUE || 3001)
+    : (process.env.CUSTOMER_WEB_PORT_GREEN || 3011);
+  const safeOpsPort = safeSlot === 'blue'
+    ? (process.env.OPERATIONS_WEB_PORT_BLUE || 3002)
+    : (process.env.OPERATIONS_WEB_PORT_GREEN || 3012);
+  const safeAdminPort = safeSlot === 'blue'
+    ? (process.env.ADMIN_WEB_PORT_BLUE || 3003)
+    : (process.env.ADMIN_WEB_PORT_GREEN || 3013);
 
   logStep('ROLLBACK', 'RUNNING', `Initiating emergency rollback from '${currentSlot}' to '${safeSlot}' (port ${safePort})...`);
 
@@ -42,6 +51,9 @@ export async function runRollback(options = {}) {
     revertedFromSlot: currentSlot,
     restoredActiveSlot: safeSlot,
     targetPort: Number(safePort),
+    targetCustPort: Number(safeCustPort),
+    targetOpsPort: Number(safeOpsPort),
+    targetAdminPort: Number(safeAdminPort),
     keepFailedSlotRunning: true, // Forensic preservation
     timestamp: new Date().toISOString(),
   };
@@ -72,9 +84,25 @@ export async function runRollback(options = {}) {
     '# ==============================================================================',
     '# ACTIVE UPSTREAM CONFIGURATION (RESTORED BY ROLLBACK)',
     `# Reverted at ${rollbackPlan.timestamp} from ${currentSlot} to ${safeSlot}`,
+    `# Slot: ${safeSlot} | API: ${safePort} | Customer: ${safeCustPort} | Ops: ${safeOpsPort} | Admin: ${safeAdminPort}`,
     '# ==============================================================================',
     'upstream api_backend {',
     `    server 127.0.0.1:${safePort} max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream customer_web_backend {',
+    `    server 127.0.0.1:${safeCustPort} max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream operations_web_backend {',
+    `    server 127.0.0.1:${safeOpsPort} max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream admin_web_backend {',
+    `    server 127.0.0.1:${safeAdminPort} max_fails=3 fail_timeout=10s;`,
     '    keepalive 32;',
     '}',
     '',

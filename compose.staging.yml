@@ -5,6 +5,7 @@
 # Database & Redis ports are strictly internal and NOT bound to the host.
 # Secrets (POSTGRES_PASSWORD, DATABASE_URL, JWT_SECRET) must be injected via
 # environment variables or secret manager. Insecure fallback values are prohibited.
+# Web frontends receive NO backend secrets; only public build variables.
 # ==============================================================================
 
 services:
@@ -16,7 +17,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-restaurant_order_staging}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    # No public port binding! Internal network only.
     volumes:
       - postgres_staging_data:/var/lib/postgresql/data
     networks:
@@ -31,7 +31,6 @@ services:
     image: redis:7-alpine
     container_name: restaurant-order-redis-staging
     restart: unless-stopped
-    # No public port binding! Internal network only.
     volumes:
       - redis_staging_data:/data
     networks:
@@ -72,6 +71,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  customer-web:
+    container_name: restaurant-order-customer-web-staging
+    ports:
+      - "${CUSTOMER_WEB_PORT:-3000}:8080"
+
+  operations-web:
+    container_name: restaurant-order-operations-web-staging
+    ports:
+      - "${OPERATIONS_WEB_PORT:-3001}:8080"
+
+  admin-web:
+    container_name: restaurant-order-admin-web-staging
+    ports:
+      - "${ADMIN_WEB_PORT:-3002}:8080"
 
 volumes:
   postgres_staging_data:
