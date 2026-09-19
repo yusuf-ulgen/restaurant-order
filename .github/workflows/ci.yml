@@ -24,15 +24,17 @@ jobs:
     name: Repository Quality Gates & Verification
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -46,7 +48,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm store
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -54,7 +56,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
@@ -81,7 +83,7 @@ jobs:
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
       - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests
-        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs
 
       # Gate 5: ESLint
       - name: Gate 5 - ESLint

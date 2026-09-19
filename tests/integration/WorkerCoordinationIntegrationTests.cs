@@ -21,11 +21,7 @@ public class WorkerCoordinationIntegrationTests : IClassFixture<TestcontainersFi
     [Fact]
     public async Task Concurrency_TwoWorkersRequestLeaseSimultaneously_OnlyOneAcquires()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
         var logger = NullLogger<RedisWorkerLeaseManager>.Instance;
@@ -52,11 +48,7 @@ public class WorkerCoordinationIntegrationTests : IClassFixture<TestcontainersFi
     [Fact]
     public async Task Lease_WrongTokenCannotRenewOrRelease()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
         var logger = NullLogger<RedisWorkerLeaseManager>.Instance;
@@ -93,11 +85,7 @@ public class WorkerCoordinationIntegrationTests : IClassFixture<TestcontainersFi
     [Fact]
     public async Task Lease_AfterTtlExpiry_AnotherWorkerCanAcquire()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
         var logger = NullLogger<RedisWorkerLeaseManager>.Instance;
@@ -127,11 +115,7 @@ public class WorkerCoordinationIntegrationTests : IClassFixture<TestcontainersFi
     [Fact]
     public async Task CentralActiveSlot_TransitionsBetweenSlotsCorrectly()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
         var db = redis.GetDatabase();
@@ -162,11 +146,7 @@ public class WorkerCoordinationIntegrationTests : IClassFixture<TestcontainersFi
     [Fact]
     public async Task IdempotencyStore_DeduplicatesConcurrentReservations()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         var redis = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
         var store = new RedisIdempotencyStore(redis, NullLogger<RedisIdempotencyStore>.Instance);

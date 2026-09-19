@@ -21,36 +21,11 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
         _fixture = fixture;
     }
 
-    private bool EnsureDockerOrSkip()
-    {
-        if (_fixture.IsDockerRunning)
-        {
-            return true;
-        }
-
-        var isCi = string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(Environment.GetEnvironmentVariable("CONTINUOUS_INTEGRATION"), "true", StringComparison.OrdinalIgnoreCase);
-
-        if (isCi)
-        {
-            Assert.Fail("Docker is required in CI for Testcontainers integration tests, but the Docker daemon is not running.");
-        }
-
-        var explicitSkip = string.Equals(Environment.GetEnvironmentVariable("SKIP_TESTCONTAINERS"), "true", StringComparison.OrdinalIgnoreCase);
-        if (explicitSkip)
-        {
-            return false;
-        }
-
-        Assert.Fail("Docker daemon is not running. To run integration tests locally, start Docker or explicitly set SKIP_TESTCONTAINERS=true.");
-        return false;
-    }
 
     [Fact]
     public async Task PostgreSql_Container_Connectivity_And_QueryExecution()
     {
-        if (!EnsureDockerOrSkip()) return;
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         Assert.NotEmpty(_fixture.DatabaseConnectionString);
 
@@ -85,7 +60,7 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
     [Fact]
     public async Task Redis_Container_Connectivity_And_Ping()
     {
-        if (!EnsureDockerOrSkip()) return;
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         Assert.NotEmpty(_fixture.RedisEndpoint);
 
@@ -116,7 +91,7 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
     [Fact]
     public void Container_Isolation_And_Configuration_Integrity()
     {
-        if (!EnsureDockerOrSkip()) return;
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
         Assert.Contains("restaurant_order_test", _fixture.DatabaseConnectionString);
         Assert.NotEmpty(_fixture.RedisEndpoint);

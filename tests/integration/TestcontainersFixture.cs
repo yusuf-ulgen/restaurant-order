@@ -16,7 +16,8 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
     private readonly RedisContainer? _redisContainer;
     private bool _isStarted;
 
-    public bool IsDockerRunning { get; }
+    public bool IsDockerRunning { get; private set; }
+    public Exception? InitializationException { get; private set; }
     public string DatabaseConnectionString => _isStarted && _postgresContainer != null ? _postgresContainer.GetConnectionString() : string.Empty;
     public string RedisEndpoint => _isStarted && _redisContainer != null ? _redisContainer.GetConnectionString() : string.Empty;
 
@@ -39,9 +40,10 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
                     .WithCleanUp(true)
                     .Build();
             }
-            catch
+            catch (Exception ex)
             {
                 IsDockerRunning = false;
+                InitializationException = ex;
             }
         }
     }
@@ -58,9 +60,11 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
             await Task.WhenAll(_postgresContainer.StartAsync(), _redisContainer.StartAsync());
             _isStarted = true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             _isStarted = false;
+            IsDockerRunning = false;
+            InitializationException = ex;
         }
     }
 

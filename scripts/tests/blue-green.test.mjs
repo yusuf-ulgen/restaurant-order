@@ -13,7 +13,7 @@ import { runDeployInactive } from '../blue-green/deploy-inactive.mjs';
 import { runHealthCheck } from '../blue-green/health-check.mjs';
 import { runWarmup } from '../blue-green/warmup.mjs';
 import { runSmoke } from '../blue-green/smoke.mjs';
-import { runCutover } from '../blue-green/cutover.mjs';
+import { runCutover, buildUpstreamConfig } from '../blue-green/cutover.mjs';
 import { runRollback } from '../blue-green/rollback.mjs';
 
 /**
@@ -259,7 +259,7 @@ test('9. cutover: enforces confirmation, validates nginx -t via docker exec, rev
   const tempConfD = path.join(tempNginxDir, 'conf.d');
   fs.mkdirSync(tempConfD, { recursive: true });
   fs.writeFileSync(path.join(tempNginxDir, 'nginx.conf'), 'events {} http { include conf.d/*.conf; }', 'utf8');
-  fs.writeFileSync(path.join(tempConfD, 'upstream.conf'), 'upstream api_backend { server restaurant-order-api-blue:5000; }', 'utf8');
+  fs.writeFileSync(path.join(tempConfD, 'upstream.conf'), buildUpstreamConfig('blue'), 'utf8');
 
   try {
     // Missing confirmation aborts
