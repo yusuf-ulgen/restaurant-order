@@ -107,7 +107,7 @@ jobs:
 
       # Step: Playwright Setup (Only chromium)
       - name: E2E Setup - Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: pnpm --filter e2e-tests exec playwright install --with-deps chromium
 
       # Step: E2E
       - name: E2E - Playwright Live API Probes
