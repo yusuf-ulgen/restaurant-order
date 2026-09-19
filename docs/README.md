@@ -33,6 +33,7 @@ The documentation is organized into clear domains to support developers, product
 - [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md) — Zero-downtime production blue/green release runbook.
 - [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md) — Incident severity levels, escalation, and post-mortem procedures.
 - [docs/ROADMAP.md](file:///d:/freelance/restaurant-order/docs/ROADMAP.md) — Development phases and milestone tracking.
+- [docs/FOUNDATION-VALIDATION.md](file:///d:/freelance/restaurant-order/docs/FOUNDATION-VALIDATION.md) — Independent audit, verification matrix, and quality gate evidence.
 
 ### 1.4. ADRs, Runbooks & Templates
 - [docs/adr/README.md](file:///d:/freelance/restaurant-order/docs/adr/README.md) — Architecture Decision Records index and guide.

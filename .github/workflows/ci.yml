@@ -51,8 +51,8 @@ jobs:
         run: node scripts/check-secrets.mjs
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
-      - name: Gate 4 - Quality Gate Scripts Unit Tests
-        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs
+      - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs
 
       # Gate 5: ESLint
       - name: Gate 5 - ESLint
@@ -85,4 +85,9 @@ jobs:
 
       # Gate 10: Docker Compose Validation
       - name: Gate 10 - Docker Compose Config Validation
-        run: docker compose -f deploy/docker-compose.yml config
+        run: |
+          docker compose -f compose.yml -f compose.dev.yml config
+          docker compose -f compose.yml -f compose.staging.yml config
+          docker compose -f compose.yml -f compose.prod.blue.yml config
+          docker compose -f compose.yml -f compose.prod.green.yml config
+          docker compose -f deploy/docker-compose.yml config
