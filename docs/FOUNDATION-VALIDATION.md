@@ -30,7 +30,7 @@ No feature development (auth, payments, ordering, UI) was performed in this foun
 | **16. Fail-Fast Başlangıç Doğrulaması** | `dotnet test tests/unit/EnvironmentValidatorTests.cs` | `PASS` | [ConfigurationValidator.cs](../apps/api/ConfigurationValidator.cs) | Prod ortamda eksik config ile başlatma | Container başlangıcında anında sonlanma |
 | **17. Frontend Secret İzolasyonu** | `apps/*-web/.env.example` taraması | `PASS` | Yalnızca `VITE_` değişkenleri mevcut; 0 backend secret | Geliştirici `VITE_` ile secret sızdırabilir | Lint kuralı veya secret scanner ile denetim |
 | **18. Canlı Dağıtım / DNS Yönlendirme** | N/A | `BLOCKED` | Canlı sunucu ve prod DNS foundation kapsamı dışındadır | Canlı ortam henüz provizyon edilmedi | Altyapı provizyon fazında uygulanacak |
-| **19. GitHub Actions CI Pipeline** | Remote GitHub Actions Run | `PENDING` | [.github/workflows/ci.yml](../.github/workflows/ci.yml) | pnpm build ayarı düzeltmesi sonrası uzaktan doğrulama bekleniyor | `fix/foundation-hardening` pushlanıp CI çıktısı incelenecek |
+| **19. GitHub Actions CI Pipeline** | Remote GitHub Actions Run | `PASS` | [.github/workflows/ci.yml](../.github/workflows/ci.yml) (Run: [35450947260](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/35450947260)) | Uzaktan bağımlılık ve önbellek yapılandırması | 10 gate eksiksiz başarıyla geçti |
 
 ---
 
@@ -73,9 +73,8 @@ No feature development (auth, payments, ordering, UI) was performed in this foun
 
 ## 4. Kalan Açık Riskler ve Sonraki Aksiyonlar
 
-1. **GitHub Actions Uzaktan Doğrulama:**
-   - *Risk:* Yerel ortamda geçen testler remote runner'da farklı çevre değişkenleri nedeniyle takılabilir.
-   - *Aksiyon:* `fix/foundation-hardening` branch'i pushlanarak GitHub Actions yeşil sonucu bizzat teyit edilmelidir.
+1. **GitHub Actions Uzaktan Doğrulama (Doğrulandı):**
+   - *Durum:* `fix/foundation-hardening` branch'i üzerinde pnpm 11.10.0 (Corepack) ve pnpm store cache ile tetiklenen run [35450947260](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/35450947260) 10 gate'in tamamını başarıyla geçerek yeşil (PASS) olmuştur.
 2. **Dağıtık Lease Sağlayıcı (Distributed Lease Provider):**
    - *Risk:* Çoklu sunucu üzerinde çalışan Blue ve Green worker'ları dinamik cutover sırasında aynı anda çalışırsa yarış durumu oluşabilir.
    - *Aksiyon:* Bir sonraki fazda (Phase 1 Domain Implementation) Redis Redlock veya PostgreSQL Advisory Lock tabanlı gerçek `IWorkerLeaseManager` implementasyonu sağlanmalıdır.
