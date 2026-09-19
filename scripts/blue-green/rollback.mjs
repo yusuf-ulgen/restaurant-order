@@ -3,16 +3,17 @@ import path from 'node:path';
 import { parseArgs, logStep } from './lib/common.mjs';
 import { defaultCommandRunner } from './lib/command-runner.mjs';
 import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
+import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
-const STATE_FILE = path.join(process.cwd(), '.deployment-state.json');
+const STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
 
 /**
- * Rollback: Reverts ingress traffic back to the safe previous slot.
- * Reads previous slot from .deployment-state.json, atomically reverts Nginx upstream,
- * validates via `nginx -t`, reloads Nginx, and preserves the failing slot for forensics.
+ * Emergency Rollback: Reverts Nginx ingress to the previous safe slot (< 60s),
+ * updates the central Redis active slot, and verifies consistency.
+ * Retains the failing slot online for forensic analysis.
  */
 export async function runRollback(options = {}) {
-  const flags = parseArgs(process.argv.slice(2), options);
+  const flags = { ...parseArgs(), ...options };
   const runner = options.runner || defaultCommandRunner;
 
   let state = {};
@@ -24,8 +25,18 @@ export async function runRollback(options = {}) {
     }
   }
 
-  const currentSlot = (flags.color || state.newActiveSlot || 'green').toLowerCase();
+  // Resolve current active slot
+  const slotResolution = await resolveActiveSlot({
+    execute: flags.execute,
+    dryRun: flags.dryRun,
+    redisUrl: options.redisUrl,
+    redisClient: options.redisClient,
+    targetColor: options.targetColor,
+  });
+
+  const currentSlot = (flags.color || (slotResolution.success ? slotResolution.activeSlot : state.newActiveSlot) || 'green').toLowerCase();
   const safeSlot = (options.targetColor || state.previousActiveSlot || (currentSlot === 'blue' ? 'green' : 'blue')).toLowerCase();
+
   const safePort = safeSlot === 'blue'
     ? (process.env.API_PORT_BLUE || 5001)
     : (process.env.API_PORT_GREEN || 5002);
@@ -153,31 +164,48 @@ export async function runRollback(options = {}) {
 
     // Update centralized active slot state in Redis
     logStep('ROLLBACK', 'RUNNING', `Restoring centralized active slot state in Redis to '${safeSlot}'...`);
-    await setRedisKey(REDIS_ACTIVE_SLOT_KEY, safeSlot, {
+    const redisResult = await setRedisKey(REDIS_ACTIVE_SLOT_KEY, safeSlot, {
       redisUrl: options.redisUrl || process.env.REDIS_URL,
       fakeClient: options.redisClient,
       required: flags.execute,
     });
 
-    // Persist rollback state
+    if (!redisResult.success) {
+      const errorMsg = `CRITICAL_INCONSISTENT_STATE: Ingress was reverted to '${safeSlot}', but Redis active-slot state failed to update: ${redisResult.error}!`;
+      logStep('ROLLBACK', 'FAIL', errorMsg);
+      if (options.appendJournalFn) {
+        options.appendJournalFn({
+          event: 'ROLLBACK_INCONSISTENT_STATE',
+          error: errorMsg,
+          ingressSlot: safeSlot,
+          redisError: redisResult.error,
+        });
+      }
+      return {
+        success: false,
+        status: 'CRITICAL_INCONSISTENT_STATE',
+        error: errorMsg,
+        plan: rollbackPlan,
+      };
+    }
+
+    // Persist rollback state ONLY after Redis update succeeds
     fs.writeFileSync(STATE_FILE, JSON.stringify({
       activeSlot: safeSlot,
       previousSlot: currentSlot,
-      revertedAt: rollbackPlan.timestamp,
-      targetPort: safePort,
-      reason: options.reason || 'manual_or_automated_rollback',
+      rollbackTimestamp: rollbackPlan.timestamp,
     }, null, 2), 'utf8');
 
     logStep('ROLLBACK', 'PASS', `Emergency rollback completed. Traffic routed back to safe slot '${safeSlot}' on port ${safePort}.`);
     logStep('ROLLBACK', 'PASS', `Failing slot '${currentSlot}' retained online for forensics and memory dump.`);
-    return { success: true, dryRun: false, plan: rollbackPlan };
+    return { success: true, status: 'ROLLBACK_SUCCESS', plan: rollbackPlan };
   } catch (err) {
     if (originalContent && fs.existsSync(upstreamConfPath)) {
       fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
     }
     if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
-    const errorMsg = `Rollback failed with unexpected exception: ${err.message}`;
+    const errorMsg = `Rollback encountered an unexpected error: ${err.message}`;
     logStep('ROLLBACK', 'FAIL', errorMsg);
     return { success: false, error: errorMsg };
   }

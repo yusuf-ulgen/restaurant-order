@@ -1,35 +1,44 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseArgs, logStep, getInactiveColor } from './lib/common.mjs';
+import { parseArgs, logStep } from './lib/common.mjs';
 import { resolveDigests } from './lib/manifest.mjs';
+import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
 /**
  * Preflight Check: Validates prerequisites before deploying to the inactive slot.
- * Ensures active and inactive colors are well-defined and distinct,
- * validates immutable image digests for API and Worker, and prohibits 'latest'.
+ * Resolves active slot via central Redis state (single source of truth),
+ * ensures target slot is distinct, validates compose files, and checks image digests.
  */
-export function runPreflight(options = {}) {
+export async function runPreflight(options = {}) {
   const flags = parseArgs(process.argv.slice(2), options);
   const rootDir = process.cwd();
   const errors = [];
 
   logStep('PREFLIGHT', 'RUNNING', 'Starting pre-deployment validation...');
 
-  // 1. Resolve Active and Inactive Colors
-  const activeColor = (process.env.ACTIVE_DEPLOYMENT_SLOT || 'blue').toLowerCase();
-  const targetColor = flags.color || getInactiveColor(activeColor);
+  // 1. Resolve Active and Target Colors via single source of truth
+  const slotResolution = await resolveActiveSlot({
+    execute: flags.execute,
+    dryRun: flags.dryRun,
+    redisUrl: options.redisUrl,
+    redisClient: options.redisClient,
+    targetColor: flags.color,
+  });
 
-  if (activeColor !== 'blue' && activeColor !== 'green') {
-    errors.push(`Invalid ACTIVE_DEPLOYMENT_SLOT: '${activeColor}'. Must be 'blue' or 'green'.`);
+  if (!slotResolution.success) {
+    errors.push(slotResolution.error);
+    logStep('PREFLIGHT', 'FAIL', slotResolution.error);
+    return {
+      success: false,
+      errors,
+      activeColor: slotResolution.activeSlot || 'unknown',
+      targetColor: slotResolution.targetSlot || 'unknown',
+      digests: null,
+    };
   }
 
-  if (targetColor !== 'blue' && targetColor !== 'green') {
-    errors.push(`Invalid target color: '${targetColor}'. Must be 'blue' or 'green'.`);
-  }
-
-  if (targetColor === activeColor) {
-    errors.push(`Target deployment color '${targetColor}' cannot match the currently active slot '${activeColor}'! Deployment must target the idle/inactive slot.`);
-  }
+  const activeColor = slotResolution.activeSlot;
+  const targetColor = slotResolution.targetSlot;
 
   // 2. Validate Compose Files Existence
   const requiredFiles = [
@@ -90,7 +99,7 @@ export function runPreflight(options = {}) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('preflight.mjs')) {
-  const result = runPreflight();
+  const result = await runPreflight();
   if (!result.success) {
     process.exit(1);
   }

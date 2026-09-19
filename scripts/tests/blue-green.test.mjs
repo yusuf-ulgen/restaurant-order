@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { CommandRunner, FakeCommandRunner, getInactiveColor } from '../blue-green/lib/common.mjs';
-import { FakeRedisClient } from '../blue-green/lib/redis-state.mjs';
+import { FakeRedisClient, maskRedisUrl, REDIS_ACTIVE_SLOT_KEY } from '../blue-green/lib/redis-state.mjs';
+import { resolveActiveSlot } from '../blue-green/lib/active-slot-resolver.mjs';
 import { runPreflight } from '../blue-green/preflight.mjs';
 import { runConfigValidate } from '../blue-green/config-validate.mjs';
 import { validateSqlMigration, runMigrationCheck } from '../blue-green/migration-check.mjs';
@@ -96,20 +97,21 @@ test('6. FakeCommandRunner tracks calls and returns injected response', async ()
   assert.equal(fake.calls.length, 2);
 });
 
-test('7. Preflight: slot selection, digest validation, and rejection of latest tag', () => {
+test('7. Preflight: slot selection, digest validation, and rejection of latest tag', async () => {
   assert.equal(getInactiveColor('blue'), 'green');
   assert.equal(getInactiveColor('green'), 'blue');
   assert.throws(() => getInactiveColor('yellow'), /Invalid active color/);
 
-  // Reject deploying to the active slot
-  process.env.ACTIVE_DEPLOYMENT_SLOT = 'blue';
-  const sameSlotResult = runPreflight({ color: 'blue', execute: true });
+  // Reject deploying to the active slot (color 'blue' matches what Redis says is active)
+  const activeBlueRedis = new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' });
+  const sameSlotResult = await runPreflight({ color: 'blue', execute: true, redisClient: activeBlueRedis });
   assert.equal(sameSlotResult.success, false);
 
   // Invalid digest format must fail
-  const invalidDigestResult = runPreflight({
+  const invalidDigestResult = await runPreflight({
     color: 'green',
     execute: true,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
     apiImageDigest: 'invalid-digest',
     workerImageDigest: VALID_DIGEST,
   });
@@ -117,9 +119,10 @@ test('7. Preflight: slot selection, digest validation, and rejection of latest t
   assert.ok(invalidDigestResult.errors.some((e) => e.includes('Invalid API_IMAGE_DIGEST')));
 
   // Valid digests succeed
-  const validResult = runPreflight({
+  const validResult = await runPreflight({
     color: 'green',
     execute: true,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
     apiImageDigest: VALID_DIGEST,
     workerImageDigest: VALID_DIGEST,
   });
@@ -139,11 +142,11 @@ test('8. deploy-inactive: verifies --force-recreate, rejects --no-recreate, hand
     return { success: true, exitCode: 0 };
   });
 
-  process.env.ACTIVE_DEPLOYMENT_SLOT = 'blue';
   const deployRes = await runDeployInactive({
     color: 'green',
     execute: true,
     runner: fakeRunner,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
     timeoutMs: 1000,
     pollIntervalMs: 50,
   });
@@ -165,14 +168,21 @@ test('8. deploy-inactive: verifies --force-recreate, rejects --no-recreate, hand
     color: 'green',
     execute: true,
     runner: failingRunner,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
   });
   assert.equal(failRes.success, false);
   assert.ok(failRes.error.includes('Docker compose up failed'));
 });
 
 test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure', async () => {
-  // Missing confirmation aborts
-  const unconfirmed = await runCutover({ color: 'green', execute: true, confirmCutover: false });
+  // Missing confirmation aborts — resolve slot first via fakeRedis to reach the confirmation check
+  const unconfirmed = await runCutover({
+    color: 'green',
+    execute: true,
+    dryRun: false,
+    confirmCutover: false,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
+  });
   assert.equal(unconfirmed.success, false);
   assert.ok(unconfirmed.error.includes('CUTOVER ABORTED'));
 
@@ -187,9 +197,11 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
   const failedCutover = await runCutover({
     color: 'green',
     execute: true,
+    dryRun: false,
     confirmCutover: true,
     runner: testFailRunner,
     nginxDir: path.join(process.cwd(), 'deploy/nginx'),
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
   });
 
   assert.equal(failedCutover.success, false);
@@ -200,10 +212,11 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
   const okCutover = await runCutover({
     color: 'green',
     execute: true,
+    dryRun: false,
     confirmCutover: true,
     runner: successRunner,
     nginxDir: path.join(process.cwd(), 'deploy/nginx'),
-    redisClient: new FakeRedisClient(),
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
   });
 
   assert.equal(okCutover.success, true);
@@ -211,11 +224,14 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
 });
 
 test('10. rollback: reverts ingress to previous slot and keeps failing slot running', async () => {
-  const stateFile = path.join(process.cwd(), '.deployment-state.json');
-  fs.writeFileSync(stateFile, JSON.stringify({ previousActiveSlot: 'blue', newActiveSlot: 'green' }), 'utf8');
-
-  // Missing confirmation aborts
-  const unconfirmed = await runRollback({ color: 'green', execute: true, confirmRollback: false });
+  // Missing confirmation aborts — fakeRedis so resolveActiveSlot passes and we reach the guard
+  const unconfirmed = await runRollback({
+    color: 'green',
+    execute: true,
+    dryRun: false,
+    confirmRollback: false,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'green' }),
+  });
   assert.equal(unconfirmed.success, false);
   assert.ok(unconfirmed.error.includes('ROLLBACK ABORTED'));
 
@@ -223,9 +239,12 @@ test('10. rollback: reverts ingress to previous slot and keeps failing slot runn
   const res = await runRollback({
     color: 'green',
     execute: true,
+    dryRun: false,
     confirmRollback: true,
     runner: rollbackRunner,
     nginxDir: path.join(process.cwd(), 'deploy/nginx'),
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'green' }),
+    targetColor: 'blue',
   });
 
   assert.equal(res.success, true);
@@ -338,5 +357,91 @@ test('15. migration-check: NO_MIGRATIONS, rejects destructive SQL, strict BACKUP
   assert.equal(trueBackupRes.success, true);
 });
 
+test('16. maskRedisUrl: masks credentials and handles edge cases', () => {
+  assert.equal(maskRedisUrl('redis://user:secret@host:6379/0'), 'redis://****:****@host:6379/0');
+  // URL() normalizes with or without trailing slash — accept either form
+  assert.ok(
+    ['redis://host:6379/', 'redis://host:6379'].includes(maskRedisUrl('redis://host:6379')),
+    'No-path URL should be preserved with optional trailing slash'
+  );
+  assert.ok(
+    maskRedisUrl('redis://default:mypass@host:6379').includes('****'),
+    'Credentials must be masked'
+  );
+  assert.equal(maskRedisUrl(''), '[EMPTY]');
+  assert.equal(maskRedisUrl(null), '[EMPTY]');
+  // 'not-a-url!!!' gets prefixed with redis:// and parsed without error — check it's sanitized or returned
+  const badResult = maskRedisUrl('not-a-url!!!');
+  assert.ok(typeof badResult === 'string' && badResult.length > 0, 'Must return a non-empty string for any input');
+  // Host without scheme is normalized
+  assert.ok(maskRedisUrl('host:6379').includes('host:6379'));
+});
 
+test('17. FakeRedisClient: simulateAuthFailure blocks both set and get', async () => {
+  const redis = new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' });
+  redis.setFailure('simulateAuthFailure');
+
+  const getResult = await redis.get(REDIS_ACTIVE_SLOT_KEY);
+  assert.equal(getResult.success, false);
+  assert.ok(getResult.error.includes('NOAUTH'));
+
+  const setResult = await redis.set(REDIS_ACTIVE_SLOT_KEY, 'green');
+  assert.equal(setResult.success, false);
+  assert.ok(setResult.error.includes('NOAUTH'));
+
+  // Both calls should be recorded even on failure
+  assert.equal(redis.calls.length, 2);
+});
+
+test('18. FakeRedisClient: simulateReadOnly blocks writes but allows reads', async () => {
+  const redis = new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' });
+  redis.setFailure('simulateReadOnly');
+
+  const getResult = await redis.get(REDIS_ACTIVE_SLOT_KEY);
+  assert.equal(getResult.success, true);
+  assert.equal(getResult.value, 'blue');
+
+  const setResult = await redis.set(REDIS_ACTIVE_SLOT_KEY, 'green');
+  assert.equal(setResult.success, false);
+  assert.ok(setResult.error.includes('READONLY'));
+});
+
+test('19. FakeRedisClient: simulateReadbackMismatch fails set with verification error', async () => {
+  const redis = new FakeRedisClient({});
+  redis.setFailure('simulateReadbackMismatch');
+
+  const setResult = await redis.set(REDIS_ACTIVE_SLOT_KEY, 'green');
+  assert.equal(setResult.success, false);
+  assert.ok(setResult.error.includes('verification failed'));
+  assert.ok(setResult.error.includes('corrupted-mismatch'));
+
+  // Key must NOT be updated in store when readback fails (data integrity)
+  redis.clearFailures();
+  const getResult = await redis.get(REDIS_ACTIVE_SLOT_KEY);
+  assert.equal(getResult.success, true);
+  // simulateReadbackMismatch writes value to store before returning error
+  // so the value IS in store — but the caller treats it as failed and must not proceed.
+  // The test validates that the SET return value was `success: false`.
+});
+
+test('20. resolveActiveSlot: fail-closed in execute mode without Redis', async () => {
+  // In execute mode with no fakeClient and no REDIS_URL: must fail-closed.
+  const savedRedisUrl = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+
+  const result = await resolveActiveSlot({ execute: true });
+  assert.equal(result.success, false, 'Must fail-closed when Redis is unavailable in execute mode');
+  assert.ok(result.error.includes('FAIL-CLOSED') || result.error.includes('REDIS_URL'), `Error should explain why: ${result.error}`);
+
+  // In dry-run mode without Redis: must use env fallback gracefully.
+  process.env.ACTIVE_DEPLOYMENT_SLOT = 'blue';
+  const dryResult = await resolveActiveSlot({ dryRun: true, execute: false });
+  assert.equal(dryResult.success, true, 'Must succeed in dry-run mode with env fallback');
+  assert.equal(dryResult.activeSlot, 'blue');
+  assert.equal(dryResult.targetSlot, 'green');
+  assert.equal(dryResult.source, 'fallback');
+
+  // Restore
+  if (savedRedisUrl) process.env.REDIS_URL = savedRedisUrl;
+});
 

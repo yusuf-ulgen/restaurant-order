@@ -3,19 +3,35 @@ import path from 'node:path';
 import { parseArgs, logStep } from './lib/common.mjs';
 import { defaultCommandRunner } from './lib/command-runner.mjs';
 import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
+import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
-const STATE_FILE = path.join(process.cwd(), '.deployment-state.json');
+const STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
 
 /**
- * Cutover: Switches ingress / load balancer traffic to the newly deployed slot.
- * Atomically updates Nginx upstream configuration, validates via `nginx -t`,
- * reloads Nginx, and updates `.deployment-state.json`.
+ * Cutover: Atomically switches live Nginx traffic to the new slot,
+ * updates the centralized active slot in Redis, and reverts Nginx if Redis update fails.
  */
 export async function runCutover(options = {}) {
-  const flags = parseArgs(process.argv.slice(2), options);
+  const flags = { ...parseArgs(), ...options };
   const runner = options.runner || defaultCommandRunner;
-  const targetColor = (flags.color || 'green').toLowerCase();
-  const previousColor = targetColor === 'blue' ? 'green' : 'blue';
+
+  // Resolve current active slot via single source of truth
+  const slotResolution = await resolveActiveSlot({
+    execute: flags.execute,
+    dryRun: flags.dryRun,
+    redisUrl: options.redisUrl,
+    redisClient: options.redisClient,
+    targetColor: flags.color,
+  });
+
+  if (!slotResolution.success) {
+    logStep('CUTOVER', 'FAIL', slotResolution.error);
+    return { success: false, error: slotResolution.error };
+  }
+
+  const previousColor = slotResolution.activeSlot;
+  const targetColor = slotResolution.targetSlot;
+
   const targetPort = targetColor === 'blue'
     ? (process.env.API_PORT_BLUE || 5001)
     : (process.env.API_PORT_GREEN || 5002);
@@ -115,7 +131,6 @@ export async function runCutover(options = {}) {
     const testResult = await runner.run('nginx', ['-t', '-c', mainConfPath]);
 
     if (!testResult.success) {
-      // Revert to backup immediately
       if (originalContent) {
         fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
       }
@@ -131,24 +146,21 @@ export async function runCutover(options = {}) {
     const reloadResult = await runner.run('nginx', ['-s', 'reload']);
 
     if (!reloadResult.success) {
-      // Revert to backup immediately
       if (originalContent) {
         fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
         await runner.run('nginx', ['-s', 'reload']);
       }
       if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
-      const errorMsg = `Nginx reload failed: ${reloadResult.stderr || reloadResult.stdout}. Restored previous configuration.`;
+      const errorMsg = `Nginx reload failed ('nginx -s reload'): ${reloadResult.stderr || reloadResult.stdout}. Reverted to previous upstream.`;
       logStep('CUTOVER', 'FAIL', errorMsg);
       return { success: false, error: errorMsg, reloadResult };
     }
 
-    // Clean up backup file
-    if (fs.existsSync(backupConfPath)) {
-      fs.unlinkSync(backupConfPath);
-    }
+    // Cleanup backup file
+    if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
-    // 7. Update centralized active slot state in Redis
+    // 7. Synchronize centralized active slot state in Redis
     logStep('CUTOVER', 'RUNNING', `Updating centralized active slot state in Redis to '${targetColor}'...`);
     const redisResult = await setRedisKey(REDIS_ACTIVE_SLOT_KEY, targetColor, {
       redisUrl: options.redisUrl || process.env.REDIS_URL,
@@ -157,28 +169,33 @@ export async function runCutover(options = {}) {
     });
 
     if (!redisResult.success) {
-      // Revert Nginx to maintain state consistency
-      const errorMsg = `Central Redis state update failed: ${redisResult.error}. Reverting Nginx configuration.`;
-      logStep('CUTOVER', 'FAIL', errorMsg);
+      // Revert Nginx upstream immediately to prevent split-brain between ingress and workers
       if (originalContent) {
         fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
         await runner.run('nginx', ['-s', 'reload']);
       }
-      return { success: false, error: errorMsg };
+      const errorMsg = `Failed to update central active slot in Redis to '${targetColor}': ${redisResult.error}. Reverted Nginx to '${previousColor}'.`;
+      logStep('CUTOVER', 'FAIL', errorMsg);
+      return { success: false, status: 'RECONCILIATION_FAILED', error: errorMsg };
     }
 
-    // 8. Persist active state to file
-    fs.writeFileSync(STATE_FILE, JSON.stringify(cutoverPlan, null, 2), 'utf8');
+    // 8. Persist state to local tracker file
+    fs.writeFileSync(STATE_FILE, JSON.stringify({
+      activeSlot: targetColor,
+      previousActiveSlot: previousColor,
+      cutoverTimestamp: cutoverPlan.timestamp,
+      targetPort,
+    }, null, 2), 'utf8');
 
     logStep('CUTOVER', 'PASS', `Production traffic shifted to slot '${targetColor}' on port ${targetPort}. Active slot is now '${targetColor}'.`);
-    return { success: true, dryRun: false, plan: cutoverPlan };
+    return { success: true, plan: cutoverPlan };
   } catch (err) {
     if (originalContent && fs.existsSync(upstreamConfPath)) {
       fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
     }
     if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
-    const errorMsg = `Cutover failed with unexpected exception: ${err.message}`;
+    const errorMsg = `Cutover encountered an unexpected error: ${err.message}`;
     logStep('CUTOVER', 'FAIL', errorMsg);
     return { success: false, error: errorMsg };
   }

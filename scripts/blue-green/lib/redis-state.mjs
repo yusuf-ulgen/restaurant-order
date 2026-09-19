@@ -1,187 +1,189 @@
-import net from 'node:net';
+import { createClient } from 'redis';
 
 export const REDIS_ACTIVE_SLOT_KEY = 'restaurant-order:active-slot';
 
 /**
- * Parses a Redis connection URL into host, port, and password.
- * Format: redis://[:password@]host[:port][/db]
+ * Sanitizes a Redis URL by masking credentials for safe logging.
  */
-export function parseRedisUrl(rawUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379') {
+export function maskRedisUrl(rawUrl) {
+  if (!rawUrl) return '[EMPTY]';
   try {
-    const url = new URL(rawUrl.startsWith('redis://') ? rawUrl : `redis://${rawUrl}`);
-    return {
-      host: url.hostname || '127.0.0.1',
-      port: parseInt(url.port || '6379', 10),
-      password: url.password ? decodeURIComponent(url.password) : null,
-    };
+    const formatted = rawUrl.startsWith('redis://') || rawUrl.startsWith('rediss://')
+      ? rawUrl
+      : `redis://${rawUrl}`;
+    const url = new URL(formatted);
+    if (url.password) url.password = '****';
+    if (url.username && url.username !== 'default') url.username = '****';
+    return url.toString();
   } catch {
-    return { host: '127.0.0.1', port: 6379, password: null };
+    return '[INVALID_REDIS_URL]';
   }
 }
 
 /**
- * Sets a key-value pair in Redis using native RESP protocol over TCP.
- * Zero external dependencies.
+ * Sanitizes an error message by removing connection strings or credentials.
+ */
+function sanitizeErrorMessage(msg) {
+  if (!msg) return 'Unknown Redis error';
+  return String(msg).replace(/(?:redis|rediss):\/\/[^@\s]+@/gi, 'redis://[CREDENTIALS_MASKED]@');
+}
+
+/**
+ * Connects, executes operation, and disconnects safely.
+ */
+async function withRedisClient(options, operation) {
+  const rawUrl = options.redisUrl || process.env.REDIS_URL;
+  if (!rawUrl) {
+    if (options.required) {
+      return { success: false, error: 'REDIS_URL is not set. Cannot access central state in execute mode.' };
+    }
+    return { success: true, bypassed: true };
+  }
+
+  const timeoutMs = options.timeoutMs || 4000;
+  const formattedUrl = rawUrl.startsWith('redis://') || rawUrl.startsWith('rediss://')
+    ? rawUrl
+    : `redis://${rawUrl}`;
+
+  let client = null;
+  try {
+    client = createClient({
+      url: formattedUrl,
+      socket: {
+        connectTimeout: timeoutMs,
+        reconnectStrategy: false, // Fail fast in CLI deployment scripts
+      },
+    });
+
+    client.on('error', () => {
+      // Handled in try/catch to avoid unhandled event emitter errors
+    });
+
+    // Connect with strict timeout
+    const connectPromise = client.connect();
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Redis connection timed out after ${timeoutMs}ms`)), timeoutMs)
+    );
+    await Promise.race([connectPromise, timeoutPromise]);
+
+    return await operation(client);
+  } catch (err) {
+    return {
+      success: false,
+      error: sanitizeErrorMessage(err.message),
+    };
+  } finally {
+    if (client) {
+      try {
+        if (client.isOpen) {
+          await client.quit();
+        }
+      } catch {
+        client.destroy();
+      }
+    }
+  }
+}
+
+/**
+ * Sets a key-value pair in Redis with mandatory read-back verification.
+ * Fails if result is not 'OK' or if read-back value does not match.
  */
 export async function setRedisKey(key, value, options = {}) {
   if (options.fakeClient) {
     return options.fakeClient.set(key, value);
   }
 
-  const rawUrl = options.redisUrl || process.env.REDIS_URL;
-  if (!rawUrl) {
-    if (options.required) {
-      return { success: false, error: 'REDIS_URL is not set. Cannot update central state in execute mode.' };
+  return withRedisClient(options, async (client) => {
+    const setResult = await client.set(key, value);
+    if (setResult !== 'OK') {
+      return {
+        success: false,
+        error: `Redis SET command returned unexpected response: ${setResult}`,
+      };
     }
-    return { success: true, bypassed: true };
-  }
 
-  const { host, port, password } = parseRedisUrl(rawUrl);
-  const timeoutMs = options.timeoutMs || 3000;
+    // Read-back verification
+    const readBack = await client.get(key);
+    if (readBack !== value) {
+      return {
+        success: false,
+        error: `Redis SET verification failed: wrote '${value}', read back '${readBack}'`,
+      };
+    }
 
-  return new Promise((resolve) => {
-    let resolved = false;
-    const client = net.createConnection({ host, port }, () => {
-      let payload = '';
-      if (password) {
-        const passBuf = Buffer.from(password, 'utf8');
-        payload += `*2\r\n$4\r\nAUTH\r\n$${passBuf.length}\r\n${passBuf.toString()}\r\n`;
-      }
-      const keyBuf = Buffer.from(key, 'utf8');
-      const valBuf = Buffer.from(value, 'utf8');
-      payload += `*3\r\n$3\r\nSET\r\n$${keyBuf.length}\r\n${keyBuf.toString()}\r\n$${valBuf.length}\r\n${valBuf.toString()}\r\n`;
-      client.write(payload);
-    });
-
-    client.setTimeout(timeoutMs);
-
-    let buffer = '';
-    client.on('data', (chunk) => {
-      buffer += chunk.toString();
-      if (buffer.includes('+OK') || buffer.includes('-ERR') || buffer.includes('-NOAUTH') || buffer.includes('-WRONGPASS')) {
-        client.end();
-      }
-    });
-
-    client.on('end', () => {
-      if (!resolved) {
-        resolved = true;
-        if (buffer.includes('+OK')) {
-          resolve({ success: true, key, value });
-        } else {
-          resolve({ success: false, error: buffer.trim() || 'Unknown Redis response' });
-        }
-      }
-    });
-
-    client.on('error', (err) => {
-      if (!resolved) {
-        resolved = true;
-        resolve({ success: false, error: err.message });
-      }
-    });
-
-    client.on('timeout', () => {
-      if (!resolved) {
-        resolved = true;
-        client.destroy();
-        resolve({ success: false, error: `Redis connection timed out after ${timeoutMs}ms` });
-      }
-    });
+    return { success: true, key, value };
   });
 }
 
 /**
- * Gets a key value from Redis using native RESP protocol over TCP.
+ * Gets a key value from Redis using official client.
  */
 export async function getRedisKey(key, options = {}) {
   if (options.fakeClient) {
     return options.fakeClient.get(key);
   }
 
-  const rawUrl = options.redisUrl || process.env.REDIS_URL;
-  if (!rawUrl) {
-    if (options.required) {
-      return { success: false, error: 'REDIS_URL is not set.' };
-    }
-    return { success: true, value: null, bypassed: true };
-  }
-
-  const { host, port, password } = parseRedisUrl(rawUrl);
-  const timeoutMs = options.timeoutMs || 3000;
-
-  return new Promise((resolve) => {
-    let resolved = false;
-    const client = net.createConnection({ host, port }, () => {
-      let payload = '';
-      if (password) {
-        const passBuf = Buffer.from(password, 'utf8');
-        payload += `*2\r\n$4\r\nAUTH\r\n$${passBuf.length}\r\n${passBuf.toString()}\r\n`;
-      }
-      const keyBuf = Buffer.from(key, 'utf8');
-      payload += `*2\r\n$3\r\nGET\r\n$${keyBuf.length}\r\n${keyBuf.toString()}\r\n`;
-      client.write(payload);
-    });
-
-    client.setTimeout(timeoutMs);
-
-    let buffer = '';
-    client.on('data', (chunk) => {
-      buffer += chunk.toString();
-      if (buffer.includes('\r\n')) {
-        client.end();
-      }
-    });
-
-    client.on('end', () => {
-      if (!resolved) {
-        resolved = true;
-        // Parse simple string or bulk string
-        if (buffer.startsWith('$-1')) {
-          resolve({ success: true, value: null });
-        } else if (buffer.startsWith('$')) {
-          const lines = buffer.split('\r\n');
-          resolve({ success: true, value: lines[1] || '' });
-        } else {
-          resolve({ success: false, error: buffer.trim() });
-        }
-      }
-    });
-
-    client.on('error', (err) => {
-      if (!resolved) {
-        resolved = true;
-        resolve({ success: false, error: err.message });
-      }
-    });
-
-    client.on('timeout', () => {
-      if (!resolved) {
-        resolved = true;
-        client.destroy();
-        resolve({ success: false, error: `Redis connection timed out after ${timeoutMs}ms` });
-      }
-    });
+  return withRedisClient(options, async (client) => {
+    const value = await client.get(key);
+    return { success: true, value };
   });
 }
 
 /**
  * FakeRedisClient for reliable unit and integration testing without running Redis.
+ * Supports configurable error simulation.
  */
 export class FakeRedisClient {
-  constructor(initial = {}) {
+  constructor(initial = {}, failureConfig = {}) {
     this.store = new Map(Object.entries(initial));
     this.calls = [];
+    this.failureConfig = { ...failureConfig };
+  }
+
+  setFailure(type) {
+    this.failureConfig[type] = true;
+  }
+
+  clearFailures() {
+    this.failureConfig = {};
   }
 
   async set(key, value) {
     this.calls.push({ action: 'set', key, value, timestamp: new Date().toISOString() });
+
+    if (this.failureConfig.simulateAuthFailure) {
+      return { success: false, error: 'NOAUTH Authentication required.' };
+    }
+    if (this.failureConfig.simulateReadOnly) {
+      return { success: false, error: 'READONLY You can\'t write against a read only replica.' };
+    }
+    if (this.failureConfig.simulateSetFailure) {
+      return { success: false, error: 'Redis SET command failed: connection reset by peer' };
+    }
+
     this.store.set(key, value);
+
+    if (this.failureConfig.simulateReadbackMismatch) {
+      return {
+        success: false,
+        error: `Redis SET verification failed: wrote '${value}', read back 'corrupted-mismatch'`,
+      };
+    }
+
     return { success: true, key, value };
   }
 
   async get(key) {
     this.calls.push({ action: 'get', key, timestamp: new Date().toISOString() });
+
+    if (this.failureConfig.simulateAuthFailure) {
+      return { success: false, error: 'NOAUTH Authentication required.' };
+    }
+    if (this.failureConfig.simulateGetFailure) {
+      return { success: false, error: 'Redis GET command failed: connection timeout' };
+    }
+
     const val = this.store.get(key) ?? null;
     return { success: true, value: val };
   }

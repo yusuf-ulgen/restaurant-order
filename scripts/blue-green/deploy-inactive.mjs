@@ -1,5 +1,6 @@
-import { parseArgs, logStep, getInactiveColor } from './lib/common.mjs';
+import { parseArgs, logStep } from './lib/common.mjs';
 import { defaultCommandRunner } from './lib/command-runner.mjs';
+import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
 /**
  * Deploy Inactive Color: Deploys containers to the idle/inactive slot using Docker Compose.
@@ -9,8 +10,23 @@ import { defaultCommandRunner } from './lib/command-runner.mjs';
 export async function runDeployInactive(options = {}) {
   const flags = parseArgs(process.argv.slice(2), options);
   const runner = options.runner || defaultCommandRunner;
-  const activeColor = (process.env.ACTIVE_DEPLOYMENT_SLOT || 'blue').toLowerCase();
-  const targetColor = flags.color || getInactiveColor(activeColor);
+
+  // Resolve Active and Target Colors via single source of truth
+  const slotResolution = await resolveActiveSlot({
+    execute: flags.execute,
+    dryRun: flags.dryRun,
+    redisUrl: options.redisUrl,
+    redisClient: options.redisClient,
+    targetColor: flags.color,
+  });
+
+  if (!slotResolution.success) {
+    logStep('DEPLOY-INACTIVE', 'FAIL', slotResolution.error);
+    return { success: false, error: slotResolution.error };
+  }
+
+  const activeColor = slotResolution.activeSlot;
+  const targetColor = slotResolution.targetSlot;
 
   logStep('DEPLOY-INACTIVE', 'RUNNING', `Preparing deployment to inactive slot '${targetColor}'...`);
 
