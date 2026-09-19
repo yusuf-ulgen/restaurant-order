@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { CommandRunner, FakeCommandRunner, getInactiveColor } from '../blue-green/lib/common.mjs';
+import { FakeRedisClient } from '../blue-green/lib/redis-state.mjs';
 import { runPreflight } from '../blue-green/preflight.mjs';
 import { runConfigValidate } from '../blue-green/config-validate.mjs';
 import { validateSqlMigration, runMigrationCheck } from '../blue-green/migration-check.mjs';
@@ -202,6 +203,7 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
     confirmCutover: true,
     runner: successRunner,
     nginxDir: path.join(process.cwd(), 'deploy/nginx'),
+    redisClient: new FakeRedisClient(),
   });
 
   assert.equal(okCutover.success, true);

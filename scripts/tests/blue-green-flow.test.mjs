@@ -12,15 +12,14 @@ import { runCutover } from '../blue-green/cutover.mjs';
 import { runObserve } from '../blue-green/observe.mjs';
 import { runRollback } from '../blue-green/rollback.mjs';
 import { runOrchestrator } from '../blue-green/orchestrator.mjs';
+import { FakeRedisClient, REDIS_ACTIVE_SLOT_KEY } from '../blue-green/lib/redis-state.mjs';
 
 const VALID_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
 test('16. orchestrator: halts on failure and records to journal', async () => {
-  // Dry-run orchestrator succeeds safely
   const dryRes = await runOrchestrator({ dryRun: true });
   assert.equal(dryRes.success, true);
 
-  // Check deployment journal file exists and has entries
   const journalFile = path.join(process.cwd(), '.deployment-journal.jsonl');
   assert.ok(fs.existsSync(journalFile), 'Deployment journal must be created');
   const journalContent = fs.readFileSync(journalFile, 'utf8');
@@ -61,24 +60,21 @@ test('17. orchestrator: triggers automated rollback when post-cutover step fails
 });
 
 test('18. fail-closed: execute mode rejects false-positive PASS on unverified operations', async () => {
-  // Execute mode deploy-inactive fails if docker runner fails
   const mockFailRunner = new FakeCommandRunner(async () => ({ success: false, exitCode: 1, stderr: 'error' }));
   const deployRes = await runDeployInactive({ color: 'green', execute: true, runner: mockFailRunner });
   assert.equal(deployRes.success, false);
 
-  // Execute mode smoke check without runner returns BLOCKED
   const smokeRes = await runSmoke({ color: 'green', execute: true });
   assert.equal(smokeRes.success, false);
   assert.equal(smokeRes.status, 'BLOCKED');
 
-  // Execute mode observe without metrics source returns BLOCKED
   delete process.env.METRICS_URL;
   const observeRes = await runObserve({ color: 'green', execute: true });
   assert.equal(observeRes.success, false);
   assert.equal(observeRes.status, 'BLOCKED');
 });
 
-test('19. disposable end-to-end blue -> green -> rollback flow', async () => {
+test('19. disposable end-to-end blue -> green -> rollback flow with central Redis state', async () => {
   const tempNginxDir = path.join(process.cwd(), '.test-nginx');
   const tempConfD = path.join(tempNginxDir, 'conf.d');
   fs.mkdirSync(tempConfD, { recursive: true });
@@ -95,6 +91,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow', async () => {
     return { success: true, exitCode: 0, stdout: 'OK' };
   });
 
+  const fakeRedis = new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' });
   process.env.ACTIVE_DEPLOYMENT_SLOT = 'blue';
 
   // Step 1: Preflight
@@ -132,12 +129,15 @@ test('19. disposable end-to-end blue -> green -> rollback flow', async () => {
     confirmCutover: true,
     runner: fakeRunner,
     nginxDir: tempNginxDir,
+    redisClient: fakeRedis,
   });
   assert.equal(cutover.success, true);
   assert.equal(cutover.plan.newActiveSlot, 'green');
 
   const updatedUpstream = fs.readFileSync(upstreamConf, 'utf8');
   assert.ok(updatedUpstream.includes('127.0.0.1:5002'), 'Upstream must point to Green port 5002');
+  const redisSlotAfterCutover = await fakeRedis.get(REDIS_ACTIVE_SLOT_KEY);
+  assert.equal(redisSlotAfterCutover.value, 'green');
 
   // Step 5: Rollback to Blue
   const rollback = await runRollback({
@@ -146,6 +146,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow', async () => {
     confirmRollback: true,
     runner: fakeRunner,
     nginxDir: tempNginxDir,
+    redisClient: fakeRedis,
   });
   assert.equal(rollback.success, true);
   assert.equal(rollback.plan.restoredActiveSlot, 'blue');
@@ -153,7 +154,44 @@ test('19. disposable end-to-end blue -> green -> rollback flow', async () => {
 
   const restoredUpstream = fs.readFileSync(upstreamConf, 'utf8');
   assert.ok(restoredUpstream.includes('127.0.0.1:5001'), 'Upstream must be restored to Blue port 5001');
+  const redisSlotAfterRollback = await fakeRedis.get(REDIS_ACTIVE_SLOT_KEY);
+  assert.equal(redisSlotAfterRollback.value, 'blue');
 
   // Clean up test directory
+  fs.rmSync(tempNginxDir, { recursive: true, force: true });
+});
+
+test('20. cutover: reverts Nginx upstream if central Redis active slot update fails', async () => {
+  const tempNginxDir = path.join(process.cwd(), '.test-nginx-fail');
+  const tempConfD = path.join(tempNginxDir, 'conf.d');
+  fs.mkdirSync(tempConfD, { recursive: true });
+
+  const tempMainConf = path.join(tempNginxDir, 'nginx.conf');
+  fs.writeFileSync(tempMainConf, 'events {} http { include conf.d/*.conf; }', 'utf8');
+
+  const upstreamConf = path.join(tempConfD, 'upstream.conf');
+  fs.writeFileSync(upstreamConf, 'upstream api_backend { server 127.0.0.1:5001; }', 'utf8');
+
+  const runner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
+  const failingRedis = {
+    set: async () => ({ success: false, error: 'Redis connection lost' }),
+  };
+
+  const cutoverRes = await runCutover({
+    color: 'green',
+    execute: true,
+    confirmCutover: true,
+    runner,
+    nginxDir: tempNginxDir,
+    redisClient: failingRedis,
+  });
+
+  assert.equal(cutoverRes.success, false);
+  assert.ok(cutoverRes.error.includes('Central Redis state update failed'));
+
+  // Verify Nginx was reverted to 5001 (blue) to avoid split-brain
+  const content = fs.readFileSync(upstreamConf, 'utf8');
+  assert.ok(content.includes('127.0.0.1:5001'), 'Must preserve original upstream on Redis update failure');
+
   fs.rmSync(tempNginxDir, { recursive: true, force: true });
 });

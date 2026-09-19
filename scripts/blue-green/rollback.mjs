@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs, logStep } from './lib/common.mjs';
 import { defaultCommandRunner } from './lib/command-runner.mjs';
+import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
 
 const STATE_FILE = path.join(process.cwd(), '.deployment-state.json');
 
@@ -121,6 +122,14 @@ export async function runRollback(options = {}) {
     }
 
     if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
+
+    // Update centralized active slot state in Redis
+    logStep('ROLLBACK', 'RUNNING', `Restoring centralized active slot state in Redis to '${safeSlot}'...`);
+    await setRedisKey(REDIS_ACTIVE_SLOT_KEY, safeSlot, {
+      redisUrl: options.redisUrl || process.env.REDIS_URL,
+      fakeClient: options.redisClient,
+      required: flags.execute,
+    });
 
     // Persist rollback state
     fs.writeFileSync(STATE_FILE, JSON.stringify({

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs, logStep } from './lib/common.mjs';
 import { defaultCommandRunner } from './lib/command-runner.mjs';
+import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
 
 const STATE_FILE = path.join(process.cwd(), '.deployment-state.json');
 
@@ -120,7 +121,26 @@ export async function runCutover(options = {}) {
       fs.unlinkSync(backupConfPath);
     }
 
-    // 7. Persist active state
+    // 7. Update centralized active slot state in Redis
+    logStep('CUTOVER', 'RUNNING', `Updating centralized active slot state in Redis to '${targetColor}'...`);
+    const redisResult = await setRedisKey(REDIS_ACTIVE_SLOT_KEY, targetColor, {
+      redisUrl: options.redisUrl || process.env.REDIS_URL,
+      fakeClient: options.redisClient,
+      required: flags.execute,
+    });
+
+    if (!redisResult.success) {
+      // Revert Nginx to maintain state consistency
+      const errorMsg = `Central Redis state update failed: ${redisResult.error}. Reverting Nginx configuration.`;
+      logStep('CUTOVER', 'FAIL', errorMsg);
+      if (originalContent) {
+        fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
+        await runner.run('nginx', ['-s', 'reload']);
+      }
+      return { success: false, error: errorMsg };
+    }
+
+    // 8. Persist active state to file
     fs.writeFileSync(STATE_FILE, JSON.stringify(cutoverPlan, null, 2), 'utf8');
 
     logStep('CUTOVER', 'PASS', `Production traffic shifted to slot '${targetColor}' on port ${targetPort}. Active slot is now '${targetColor}'.`);
