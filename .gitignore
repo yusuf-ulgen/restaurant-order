@@ -29,6 +29,8 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+*.cobertura.xml
+coverage.json
 
 # OS Specific
 .DS_Store

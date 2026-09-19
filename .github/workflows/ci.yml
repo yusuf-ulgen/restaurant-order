@@ -89,29 +89,40 @@ jobs:
       - name: Gate 6 - TypeScript Typecheck
         run: pnpm typecheck
 
-      # Gate 7: Architecture Tests
-      - name: Gate 7 - .NET Architecture Boundary Tests
-        run: dotnet test tests/architecture/RestaurantOrder.ArchitectureTests.csproj -c Release
+      # Step: Architecture
+      - name: Architecture - .NET Architecture Boundary Tests
+        run: pnpm test:architecture
 
-      # Gate 8: Unit & Integration Tests
-      - name: Gate 8a - .NET Unit Tests
-        run: dotnet test tests/unit/RestaurantOrder.UnitTests.csproj -c Release
+      # Step: Backend Unit
+      - name: Backend Unit - .NET Domain & Calculation Unit Tests
+        run: pnpm test:unit:backend
 
-      - name: Gate 8b - .NET Integration Tests
-        run: dotnet test tests/integration/RestaurantOrder.IntegrationTests.csproj -c Release
+      # Step: Backend Integration
+      - name: Backend Integration - Testcontainers PostgreSQL & Redis Integration Tests
+        run: pnpm test:integration
 
-      - name: Gate 8c - Frontend Component Tests (Vitest)
-        run: pnpm --filter @restaurant-order/ui test
+      # Step: Frontend Component
+      - name: Frontend Component - Vitest & Testing Library Component Tests
+        run: pnpm test:unit:frontend
 
-      # Gate 9: Production Build
-      - name: Gate 9a - .NET Solution Build
-        run: dotnet build RestaurantOrder.sln -c Release --no-restore
+      # Step: Playwright Setup (Only chromium)
+      - name: E2E Setup - Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
-      - name: Gate 9b - Frontend Applications Build
+      # Step: E2E
+      - name: E2E - Playwright Live API Probes
+        run: pnpm test:e2e
+
+      # Step: Coverage
+      - name: Coverage - Backend & Frontend Coverage Enforcement
+        run: pnpm test:coverage
+
+      # Step: Production Build
+      - name: Build - Backend Solution & Frontend Web Apps Build
         run: pnpm build
 
-      # Gate 10: Docker Compose Validation
-      - name: Gate 10 - Docker Compose Config Validation
+      # Step: Docker Compose Validation
+      - name: Docker - Compose Configuration Validation
         run: |
           docker compose -f compose.yml -f compose.dev.yml config
           docker compose -f compose.yml -f compose.staging.yml config

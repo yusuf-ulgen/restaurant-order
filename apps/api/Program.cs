@@ -1,5 +1,6 @@
 using System.Text.Json;
 using RestaurantOrder.Api;
+using RestaurantOrder.Api.Domain.Pricing;
 using RestaurantOrder.Api.Health;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,11 +10,13 @@ ConfigurationValidator.Validate(builder.Configuration, builder.Environment);
 
 builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();
 builder.Services.AddSingleton<IRedisHealthCheck, StackExchangeRedisHealthCheck>();
+builder.Services.AddSingleton<IPricingService, PricingService>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 var deploymentColor = builder.Configuration["DEPLOYMENT_COLOR"] ?? "unknown";
+var color = deploymentColor;
 
 if (app.Environment.IsDevelopment())
 {
@@ -21,14 +24,13 @@ if (app.Environment.IsDevelopment())
 }
 
 // Liveness probe indicating process is alive (never checks external dependencies)
-app.MapGet("/health/live", () => Results.Ok(new
-{
-    status = "Healthy",
-    timestamp = DateTime.UtcNow.ToString("O"),
-    service = "restaurant-order-api",
-    version = "0.1.0",
-    color = deploymentColor
-}))
+app.MapGet("/health/live", () => Results.Ok(new HealthLiveResponse(
+    Status: "Healthy",
+    Timestamp: DateTime.UtcNow.ToString("O"),
+    Service: "restaurant-order-api",
+    Version: "0.1.0",
+    Color: deploymentColor
+)))
 .WithName("HealthLive")
 .WithSummary("Liveness probe indicating process is alive")
 .WithTags("Health");
@@ -48,19 +50,17 @@ app.MapGet("/health/ready", async (
     var redisHealthy = await redisTask;
     var allHealthy = dbHealthy && redisHealthy;
 
-    var response = new
-    {
-        status = allHealthy ? "Healthy" : "Unhealthy",
-        timestamp = DateTime.UtcNow.ToString("O"),
-        service = "restaurant-order-api",
-        version = "0.1.0",
-        color = deploymentColor,
-        checks = new
-        {
-            database = dbHealthy ? "Healthy" : "Unhealthy",
-            redis = redisHealthy ? "Healthy" : "Unhealthy"
-        }
-    };
+    var response = new HealthReadyResponse(
+        Status: allHealthy ? "Healthy" : "Unhealthy",
+        Timestamp: DateTime.UtcNow.ToString("O"),
+        Service: "restaurant-order-api",
+        Version: "0.1.0",
+        Color: deploymentColor,
+        Checks: new HealthChecks(
+            Database: dbHealthy ? "Healthy" : "Unhealthy",
+            Redis: redisHealthy ? "Healthy" : "Unhealthy"
+        )
+    );
 
     return allHealthy
         ? Results.Ok(response)
