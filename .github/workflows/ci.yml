@@ -128,8 +128,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci_test_user:ci_test_pass_123@localhost:5432/restaurant_order_ci
           REDIS_URL: redis://localhost:6379
-          JWT_SECRET: ci_test_jwt_secret_min_32_characters_long_12345
-          POSTGRES_PASSWORD: ci_test_postgres_password_12345
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci_test_jwt_secret_min_32_characters_long_12345' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_postgres_password_12345' }}
           API_IMAGE_DIGEST: sha256:1111111111111111111111111111111111111111111111111111111111111111
           WORKER_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
           CUSTOMER_WEB_IMAGE_DIGEST: sha256:3333333333333333333333333333333333333333333333333333333333333333
