@@ -75,6 +75,24 @@ export async function runPreflight(options = {}) {
     }
   }
 
+  // 4. Verify external ingress Docker network in execute mode
+  const runner = options.runner;
+  const networkName = 'restaurant_order_ingress';
+  if (flags.execute && runner) {
+    const netCheck = await runner.run('docker', ['network', 'inspect', networkName]);
+    if (!netCheck.success) {
+      if (options.autoCreateNetwork) {
+        logStep('PREFLIGHT', 'RUNNING', `Creating external Docker network '${networkName}'...`);
+        const createNet = await runner.run('docker', ['network', 'create', networkName]);
+        if (!createNet.success) {
+          errors.push(`Failed to create required external Docker network '${networkName}': ${createNet.stderr || createNet.stdout}`);
+        }
+      } else {
+        errors.push(`External Docker network '${networkName}' not found. Run 'docker network create ${networkName}' before deployment.`);
+      }
+    }
+  }
+
   if (errors.length > 0) {
     for (const err of errors) {
       logStep('PREFLIGHT', 'FAIL', err);

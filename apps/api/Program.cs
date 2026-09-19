@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 ConfigurationValidator.Validate(builder.Configuration, builder.Environment);
 
 builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();
+builder.Services.AddSingleton<IRedisConnectionProvider, StackExchangeRedisConnectionProvider>();
 builder.Services.AddSingleton<IRedisHealthCheck, StackExchangeRedisHealthCheck>();
 builder.Services.AddSingleton<IPricingService, PricingService>();
 builder.Services.AddOpenApi();

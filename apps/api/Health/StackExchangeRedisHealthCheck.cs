@@ -11,15 +11,18 @@ namespace RestaurantOrder.Api.Health;
 /// </summary>
 public class StackExchangeRedisHealthCheck : IRedisHealthCheck
 {
+    private readonly IRedisConnectionProvider _connectionProvider;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<StackExchangeRedisHealthCheck> _logger;
 
     public StackExchangeRedisHealthCheck(
+        IRedisConnectionProvider connectionProvider,
         IConfiguration configuration,
         IHostEnvironment environment,
         ILogger<StackExchangeRedisHealthCheck> logger)
     {
+        _connectionProvider = connectionProvider;
         _configuration = configuration;
         _environment = environment;
         _logger = logger;
@@ -43,18 +46,18 @@ public class StackExchangeRedisHealthCheck : IRedisHealthCheck
 
         try
         {
-            var options = ConfigurationOptions.Parse(rawUrl);
-            options.ConnectTimeout = 3000;
-            options.AsyncTimeout = 3000;
-            options.AbortOnConnectFail = false;
-
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-            var multiplexer = await ConnectionMultiplexer.ConnectAsync(options);
-            if (!multiplexer.IsConnected)
+            var multiplexer = await _connectionProvider.GetConnectionAsync(linkedCts.Token);
+            if (multiplexer == null || !multiplexer.IsConnected)
             {
-                _logger.LogError("Redis client failed to establish connection.");
+                if (_environment.IsDevelopment())
+                {
+                    return true;
+                }
+
+                _logger.LogError("Redis connection unavailable. Health probe failed closed.");
                 return false;
             }
 
@@ -63,12 +66,15 @@ public class StackExchangeRedisHealthCheck : IRedisHealthCheck
 
             return pingResult != TimeSpan.Zero;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Redis health check cancelled by caller.");
+            return false;
+        }
         catch (Exception ex)
         {
-            // Sanitized logging: never include raw endpoint or passwords
-            _logger.LogError("Redis health check failed: {ExceptionType} - {Message}",
-                ex.GetType().Name,
-                ex.Message);
+            // Sanitized logging: log exception type only, never ex.Message which may leak endpoints or auth info
+            _logger.LogError("Redis health check failed: {ExceptionType}", ex.GetType().Name);
             return false;
         }
     }

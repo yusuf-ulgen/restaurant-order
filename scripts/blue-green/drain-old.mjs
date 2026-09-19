@@ -14,18 +14,30 @@ export async function runDrainOld(options = {}) {
 
   logStep('DRAIN-OLD', 'RUNNING', `Draining in-flight connections on retired slot '${oldColor}' (${drainTimeoutSec}s)...`);
 
+  const projectName = `restaurant-order-${oldColor}`;
   const composeArgs = [
     'compose',
+    '-p', projectName,
     '-f', 'compose.yml',
     '-f', `compose.prod.${oldColor}.yml`,
     'stop',
   ];
 
+  const containersToCheck = [
+    `restaurant-order-api-${oldColor}`,
+    `restaurant-order-worker-${oldColor}`,
+    `restaurant-order-customer-web-${oldColor}`,
+    `restaurant-order-operations-web-${oldColor}`,
+    `restaurant-order-admin-web-${oldColor}`,
+  ];
+
   const drainPlan = {
     drainingSlot: oldColor,
+    composeProject: projectName,
     drainTimeoutSec,
     keepFailedSlot,
     composeCommand: `docker ${composeArgs.join(' ')}`,
+    verifiedContainers: containersToCheck,
   };
 
   // 1. If forensic preservation is requested, explicitly skip stopping
@@ -38,6 +50,9 @@ export async function runDrainOld(options = {}) {
   if (flags.dryRun) {
     logStep('DRAIN-OLD', 'DRY-RUN', `[SIMULATED] Waiting ${drainTimeoutSec}s for HTTP keep-alives and WebSocket sessions to close gracefully.`);
     logStep('DRAIN-OLD', 'DRY-RUN', `[SIMULATED] Would execute: ${drainPlan.composeCommand}`);
+    for (const c of containersToCheck) {
+      logStep('DRAIN-OLD', 'DRY-RUN', `[SIMULATED] Would inspect status of container '${c}'`);
+    }
     logStep('DRAIN-OLD', 'PASS', `Retired slot '${oldColor}' drained and ready for idle state.`);
     return { success: true, dryRun: true, plan: drainPlan };
   }
@@ -57,25 +72,31 @@ export async function runDrainOld(options = {}) {
     return { success: false, error: errorMsg, result: stopResult };
   }
 
-  // 5. Inspect container status to confirm stopped/exited
-  const containerName = `restaurant-order-api-${oldColor}`;
-  const inspectResult = await runner.run('docker', [
-    'inspect',
-    '--format',
-    '{{.State.Status}}',
-    containerName,
-  ]);
+  // 5. Inspect all 5 container statuses to confirm stopped/exited
+  for (const containerName of containersToCheck) {
+    const inspectResult = await runner.run('docker', [
+      'inspect',
+      '--format',
+      '{{.State.Status}}',
+      containerName,
+    ]);
 
-  if (inspectResult.success) {
-    const status = inspectResult.stdout.trim().toLowerCase();
-    if (status === 'running') {
-      const errorMsg = `Container '${containerName}' is still running after stop command! Drain verification failed.`;
+    if (!inspectResult.success) {
+      const errorMsg = `Failed to inspect container '${containerName}': ${inspectResult.stderr || inspectResult.stdout}. Drain verification failed.`;
       logStep('DRAIN-OLD', 'FAIL', errorMsg);
-      return { success: false, error: errorMsg, containerStatus: status };
+      return { success: false, error: errorMsg, containerName, inspectResult };
+    }
+
+    const status = (inspectResult.stdout || '').trim().toLowerCase();
+    const stoppedStatuses = new Set(['exited', 'dead']);
+    if (!stoppedStatuses.has(status)) {
+      const errorMsg = `Container '${containerName}' is still active (status: '${status}') after stop command! Drain verification failed.`;
+      logStep('DRAIN-OLD', 'FAIL', errorMsg);
+      return { success: false, error: errorMsg, containerName, containerStatus: status };
     }
   }
 
-  logStep('DRAIN-OLD', 'PASS', `Retired slot '${oldColor}' stopped gracefully and verified non-running.`);
+  logStep('DRAIN-OLD', 'PASS', `Retired slot '${oldColor}' stopped gracefully and all 5 containers verified non-running.`);
   return { success: true, dryRun: false, plan: drainPlan };
 }
 

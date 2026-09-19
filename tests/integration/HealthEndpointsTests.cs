@@ -169,7 +169,9 @@ public class HealthEndpointsTests : IClassFixture<WebApplicationFactory<Program>
 
         var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
         var logger = new LoggerFactory().CreateLogger<StackExchangeRedisHealthCheck>();
-        var checker = new StackExchangeRedisHealthCheck(config, env, logger);
+        var providerLogger = new LoggerFactory().CreateLogger<StackExchangeRedisConnectionProvider>();
+        var provider = new StackExchangeRedisConnectionProvider(config, env, providerLogger);
+        var checker = new StackExchangeRedisHealthCheck(provider, config, env, logger);
 
         var isHealthy = await checker.IsHealthyAsync();
         Assert.False(isHealthy);

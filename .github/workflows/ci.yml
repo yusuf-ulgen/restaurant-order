@@ -9,6 +9,8 @@ on:
   pull_request:
     branches:
       - main
+      - 'feat/**'
+      - 'fix/**'
 
 permissions:
   contents: read
@@ -25,12 +27,12 @@ jobs:
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
 
@@ -44,7 +46,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -52,7 +54,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@3950428444dd6847d042c98d462813da3429c477 # v4.3.0
         with:
           dotnet-version: 10.0.x
 
@@ -79,7 +81,7 @@ jobs:
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
       - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests
-        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs
 
       # Gate 5: ESLint
       - name: Gate 5 - ESLint
@@ -123,13 +125,35 @@ jobs:
 
       # Step: Docker Compose Validation
       - name: Docker - Compose Configuration Validation
+        env:
+          DATABASE_URL: postgresql://ci_test_user:ci_test_pass_123@localhost:5432/restaurant_order_ci
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ci_test_jwt_secret_min_32_characters_long_12345
+          POSTGRES_PASSWORD: ci_test_postgres_password_12345
+          API_IMAGE_DIGEST: sha256:1111111111111111111111111111111111111111111111111111111111111111
+          WORKER_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
+          CUSTOMER_WEB_IMAGE_DIGEST: sha256:3333333333333333333333333333333333333333333333333333333333333333
+          OPERATIONS_WEB_IMAGE_DIGEST: sha256:4444444444444444444444444444444444444444444444444444444444444444
+          ADMIN_WEB_IMAGE_DIGEST: sha256:5555555555555555555555555555555555555555555555555555555555555555
         run: |
           docker compose -f compose.yml -f compose.dev.yml config
           docker compose -f compose.yml -f compose.staging.yml config
-          docker compose -f compose.yml -f compose.prod.blue.yml config
-          docker compose -f compose.yml -f compose.prod.green.yml config
+          docker compose -p restaurant-order-blue -f compose.yml -f compose.prod.blue.yml config
+          docker compose -p restaurant-order-green -f compose.yml -f compose.prod.green.yml config
+          docker compose -f compose.ingress.yml config
           docker compose -f deploy/docker-compose.yml config
 
       # Step: Docker Container Smoke & Hardening Tests
       - name: Docker - Container Smoke & Hardening Tests
         run: node --test scripts/tests/container-smoke.test.mjs
+
+      # Step: Repository Cleanliness Check (No modified tracked files or untracked test leftovers)
+      - name: Cleanliness - Verify Untouched Repository State
+        shell: bash
+        run: |
+          git diff --exit-code
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: Untracked or dirty repository files detected after build/test pipeline:"
+            git status --porcelain
+            exit 1
+          fi

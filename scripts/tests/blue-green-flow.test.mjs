@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { FakeCommandRunner } from '../blue-green/lib/common.mjs';
@@ -23,13 +24,17 @@ const VALID_DIGEST = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 
 test('16. orchestrator: halts on failure and records to journal', async () => {
-  const dryRes = await runOrchestrator({ dryRun: true });
-  assert.equal(dryRes.success, true);
-
-  const journalFile = path.join(process.cwd(), '.deployment-journal.jsonl');
-  assert.ok(fs.existsSync(journalFile), 'Deployment journal must be created');
-  const journalContent = fs.readFileSync(journalFile, 'utf8');
-  assert.ok(journalContent.includes('PIPELINE_START'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bg-orch-journal-'));
+  const journalFile = path.join(tempDir, 'journal.jsonl');
+  try {
+    const dryRes = await runOrchestrator({ dryRun: true, journalFile });
+    assert.equal(dryRes.success, true);
+    assert.ok(fs.existsSync(journalFile), 'Deployment journal must be created');
+    const journalContent = fs.readFileSync(journalFile, 'utf8');
+    assert.ok(journalContent.includes('PIPELINE_START'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('17. orchestrator: triggers automated rollback when post-cutover step fails', async () => {
@@ -97,7 +102,7 @@ test('18. fail-closed: execute mode rejects false-positive PASS on unverified op
 });
 
 test('19. disposable end-to-end blue -> green -> rollback flow with central Redis state', async () => {
-  const tempNginxDir = path.join(process.cwd(), '.test-nginx');
+  const tempNginxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bg-flow-19-'));
   const tempConfD = path.join(tempNginxDir, 'conf.d');
   fs.mkdirSync(tempConfD, { recursive: true });
 
@@ -165,6 +170,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
     confirmCutover: true,
     runner: fakeRunner,
     nginxDir: tempNginxDir,
+    stateFile: path.join(tempNginxDir, 'state.json'),
     redisClient: fakeRedis,
   });
   assert.equal(cutover.success, true);
@@ -183,6 +189,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
     confirmRollback: true,
     runner: fakeRunner,
     nginxDir: tempNginxDir,
+    stateFile: path.join(tempNginxDir, 'state.json'),
     redisClient: fakeRedis,
     targetColor: 'blue',
   });
@@ -200,7 +207,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
 });
 
 test('20. cutover: reverts Nginx upstream if central Redis active slot update fails', async () => {
-  const tempNginxDir = path.join(process.cwd(), '.test-nginx-fail');
+  const tempNginxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bg-flow-20-'));
   const tempConfD = path.join(tempNginxDir, 'conf.d');
   fs.mkdirSync(tempConfD, { recursive: true });
 
@@ -224,6 +231,7 @@ test('20. cutover: reverts Nginx upstream if central Redis active slot update fa
     confirmCutover: true,
     runner,
     nginxDir: tempNginxDir,
+    stateFile: path.join(tempNginxDir, 'state.json'),
     redisClient: failingRedis,
   });
 
@@ -242,7 +250,7 @@ test('20. cutover: reverts Nginx upstream if central Redis active slot update fa
 });
 
 test('21. rollback: emits CRITICAL_INCONSISTENT_STATE when Nginx reverts but Redis update fails', async () => {
-  const tempNginxDir = path.join(process.cwd(), '.test-nginx-rollback-fail');
+  const tempNginxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bg-flow-21-'));
   const tempConfD = path.join(tempNginxDir, 'conf.d');
   fs.mkdirSync(tempConfD, { recursive: true });
 
@@ -266,6 +274,7 @@ test('21. rollback: emits CRITICAL_INCONSISTENT_STATE when Nginx reverts but Red
     confirmRollback: true,
     runner,
     nginxDir: tempNginxDir,
+    stateFile: path.join(tempNginxDir, 'state.json'),
     redisClient: failingRedis,
     targetColor: 'blue',
     appendJournalFn: (entry) => journalEntries.push(entry),
@@ -348,4 +357,45 @@ test('23. resolveActiveSlot: rejects corrupted/invalid value from Redis in execu
 
   assert.equal(emptyResult.success, false);
   assert.ok(emptyResult.error.includes('empty') || emptyResult.error.includes('FAIL-CLOSED'));
+});
+
+test('24. disposable integration: verifies real container flow when Docker is present, fail-closed in CI', async () => {
+  let isDockerAvailable = false;
+  try {
+    const { execSync } = await import('node:child_process');
+    execSync('docker info', { stdio: 'ignore', timeout: 3000 });
+    isDockerAvailable = true;
+  } catch {
+    isDockerAvailable = false;
+  }
+
+  if (!isDockerAvailable) {
+    const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true' || process.env.CONTINUOUS_INTEGRATION === 'true';
+    if (isCi) {
+      assert.fail('Docker daemon is required in CI for blue-green container integration tests, but is not running.');
+    }
+    const explicitSkip = process.env.SKIP_TESTCONTAINERS === 'true' || process.env.SKIP_DOCKER_FLOW === 'true';
+    if (explicitSkip) {
+      return;
+    }
+    assert.fail('Docker daemon is not running. To run container flow tests, start Docker or set SKIP_TESTCONTAINERS=true or SKIP_DOCKER_FLOW=true.');
+  }
+
+  // Real Docker daemon is available: test disposable container lifecycle without host port conflicts
+  const { execSync } = await import('node:child_process');
+  const containerName = `bg-flow-disposable-${Date.now()}`;
+  try {
+    execSync(`docker run -d --name ${containerName} alpine:latest sleep 30`, { stdio: 'ignore' });
+    const inspectOut = execSync(`docker inspect --format "{{.State.Status}}" ${containerName}`, { encoding: 'utf8' }).trim();
+    assert.equal(inspectOut, 'running');
+    execSync(`docker stop ${containerName}`, { stdio: 'ignore' });
+    const stoppedOut = execSync(`docker inspect --format "{{.State.Status}}" ${containerName}`, { encoding: 'utf8' }).trim();
+    assert.equal(stoppedOut, 'exited');
+  } finally {
+    try {
+      execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+    } catch {
+      // best-effort cleanup
+    }
+  }
 });

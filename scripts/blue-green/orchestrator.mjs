@@ -14,15 +14,16 @@ import { runObserve } from './observe.mjs';
 import { runDrainOld } from './drain-old.mjs';
 import { runRollback } from './rollback.mjs';
 
-const JOURNAL_FILE = path.join(process.cwd(), '.deployment-journal.jsonl');
+const DEFAULT_JOURNAL_FILE = path.join(process.cwd(), '.deployment-journal.jsonl');
 
-function appendJournal(entry, isExecute = false) {
+function appendJournal(entry, isExecute = false, customJournalFile = null) {
+  const journalPath = customJournalFile || process.env.DEPLOYMENT_JOURNAL_FILE || DEFAULT_JOURNAL_FILE;
   try {
     const line = JSON.stringify({ timestamp: new Date().toISOString(), ...entry }) + '\n';
-    fs.appendFileSync(JOURNAL_FILE, line, 'utf8');
+    fs.appendFileSync(journalPath, line, 'utf8');
   } catch (err) {
     if (isExecute) {
-      throw new Error(`CRITICAL: Failed to write to deployment journal '${JOURNAL_FILE}': ${err.message}`);
+      throw new Error(`CRITICAL: Failed to write to deployment journal '${journalPath}': ${err.message}`);
     }
   }
 }
@@ -33,10 +34,11 @@ function appendJournal(entry, isExecute = false) {
  * Enforces mid-pipeline consistency and post-cutover verification.
  */
 export async function runOrchestrator(options = {}) {
-  const flags = { ...parseArgs(), ...options };
-  const isExecute = flags.execute === true;
+  const flags = parseArgs(process.argv.slice(2), options);
+  const isExecute = flags.execute === true && flags.dryRun !== true;
+  const journalFile = options.journalFile || process.env.DEPLOYMENT_JOURNAL_FILE || null;
 
-  // 1. Initial Slot Resolution via Single Source of Truth
+  // Resolve Active and Target Colors via single source of truth
   const slotResolution = await resolveActiveSlot({
     execute: isExecute,
     dryRun: flags.dryRun,
@@ -46,35 +48,35 @@ export async function runOrchestrator(options = {}) {
   });
 
   if (!slotResolution.success) {
-    logStep('ORCHESTRATOR', 'FAIL', `Initial active slot resolution failed: ${slotResolution.error}`);
-    return { success: false, error: slotResolution.error, failedStep: 'active-slot-resolution' };
+    logStep('ORCHESTRATOR', 'FAIL', `Pipeline aborted: ${slotResolution.error}`);
+    appendJournal({ event: 'PIPELINE_ABORTED', error: slotResolution.error }, isExecute, journalFile);
+    return { success: false, error: slotResolution.error };
   }
 
   const activeColor = slotResolution.activeSlot;
   const targetColor = slotResolution.targetSlot;
 
-  console.log('================================================================================');
-  console.log('RESTAURANT-ORDER BLUE-GREEN DEPLOYMENT ORCHESTRATOR');
-  console.log(`Active Slot: '${activeColor}' | Target Slot: '${targetColor}' | Mode: ${flags.dryRun ? 'DRY-RUN (Safe)' : 'EXECUTE (Live)'}`);
-  console.log('================================================================================\n');
+  console.log('='.repeat(80));
+  console.log(`RESTAURANT-ORDER BLUE-GREEN DEPLOYMENT ORCHESTRATOR`);
+  console.log(`Active Slot: '${activeColor}' | Target Slot: '${targetColor}' | Mode: ${isExecute ? 'EXECUTE (Live)' : 'DRY-RUN (Simulated)'}`);
+  console.log('='.repeat(80));
 
   appendJournal({
     event: 'PIPELINE_START',
-    activeColor,
-    targetColor,
-    mode: flags.dryRun ? 'DRY-RUN' : 'EXECUTE',
-    source: slotResolution.source,
-  }, isExecute);
+    activeSlot: activeColor,
+    targetSlot: targetColor,
+    mode: isExecute ? 'EXECUTE' : 'DRY-RUN',
+  }, isExecute, journalFile);
 
   const sharedContext = {
-    ...flags,
-    redisUrl: options.redisUrl,
-    redisClient: options.redisClient,
-    runner: options.runner,
+    ...options,
+    execute: flags.execute,
+    dryRun: flags.dryRun,
+    color: targetColor,
   };
 
   const steps = [
-    { name: 'Preflight Validation', id: 'preflight', fn: () => (options.preflightFn ? options.preflightFn() : runPreflight({ ...sharedContext, color: targetColor })) },
+    { name: 'Preflight Validation', id: 'preflight', fn: () => (options.preflightFn ? options.preflightFn() : runPreflight(sharedContext)) },
     { name: 'Configuration Validation', id: 'config-validate', fn: () => (options.configValidateFn ? options.configValidateFn() : runConfigValidate(sharedContext)) },
     { name: 'Database Migration Safety', id: 'migration-check', fn: () => (options.migrationCheckFn ? options.migrationCheckFn() : runMigrationCheck(sharedContext)) },
     { name: 'Deploy Inactive Slot', id: 'deploy-inactive', fn: () => (options.deployInactiveFn ? options.deployInactiveFn() : runDeployInactive({ ...sharedContext, color: targetColor })) },
@@ -89,6 +91,13 @@ export async function runOrchestrator(options = {}) {
         redisUrl: options.redisUrl,
         redisClient: options.redisClient,
       });
+
+      // Fail-closed in execute mode if Redis query fails, timeouts, or errors
+      if (isExecute && !midCheck.success) {
+        const errorMsg = `Mid-pipeline active slot check failed: ${midCheck.error || 'Redis unreachable'}. Halting cutover.`;
+        logStep('ORCHESTRATOR', 'FAIL', errorMsg);
+        return { success: false, error: errorMsg };
+      }
 
       if (midCheck.success && midCheck.activeSlot !== activeColor) {
         const errorMsg = `Active slot changed unexpectedly from '${activeColor}' to '${midCheck.activeSlot}' mid-pipeline! Halting cutover.`;
@@ -134,7 +143,7 @@ export async function runOrchestrator(options = {}) {
       success: result.success,
       status: result.status || (result.success ? 'PASS' : 'FAIL'),
       error: result.error,
-    }, isExecute);
+    }, isExecute, journalFile);
 
     if (!result.success) {
       logStep('ORCHESTRATOR', 'FAIL', `Pipeline halted at step: ${step.name}. Triggering safety abort.`);
@@ -149,21 +158,21 @@ export async function runOrchestrator(options = {}) {
           targetColor: activeColor,
           confirmRollback: true,
           reason: `Post-cutover failure at step: ${step.name}`,
-          appendJournalFn: (entry) => appendJournal(entry, isExecute),
+          appendJournalFn: (entry) => appendJournal(entry, isExecute, journalFile),
         });
 
         appendJournal({
           event: 'POST_CUTOVER_ROLLBACK',
           rollbackSuccess: rollbackResult.success,
           rollbackResult,
-        }, isExecute);
+        }, isExecute, journalFile);
 
         if (!rollbackResult.success) {
           logStep('ORCHESTRATOR', 'FAIL', 'CRITICAL: Post-cutover rollback failed!');
         }
       }
 
-      appendJournal({ event: 'PIPELINE_FAILED', failedStep: step.name }, isExecute);
+      appendJournal({ event: 'PIPELINE_FAILED', failedStep: step.name }, isExecute, journalFile);
       return { success: false, failedStep: step.name, result, cutoverCompleted };
     }
 
@@ -176,7 +185,7 @@ export async function runOrchestrator(options = {}) {
   logStep('ORCHESTRATOR', 'PASS', `Blue-Green deployment pipeline completed successfully! Active slot is now '${targetColor}'.`);
   console.log('================================================================================\n');
 
-  appendJournal({ event: 'PIPELINE_SUCCESS', activeSlot: targetColor }, isExecute);
+  appendJournal({ event: 'PIPELINE_SUCCESS', activeSlot: targetColor }, isExecute, journalFile);
   return { success: true, activeSlot: targetColor };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { App } from './App';
 
 describe('Admin Web App', () => {
@@ -35,7 +35,9 @@ describe('Admin Web App', () => {
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Henüz Raporlanmış Veri Yok')).toBeDefined();
-      expect(screen.getByText('Raporları Yenile')).toBeDefined();
+      const actionButton = screen.getByText('Raporları Yenile');
+      expect(actionButton).toBeDefined();
+      fireEvent.click(actionButton);
     });
 
     it('catches render errors and displays error boundary fallback', () => {

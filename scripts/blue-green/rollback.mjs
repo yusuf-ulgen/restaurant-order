@@ -5,14 +5,14 @@ import { defaultCommandRunner } from './lib/command-runner.mjs';
 import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
 import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
-const STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
+const DEFAULT_STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
 const INGRESS_CONTAINER = 'restaurant-order-ingress';
 
 /**
  * Builds rollback upstream config using container DNS names on the shared
  * restaurant_order_ingress Docker network. Internal ports: API=5000, Web=8080.
  */
-function buildRollbackUpstreamConfig(safeSlot, timestamp) {
+export function buildRollbackUpstreamConfig(safeSlot, timestamp) {
   const apiContainer = `restaurant-order-api-${safeSlot}`;
   const custContainer = `restaurant-order-customer-web-${safeSlot}`;
   const opsContainer = `restaurant-order-operations-web-${safeSlot}`;
@@ -52,32 +52,45 @@ function buildRollbackUpstreamConfig(safeSlot, timestamp) {
  * updates the central Redis active slot, and verifies consistency.
  * Retains the failing slot online for forensic analysis.
  *
- * Uses docker exec to validate and reload inside the ingress container,
- * preventing accidental reload of an unrelated host nginx process.
+ * Uses docker exec to validate and reload inside the ingress container.
+ * In execute mode, Redis is authoritative unless --emergency-override is passed.
  */
 export async function runRollback(options = {}) {
   const flags = { ...parseArgs(), ...options };
   const runner = options.runner || defaultCommandRunner;
+  const stateFile = options.stateFile || DEFAULT_STATE_FILE;
+  const isExecute = flags.execute === true && flags.dryRun !== true;
 
   let state = {};
-  if (fs.existsSync(STATE_FILE)) {
+  if (fs.existsSync(stateFile)) {
     try {
-      state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     } catch {
       // Ignore corrupt state file
     }
   }
 
-  // Resolve current active slot
+  // Resolve current active slot via authoritative Redis
   const slotResolution = await resolveActiveSlot({
-    execute: flags.execute,
+    execute: isExecute,
     dryRun: flags.dryRun,
     redisUrl: options.redisUrl,
     redisClient: options.redisClient,
     targetColor: options.targetColor,
   });
 
-  const currentSlot = (flags.color || (slotResolution.success ? slotResolution.activeSlot : state.newActiveSlot) || 'green').toLowerCase();
+  if (isExecute && !slotResolution.success && !flags.emergencyOverride) {
+    const errorMsg = `ROLLBACK ABORTED: Cannot resolve active slot from authoritative Redis (${slotResolution.error}). Refusing silent fallback in execute mode. Operator must supply --emergency-override to bypass during a total Redis outage.`;
+    logStep('ROLLBACK', 'FAIL', errorMsg);
+    return { success: false, status: 'BLOCKED_NO_CENTRAL_STATE', error: errorMsg };
+  }
+
+  if (flags.emergencyOverride) {
+    logStep('ROLLBACK', 'WARNING', 'EMERGENCY OVERRIDE ACTIVE: Bypassing central Redis state resolution. Manual operator reconciliation required after recovery.');
+  }
+
+  // Determine current and safe rollback target using matched state fields (activeSlot, previousActiveSlot)
+  const currentSlot = (flags.color || (slotResolution.success ? slotResolution.activeSlot : (state.activeSlot || state.newActiveSlot)) || 'green').toLowerCase();
   const safeSlot = (options.targetColor || state.previousActiveSlot || (currentSlot === 'blue' ? 'green' : 'blue')).toLowerCase();
 
   logStep('ROLLBACK', 'RUNNING', `Initiating emergency rollback from '${currentSlot}' to '${safeSlot}' (container DNS routing)...`);
@@ -94,6 +107,7 @@ export async function runRollback(options = {}) {
     ingressContainer: INGRESS_CONTAINER,
     keepFailedSlotRunning: true, // Forensic preservation
     timestamp: new Date().toISOString(),
+    emergencyOverride: flags.emergencyOverride === true,
   };
 
   const nginxDir = options.nginxDir || process.env.NGINX_CONF_DIR || path.join(process.cwd(), 'deploy/nginx');
@@ -171,10 +185,10 @@ export async function runRollback(options = {}) {
     const redisResult = await setRedisKey(REDIS_ACTIVE_SLOT_KEY, safeSlot, {
       redisUrl: options.redisUrl || process.env.REDIS_URL,
       fakeClient: options.redisClient,
-      required: flags.execute,
+      required: flags.execute && !flags.emergencyOverride,
     });
 
-    if (!redisResult.success) {
+    if (!redisResult.success && !flags.emergencyOverride) {
       const errorMsg = `CRITICAL_INCONSISTENT_STATE: Ingress was reverted to '${safeSlot}', but Redis active-slot state failed to update: ${redisResult.error}!`;
       logStep('ROLLBACK', 'FAIL', errorMsg);
       if (options.appendJournalFn) {
@@ -191,19 +205,22 @@ export async function runRollback(options = {}) {
         error: errorMsg,
         plan: rollbackPlan,
       };
+    } else if (!redisResult.success && flags.emergencyOverride) {
+      logStep('ROLLBACK', 'WARNING', `Emergency override: Redis state could not be updated (${redisResult.error}), but Nginx rollback succeeded.`);
     }
 
     // Persist rollback state ONLY after Redis update succeeds
-    fs.writeFileSync(STATE_FILE, JSON.stringify({
+    fs.writeFileSync(stateFile, JSON.stringify({
       activeSlot: safeSlot,
-      previousSlot: currentSlot,
+      previousActiveSlot: currentSlot,
       rollbackTimestamp: rollbackPlan.timestamp,
       ingressContainer,
+      emergencyOverride: flags.emergencyOverride === true,
     }, null, 2), 'utf8');
 
     logStep('ROLLBACK', 'PASS', `Emergency rollback completed. Traffic routed back to safe slot '${safeSlot}' via container DNS.`);
     logStep('ROLLBACK', 'PASS', `Failing slot '${currentSlot}' retained online for forensics and memory dump.`);
-    return { success: true, status: 'ROLLBACK_SUCCESS', plan: rollbackPlan };
+    return { success: true, status: flags.emergencyOverride ? 'EMERGENCY_OVERRIDE_SUCCESS' : 'ROLLBACK_SUCCESS', plan: rollbackPlan };
   } catch (err) {
     if (originalContent && fs.existsSync(upstreamConfPath)) {
       fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { App } from './App';
 
 describe('Customer Web App', () => {
@@ -27,7 +27,9 @@ describe('Customer Web App', () => {
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Aktif Sipariş Bulunmuyor')).toBeDefined();
-      expect(screen.getByText('Menüyü Aç')).toBeDefined();
+      const actionButton = screen.getByText('Menüyü Aç');
+      expect(actionButton).toBeDefined();
+      fireEvent.click(actionButton);
     });
 
     it('catches render errors and displays error boundary fallback', () => {

@@ -21,16 +21,36 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
         _fixture = fixture;
     }
 
+    private bool EnsureDockerOrSkip()
+    {
+        if (_fixture.IsDockerRunning)
+        {
+            return true;
+        }
+
+        var isCi = string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(Environment.GetEnvironmentVariable("CONTINUOUS_INTEGRATION"), "true", StringComparison.OrdinalIgnoreCase);
+
+        if (isCi)
+        {
+            Assert.Fail("Docker is required in CI for Testcontainers integration tests, but the Docker daemon is not running.");
+        }
+
+        var explicitSkip = string.Equals(Environment.GetEnvironmentVariable("SKIP_TESTCONTAINERS"), "true", StringComparison.OrdinalIgnoreCase);
+        if (explicitSkip)
+        {
+            return false;
+        }
+
+        Assert.Fail("Docker daemon is not running. To run integration tests locally, start Docker or explicitly set SKIP_TESTCONTAINERS=true.");
+        return false;
+    }
+
     [Fact]
     public async Task PostgreSql_Container_Connectivity_And_QueryExecution()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            // Host environment does not have an active Docker daemon.
-            // In CI (GitHub Actions), Docker is active and this executes against the live container.
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!EnsureDockerOrSkip()) return;
 
         Assert.NotEmpty(_fixture.DatabaseConnectionString);
 
@@ -65,11 +85,7 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
     [Fact]
     public async Task Redis_Container_Connectivity_And_Ping()
     {
-        if (!_fixture.IsDockerRunning)
-        {
-            Assert.False(_fixture.IsDockerRunning);
-            return;
-        }
+        if (!EnsureDockerOrSkip()) return;
 
         Assert.NotEmpty(_fixture.RedisEndpoint);
 
@@ -90,7 +106,8 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
             .Build();
 
         var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
-        var checker = new StackExchangeRedisHealthCheck(config, env, NullLogger<StackExchangeRedisHealthCheck>.Instance);
+        var provider = new StackExchangeRedisConnectionProvider(config, env, NullLogger<StackExchangeRedisConnectionProvider>.Instance);
+        var checker = new StackExchangeRedisHealthCheck(provider, config, env, NullLogger<StackExchangeRedisHealthCheck>.Instance);
 
         var isHealthy = await checker.IsHealthyAsync();
         Assert.True(isHealthy);
@@ -99,16 +116,10 @@ public class TestcontainersIntegrationTests : IClassFixture<TestcontainersFixtur
     [Fact]
     public void Container_Isolation_And_Configuration_Integrity()
     {
-        // Verifies the fixture correctly configures ports and credentials without leaking
-        if (_fixture.IsDockerRunning)
-        {
-            Assert.Contains("restaurant_order_test", _fixture.DatabaseConnectionString);
-            Assert.NotEmpty(_fixture.RedisEndpoint);
-        }
-        else
-        {
-            Assert.True(true, "Docker is not available in the current host environment. Container tests run in CI.");
-        }
+        if (!EnsureDockerOrSkip()) return;
+
+        Assert.Contains("restaurant_order_test", _fixture.DatabaseConnectionString);
+        Assert.NotEmpty(_fixture.RedisEndpoint);
     }
 
     private class TestHostEnvironment : IHostEnvironment
