@@ -31,6 +31,8 @@ playwright-report/
 blob-report/
 *.cobertura.xml
 coverage.json
+*.sarif
+results.sarif
 
 # Deployment State & Journal
 .deployment-state.json
