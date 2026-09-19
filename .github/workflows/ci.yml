@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -65,9 +67,15 @@ jobs:
       - name: Gate 2 - Documentation & Link Validation
         run: node scripts/check-docs.mjs
 
-      # Gate 3: Secret Scanning
-      - name: Gate 3 - Secret & Credential Scanning
+      # Gate 3a: Repository Secret Scanning
+      - name: Gate 3a - In-Repo Secret & Credential Scanning
         run: node scripts/check-secrets.mjs
+
+      # Gate 3b: Gitleaks Secret Scanner (Pinned to immutable SHA v3.0.0)
+      - name: Gate 3b - Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
       - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests

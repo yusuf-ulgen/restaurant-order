@@ -1,11 +1,14 @@
 using System.Text.Json;
 using RestaurantOrder.Api;
+using RestaurantOrder.Api.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Fail-fast configuration validation
 ConfigurationValidator.Validate(builder.Configuration, builder.Environment);
 
+builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();
+builder.Services.AddSingleton<IRedisHealthCheck, StackExchangeRedisHealthCheck>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -17,7 +20,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Starter Health Endpoints with deployment color visibility
+// Liveness probe indicating process is alive (never checks external dependencies)
 app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "Healthy",
@@ -30,16 +33,41 @@ app.MapGet("/health/live", () => Results.Ok(new
 .WithSummary("Liveness probe indicating process is alive")
 .WithTags("Health");
 
-app.MapGet("/health/ready", () => Results.Ok(new
+// Readiness probe verifying real PostgreSQL and Redis accessibility
+app.MapGet("/health/ready", async (
+    IDatabaseHealthCheck dbCheck,
+    IRedisHealthCheck redisCheck,
+    CancellationToken ct) =>
 {
-    status = "Healthy",
-    timestamp = DateTime.UtcNow.ToString("O"),
-    service = "restaurant-order-api",
-    version = "0.1.0",
-    color = deploymentColor
-}))
+    var dbTask = dbCheck.IsHealthyAsync(ct);
+    var redisTask = redisCheck.IsHealthyAsync(ct);
+
+    await Task.WhenAll(dbTask, redisTask);
+
+    var dbHealthy = await dbTask;
+    var redisHealthy = await redisTask;
+    var allHealthy = dbHealthy && redisHealthy;
+
+    var response = new
+    {
+        status = allHealthy ? "Healthy" : "Unhealthy",
+        timestamp = DateTime.UtcNow.ToString("O"),
+        service = "restaurant-order-api",
+        version = "0.1.0",
+        color = deploymentColor,
+        checks = new
+        {
+            database = dbHealthy ? "Healthy" : "Unhealthy",
+            redis = redisHealthy ? "Healthy" : "Unhealthy"
+        }
+    };
+
+    return allHealthy
+        ? Results.Ok(response)
+        : Results.Json(response, statusCode: StatusCodes.Status503ServiceUnavailable);
+})
 .WithName("HealthReady")
-.WithSummary("Readiness probe indicating service is ready to accept traffic")
+.WithSummary("Readiness probe verifying database and redis accessibility")
 .WithTags("Health");
 
 app.Run();

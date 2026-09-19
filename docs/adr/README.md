@@ -33,6 +33,7 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 | `ADR-0004` | Realtime Event Transport Architecture | `PROPOSED` | SignalR Hubs & Redis Backplane Design |
 | `ADR-0005` | ESC/POS Thermal Printing Integration Pattern | `PROPOSED` | Local Branch Print Agent vs Cloud Direct Socket |
 | `ADR-0006` | Digital Payment Gateway Integration Strategy | `PROPOSED` | Multi-gateway abstraction layer |
+| [ADR-0007](./0007-health-checks-and-dependency-verification.md) | Infrastructure Health Checks & Dependency Verification | `ACCEPTED` | Fail-closed liveness/readiness separation, zero-leak health checks |
 
 ---
 
