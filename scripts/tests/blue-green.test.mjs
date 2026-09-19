@@ -19,20 +19,39 @@ import { runObserve } from '../blue-green/observe.mjs';
 import { runRollback } from '../blue-green/rollback.mjs';
 import { runOrchestrator } from '../blue-green/orchestrator.mjs';
 
-const VALID_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+/**
+ * A properly formatted but deliberately non-real sha256 digest for test fixtures.
+ * NOT the empty-content hash (e3b0c...) which is now explicitly rejected in execute mode.
+ */
+const VALID_DIGEST = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const EMPTY_CONTENT_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
 test('1. Docker Compose config validation across all environments', () => {
   const composeFiles = [
     ['-f', 'compose.yml', '-f', 'compose.dev.yml'],
     ['-f', 'compose.yml', '-f', 'compose.staging.yml'],
-    ['-f', 'compose.yml', '-f', 'compose.prod.blue.yml'],
-    ['-f', 'compose.yml', '-f', 'compose.prod.green.yml'],
+    // Production slots: validate with -p flag to reflect real usage
+    ['-p', 'restaurant-order-blue', '-f', 'compose.yml', '-f', 'compose.prod.blue.yml'],
+    ['-p', 'restaurant-order-green', '-f', 'compose.yml', '-f', 'compose.prod.green.yml'],
+    ['-p', 'restaurant-order-ingress', '-f', 'compose.ingress.yml'],
     ['-f', 'deploy/docker-compose.yml'],
   ];
 
+  const testEnv = {
+    ...process.env,
+    DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/restaurant_order',
+    REDIS_URL: 'redis://localhost:6379',
+    JWT_SECRET: 'test_jwt_secret_min_32_characters_long_for_security',
+    API_IMAGE_DIGEST: VALID_DIGEST,
+    WORKER_IMAGE_DIGEST: VALID_DIGEST,
+    CUSTOMER_WEB_IMAGE_DIGEST: VALID_DIGEST,
+    OPERATIONS_WEB_IMAGE_DIGEST: VALID_DIGEST,
+    ADMIN_WEB_IMAGE_DIGEST: VALID_DIGEST,
+  };
+
   for (const args of composeFiles) {
     const cmd = `docker compose ${args.join(' ')} config`;
-    const output = execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const output = execSync(cmd, { env: testEnv, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
     assert.ok(output.includes('services:'), `Expected valid compose config for: ${args.join(' ')}`);
   }
 });
@@ -54,19 +73,36 @@ test('3. Environment contracts and missing environment validation', () => {
   assert.ok(!customerEnv.includes('JWT_SECRET'), 'Customer web must NOT contain JWT_SECRET');
 });
 
-test('4. Blue/Green compose files use immutable image digests and non-overlapping ports', () => {
+test('4. Blue/Green compose files use immutable image digests, project isolation, and container DNS routing', () => {
   const blueContent = fs.readFileSync(path.join(process.cwd(), 'compose.prod.blue.yml'), 'utf8');
   const greenContent = fs.readFileSync(path.join(process.cwd(), 'compose.prod.green.yml'), 'utf8');
+  const ingressContent = fs.readFileSync(path.join(process.cwd(), 'compose.ingress.yml'), 'utf8');
 
-  assert.ok(blueContent.includes('@${API_IMAGE_DIGEST'), 'Blue compose must pin API image by digest');
-  assert.ok(blueContent.includes('@${WORKER_IMAGE_DIGEST'), 'Blue compose must pin Worker image by digest');
-  assert.ok(greenContent.includes('@${API_IMAGE_DIGEST'), 'Green compose must pin API image by digest');
-  assert.ok(greenContent.includes('@${WORKER_IMAGE_DIGEST'), 'Green compose must pin Worker image by digest');
+  // All 5 images must be pinned by digest in both slots
+  for (const [label, content] of [['blue', blueContent], ['green', greenContent]]) {
+    assert.ok(content.includes('@${API_IMAGE_DIGEST'), `${label} compose must pin API image by digest`);
+    assert.ok(content.includes('@${WORKER_IMAGE_DIGEST'), `${label} compose must pin Worker image by digest`);
+    assert.ok(content.includes('@${CUSTOMER_WEB_IMAGE_DIGEST'), `${label} compose must pin customer-web by digest`);
+    assert.ok(content.includes('@${OPERATIONS_WEB_IMAGE_DIGEST'), `${label} compose must pin operations-web by digest`);
+    assert.ok(content.includes('@${ADMIN_WEB_IMAGE_DIGEST'), `${label} compose must pin admin-web by digest`);
+  }
 
-  assert.ok(blueContent.includes('5001'));
-  assert.ok(greenContent.includes('5002'));
+  // Slots use expose (internal port), not host port bindings
+  // Ingress reaches them via container DNS on the shared network
+  assert.ok(blueContent.includes('expose:'), 'Blue slot must use expose, not host ports');
+  assert.ok(greenContent.includes('expose:'), 'Green slot must use expose, not host ports');
+
+  // No DB secrets in web slots
   assert.ok(!blueContent.includes('5432:5432'));
   assert.ok(!greenContent.includes('5432:5432'));
+
+  // Shared external ingress network declared in both slots
+  assert.ok(blueContent.includes('restaurant_order_ingress'), 'Blue must connect to shared ingress network');
+  assert.ok(greenContent.includes('restaurant_order_ingress'), 'Green must connect to shared ingress network');
+
+  // Ingress compose connects to the same shared network
+  assert.ok(ingressContent.includes('restaurant_order_ingress'), 'Ingress must be on the shared network');
+  assert.ok(ingressContent.includes('restaurant-order-ingress'), 'Ingress container must have stable name');
 });
 
 test('5. CommandRunner masks secrets and handles execution failure', async () => {
@@ -97,7 +133,7 @@ test('6. FakeCommandRunner tracks calls and returns injected response', async ()
   assert.equal(fake.calls.length, 2);
 });
 
-test('7. Preflight: slot selection, digest validation, and rejection of latest tag', async () => {
+test('7. Preflight: slot selection, digest validation, rejection of latest tag, and empty-content hash', async () => {
   assert.equal(getInactiveColor('blue'), 'green');
   assert.equal(getInactiveColor('green'), 'blue');
   assert.throws(() => getInactiveColor('yellow'), /Invalid active color/);
@@ -118,21 +154,44 @@ test('7. Preflight: slot selection, digest validation, and rejection of latest t
   assert.equal(invalidDigestResult.success, false);
   assert.ok(invalidDigestResult.errors.some((e) => e.includes('Invalid API_IMAGE_DIGEST')));
 
-  // Valid digests succeed
+  // The empty-content SHA-256 (e3b0c...) must be explicitly rejected in execute mode
+  const emptyHashResult = await runPreflight({
+    color: 'green',
+    execute: true,
+    redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
+    apiImageDigest: EMPTY_CONTENT_DIGEST,
+    workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
+  });
+  assert.equal(emptyHashResult.success, false, 'Empty-content hash must be rejected in execute mode');
+  assert.ok(
+    emptyHashResult.errors.some((e) => e.includes('empty-content hash') || e.includes('empty-content')),
+    'Error must explain that this is the empty-content hash'
+  );
+
+  // Valid digests succeed (all 5 images)
   const validResult = await runPreflight({
     color: 'green',
     execute: true,
     redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
     apiImageDigest: VALID_DIGEST,
     workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
   assert.equal(validResult.success, true);
 });
 
-test('8. deploy-inactive: verifies --force-recreate, rejects --no-recreate, handles failure', async () => {
+test('8. deploy-inactive: project isolation, pull+up sequence, --force-recreate, handles failure', async () => {
   const calls = [];
   const fakeRunner = new FakeCommandRunner(async (cmd, args) => {
-    calls.push({ cmd, args });
+    calls.push({ cmd, args: [...args] });
+    if (args.includes('pull')) {
+      return { success: true, exitCode: 0, stdout: 'Pulled all images' };
+    }
     if (args.includes('up')) {
       return { success: true, exitCode: 0, stdout: 'Started' };
     }
@@ -145,37 +204,61 @@ test('8. deploy-inactive: verifies --force-recreate, rejects --no-recreate, hand
   const deployRes = await runDeployInactive({
     color: 'green',
     execute: true,
+    dryRun: false,
     runner: fakeRunner,
     redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
     timeoutMs: 1000,
     pollIntervalMs: 50,
+    skipHealthPoll: true,
+    apiImageDigest: VALID_DIGEST,
+    workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
 
   assert.equal(deployRes.success, true);
+  assert.equal(deployRes.composeProject, 'restaurant-order-green', 'Must use slot-specific Compose project name');
+
+  // Must pull before up
+  const pullCall = calls.find((c) => c.args.includes('pull'));
+  assert.ok(pullCall, 'Must invoke docker compose pull before up');
+  assert.ok(pullCall.args.includes('-p'), 'Pull must use -p project flag for slot isolation');
+  assert.ok(pullCall.args.includes('restaurant-order-green'), 'Pull must target the green project');
+
+  // Must up with --force-recreate
   const upCall = calls.find((c) => c.args.includes('up'));
   assert.ok(upCall, 'Must invoke docker compose up');
-  assert.ok(upCall.args.includes('--force-recreate'), 'Must use --force-recreate');
+  assert.ok(upCall.args.join(' ').includes('up -d --force-recreate'), 'Must use --force-recreate');
   assert.ok(!upCall.args.includes('--no-recreate'), 'Must NOT use --no-recreate');
+  assert.ok(upCall.args.includes('-p'), 'Up must use -p project flag for slot isolation');
 
-  // Failure handling when docker compose fails
-  const failingRunner = new FakeCommandRunner(async () => ({
-    success: false,
-    exitCode: 1,
-    stderr: 'Docker daemon unavailable',
-  }));
+  // Failure handling when docker pull fails
+  const failingRunner = new FakeCommandRunner(async (cmd, args) => {
+    if (args.includes('pull')) {
+      return { success: false, exitCode: 1, stderr: 'Docker daemon unavailable' };
+    }
+    return { success: true, exitCode: 0 };
+  });
 
   const failRes = await runDeployInactive({
     color: 'green',
     execute: true,
+    dryRun: false,
     runner: failingRunner,
     redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
+    apiImageDigest: VALID_DIGEST,
+    workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
   assert.equal(failRes.success, false);
-  assert.ok(failRes.error.includes('Docker compose up failed'));
+  assert.ok(failRes.error.includes('Docker pull failed') || failRes.error.includes('Docker compose up failed'));
 });
 
-test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure', async () => {
-  // Missing confirmation aborts — resolve slot first via fakeRedis to reach the confirmation check
+test('9. cutover: enforces confirmation, validates nginx -t via docker exec, reverts on failure', async () => {
+  // Missing confirmation aborts
   const unconfirmed = await runCutover({
     color: 'green',
     execute: true,
@@ -186,10 +269,14 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
   assert.equal(unconfirmed.success, false);
   assert.ok(unconfirmed.error.includes('CUTOVER ABORTED'));
 
-  // When nginx -t fails, previous config is preserved
+  // When docker exec nginx -t fails, previous config is preserved
   const testFailRunner = new FakeCommandRunner(async (cmd, args) => {
-    if (cmd === 'nginx' && args.includes('-t')) {
+    if (cmd === 'docker' && args.includes('exec') && args.includes('nginx') && args.includes('-t')) {
       return { success: false, exitCode: 1, stderr: 'nginx: syntax error in config' };
+    }
+    // docker inspect: container is 'running'
+    if (cmd === 'docker' && args.includes('inspect')) {
+      return { success: true, exitCode: 0, stdout: 'running' };
     }
     return { success: true, exitCode: 0 };
   });
@@ -207,8 +294,14 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
   assert.equal(failedCutover.success, false);
   assert.ok(failedCutover.error.includes('validation failed'));
 
-  // Successful cutover with valid runner
-  const successRunner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
+  // Successful cutover with valid runner (docker exec returns success)
+  const successRunner = new FakeCommandRunner(async (cmd, args) => {
+    // docker inspect for container status
+    if (cmd === 'docker' && args.includes('inspect')) {
+      return { success: true, exitCode: 0, stdout: 'running' };
+    }
+    return { success: true, exitCode: 0 };
+  });
   const okCutover = await runCutover({
     color: 'green',
     execute: true,
@@ -223,8 +316,8 @@ test('9. cutover: enforces confirmation, validates nginx -t, reverts on failure'
   assert.equal(okCutover.plan.newActiveSlot, 'green');
 });
 
-test('10. rollback: reverts ingress to previous slot and keeps failing slot running', async () => {
-  // Missing confirmation aborts — fakeRedis so resolveActiveSlot passes and we reach the guard
+test('10. rollback: reverts ingress to previous slot via docker exec, keeps failing slot running', async () => {
+  // Missing confirmation aborts
   const unconfirmed = await runRollback({
     color: 'green',
     execute: true,
@@ -235,7 +328,13 @@ test('10. rollback: reverts ingress to previous slot and keeps failing slot runn
   assert.equal(unconfirmed.success, false);
   assert.ok(unconfirmed.error.includes('ROLLBACK ABORTED'));
 
-  const rollbackRunner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
+  const rollbackRunner = new FakeCommandRunner(async (cmd, args) => {
+    // docker exec calls for nginx validation/reload
+    if (cmd === 'docker' && args.includes('exec')) {
+      return { success: true, exitCode: 0 };
+    }
+    return { success: true, exitCode: 0 };
+  });
   const res = await runRollback({
     color: 'green',
     execute: true,
@@ -250,6 +349,7 @@ test('10. rollback: reverts ingress to previous slot and keeps failing slot runn
   assert.equal(res.success, true);
   assert.equal(res.plan.restoredActiveSlot, 'blue');
   assert.equal(res.plan.keepFailedSlotRunning, true);
+  assert.equal(res.plan.ingressContainer, 'restaurant-order-ingress', 'Rollback must target the ingress container');
 });
 
 test('11. health-check: validates live/ready, rejects color and version mismatch', async () => {

@@ -1,51 +1,69 @@
 # ==============================================================================
 # PRODUCTION SLOT BLUE DOCKER COMPOSE OVERRIDE (compose.prod.blue.yml)
 # ==============================================================================
-# Usage: docker compose -f compose.yml -f compose.prod.blue.yml up -d
-# Blue slot runs on port 5001 (API) and 3001-3003 (Web) for zero-conflict concurrent blue-green.
-# Immutable image digest pinning: uses @sha256:digest instead of tags.
-# Production DB and Redis are managed external services; no container ports exposed.
-# Web frontends receive NO backend secrets; only public build variables.
+# Usage: docker compose -p restaurant-order-blue -f compose.yml -f compose.prod.blue.yml up -d
+#
+# Blue slot project: restaurant-order-blue
+# Naming contract:
+#   - All container_names are globally unique and slot-scoped (*-blue suffix).
+#   - Port bindings are slot-scoped to prevent conflicts with Green slot.
+#   - Services connect to the shared external network 'restaurant_order_ingress'
+#     so the Nginx ingress container can route by DNS service name.
+#   - No backend secrets are passed to web frontend images.
 # ==============================================================================
 
 services:
   api:
-    image: ${API_IMAGE:-restaurant-order-api}@${API_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${API_IMAGE:-restaurant-order-api}@${API_IMAGE_DIGEST:?API_IMAGE_DIGEST is required for production deployment}
     container_name: restaurant-order-api-blue
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       DEPLOYMENT_COLOR: blue
       PORT: 5000
-    ports:
-      - "${API_PORT_BLUE:-5001}:5000"
+    expose:
+      - "5000"
+    networks:
+      - restaurant_order_ingress
 
   worker:
-    image: ${WORKER_IMAGE:-restaurant-order-worker}@${WORKER_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${WORKER_IMAGE:-restaurant-order-worker}@${WORKER_IMAGE_DIGEST:?WORKER_IMAGE_DIGEST is required for production deployment}
     container_name: restaurant-order-worker-blue
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL required}
       DEPLOYMENT_COLOR: blue
-      ACTIVE_DEPLOYMENT_SLOT: ${ACTIVE_DEPLOYMENT_SLOT:-blue}
+    networks:
+      - restaurant_order_ingress
 
   customer-web:
-    image: ${CUSTOMER_WEB_IMAGE:-restaurant-order-customer-web}@${CUSTOMER_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${CUSTOMER_WEB_IMAGE:-restaurant-order-customer-web}@${CUSTOMER_WEB_IMAGE_DIGEST:?CUSTOMER_WEB_IMAGE_DIGEST is required for production deployment}
     container_name: restaurant-order-customer-web-blue
-    ports:
-      - "${CUSTOMER_WEB_PORT_BLUE:-3001}:8080"
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
 
   operations-web:
-    image: ${OPERATIONS_WEB_IMAGE:-restaurant-order-operations-web}@${OPERATIONS_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${OPERATIONS_WEB_IMAGE:-restaurant-order-operations-web}@${OPERATIONS_WEB_IMAGE_DIGEST:?OPERATIONS_WEB_IMAGE_DIGEST is required for production deployment}
     container_name: restaurant-order-operations-web-blue
-    ports:
-      - "${OPERATIONS_WEB_PORT_BLUE:-3002}:8080"
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
 
   admin-web:
-    image: ${ADMIN_WEB_IMAGE:-restaurant-order-admin-web}@${ADMIN_WEB_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${ADMIN_WEB_IMAGE:-restaurant-order-admin-web}@${ADMIN_WEB_IMAGE_DIGEST:?ADMIN_WEB_IMAGE_DIGEST is required for production deployment}
     container_name: restaurant-order-admin-web-blue
-    ports:
-      - "${ADMIN_WEB_PORT_BLUE:-3003}:8080"
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
+
+networks:
+  restaurant_order_ingress:
+    external: true
+    name: restaurant_order_ingress

@@ -5,11 +5,34 @@ export const SHA256_DIGEST_REGEX = /^sha256:[a-f0-9]{64}$/i;
 export const PLACEHOLDER_DIGEST = 'sha256:0000000000000000000000000000000000000000000000000000000000000000';
 
 /**
+ * Known empty-content SHA-256 digest.
+ * This is the hash of zero bytes and must NOT be accepted as a real image digest.
+ * Any image using this value was not built or pushed to a real registry.
+ */
+export const EMPTY_CONTENT_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+/**
+ * All image keys required in a production release manifest.
+ * Preflight fails if any of these is missing or invalid.
+ */
+export const REQUIRED_IMAGE_KEYS = ['api', 'worker', 'customer-web', 'operations-web', 'admin-web'];
+
+/**
  * Validates whether a given string is a valid sha256 digest.
  */
 export function isValidDigest(digest) {
   if (!digest || typeof digest !== 'string') return false;
   return SHA256_DIGEST_REGEX.test(digest.trim());
+}
+
+/**
+ * Returns true if the digest is a known placeholder (all-zeros or empty-content hash).
+ * These values indicate no real image was built.
+ */
+export function isPlaceholderDigest(digest) {
+  if (!digest || typeof digest !== 'string') return false;
+  const d = digest.trim().toLowerCase();
+  return d === PLACEHOLDER_DIGEST || d === EMPTY_CONTENT_DIGEST;
 }
 
 /**
@@ -23,6 +46,7 @@ export function isLatestTagForbidden(tag) {
 
 /**
  * Loads and parses release-manifest.json.
+ * Validates all 5 required image entries are present.
  */
 export function loadReleaseManifest(manifestPath = 'release-manifest.json') {
   const fullPath = path.isAbsolute(manifestPath)
@@ -37,8 +61,17 @@ export function loadReleaseManifest(manifestPath = 'release-manifest.json') {
     const raw = fs.readFileSync(fullPath, 'utf8');
     const parsed = JSON.parse(raw);
 
-    if (!parsed.version || !parsed.images || !parsed.images.api || !parsed.images.worker) {
-      return { success: false, error: 'Invalid manifest schema: missing version or images (api/worker)' };
+    if (!parsed.version || !parsed.images) {
+      return { success: false, error: 'Invalid manifest schema: missing version or images' };
+    }
+
+    // Validate all required image keys are present
+    const missingImages = REQUIRED_IMAGE_KEYS.filter((key) => !parsed.images[key]);
+    if (missingImages.length > 0) {
+      return {
+        success: false,
+        error: `Manifest is missing required image entries: ${missingImages.join(', ')}. All 5 images (api, worker, customer-web, operations-web, admin-web) are required.`,
+      };
     }
 
     return { success: true, manifest: parsed };
@@ -48,12 +81,14 @@ export function loadReleaseManifest(manifestPath = 'release-manifest.json') {
 }
 
 /**
- * Resolves and validates API and Worker image digests from environment, flags, or manifest.
+ * Resolves and validates image digests for all 5 production images.
+ * Priority: explicit options > environment variables > release manifest.
  */
 export function resolveDigests(options = {}) {
   const manifestResult = loadReleaseManifest(options.manifestPath);
   const manifest = manifestResult.success ? manifestResult.manifest : null;
 
+  // Resolve all 5 image digests
   const apiDigest = options.apiImageDigest ||
     process.env.API_IMAGE_DIGEST ||
     options.imageDigest ||
@@ -68,38 +103,58 @@ export function resolveDigests(options = {}) {
     manifest?.images?.worker?.digest ||
     null;
 
+  const customerWebDigest = options.customerWebImageDigest ||
+    process.env.CUSTOMER_WEB_IMAGE_DIGEST ||
+    manifest?.images?.['customer-web']?.digest ||
+    null;
+
+  const operationsWebDigest = options.operationsWebImageDigest ||
+    process.env.OPERATIONS_WEB_IMAGE_DIGEST ||
+    manifest?.images?.['operations-web']?.digest ||
+    null;
+
+  const adminWebDigest = options.adminWebImageDigest ||
+    process.env.ADMIN_WEB_IMAGE_DIGEST ||
+    manifest?.images?.['admin-web']?.digest ||
+    null;
+
   const version = options.version || manifest?.version || 'unknown';
 
   const errors = [];
 
-  if (!apiDigest) {
-    errors.push('API_IMAGE_DIGEST is required');
-  } else if (!isValidDigest(apiDigest)) {
-    errors.push(`Invalid API_IMAGE_DIGEST format: '${apiDigest}'. Must be sha256:<64 hex chars>`);
-  } else if (apiDigest === PLACEHOLDER_DIGEST && options.execute) {
-    errors.push('API_IMAGE_DIGEST cannot be placeholder all-zeros in execute mode');
-  }
+  // Helper to validate a single digest
+  const validateDigest = (digest, label) => {
+    if (!digest) {
+      errors.push(`${label} is required`);
+    } else if (!isValidDigest(digest)) {
+      errors.push(`Invalid ${label} format: '${digest}'. Must be sha256:<64 hex chars>`);
+    } else if (isPlaceholderDigest(digest) && options.execute) {
+      if (digest.toLowerCase() === EMPTY_CONTENT_DIGEST) {
+        errors.push(`${label} is the empty-content hash (sha256:e3b0c...) — this is NOT a real image digest. Build and push the image first.`);
+      } else {
+        errors.push(`${label} cannot be placeholder all-zeros in execute mode`);
+      }
+    }
+  };
 
-  if (!workerDigest) {
-    errors.push('WORKER_IMAGE_DIGEST is required');
-  } else if (!isValidDigest(workerDigest)) {
-    errors.push(`Invalid WORKER_IMAGE_DIGEST format: '${workerDigest}'. Must be sha256:<64 hex chars>`);
-  } else if (workerDigest === PLACEHOLDER_DIGEST && options.execute) {
-    errors.push('WORKER_IMAGE_DIGEST cannot be placeholder all-zeros in execute mode');
-  }
+  validateDigest(apiDigest, 'API_IMAGE_DIGEST');
+  validateDigest(workerDigest, 'WORKER_IMAGE_DIGEST');
+  validateDigest(customerWebDigest, 'CUSTOMER_WEB_IMAGE_DIGEST');
+  validateDigest(operationsWebDigest, 'OPERATIONS_WEB_IMAGE_DIGEST');
+  validateDigest(adminWebDigest, 'ADMIN_WEB_IMAGE_DIGEST');
 
-  // Check forbidden 'latest'
+  // Check forbidden 'latest' tag in options/env
   const imageTag = options.imageTag || process.env.IMAGE_TAG;
   if (isLatestTagForbidden(imageTag)) {
     errors.push(`Tag '${imageTag}' is forbidden in production. Use immutable sha256 digests.`);
   }
 
-  if (manifest?.images?.api?.tag && isLatestTagForbidden(manifest.images.api.tag)) {
-    errors.push(`Manifest API tag '${manifest.images.api.tag}' is forbidden in production.`);
-  }
-
-  if (manifest?.images?.worker?.tag && isLatestTagForbidden(manifest.images.worker.tag)) {
-    errors.push(`Manifest Worker tag '${manifest.images.worker.tag}' is forbidden in production.`);
+  // Check forbidden tags in manifest
+  for (const key of REQUIRED_IMAGE_KEYS) {
+    const imgEntry = manifest?.images?.[key];
+    if (imgEntry?.tag && isLatestTagForbidden(imgEntry.tag)) {
+      errors.push(`Manifest ${key} tag '${imgEntry.tag}' is forbidden in production.`);
+    }
   }
 
   return {
@@ -107,6 +162,9 @@ export function resolveDigests(options = {}) {
     errors,
     apiDigest,
     workerDigest,
+    customerWebDigest,
+    operationsWebDigest,
+    adminWebDigest,
     version,
     manifest,
   };

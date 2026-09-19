@@ -6,11 +6,54 @@ import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
 import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
 const STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
+const INGRESS_CONTAINER = 'restaurant-order-ingress';
 
 /**
- * Emergency Rollback: Reverts Nginx ingress to the previous safe slot (< 60s),
+ * Builds rollback upstream config using container DNS names on the shared
+ * restaurant_order_ingress Docker network. Internal ports: API=5000, Web=8080.
+ */
+function buildRollbackUpstreamConfig(safeSlot, timestamp) {
+  const apiContainer = `restaurant-order-api-${safeSlot}`;
+  const custContainer = `restaurant-order-customer-web-${safeSlot}`;
+  const opsContainer = `restaurant-order-operations-web-${safeSlot}`;
+  const adminContainer = `restaurant-order-admin-web-${safeSlot}`;
+
+  return [
+    '# ==============================================================================',
+    '# ACTIVE UPSTREAM CONFIGURATION (RESTORED BY ROLLBACK)',
+    `# Reverted at ${timestamp}`,
+    `# Slot: ${safeSlot} | Routing via Docker container DNS on internal port`,
+    '# ==============================================================================',
+    'upstream api_backend {',
+    `    server ${apiContainer}:5000 max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream customer_web_backend {',
+    `    server ${custContainer}:8080 max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream operations_web_backend {',
+    `    server ${opsContainer}:8080 max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+    'upstream admin_web_backend {',
+    `    server ${adminContainer}:8080 max_fails=3 fail_timeout=10s;`,
+    '    keepalive 32;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Emergency Rollback: Reverts Nginx ingress to the previous safe slot (<60s),
  * updates the central Redis active slot, and verifies consistency.
  * Retains the failing slot online for forensic analysis.
+ *
+ * Uses docker exec to validate and reload inside the ingress container,
+ * preventing accidental reload of an unrelated host nginx process.
  */
 export async function runRollback(options = {}) {
   const flags = { ...parseArgs(), ...options };
@@ -37,20 +80,7 @@ export async function runRollback(options = {}) {
   const currentSlot = (flags.color || (slotResolution.success ? slotResolution.activeSlot : state.newActiveSlot) || 'green').toLowerCase();
   const safeSlot = (options.targetColor || state.previousActiveSlot || (currentSlot === 'blue' ? 'green' : 'blue')).toLowerCase();
 
-  const safePort = safeSlot === 'blue'
-    ? (process.env.API_PORT_BLUE || 5001)
-    : (process.env.API_PORT_GREEN || 5002);
-  const safeCustPort = safeSlot === 'blue'
-    ? (process.env.CUSTOMER_WEB_PORT_BLUE || 3001)
-    : (process.env.CUSTOMER_WEB_PORT_GREEN || 3011);
-  const safeOpsPort = safeSlot === 'blue'
-    ? (process.env.OPERATIONS_WEB_PORT_BLUE || 3002)
-    : (process.env.OPERATIONS_WEB_PORT_GREEN || 3012);
-  const safeAdminPort = safeSlot === 'blue'
-    ? (process.env.ADMIN_WEB_PORT_BLUE || 3003)
-    : (process.env.ADMIN_WEB_PORT_GREEN || 3013);
-
-  logStep('ROLLBACK', 'RUNNING', `Initiating emergency rollback from '${currentSlot}' to '${safeSlot}' (port ${safePort})...`);
+  logStep('ROLLBACK', 'RUNNING', `Initiating emergency rollback from '${currentSlot}' to '${safeSlot}' (container DNS routing)...`);
 
   if (!flags.confirmRollback && !flags.dryRun) {
     const errorMsg = 'ROLLBACK ABORTED: Missing required --confirm-rollback operator flag. Refusing to alter traffic.';
@@ -61,63 +91,37 @@ export async function runRollback(options = {}) {
   const rollbackPlan = {
     revertedFromSlot: currentSlot,
     restoredActiveSlot: safeSlot,
-    targetPort: Number(safePort),
-    targetCustPort: Number(safeCustPort),
-    targetOpsPort: Number(safeOpsPort),
-    targetAdminPort: Number(safeAdminPort),
+    ingressContainer: INGRESS_CONTAINER,
     keepFailedSlotRunning: true, // Forensic preservation
     timestamp: new Date().toISOString(),
   };
 
   const nginxDir = options.nginxDir || process.env.NGINX_CONF_DIR || path.join(process.cwd(), 'deploy/nginx');
-  const mainConfPath = path.join(nginxDir, 'nginx.conf');
   const upstreamConfPath = path.join(nginxDir, 'conf.d/upstream.conf');
   const backupConfPath = path.join(nginxDir, 'conf.d/upstream.conf.rollback-backup');
 
   if (flags.dryRun) {
-    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] Reverting Nginx upstream to server 127.0.0.1:${safePort} (${safeSlot})`);
-    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] Validating config via 'nginx -t -c ${mainConfPath}'`);
-    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] Reloading Nginx via 'nginx -s reload'`);
+    const safeApiContainer = `restaurant-order-api-${safeSlot}`;
+    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] Reverting Nginx upstream to container '${safeApiContainer}:5000'`);
+    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] docker exec ${INGRESS_CONTAINER} nginx -t`);
+    logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] docker exec ${INGRESS_CONTAINER} nginx -s reload`);
     logStep('ROLLBACK', 'DRY-RUN', `[SIMULATED] Retaining slot '${currentSlot}' online for crash dump analysis.`);
     logStep('ROLLBACK', 'PASS', `Dry-run rollback plan verified. Restored active slot: '${safeSlot}'.`);
     return { success: true, dryRun: true, plan: rollbackPlan };
   }
 
-  // Check ingress provider availability
-  const ingressProvider = options.ingressProvider || process.env.INGRESS_PROVIDER || 'nginx';
-  if (ingressProvider === 'none' || (!options.runner && !fs.existsSync(mainConfPath))) {
-    const errorMsg = 'BLOCKED: Ingress provider is not configured or nginx config is missing. Cannot perform live rollback without verified ingress.';
-    logStep('ROLLBACK', 'FAIL', errorMsg);
-    return { success: false, status: 'BLOCKED', error: errorMsg };
+  // Check ingress container availability
+  const ingressContainer = options.ingressContainer || INGRESS_CONTAINER;
+  if (!options.runner) {
+    const inspectResult = await runner.run('docker', ['inspect', '--format', '{{.State.Status}}', ingressContainer]);
+    if (!inspectResult.success || inspectResult.stdout.trim() !== 'running') {
+      const errorMsg = `BLOCKED: Ingress container '${ingressContainer}' is not running. Cannot perform rollback.`;
+      logStep('ROLLBACK', 'FAIL', errorMsg);
+      return { success: false, status: 'BLOCKED', error: errorMsg };
+    }
   }
 
-  const candidateContent = [
-    '# ==============================================================================',
-    '# ACTIVE UPSTREAM CONFIGURATION (RESTORED BY ROLLBACK)',
-    `# Reverted at ${rollbackPlan.timestamp} from ${currentSlot} to ${safeSlot}`,
-    `# Slot: ${safeSlot} | API: ${safePort} | Customer: ${safeCustPort} | Ops: ${safeOpsPort} | Admin: ${safeAdminPort}`,
-    '# ==============================================================================',
-    'upstream api_backend {',
-    `    server 127.0.0.1:${safePort} max_fails=3 fail_timeout=10s;`,
-    '    keepalive 32;',
-    '}',
-    '',
-    'upstream customer_web_backend {',
-    `    server 127.0.0.1:${safeCustPort} max_fails=3 fail_timeout=10s;`,
-    '    keepalive 32;',
-    '}',
-    '',
-    'upstream operations_web_backend {',
-    `    server 127.0.0.1:${safeOpsPort} max_fails=3 fail_timeout=10s;`,
-    '    keepalive 32;',
-    '}',
-    '',
-    'upstream admin_web_backend {',
-    `    server 127.0.0.1:${safeAdminPort} max_fails=3 fail_timeout=10s;`,
-    '    keepalive 32;',
-    '}',
-    '',
-  ].join('\n');
+  const candidateContent = buildRollbackUpstreamConfig(safeSlot, rollbackPlan.timestamp);
 
   let originalContent = '';
   try {
@@ -129,9 +133,9 @@ export async function runRollback(options = {}) {
     fs.mkdirSync(path.dirname(upstreamConfPath), { recursive: true });
     fs.writeFileSync(upstreamConfPath, candidateContent, 'utf8');
 
-    // Validate with nginx -t
-    logStep('ROLLBACK', 'RUNNING', `Validating restored configuration with 'nginx -t'...`);
-    const testResult = await runner.run('nginx', ['-t', '-c', mainConfPath]);
+    // Validate with nginx -t inside the ingress container
+    logStep('ROLLBACK', 'RUNNING', `Validating rollback config: docker exec ${ingressContainer} nginx -t`);
+    const testResult = await runner.run('docker', ['exec', ingressContainer, 'nginx', '-t']);
 
     if (!testResult.success) {
       if (originalContent) {
@@ -144,14 +148,14 @@ export async function runRollback(options = {}) {
       return { success: false, error: errorMsg };
     }
 
-    // Reload Nginx
-    logStep('ROLLBACK', 'RUNNING', `Reloading Nginx with 'nginx -s reload'...`);
-    const reloadResult = await runner.run('nginx', ['-s', 'reload']);
+    // Reload Nginx inside the ingress container
+    logStep('ROLLBACK', 'RUNNING', `Reloading Nginx: docker exec ${ingressContainer} nginx -s reload`);
+    const reloadResult = await runner.run('docker', ['exec', ingressContainer, 'nginx', '-s', 'reload']);
 
     if (!reloadResult.success) {
       if (originalContent) {
         fs.writeFileSync(upstreamConfPath, originalContent, 'utf8');
-        await runner.run('nginx', ['-s', 'reload']);
+        await runner.run('docker', ['exec', ingressContainer, 'nginx', '-s', 'reload']);
       }
       if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
@@ -163,7 +167,7 @@ export async function runRollback(options = {}) {
     if (fs.existsSync(backupConfPath)) fs.unlinkSync(backupConfPath);
 
     // Update centralized active slot state in Redis
-    logStep('ROLLBACK', 'RUNNING', `Restoring centralized active slot state in Redis to '${safeSlot}'...`);
+    logStep('ROLLBACK', 'RUNNING', `Restoring centralized active slot in Redis to '${safeSlot}'...`);
     const redisResult = await setRedisKey(REDIS_ACTIVE_SLOT_KEY, safeSlot, {
       redisUrl: options.redisUrl || process.env.REDIS_URL,
       fakeClient: options.redisClient,
@@ -194,9 +198,10 @@ export async function runRollback(options = {}) {
       activeSlot: safeSlot,
       previousSlot: currentSlot,
       rollbackTimestamp: rollbackPlan.timestamp,
+      ingressContainer,
     }, null, 2), 'utf8');
 
-    logStep('ROLLBACK', 'PASS', `Emergency rollback completed. Traffic routed back to safe slot '${safeSlot}' on port ${safePort}.`);
+    logStep('ROLLBACK', 'PASS', `Emergency rollback completed. Traffic routed back to safe slot '${safeSlot}' via container DNS.`);
     logStep('ROLLBACK', 'PASS', `Failing slot '${currentSlot}' retained online for forensics and memory dump.`);
     return { success: true, status: 'ROLLBACK_SUCCESS', plan: rollbackPlan };
   } catch (err) {

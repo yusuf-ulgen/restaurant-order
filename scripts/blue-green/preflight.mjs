@@ -47,6 +47,7 @@ export async function runPreflight(options = {}) {
     'compose.staging.yml',
     'compose.prod.blue.yml',
     'compose.prod.green.yml',
+    'compose.ingress.yml',
   ];
 
   for (const file of requiredFiles) {
@@ -56,10 +57,13 @@ export async function runPreflight(options = {}) {
     }
   }
 
-  // 3. Image Digest & Manifest Parity Verification
+  // 3. Image Digest & Manifest Parity Verification (all 5 images)
   const digestResult = resolveDigests({
     apiImageDigest: flags.apiImageDigest,
     workerImageDigest: flags.workerImageDigest,
+    customerWebImageDigest: flags.customerWebImageDigest || options.customerWebImageDigest,
+    operationsWebImageDigest: flags.operationsWebImageDigest || options.operationsWebImageDigest,
+    adminWebImageDigest: flags.adminWebImageDigest || options.adminWebImageDigest,
     imageDigest: flags.imageDigest,
     manifestPath: flags.manifestPath,
     execute: flags.execute,

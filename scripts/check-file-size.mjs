@@ -57,6 +57,7 @@ export function isBinaryOrMinified(filePath) {
   if (BINARY_EXTENSIONS.has(ext)) return true;
   if (filePath.endsWith('.min.js') || filePath.endsWith('.min.css')) return true;
   if (filePath.endsWith('.cobertura.xml') || filePath.endsWith('coverage.json')) return true;
+  if (filePath.endsWith('.log') || filePath.endsWith('.jsonl')) return true;
   return false;
 }
 

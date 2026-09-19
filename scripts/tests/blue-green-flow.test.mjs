@@ -15,7 +15,12 @@ import { runRollback } from '../blue-green/rollback.mjs';
 import { runOrchestrator } from '../blue-green/orchestrator.mjs';
 import { FakeRedisClient, REDIS_ACTIVE_SLOT_KEY } from '../blue-green/lib/redis-state.mjs';
 
-const VALID_DIGEST = 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+/**
+ * A properly formatted but deliberately non-real sha256 digest for test fixtures.
+ * NOT the empty-content hash (e3b0c...) which is now explicitly rejected in execute mode.
+ */
+const VALID_DIGEST = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
 
 test('16. orchestrator: halts on failure and records to journal', async () => {
   const dryRes = await runOrchestrator({ dryRun: true });
@@ -73,6 +78,11 @@ test('18. fail-closed: execute mode rejects false-positive PASS on unverified op
     dryRun: false,
     runner: mockFailRunner,
     redisClient: new FakeRedisClient({ [REDIS_ACTIVE_SLOT_KEY]: 'blue' }),
+    apiImageDigest: VALID_DIGEST,
+    workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
   assert.equal(deployRes.success, false);
 
@@ -95,7 +105,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
   fs.writeFileSync(tempMainConf, 'events {} http { include conf.d/*.conf; }', 'utf8');
 
   const upstreamConf = path.join(tempConfD, 'upstream.conf');
-  fs.writeFileSync(upstreamConf, 'upstream api_backend { server 127.0.0.1:5001; }', 'utf8');
+  fs.writeFileSync(upstreamConf, 'upstream api_backend { server restaurant-order-api-blue:5000; }', 'utf8');
 
   const executedCommands = [];
   const fakeRunner = new FakeCommandRunner(async (cmd, args) => {
@@ -113,9 +123,13 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
     redisClient: fakeRedis,
     apiImageDigest: VALID_DIGEST,
     workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
   assert.equal(preflight.success, true);
   assert.equal(preflight.targetColor, 'green');
+
 
   // Step 2: Deploy Inactive Green
   const deploy = await runDeployInactive({
@@ -125,6 +139,11 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
     runner: fakeRunner,
     redisClient: fakeRedis,
     skipHealthPoll: true,
+    apiImageDigest: VALID_DIGEST,
+    workerImageDigest: VALID_DIGEST,
+    customerWebImageDigest: VALID_DIGEST,
+    operationsWebImageDigest: VALID_DIGEST,
+    adminWebImageDigest: VALID_DIGEST,
   });
   assert.equal(deploy.success, true);
   assert.ok(executedCommands.some((c) => c.args.includes('up -d --force-recreate')));
@@ -152,7 +171,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
   assert.equal(cutover.plan.newActiveSlot, 'green');
 
   const updatedUpstream = fs.readFileSync(upstreamConf, 'utf8');
-  assert.ok(updatedUpstream.includes('127.0.0.1:5002'), 'Upstream must point to Green port 5002');
+  assert.ok(updatedUpstream.includes('restaurant-order-api-green:5000'), 'Upstream must point to Green API container');
   const redisSlotAfterCutover = await fakeRedis.get(REDIS_ACTIVE_SLOT_KEY);
   assert.equal(redisSlotAfterCutover.value, 'green');
 
@@ -172,7 +191,7 @@ test('19. disposable end-to-end blue -> green -> rollback flow with central Redi
   assert.equal(rollback.plan.keepFailedSlotRunning, true);
 
   const restoredUpstream = fs.readFileSync(upstreamConf, 'utf8');
-  assert.ok(restoredUpstream.includes('127.0.0.1:5001'), 'Upstream must be restored to Blue port 5001');
+  assert.ok(restoredUpstream.includes('restaurant-order-api-blue:5000'), 'Upstream must be restored to Blue API container');
   const redisSlotAfterRollback = await fakeRedis.get(REDIS_ACTIVE_SLOT_KEY);
   assert.equal(redisSlotAfterRollback.value, 'blue');
 
@@ -189,7 +208,7 @@ test('20. cutover: reverts Nginx upstream if central Redis active slot update fa
   fs.writeFileSync(tempMainConf, 'events {} http { include conf.d/*.conf; }', 'utf8');
 
   const upstreamConf = path.join(tempConfD, 'upstream.conf');
-  fs.writeFileSync(upstreamConf, 'upstream api_backend { server 127.0.0.1:5001; }', 'utf8');
+  fs.writeFileSync(upstreamConf, 'upstream api_backend { server restaurant-order-api-blue:5000; }', 'utf8');
 
   const runner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
   // Redis allows slot resolution (get) but fails on the state update (set)
@@ -215,9 +234,9 @@ test('20. cutover: reverts Nginx upstream if central Redis active slot update fa
     `Expected Redis failure error, got: ${cutoverRes.error}`
   );
 
-  // Verify Nginx was reverted to 5001 (blue) to avoid split-brain
+  // Verify Nginx was reverted to blue to avoid split-brain
   const content = fs.readFileSync(upstreamConf, 'utf8');
-  assert.ok(content.includes('127.0.0.1:5001'), 'Must preserve original upstream on Redis update failure');
+  assert.ok(content.includes('restaurant-order-api-blue:5000'), 'Must preserve original upstream on Redis update failure');
 
   fs.rmSync(tempNginxDir, { recursive: true, force: true });
 });
@@ -229,7 +248,7 @@ test('21. rollback: emits CRITICAL_INCONSISTENT_STATE when Nginx reverts but Red
 
   fs.writeFileSync(path.join(tempNginxDir, 'nginx.conf'), 'events {} http { include conf.d/*.conf; }', 'utf8');
   const upstreamConf = path.join(tempConfD, 'upstream.conf');
-  fs.writeFileSync(upstreamConf, 'upstream api_backend { server 127.0.0.1:5002; }', 'utf8');
+  fs.writeFileSync(upstreamConf, 'upstream api_backend { server restaurant-order-api-green:5000; }', 'utf8');
 
   const journalEntries = [];
   const runner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
@@ -261,9 +280,9 @@ test('21. rollback: emits CRITICAL_INCONSISTENT_STATE when Nginx reverts but Red
   assert.ok(journalEntries.some((e) => e.event === 'ROLLBACK_INCONSISTENT_STATE'),
     'Journal must record ROLLBACK_INCONSISTENT_STATE for operator visibility');
 
-  // Nginx was reverted to blue (5001) despite Redis failure
+  // Nginx was reverted to blue despite Redis failure
   const content = fs.readFileSync(upstreamConf, 'utf8');
-  assert.ok(content.includes('127.0.0.1:5001'), 'Nginx must be reverted to safe slot even if Redis fails');
+  assert.ok(content.includes('restaurant-order-api-blue:5000'), 'Nginx must be reverted to safe slot even if Redis fails');
 
   fs.rmSync(tempNginxDir, { recursive: true, force: true });
 });
