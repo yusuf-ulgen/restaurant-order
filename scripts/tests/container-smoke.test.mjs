@@ -46,14 +46,14 @@ test('Container Smoke Tests Suite', { skip: !dockerRunning ? 'Docker daemon is n
       timeout: 180000,
     });
 
-    const userCheck = execFileSync('docker', ['run', '--rm', disposableApiTag, 'whoami'], {
+    const userCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'whoami', disposableApiTag], {
       encoding: 'utf8',
       timeout: 10000,
     }).trim();
 
     assert.equal(userCheck, 'appuser', 'API container must run as unprivileged appuser');
 
-    const uidCheck = execFileSync('docker', ['run', '--rm', disposableApiTag, 'id', '-u'], {
+    const uidCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'id', disposableApiTag, '-u'], {
       encoding: 'utf8',
       timeout: 10000,
     }).trim();
@@ -100,12 +100,20 @@ test('Container Smoke Tests Suite', { skip: !dockerRunning ? 'Docker daemon is n
       timeout: 180000,
     });
 
-    const userCheck = execFileSync('docker', ['run', '--rm', disposableWorkerTag, 'whoami'], {
+    const userCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'whoami', disposableWorkerTag], {
       encoding: 'utf8',
       timeout: 10000,
     }).trim();
 
     assert.equal(userCheck, 'appuser', 'Worker container must run as unprivileged appuser');
+
+    const uidCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'id', disposableWorkerTag, '-u'], {
+      encoding: 'utf8',
+      timeout: 10000,
+    }).trim();
+
+    assert.notEqual(uidCheck, '0', 'Worker container must not run as root (UID 0)');
+    assert.equal(uidCheck, '10001', 'Worker container must run as UID 10001');
 
     // Run worker in Production mode without required Redis/DB -> must fail-closed immediately (exit code != 0)
     const runResult = spawnSync('docker', [
@@ -127,14 +135,14 @@ test('Container Smoke Tests Suite', { skip: !dockerRunning ? 'Docker daemon is n
       '.',
     ], { stdio: 'pipe', timeout: 180000 });
 
-    const userCheck = execFileSync('docker', ['run', '--rm', disposableCustomerTag, 'whoami'], {
+    const userCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'whoami', disposableCustomerTag], {
       encoding: 'utf8',
       timeout: 10000,
     }).trim();
 
     assert.equal(userCheck, 'nginx', 'Web container must run as unprivileged nginx user');
 
-    const uidCheck = execFileSync('docker', ['run', '--rm', disposableCustomerTag, 'id', '-u'], {
+    const uidCheck = execFileSync('docker', ['run', '--rm', '--entrypoint', 'id', disposableCustomerTag, '-u'], {
       encoding: 'utf8',
       timeout: 10000,
     }).trim();
