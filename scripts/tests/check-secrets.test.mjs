@@ -22,14 +22,15 @@ test('isAllowlistedSecret correctly identifies known safe fixtures', () => {
   assert.strictEqual(isAllowlistedSecret('<YOUR_SECRET_TOKEN>'), true);
 
   // Real or arbitrary keys are not allowlisted
-  assert.strictEqual(isAllowlistedSecret('AKIA1234567890ABCDEF'), false);
+  const testAwsKey = ['AKIA', '1234567890ABCDEF'].join(''); // gitleaks:allow
+  assert.strictEqual(isAllowlistedSecret(testAwsKey), false);
   assert.strictEqual(isAllowlistedSecret(realGh), false);
 });
 
 test('scanFileForSecrets catches real tokens even when line contains safe words (prevents bypass)', () => {
   // Construct realistic tokens dynamically
   const ghToken = ['ghp', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'].join('_');
-  const awsKey = 'AKIA' + '1234567890ABCDEF';
+  const awsKey = ['AKIA', '1234567890ABCDEF'].join(''); // gitleaks:allow
   const stripeKey = ['sk', 'live', '1234567890abcdefghijklmn'].join('_');
 
   // These lines contain bypass keywords ('test', 'localhost', 'fake', 'sample') but real tokens!

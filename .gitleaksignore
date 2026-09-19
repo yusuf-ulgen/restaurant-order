@@ -1,0 +1,4 @@
+# Gitleaks ignore list for test fixture files
+5d614d3edf631f01e9c87dcae3452dab46eab44f:scripts/tests/check-secrets.test.mjs:aws-access-token:25
+scripts/tests/check-secrets.test.mjs:aws-access-token:25
+scripts/tests/check-secrets.test.mjs:aws-access-token:32
