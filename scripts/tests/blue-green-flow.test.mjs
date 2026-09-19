@@ -363,7 +363,7 @@ test('24. disposable integration: verifies real container flow when Docker is pr
   let isDockerAvailable = false;
   try {
     const { execSync } = await import('node:child_process');
-    execSync('docker info', { stdio: 'ignore', timeout: 3000 });
+    execSync('docker info', { stdio: 'ignore', timeout: 15000 });
     isDockerAvailable = true;
   } catch {
     isDockerAvailable = false;
