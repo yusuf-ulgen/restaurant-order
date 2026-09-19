@@ -73,9 +73,61 @@ export function findMarkdownFiles(dir, fileList = []) {
   return fileList;
 }
 
+export function generateGitHubSlug(text) {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // remove markdown links
+    .replace(/`([^`]+)`/g, '$1') // remove inline code
+    .replace(/[*_~]/g, '') // remove formatting
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '') // remove punctuation except whitespace and hyphens
+    .replace(/\s+/g, '-'); // whitespace to hyphens
+}
+
+export function extractMarkdownAnchors(content) {
+  const anchors = new Set();
+  const slugCounts = new Map();
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const headingMatch = /^#{1,6}\s+(.+)$/.exec(line.trim());
+    if (headingMatch) {
+      const headingText = headingMatch[1].trim();
+      const rawSlug = generateGitHubSlug(headingText);
+      const count = slugCounts.get(rawSlug) || 0;
+      slugCounts.set(rawSlug, count + 1);
+
+      const finalSlug = count === 0 ? rawSlug : `${rawSlug}-${count}`;
+      anchors.add(finalSlug);
+      anchors.add(rawSlug);
+    }
+
+    const htmlAnchorRegex = /<(?:a|span|div)[^>]*(?:id|name)=["']([^"']+)["']/gi;
+    let htmlMatch;
+    while ((htmlMatch = htmlAnchorRegex.exec(line)) !== null) {
+      anchors.add(htmlMatch[1].toLowerCase());
+    }
+  }
+
+  return anchors;
+}
+
 export function validateMarkdownLinks(rootDir, mdFiles) {
   const brokenLinks = [];
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const fileAnchorsCache = new Map();
+
+  function getAnchorsForFile(filePath) {
+    if (!fileAnchorsCache.has(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        fileAnchorsCache.set(filePath, extractMarkdownAnchors(content));
+      } catch {
+        fileAnchorsCache.set(filePath, new Set());
+      }
+    }
+    return fileAnchorsCache.get(filePath);
+  }
 
   for (const file of mdFiles) {
     const content = fs.readFileSync(file, 'utf8');
@@ -84,36 +136,85 @@ export function validateMarkdownLinks(rootDir, mdFiles) {
     while ((match = linkRegex.exec(content)) !== null) {
       const rawLink = match[2].trim();
 
-      // Skip external links and internal pure anchor links
-      if (rawLink.startsWith('http://') || rawLink.startsWith('https://') || rawLink.startsWith('#') || rawLink.startsWith('mailto:')) {
+      // Skip external web links and mailto
+      if (rawLink.startsWith('http://') || rawLink.startsWith('https://') || rawLink.startsWith('mailto:')) {
         continue;
       }
 
+      // 1. Forbid 'file://' or 'file:' links
+      if (/^file:\/\//i.test(rawLink) || /^file:/i.test(rawLink)) {
+        brokenLinks.push({
+          source: path.relative(rootDir, file),
+          link: rawLink,
+          reason: "Forbidden 'file://' URI scheme detected. All internal links must be relative."
+        });
+        continue;
+      }
+
+      // 2. Forbid Windows absolute paths (e.g. D:/..., C:\..., \\...)
+      if (/^[a-zA-Z]:[\\/]/.test(rawLink) || rawLink.startsWith('\\\\')) {
+        brokenLinks.push({
+          source: path.relative(rootDir, file),
+          link: rawLink,
+          reason: 'Forbidden Windows absolute path detected. Links must be relative.'
+        });
+        continue;
+      }
+
+      const [targetPart, anchorPart] = rawLink.split('#');
+
+      // 3. Forbid POSIX absolute root paths (e.g. /docs/...)
+      if (targetPart.startsWith('/') || targetPart.startsWith('\\')) {
+        brokenLinks.push({
+          source: path.relative(rootDir, file),
+          link: rawLink,
+          reason: 'Forbidden absolute root path detected. Use relative paths.'
+        });
+        continue;
+      }
+
+      // Resolve target file
       let targetPath = '';
-      if (rawLink.startsWith('file:///')) {
-        let clean = rawLink.slice(8).replace(/\//g, path.sep);
-        // Handle Windows path like D:/...
-        if (/^[a-zA-Z]:/.test(clean)) {
-          targetPath = clean;
-        } else {
-          targetPath = path.sep + clean;
-        }
+      if (!targetPart) {
+        targetPath = file;
       } else {
-        targetPath = path.resolve(path.dirname(file), rawLink);
+        targetPath = path.resolve(path.dirname(file), targetPart);
       }
 
-      // Strip anchor fragment from target path
-      const hashIndex = targetPath.indexOf('#');
-      if (hashIndex !== -1) {
-        targetPath = targetPath.substring(0, hashIndex);
+      // 4. Forbid links escaping repository root
+      const relToRoot = path.relative(rootDir, targetPath);
+      if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+        brokenLinks.push({
+          source: path.relative(rootDir, file),
+          link: rawLink,
+          reason: 'Link escapes repository root boundary.'
+        });
+        continue;
       }
 
+      // 5. Verify target exists
       if (!fs.existsSync(targetPath)) {
         brokenLinks.push({
           source: path.relative(rootDir, file),
           link: rawLink,
-          resolved: targetPath
+          resolved: targetPath,
+          reason: 'Target file or directory does not exist.'
         });
+        continue;
+      }
+
+      // 6. Verify anchor if specified and target is a markdown file
+      if (anchorPart && targetPath.endsWith('.md')) {
+        const anchors = getAnchorsForFile(targetPath);
+        const normalizedAnchor = anchorPart.toLowerCase().trim();
+        if (!anchors.has(normalizedAnchor)) {
+          brokenLinks.push({
+            source: path.relative(rootDir, file),
+            link: rawLink,
+            resolved: targetPath,
+            reason: `Anchor '#${anchorPart}' was not found in target Markdown document.`
+          });
+        }
       }
     }
   }

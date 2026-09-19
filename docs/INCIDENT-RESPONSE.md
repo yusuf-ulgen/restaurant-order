@@ -29,7 +29,7 @@
   ```bash
   node scripts/blue-green/rollback.mjs --execute --confirm-rollback
   ```
-- See [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md) for full execution parameters and forensic retention details.
+- See [docs/BLUE-GREEN-RUNBOOK.md](./BLUE-GREEN-RUNBOOK.md) for full execution parameters and forensic retention details.
 
 ---
 
@@ -40,4 +40,4 @@ Every Sev-1 and Sev-2 incident requires a formal, blameless post-mortem within *
 1. **Focus on Systems, Not People:** The goal is to understand what systemic, architectural, or procedural gaps allowed the failure to occur.
 2. **Timeline Analysis:** Detailed second-by-second chronology of events from initial detection to full recovery.
 3. **Action Items:** Tracked, assigned tasks with deadlines to prevent recurrence (e.g., adding automated tests, improving alerts).
-4. **Standard Template:** Use the standardized template in [docs/templates/INCIDENT-TEMPLATE.md](file:///d:/freelance/restaurant-order/docs/templates/INCIDENT-TEMPLATE.md).
+4. **Standard Template:** Use the standardized template in [docs/templates/INCIDENT-TEMPLATE.md](./templates/INCIDENT-TEMPLATE.md).

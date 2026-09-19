@@ -27,8 +27,8 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 
 | ADR ID | Title | Status | Primary Focus |
 | :--- | :--- | :--- | :--- |
-| [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) | Core Technology Stack & Monorepo Foundation | `ACCEPTED` | React 19, .NET 10, Modular Monolith, SignalR, Redis, Postgres |
-| [ADR-0002](file:///d:/freelance/restaurant-order/docs/adr/0002-persistence-selection.md) | Data Persistence Library Selection | `PROPOSED` | Comparative evaluation of EF Core, Dapper, and Marten |
+| [ADR-0001](./0001-technology-stack.md) | Core Technology Stack & Monorepo Foundation | `ACCEPTED` | React 19, .NET 10, Modular Monolith, SignalR, Redis, Postgres |
+| [ADR-0002](./0002-persistence-selection.md) | Data Persistence Library Selection | `PROPOSED` | Comparative evaluation of EF Core, Dapper, and Marten |
 | `ADR-0003` | Multi-Tenant Data Isolation Strategy | `PROPOSED` | PostgreSQL Row-Level Security vs Schema-per-tenant |
 | `ADR-0004` | Realtime Event Transport Architecture | `PROPOSED` | SignalR Hubs & Redis Backplane Design |
 | `ADR-0005` | ESC/POS Thermal Printing Integration Pattern | `PROPOSED` | Local Branch Print Agent vs Cloud Direct Socket |
@@ -39,6 +39,6 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 ## 4. Creating a New ADR
 
 To propose a new architecture decision:
-1. Copy the template from [docs/templates/ADR-TEMPLATE.md](file:///d:/freelance/restaurant-order/docs/templates/ADR-TEMPLATE.md).
+1. Copy the template from [docs/templates/ADR-TEMPLATE.md](../templates/ADR-TEMPLATE.md).
 2. Save it as `docs/adr/ADR-XXX-<decision-title>.md`.
 3. Set initial status to `PROPOSED` and submit via Pull Request.

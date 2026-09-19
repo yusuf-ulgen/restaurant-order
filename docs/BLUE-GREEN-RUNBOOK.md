@@ -82,4 +82,4 @@ node scripts/blue-green/rollback.mjs --execute --confirm-rollback
 ### 4.1. Rollback Invariants
 1. **Immediate Ingress Switch:** Reverts traffic back to the previous safe slot within 60 seconds.
 2. **Forensic Preservation:** The failed slot container is **retained in isolated mode** for memory dump extraction and log analysis.
-3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md).
+3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md).

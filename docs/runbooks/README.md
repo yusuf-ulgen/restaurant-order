@@ -10,8 +10,8 @@ Runbooks provide operational procedures, diagnostic checklists, and recovery ste
 
 | Runbook | Purpose | Target Audience |
 | :--- | :--- | :--- |
-| [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md) | Zero-downtime production deployment, health checks & traffic cutover. | DevOps / Release Leads |
-| [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md) | Incident severity classification, escalation paths & post-mortem workflows. | On-Call Engineers / Managers |
+| [docs/BLUE-GREEN-RUNBOOK.md](../BLUE-GREEN-RUNBOOK.md) | Zero-downtime production deployment, health checks & traffic cutover. | DevOps / Release Leads |
+| [docs/INCIDENT-RESPONSE.md](../INCIDENT-RESPONSE.md) | Incident severity classification, escalation paths & post-mortem workflows. | On-Call Engineers / Managers |
 
 ---
 
