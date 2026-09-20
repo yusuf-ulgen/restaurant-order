@@ -1,0 +1,106 @@
+# ==============================================================================
+# BASE DOCKER COMPOSE CONFIGURATION (compose.yml)
+# ==============================================================================
+# Shared base service definitions, security controls, and networking contracts.
+# Environment-specific overrides:
+#   - Development:       compose.dev.yml
+#   - Staging:           compose.staging.yml
+#   - Production Blue:   docker compose -p restaurant-order-blue -f compose.yml -f compose.prod.blue.yml up -d
+#   - Production Green:  docker compose -p restaurant-order-green -f compose.yml -f compose.prod.green.yml up -d
+#   - Ingress:           docker compose -p restaurant-order-ingress -f compose.ingress.yml up -d
+#
+# Production topology:
+#   - Blue and Green slots run as separate Compose projects (-p flag) to prevent
+#     service identity collisions. Container names are slot-scoped (*-blue, *-green).
+#   - Both slots attach to the shared external network 'restaurant_order_ingress'
+#     so the ingress container can reach them via Docker DNS.
+#   - The ingress runs as a third independent project (restaurant-order-ingress).
+# ==============================================================================
+
+services:
+  api:
+    image: ${API_IMAGE:-restaurant-order-api}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health/live || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  worker:
+    image: ${WORKER_IMAGE:-restaurant-order-worker}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+
+  customer-web:
+    image: ${CUSTOMER_WEB_IMAGE:-restaurant-order-customer-web}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  operations-web:
+    image: ${OPERATIONS_WEB_IMAGE:-restaurant-order-operations-web}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  admin-web:
+    image: ${ADMIN_WEB_IMAGE:-restaurant-order-admin-web}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+# Default dev/staging network (not used in production slots).
+# Production slots use the external 'restaurant_order_ingress' network
+# defined in compose.prod.blue.yml and compose.prod.green.yml.
+networks:
+  app_internal:
+    driver: bridge
+    name: restaurant_order_net

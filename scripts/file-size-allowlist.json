@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Documented allowlist for files permitted to exceed the 600-line strict limit",
+  "allowlist": [
+    {
+      "path": "pnpm-lock.yaml",
+      "reason": "Machine-generated unified pnpm lockfile containing dependency tree and integrity hashes."
+    },
+    {
+      "path": "RestaurantOrder.sln",
+      "reason": "Machine-generated .NET solution file linking projects and build configurations."
+    }
+  ]
+}

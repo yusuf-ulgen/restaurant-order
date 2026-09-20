@@ -1,0 +1,50 @@
+@import '@restaurant-order/ui/src/tokens.css';
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--ro-font-sans);
+  background-color: var(--ro-color-bg);
+  color: var(--ro-color-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  background-color: var(--ro-color-secondary);
+  color: #ffffff;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  padding: 32px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ro-color-secondary);
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--ro-color-text-muted);
+  margin-top: 4px;
+}

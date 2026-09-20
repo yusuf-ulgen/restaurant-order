@@ -1,0 +1,68 @@
+# ==============================================================================
+# PRODUCTION SLOT GREEN DOCKER COMPOSE OVERRIDE (compose.prod.green.yml)
+# ==============================================================================
+# Usage: docker compose -p restaurant-order-green -f compose.yml -f compose.prod.green.yml up -d
+#
+# Green slot project: restaurant-order-green
+# Naming contract:
+#   - All container_names are globally unique and slot-scoped (*-green suffix).
+#   - Services connect to the shared external network 'restaurant_order_ingress'
+#     so the Nginx ingress container can route by DNS service name.
+#   - No backend secrets are passed to web frontend images.
+# ==============================================================================
+
+services:
+  api:
+    image: ${API_IMAGE:-restaurant-order-api}@${API_IMAGE_DIGEST:?API_IMAGE_DIGEST is required for production deployment}
+    container_name: restaurant-order-api-green
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      DEPLOYMENT_COLOR: green
+      PORT: 5000
+    expose:
+      - "5000"
+    networks:
+      - restaurant_order_ingress
+
+  worker:
+    image: ${WORKER_IMAGE:-restaurant-order-worker}@${WORKER_IMAGE_DIGEST:?WORKER_IMAGE_DIGEST is required for production deployment}
+    container_name: restaurant-order-worker-green
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL required}
+      DEPLOYMENT_COLOR: green
+    networks:
+      - restaurant_order_ingress
+
+  customer-web:
+    image: ${CUSTOMER_WEB_IMAGE:-restaurant-order-customer-web}@${CUSTOMER_WEB_IMAGE_DIGEST:?CUSTOMER_WEB_IMAGE_DIGEST is required for production deployment}
+    container_name: restaurant-order-customer-web-green
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
+
+  operations-web:
+    image: ${OPERATIONS_WEB_IMAGE:-restaurant-order-operations-web}@${OPERATIONS_WEB_IMAGE_DIGEST:?OPERATIONS_WEB_IMAGE_DIGEST is required for production deployment}
+    container_name: restaurant-order-operations-web-green
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
+
+  admin-web:
+    image: ${ADMIN_WEB_IMAGE:-restaurant-order-admin-web}@${ADMIN_WEB_IMAGE_DIGEST:?ADMIN_WEB_IMAGE_DIGEST is required for production deployment}
+    container_name: restaurant-order-admin-web-green
+    expose:
+      - "8080"
+    networks:
+      - restaurant_order_ingress
+
+networks:
+  restaurant_order_ingress:
+    external: true
+    name: restaurant_order_ingress

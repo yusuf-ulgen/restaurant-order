@@ -1,0 +1,6 @@
+# Gitleaks ignore list for test fixture files
+5d614d3edf631f01e9c87dcae3452dab46eab44f:scripts/tests/check-secrets.test.mjs:aws-access-token:25
+scripts/tests/check-secrets.test.mjs:aws-access-token:25
+scripts/tests/check-secrets.test.mjs:aws-access-token:32
+67e9cd9a416e2b6720fb6670391b38935749ad12:.github/workflows/ci.yml:generic-api-key:131
+.github/workflows/ci.yml:generic-api-key:131

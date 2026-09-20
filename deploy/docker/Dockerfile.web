@@ -1,0 +1,38 @@
+# Multi-stage Dockerfile for Vite React 19 Frontend Shells
+FROM node:22-alpine AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
+
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+COPY packages/ packages/
+COPY apps/ apps/
+
+ARG APP_NAME=customer-web
+# Build arguments for public VITE_ variables only
+ARG VITE_API_URL=""
+ENV VITE_API_URL=${VITE_API_URL}
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter ${APP_NAME} build
+
+FROM nginx:alpine AS final
+ARG APP_NAME=customer-web
+
+# Remove default configuration and install hardened unprivileged configuration
+RUN rm -rf /etc/nginx/conf.d/* /etc/nginx/nginx.conf
+COPY deploy/docker/nginx-web.conf /etc/nginx/nginx.conf
+COPY --from=build /app/apps/${APP_NAME}/dist /usr/share/nginx/html
+
+# Prepare temporary directories and ownership for non-root execution
+RUN mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
+    chown -R nginx:nginx /tmp /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html
+
+USER nginx
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

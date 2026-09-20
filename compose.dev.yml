@@ -1,0 +1,93 @@
+# ==============================================================================
+# DEVELOPMENT DOCKER COMPOSE OVERRIDE (compose.dev.yml)
+# ==============================================================================
+# Usage: docker compose -f compose.yml -f compose.dev.yml up -d
+# Exposes local PostgreSQL and Redis ports for developer convenience.
+# Web frontends run on ports 3000, 3001, 3002.
+# ==============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurant-order-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant_order_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d restaurant_order_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: restaurant-order-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - app_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    container_name: restaurant-order-api-dev
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DATABASE_URL: Host=postgres;Port=5432;Database=restaurant_order_dev;Username=postgres;Password=postgres
+      REDIS_URL: redis:6379
+      DEPLOYMENT_COLOR: blue
+      PORT: 5000
+    ports:
+      - "${API_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    container_name: restaurant-order-worker-dev
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DATABASE_URL: Host=postgres;Port=5432;Database=restaurant_order_dev;Username=postgres;Password=postgres
+      REDIS_URL: redis:6379
+      DEPLOYMENT_COLOR: blue
+      ACTIVE_DEPLOYMENT_SLOT: blue
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  customer-web:
+    container_name: restaurant-order-customer-web-dev
+    ports:
+      - "3000:8080"
+
+  operations-web:
+    container_name: restaurant-order-operations-web-dev
+    ports:
+      - "3001:8080"
+
+  admin-web:
+    container_name: restaurant-order-admin-web-dev
+    ports:
+      - "3002:8080"
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:

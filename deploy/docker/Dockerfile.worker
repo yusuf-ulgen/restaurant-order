@@ -1,0 +1,20 @@
+# Multi-stage Dockerfile for .NET 10 Worker Service
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+WORKDIR /src
+
+COPY ["apps/worker/RestaurantOrder.Worker.csproj", "apps/worker/"]
+RUN dotnet restore "apps/worker/RestaurantOrder.Worker.csproj"
+
+COPY apps/worker/ apps/worker/
+WORKDIR /src/apps/worker
+RUN dotnet publish "RestaurantOrder.Worker.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS final
+WORKDIR /app
+
+# Create non-root system user and enforce unprivileged execution
+RUN addgroup -g 10001 appgroup && adduser -u 10001 -G appgroup -s /sbin/nologin -D appuser
+USER appuser
+
+COPY --from=build --chown=appuser:appgroup /app/publish .
+ENTRYPOINT ["dotnet", "RestaurantOrder.Worker.dll"]
