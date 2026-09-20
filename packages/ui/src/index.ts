@@ -18,7 +18,20 @@ export * from './components/FormError';
 export * from './components/VisuallyHidden';
 export * from './components/ErrorBoundary';
 
+// Overlay Components & Dialogs
+export * from './components/Modal';
+export * from './components/BottomSheet';
+export * from './components/Drawer';
+export * from './components/ConfirmationDialog';
+
+// Overlay Primitives & Utilities
+export * from './overlay';
+
+// Toast System
+export * from './toast';
+
 // Design Tokens & Theme Utilities
 export * from './tokens/tokens';
 export * from './tokens/theme';
 export * from './tokens/types';
+
