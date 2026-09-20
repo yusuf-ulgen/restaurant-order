@@ -1,50 +1,39 @@
 @import '@restaurant-order/ui/src/tokens.css';
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: var(--ro-font-sans);
-  background-color: var(--ro-color-bg);
-  color: var(--ro-color-text);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-}
+@import '@restaurant-order/ui/src/base.css';
 
 .layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
   width: 240px;
   background-color: var(--ro-color-secondary);
-  color: #ffffff;
-  padding: 24px 16px;
+  color: var(--ro-color-text-inverse);
+  padding: var(--ro-space-6) var(--ro-space-4);
   display: flex;
   flex-direction: column;
 }
 
 .main-content {
   flex: 1;
-  padding: 32px;
+  padding: var(--ro-space-8);
 }
 
 .header {
-  margin-bottom: 24px;
+  margin-bottom: var(--ro-space-6);
 }
 
 .title {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: var(--ro-font-size-2xl);
+  font-weight: var(--ro-font-weight-bold);
   color: var(--ro-color-secondary);
+  line-height: var(--ro-line-height-tight);
 }
 
 .subtitle {
-  font-size: 0.875rem;
+  font-size: var(--ro-font-size-sm);
   color: var(--ro-color-text-muted);
-  margin-top: 4px;
+  margin-top: var(--ro-space-1);
 }

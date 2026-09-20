@@ -29,9 +29,9 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const sizeStyles: Record<string, React.CSSProperties> = {
-    sm: { padding: '6px 12px', fontSize: '0.875rem' },
-    md: { padding: '10px 18px', fontSize: '1rem' },
-    lg: { padding: '14px 24px', fontSize: '1.125rem' },
+    sm: { padding: '6px 12px', fontSize: '0.875rem', minHeight: 'var(--ro-touch-target-dense, 36px)' },
+    md: { padding: '10px 18px', fontSize: '1rem', minHeight: 'var(--ro-touch-target-min, 44px)' },
+    lg: { padding: '14px 24px', fontSize: '1.125rem', minHeight: '48px' },
   };
 
   const variantStyles: Record<string, React.CSSProperties> = {
