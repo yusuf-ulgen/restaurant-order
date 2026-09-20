@@ -5,12 +5,46 @@ import {
   ErrorBoundary,
   EmptyState,
   AppShell,
+  PageHeader,
+  ContentSection,
+  NavSectionConfig,
 } from '@restaurant-order/ui';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
   initialError?: boolean;
 }
+
+export const adminSidebarSections: NavSectionConfig[] = [
+  {
+    id: 'main',
+    title: 'Ana Menü',
+    order: 1,
+    items: [
+      { id: 'dashboard', label: 'Kontrol Paneli', isActive: true, order: 1 },
+      { id: 'menu', label: 'Menü Yönetimi', order: 2 },
+      { id: 'tables', label: 'Şube & Masalar', order: 3 },
+    ],
+  },
+  {
+    id: 'operations',
+    title: 'Operasyon',
+    order: 2,
+    items: [
+      { id: 'orders', label: 'Siparişler', order: 1 },
+      { id: 'staff', label: 'Personel & Vardiya', order: 2 },
+    ],
+  },
+  {
+    id: 'system',
+    title: 'Sistem',
+    order: 3,
+    items: [
+      { id: 'reports', label: 'Raporlar', order: 1 },
+      { id: 'settings', label: 'Ayarlar', order: 2 },
+    ],
+  },
+];
 
 export const AdminContent: React.FC<AdminAppProps> = ({
   hasMetrics = true,
@@ -27,31 +61,24 @@ export const AdminContent: React.FC<AdminAppProps> = ({
         title: 'Restoran Yönetim',
         ariaLabel: 'Yönetim Menüsü',
         navAriaLabel: 'Ana Gezinti',
-        sections: [
-          {
-            id: 'sec-nav',
-            items: [
-              { id: 'dashboard', label: 'Kontrol Paneli', isActive: true },
-              { id: 'menu', label: 'Menü Yönetimi' },
-              { id: 'tables', label: 'Şube & Masalar' },
-            ],
-          },
-        ],
+        sections: adminSidebarSections,
       }}
       header={{
-        title: (
-          <h1 className="title" style={{ margin: 0, fontSize: 'var(--ro-font-size-lg)' }}>
-            Yönetim Paneli
-          </h1>
-        ),
-        subtitle: (
-          <p className="subtitle" style={{ margin: 0 }}>
-            Organizasyon Genel Bakışı
-          </p>
-        ),
+        title: <h1 className="title">Yönetim Paneli</h1>,
+        subtitle: <p className="subtitle">Organizasyon Genel Bakışı</p>,
         actions: <Badge variant="primary">Restoran Admini</Badge>,
       }}
+      footer={{
+        copyright: '© 2026 Restaurant Order Platform',
+        businessText: 'Admin Kontrol Paneli',
+      }}
     >
+      <PageHeader
+        title="Genel Bakış"
+        subtitle="Güncel şube durumları ve operasyonel göstergeler"
+        headingLevel={3}
+      />
+
       {!hasMetrics ? (
         <Card padding="md">
           <EmptyState
@@ -62,27 +89,24 @@ export const AdminContent: React.FC<AdminAppProps> = ({
           />
         </Card>
       ) : (
-        <section
-          aria-label="Özet Metrikler"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '20px',
-          }}
+        <ContentSection
+          title="Özet Metrikler"
+          description="Bugüne ait canlı operasyon metrikleri"
+          variant="default"
         >
-          <Card padding="md">
-            <h3 style={{ fontSize: '1rem', color: 'var(--ro-color-text-muted)' }}>
-              Günlük Sipariş
-            </h3>
-            <p style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '8px' }}>0</p>
-          </Card>
-          <Card padding="md">
-            <h3 style={{ fontSize: '1rem', color: 'var(--ro-color-text-muted)' }}>
-              Aktif Masalar
-            </h3>
-            <p style={{ fontSize: '1.75rem', fontWeight: 700, marginTop: '8px' }}>0</p>
-          </Card>
-        </section>
+          <div className="admin-kpi-grid">
+            <Card padding="md">
+              <h3 className="admin-kpi-label">Günlük Sipariş</h3>
+              <p className="admin-kpi-value">0</p>
+              <p className="admin-kpi-subtext">Bugün tamamlanan sipariş sayısı</p>
+            </Card>
+            <Card padding="md">
+              <h3 className="admin-kpi-label">Aktif Masalar</h3>
+              <p className="admin-kpi-value">0</p>
+              <p className="admin-kpi-subtext">Şu anda oturan veya sipariş bekleyen masalar</p>
+            </Card>
+          </div>
+        </ContentSection>
       )}
     </AppShell>
   );

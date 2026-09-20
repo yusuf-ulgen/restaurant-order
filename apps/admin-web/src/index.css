@@ -1,39 +1,33 @@
 @import '@restaurant-order/ui/src/tokens.css';
 @import '@restaurant-order/ui/src/base.css';
 
-.layout {
-  display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
+/* Admin Web Specific Styles using Design Tokens */
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--ro-space-4);
+  margin-top: var(--ro-space-4);
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.sidebar {
-  width: 240px;
-  background-color: var(--ro-color-secondary);
-  color: var(--ro-color-text-inverse);
-  padding: var(--ro-space-6) var(--ro-space-4);
-  display: flex;
-  flex-direction: column;
-}
-
-.main-content {
-  flex: 1;
-  padding: var(--ro-space-8);
-}
-
-.header {
-  margin-bottom: var(--ro-space-6);
-}
-
-.title {
-  font-size: var(--ro-font-size-2xl);
-  font-weight: var(--ro-font-weight-bold);
-  color: var(--ro-color-secondary);
-  line-height: var(--ro-line-height-tight);
-}
-
-.subtitle {
+.admin-kpi-label {
   font-size: var(--ro-font-size-sm);
   color: var(--ro-color-text-muted);
-  margin-top: var(--ro-space-1);
+  font-weight: var(--ro-font-weight-medium);
+  margin: 0;
+}
+
+.admin-kpi-value {
+  font-size: var(--ro-font-size-3xl);
+  font-weight: var(--ro-font-weight-bold);
+  color: var(--ro-color-text-primary);
+  line-height: var(--ro-line-height-tight);
+  margin: var(--ro-space-2) 0 0 0;
+}
+
+.admin-kpi-subtext {
+  font-size: var(--ro-font-size-xs);
+  color: var(--ro-color-text-muted);
+  margin: var(--ro-space-1) 0 0 0;
 }

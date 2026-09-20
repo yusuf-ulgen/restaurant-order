@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Button,
@@ -6,6 +6,7 @@ import {
   ErrorBoundary,
   EmptyState,
   AppShell,
+  BottomSheet,
 } from '@restaurant-order/ui';
 
 export interface CustomerAppProps {
@@ -17,6 +18,8 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
   hasActiveSession = true,
   initialError = false,
 }) => {
+  const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+
   if (initialError) {
     throw new Error('Aktif oturum yüklenemedi.');
   }
@@ -25,16 +28,8 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
     <AppShell
       variant="customer"
       header={{
-        title: (
-          <h1 className="title" style={{ margin: 0, fontSize: 'var(--ro-font-size-lg)' }}>
-            Restoran Sipariş
-          </h1>
-        ),
-        subtitle: (
-          <p className="subtitle" style={{ margin: 0 }}>
-            Masa 04 • Giriş Salonu
-          </p>
-        ),
+        title: <h1 className="title">Restoran Sipariş</h1>,
+        subtitle: <p className="subtitle">Masa 04 • Giriş Salonu</p>,
         actions: <Badge variant="success">Açık Oturum</Badge>,
       }}
       footer={{
@@ -53,27 +48,64 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
         </Card>
       ) : (
         <Card padding="md">
-          <h2 style={{ fontSize: '1.125rem', marginBottom: '8px' }}>Hoş Geldiniz</h2>
-          <p
-            style={{
-              color: 'var(--ro-color-text-muted)',
-              fontSize: '0.875rem',
-              lineHeight: '1.5',
-            }}
-          >
+          <h2 className="customer-card-title">Hoş Geldiniz</h2>
+          <p className="customer-card-text">
             Masadaki QR kodu tarayarak menüyü inceleyebilir, doğrudan sipariş verebilir ve
             hesap durumunuzu takip edebilirsiniz.
           </p>
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-            <Button variant="primary" size="md" style={{ flex: 1 }}>
+          <div className="customer-actions">
+            <Button
+              variant="primary"
+              size="md"
+              className="customer-action-btn-primary"
+            >
               Menüyü İncele
             </Button>
-            <Button variant="outline" size="md">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setIsServiceSheetOpen(true)}
+            >
               Garson Çağır
             </Button>
           </div>
         </Card>
       )}
+
+      {/* Service Request Bottom Sheet */}
+      <BottomSheet
+        isOpen={isServiceSheetOpen}
+        onClose={() => setIsServiceSheetOpen(false)}
+        title="Garson Çağır"
+        description="Masanız için servis veya destek talebi iletin."
+      >
+        <div className="service-options-list">
+          <button
+            type="button"
+            className="service-option-item"
+            onClick={() => setIsServiceSheetOpen(false)}
+          >
+            <span>Masaya Su / Peçete Talebi</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <button
+            type="button"
+            className="service-option-item"
+            onClick={() => setIsServiceSheetOpen(false)}
+          >
+            <span>Hesap İstiyorum</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <button
+            type="button"
+            className="service-option-item"
+            onClick={() => setIsServiceSheetOpen(false)}
+          >
+            <span>Garson ile Görüşme Talebi</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </BottomSheet>
     </AppShell>
   );
 };

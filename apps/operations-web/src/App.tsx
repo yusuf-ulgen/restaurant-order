@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Button,
@@ -6,6 +6,7 @@ import {
   ErrorBoundary,
   EmptyState,
   AppShell,
+  Modal,
 } from '@restaurant-order/ui';
 
 export interface OperationsAppProps {
@@ -17,6 +18,8 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
   hasActiveTables = true,
   initialError = false,
 }) => {
+  const [isCallsModalOpen, setIsCallsModalOpen] = useState(false);
+
   if (initialError) {
     throw new Error('Operasyon verileri yüklenemedi.');
   }
@@ -25,22 +28,14 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
     <AppShell
       variant="operations"
       header={{
-        title: (
-          <h1 className="title" style={{ margin: 0, fontSize: 'var(--ro-font-size-lg)' }}>
-            Garson & Operasyon
-          </h1>
-        ),
-        subtitle: (
-          <p className="subtitle" style={{ margin: 0 }}>
-            Şube: Kadıköy • Aktif Vardiya
-          </p>
-        ),
+        title: <h1 className="title">Garson & Operasyon</h1>,
+        subtitle: <p className="subtitle">Şube: Kadıköy • Aktif Vardiya</p>,
         actions: <Badge variant="primary">Garson Modu</Badge>,
       }}
       mobileNav={{
         items: [
           { id: 'tables', label: 'Masalar', isActive: true },
-          { id: 'calls', label: 'Çağrılar' },
+          { id: 'calls', label: 'Çağrılar', onClick: () => setIsCallsModalOpen(true) },
           { id: 'orders', label: 'Siparişler' },
         ],
       }}
@@ -55,28 +50,61 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
           />
         </Card>
       ) : (
-        <Card padding="md">
-          <h2 style={{ fontSize: '1.125rem', marginBottom: '8px' }}>Masa Yönetimi</h2>
-          <p
-            style={{
-              color: 'var(--ro-color-text-muted)',
-              fontSize: '0.875rem',
-              lineHeight: '1.5',
-            }}
-          >
-            Masa durumlarını görüntüleyebilir, yeni sipariş alabilir ve servis çağrılarına yanıt
-            verebilirsiniz.
-          </p>
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" size="md" style={{ flex: 1 }}>
-              Masa Planı
-            </Button>
-            <Button variant="outline" size="md">
-              Çağrılar (0)
-            </Button>
+        <>
+          <Card padding="md">
+            <h2 className="operations-card-title">Masa Yönetimi</h2>
+            <p className="operations-card-text">
+              Masa durumlarını görüntüleyebilir, yeni sipariş alabilir ve servis çağrılarına yanıt
+              verebilirsiniz.
+            </p>
+            <div className="operations-actions">
+              <Button
+                variant="secondary"
+                size="md"
+                className="operations-action-btn-primary"
+              >
+                Masa Planı
+              </Button>
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => setIsCallsModalOpen(true)}
+              >
+                Çağrılar (0)
+              </Button>
+            </div>
+          </Card>
+
+          <div className="operations-quick-stats">
+            <div className="operations-stat-item">
+              <span className="operations-stat-label">Bekleyen Çağrı</span>
+              <span className="operations-stat-value">0</span>
+            </div>
+            <div className="operations-stat-item">
+              <span className="operations-stat-label">Açık Hesaplar</span>
+              <span className="operations-stat-value">0</span>
+            </div>
+            <div className="operations-stat-item">
+              <span className="operations-stat-label">Hazır Siparişler</span>
+              <span className="operations-stat-value">0</span>
+            </div>
           </div>
-        </Card>
+        </>
       )}
+
+      {/* Calls Modal */}
+      <Modal
+        isOpen={isCallsModalOpen}
+        onClose={() => setIsCallsModalOpen(false)}
+        title="Aktif Çağrılar"
+        description="Masalardan gelen servis ve hesap çağrıları"
+        size="sm"
+      >
+        <EmptyState
+          title="Bekleyen Çağrı Yok"
+          description="Şu anda masalardan iletilen açık bir garson veya hesap çağrısı bulunmamaktadır."
+        />
+      </Modal>
     </AppShell>
   );
 };

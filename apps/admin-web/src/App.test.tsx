@@ -82,5 +82,34 @@ describe('Admin Web App', () => {
       const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThanOrEqual(3);
     });
+
+    it('toggles sidebar collapsed state via collapse button', () => {
+      render(<App />);
+
+      const collapseBtn = screen.getByTestId('sidebar-collapse-btn');
+      expect(collapseBtn).toBeDefined();
+
+      fireEvent.click(collapseBtn);
+      const sidebar = screen.getByTestId('desktop-sidebar');
+      expect(sidebar.getAttribute('data-collapsed')).toBe('true');
+
+      fireEvent.click(collapseBtn);
+      expect(sidebar.getAttribute('data-collapsed')).toBeNull();
+    });
+
+    it('opens and closes mobile drawer via header toggle', () => {
+      render(<App />);
+
+      const mobileToggleBtn = screen.getByTestId('mobile-menu-toggle');
+      fireEvent.click(mobileToggleBtn);
+
+      const drawer = screen.getByRole('dialog');
+      expect(drawer).toBeDefined();
+
+      const closeBtn = screen.getByRole('button', { name: 'Kapat' });
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
   });
 });

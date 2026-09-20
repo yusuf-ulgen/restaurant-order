@@ -1,42 +1,61 @@
 @import '@restaurant-order/ui/src/tokens.css';
 @import '@restaurant-order/ui/src/base.css';
 
-.container {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 16px;
-  padding-top: max(16px, var(--ro-safe-area-top));
-  padding-bottom: max(16px, var(--ro-safe-area-bottom));
-  padding-left: max(16px, var(--ro-safe-area-left));
-  padding-right: max(16px, var(--ro-safe-area-right));
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
+/* Customer Web Specific Styles using Design Tokens */
+.customer-card-title {
+  font-size: var(--ro-font-size-lg);
+  font-weight: var(--ro-font-weight-semibold);
+  color: var(--ro-color-text-primary);
+  margin: 0 0 var(--ro-space-2) 0;
 }
 
-.header {
-  padding: var(--ro-space-4) 0;
-  border-bottom: 1px solid var(--ro-color-border);
-  margin-bottom: var(--ro-space-6);
-}
-
-.title {
-  font-size: var(--ro-font-size-xl);
-  font-weight: var(--ro-font-weight-bold);
-  color: var(--ro-color-primary);
-  line-height: var(--ro-line-height-tight);
-}
-
-.subtitle {
-  font-size: var(--ro-font-size-sm);
+.customer-card-text {
   color: var(--ro-color-text-muted);
-  margin-top: var(--ro-space-1);
+  font-size: var(--ro-font-size-sm);
+  line-height: var(--ro-line-height-normal);
+  margin: 0;
 }
 
-.content {
+.customer-actions {
+  display: flex;
+  gap: var(--ro-space-2);
+  margin-top: var(--ro-space-4);
+  flex-wrap: wrap;
+}
+
+.customer-action-btn-primary {
   flex: 1;
+  min-width: 140px;
+}
+
+.service-options-list {
   display: flex;
   flex-direction: column;
-  gap: var(--ro-space-4);
+  gap: var(--ro-space-2);
+  padding: var(--ro-space-2) 0;
+}
+
+.service-option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ro-space-3) var(--ro-space-4);
+  border: 1px solid var(--ro-color-border);
+  border-radius: var(--ro-radius-md);
+  background-color: var(--ro-color-surface);
+  color: var(--ro-color-text-primary);
+  cursor: pointer;
+  min-height: var(--ro-touch-target-min, 44px);
+  font-size: var(--ro-font-size-sm);
+  font-weight: var(--ro-font-weight-medium);
+  transition: background-color var(--ro-duration-fast) var(--ro-ease-standard);
+  text-align: left;
+}
+
+.service-option-item:hover {
+  background-color: var(--ro-color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.service-option-item:focus-visible {
+  outline: 2px solid var(--ro-color-focus);
 }

@@ -73,5 +73,22 @@ describe('Operations Web App', () => {
       expect(buttons.some((btn) => btn.textContent?.includes('Masa Planı'))).toBe(true);
       expect(buttons.some((btn) => btn.textContent?.includes('Çağrılar'))).toBe(true);
     });
+
+    it('opens and closes active calls Modal when Çağrılar button is clicked', () => {
+      render(<App />);
+
+      const callsBtn = screen.getByRole('button', { name: 'Çağrılar (0)' });
+      fireEvent.click(callsBtn);
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeDefined();
+      expect(screen.getByText('Aktif Çağrılar')).toBeDefined();
+      expect(screen.getByText('Bekleyen Çağrı Yok')).toBeDefined();
+
+      const closeBtn = screen.getByRole('button', { name: 'Kapat' });
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
   });
 });

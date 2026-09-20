@@ -73,5 +73,22 @@ describe('Customer Web App', () => {
       expect(buttons.some((btn) => btn.textContent?.includes('Menüyü İncele'))).toBe(true);
       expect(buttons.some((btn) => btn.textContent?.includes('Garson Çağır'))).toBe(true);
     });
+
+    it('opens and closes service request BottomSheet on Garson Çağır click', () => {
+      render(<App />);
+
+      const callWaiterBtn = screen.getByRole('button', { name: 'Garson Çağır' });
+      fireEvent.click(callWaiterBtn);
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeDefined();
+      expect(screen.getByText('Masanız için servis veya destek talebi iletin.')).toBeDefined();
+      expect(screen.getByText('Masaya Su / Peçete Talebi')).toBeDefined();
+
+      const optionBtn = screen.getByText('Masaya Su / Peçete Talebi');
+      fireEvent.click(optionBtn);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
   });
 });

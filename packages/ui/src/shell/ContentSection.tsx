@@ -6,6 +6,7 @@ export interface ContentSectionProps {
   actions?: React.ReactNode;
   children: React.ReactNode;
   variant?: 'default' | 'card' | 'bordered';
+  headingLevel?: 2 | 3 | 4;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -16,11 +17,13 @@ export const ContentSection: React.FC<ContentSectionProps> = ({
   actions,
   children,
   variant = 'default',
+  headingLevel = 3,
   className,
   style,
 }) => {
   const generatedId = useId();
   const titleId = title ? `section-title-${generatedId}` : undefined;
+  const HeadingTag = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
 
   const variantStyles: Record<typeof variant, React.CSSProperties> = {
     default: {
@@ -72,7 +75,7 @@ export const ContentSection: React.FC<ContentSectionProps> = ({
         >
           <div>
             {title && (
-              <h2
+              <HeadingTag
                 id={titleId}
                 style={{
                   margin: 0,
@@ -82,7 +85,7 @@ export const ContentSection: React.FC<ContentSectionProps> = ({
                 }}
               >
                 {title}
-              </h2>
+              </HeadingTag>
             )}
             {description && (
               <p
