@@ -130,12 +130,12 @@ public class WorkerCoordinationTests
         using var cts = new CancellationTokenSource();
         await worker.StartAsync(cts.Token);
 
-        await Task.Delay(100);
+        await WaitForConditionAsync(() => worker.IsLeader, TimeSpan.FromSeconds(3));
         Assert.True(worker.IsLeader);
 
         // Simulate cutover: active slot changes, guard becomes inactive
         guard.IsActive = false;
-        await Task.Delay(1100);
+        await WaitForConditionAsync(() => !worker.IsLeader, TimeSpan.FromSeconds(3));
 
         Assert.False(worker.IsLeader);
         Assert.True(lease.ReleaseCalled);
@@ -161,12 +161,12 @@ public class WorkerCoordinationTests
         using var cts = new CancellationTokenSource();
         await worker.StartAsync(cts.Token);
 
-        await Task.Delay(100);
+        await WaitForConditionAsync(() => worker.IsLeader, TimeSpan.FromSeconds(3));
         Assert.True(worker.IsLeader);
 
         // Next renewal fails (e.g. Redis disconnection or TTL expired)
         lease.CanRenew = false;
-        await Task.Delay(1200);
+        await WaitForConditionAsync(() => !worker.IsLeader, TimeSpan.FromSeconds(3));
 
         Assert.False(worker.IsLeader);
 
@@ -219,5 +219,14 @@ public class WorkerCoordinationTests
 
         var reserved = await store.TryReserveKeyAsync("test-job-key", TimeSpan.FromMinutes(5));
         Assert.False(reserved);
+    }
+
+    private static async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var start = DateTime.UtcNow;
+        while (!condition() && DateTime.UtcNow - start < timeout)
+        {
+            await Task.Delay(25);
+        }
     }
 }

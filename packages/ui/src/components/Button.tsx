@@ -1,66 +1,103 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
+import { Spinner } from './Spinner';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
   children: React.ReactNode;
 }
 
-export const Button: React.FC<ButtonProps> = ({
-  variant = 'primary',
-  size = 'md',
-  children,
-  style,
-  disabled,
-  ...props
-}) => {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    loading = false,
+    disabled = false,
+    children,
+    style,
+    ...props
+  },
+  ref
+) {
+  const isInactive = disabled || loading;
+
   const baseStyles: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontWeight: 600,
+    gap: 'var(--ro-space-2)',
+    fontWeight: 'var(--ro-font-weight-semibold)',
     fontFamily: 'var(--ro-font-sans)',
     borderRadius: 'var(--ro-radius-md)',
     border: '1px solid transparent',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
+    cursor: isInactive ? 'not-allowed' : 'pointer',
+    opacity: isInactive ? 0.6 : 1,
     transition: 'all var(--ro-transition-fast)',
     textDecoration: 'none',
+    boxSizing: 'border-box',
+    userSelect: 'none',
+    position: 'relative',
   };
 
-  const sizeStyles: Record<string, React.CSSProperties> = {
-    sm: { padding: '6px 12px', fontSize: '0.875rem' },
-    md: { padding: '10px 18px', fontSize: '1rem' },
-    lg: { padding: '14px 24px', fontSize: '1.125rem' },
+  const sizeStyles: Record<'sm' | 'md' | 'lg', React.CSSProperties> = {
+    sm: {
+      padding: 'var(--ro-space-1) var(--ro-space-3)',
+      fontSize: 'var(--ro-font-size-sm)',
+      minHeight: 'var(--ro-touch-target-dense, 36px)',
+    },
+    md: {
+      padding: 'var(--ro-space-2) var(--ro-space-4)',
+      fontSize: 'var(--ro-font-size-base)',
+      minHeight: 'var(--ro-touch-target-min, 44px)',
+    },
+    lg: {
+      padding: 'var(--ro-space-3) var(--ro-space-6)',
+      fontSize: 'var(--ro-font-size-md)',
+      minHeight: '48px',
+    },
   };
 
-  const variantStyles: Record<string, React.CSSProperties> = {
+  const variantStyles: Record<'primary' | 'secondary' | 'outline' | 'ghost' | 'danger', React.CSSProperties> = {
     primary: {
       backgroundColor: 'var(--ro-color-primary)',
-      color: '#ffffff',
+      color: 'var(--ro-color-white)',
     },
     secondary: {
       backgroundColor: 'var(--ro-color-secondary)',
-      color: '#ffffff',
+      color: 'var(--ro-color-white)',
     },
     outline: {
       backgroundColor: 'transparent',
       borderColor: 'var(--ro-color-border)',
       color: 'var(--ro-color-text)',
     },
+    ghost: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+      color: 'var(--ro-color-text)',
+    },
     danger: {
       backgroundColor: 'var(--ro-color-danger)',
-      color: '#ffffff',
+      color: 'var(--ro-color-white)',
     },
   };
 
   return (
     <button
-      style={{ ...baseStyles, ...sizeStyles[size], ...variantStyles[variant], ...style }}
-      disabled={disabled}
+      ref={ref}
+      style={{
+        ...baseStyles,
+        ...sizeStyles[size],
+        ...variantStyles[variant],
+        ...style,
+      }}
+      disabled={isInactive}
+      aria-busy={loading ? 'true' : undefined}
       {...props}
     >
-      {children}
+      {loading && <Spinner size="sm" aria-hidden="true" />}
+      <span>{children}</span>
     </button>
   );
-};
+});

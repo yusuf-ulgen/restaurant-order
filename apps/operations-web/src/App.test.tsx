@@ -16,7 +16,7 @@ describe('Operations Web App', () => {
       render(<App />);
 
       expect(screen.getByText('Masa Yönetimi')).toBeDefined();
-      expect(screen.getByText('Masa Planı')).toBeDefined();
+      expect(screen.getByText(/Masa Planı/i)).toBeDefined();
       expect(screen.getByText('Çağrılar (0)')).toBeDefined();
     });
   });
@@ -27,9 +27,7 @@ describe('Operations Web App', () => {
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Aktif Masa Bulunmuyor')).toBeDefined();
-      const actionButton = screen.getByText('Masaları Yenile');
-      expect(actionButton).toBeDefined();
-      fireEvent.click(actionButton);
+      expect(screen.queryByText('Masaları Yenile')).toBeNull();
     });
 
     it('catches render errors and displays error boundary fallback', () => {
@@ -70,8 +68,26 @@ describe('Operations Web App', () => {
 
       const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBeGreaterThanOrEqual(2);
-      expect(buttons.some((btn) => btn.textContent?.includes('Masa Planı'))).toBe(true);
+      const planBtn = screen.getByRole('button', { name: /Masa Planı/i });
+      expect(planBtn.hasAttribute('disabled')).toBe(true);
       expect(buttons.some((btn) => btn.textContent?.includes('Çağrılar'))).toBe(true);
+    });
+
+    it('opens and closes active calls Modal when Çağrılar button is clicked', () => {
+      render(<App />);
+
+      const callsBtn = screen.getByRole('button', { name: 'Çağrılar (0)' });
+      fireEvent.click(callsBtn);
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeDefined();
+      expect(screen.getByText('Aktif Çağrılar')).toBeDefined();
+      expect(screen.getByText('Bekleyen Çağrı Yok')).toBeDefined();
+
+      const closeBtn = screen.getByRole('button', { name: 'Kapat' });
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
 });

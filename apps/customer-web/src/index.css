@@ -1,49 +1,68 @@
 @import '@restaurant-order/ui/src/tokens.css';
+@import '@restaurant-order/ui/src/base.css';
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Customer Web Specific Styles using Design Tokens */
+.customer-card-title {
+  font-size: var(--ro-font-size-lg);
+  font-weight: var(--ro-font-weight-semibold);
+  color: var(--ro-color-text-primary);
+  margin: 0 0 var(--ro-space-2) 0;
 }
 
-body {
-  font-family: var(--ro-font-sans);
-  background-color: var(--ro-color-bg);
-  color: var(--ro-color-text);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-}
-
-.container {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 16px;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--ro-color-border);
-  margin-bottom: 24px;
-}
-
-.title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--ro-color-primary);
-}
-
-.subtitle {
-  font-size: 0.875rem;
+.customer-card-text {
   color: var(--ro-color-text-muted);
-  margin-top: 4px;
+  font-size: var(--ro-font-size-sm);
+  line-height: var(--ro-line-height-normal);
+  margin: 0;
 }
 
-.content {
+.customer-actions {
+  display: flex;
+  gap: var(--ro-space-2);
+  margin-top: var(--ro-space-4);
+  flex-wrap: wrap;
+}
+
+.customer-action-btn-primary {
   flex: 1;
+  min-width: 140px;
+}
+
+.service-options-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ro-space-2);
+  padding: var(--ro-space-2) 0;
+}
+
+.service-option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ro-space-3) var(--ro-space-4);
+  border: 1px solid var(--ro-color-border);
+  border-radius: var(--ro-radius-md);
+  background-color: var(--ro-color-surface);
+  color: var(--ro-color-text-primary);
+  cursor: pointer;
+  min-height: var(--ro-touch-target-min, 44px);
+  font-size: var(--ro-font-size-sm);
+  font-weight: var(--ro-font-weight-medium);
+  transition: background-color var(--ro-duration-fast) var(--ro-ease-standard);
+  text-align: left;
+}
+
+.service-option-item:hover:not(:disabled) {
+  background-color: var(--ro-color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.service-option-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background-color: var(--ro-color-surface-subtle);
+  color: var(--ro-color-text-muted);
+}
+
+.service-option-item:focus-visible {
+  outline: 2px solid var(--ro-color-focus);
 }

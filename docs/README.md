@@ -16,6 +16,7 @@ The documentation is organized into clear domains to support developers, product
 
 ### 1.2. Architecture & Technical Foundations
 - [docs/ARCHITECTURE.md](./ARCHITECTURE.md) — System architecture, bounded contexts, event model, and proposed technology stack.
+- [docs/DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md) — Centralized design tokens, accessible UI components, and application shells.
 - [docs/REPOSITORY-STRUCTURE.md](./REPOSITORY-STRUCTURE.md) — Repository layout, module boundaries, and file size limits (450/600 lines).
 - [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md) — RBAC matrix across the 8 system roles.
 - [docs/STATE-MACHINES.md](./STATE-MACHINES.md) — Formal state lifecycle models for tables, orders, tickets, and payments.

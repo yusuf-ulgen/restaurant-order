@@ -78,6 +78,7 @@ Agents must consult the relevant document in `docs/` before implementing any fea
 | Repository Organization & Rules | [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md) |
 | Access Control & RBAC | [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md) |
 | UI & Screen Inventory | [docs/SCREEN-INVENTORY.md](docs/SCREEN-INVENTORY.md) |
+| Design System & Shells | [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) |
 | State Machines & Lifecycles | [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) |
 | Negative Flows & Failures | [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md) |
 | Multi-Tenancy & Isolation | [docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md) |

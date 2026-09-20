@@ -9,8 +9,8 @@ describe('Admin Web App', () => {
 
       expect(screen.getByText('Restoran Yönetim')).toBeDefined();
       expect(screen.getByText('Kontrol Paneli')).toBeDefined();
-      expect(screen.getByText('Menü Yönetimi')).toBeDefined();
-      expect(screen.getByText('Şube & Masalar')).toBeDefined();
+      expect(screen.getByText(/Menü Yönetimi/i)).toBeDefined();
+      expect(screen.getByText(/Şube & Masalar/i)).toBeDefined();
     });
 
     it('renders header, title, and admin badge', () => {
@@ -35,9 +35,7 @@ describe('Admin Web App', () => {
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Henüz Raporlanmış Veri Yok')).toBeDefined();
-      const actionButton = screen.getByText('Raporları Yenile');
-      expect(actionButton).toBeDefined();
-      fireEvent.click(actionButton);
+      expect(screen.queryByText('Raporları Yenile')).toBeNull();
     });
 
     it('catches render errors and displays error boundary fallback', () => {
@@ -73,14 +71,48 @@ describe('Admin Web App', () => {
       expect(h2.textContent).toBe('Restoran Yönetim');
     });
 
-    it('has accessible navigation buttons', () => {
+    it('has accessible navigation items with correct link and disabled semantics', () => {
       render(<App />);
 
       const nav = screen.getByRole('navigation', { name: 'Ana Gezinti' });
       expect(nav).toBeDefined();
 
-      const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBeGreaterThanOrEqual(3);
+      const activeLink = screen.getByRole('link', { name: /Kontrol Paneli/i });
+      expect(activeLink.getAttribute('aria-current')).toBe('page');
+      expect(activeLink.getAttribute('href')).toBe('/');
+
+      const disabledMenu = screen.getByTestId('sidebar-item-menu');
+      expect(disabledMenu.getAttribute('aria-disabled')).toBe('true');
+      expect(disabledMenu.textContent).toContain('Menü Yönetimi (Yakında)');
+    });
+
+    it('toggles sidebar collapsed state via collapse button', () => {
+      render(<App />);
+
+      const collapseBtn = screen.getByTestId('sidebar-collapse-btn');
+      expect(collapseBtn).toBeDefined();
+
+      fireEvent.click(collapseBtn);
+      const sidebar = screen.getByTestId('desktop-sidebar');
+      expect(sidebar.getAttribute('data-collapsed')).toBe('true');
+
+      fireEvent.click(collapseBtn);
+      expect(sidebar.getAttribute('data-collapsed')).toBeNull();
+    });
+
+    it('opens and closes mobile drawer via header toggle', () => {
+      render(<App />);
+
+      const mobileToggleBtn = screen.getByTestId('mobile-menu-toggle');
+      fireEvent.click(mobileToggleBtn);
+
+      const drawer = screen.getByRole('dialog');
+      expect(drawer).toBeDefined();
+
+      const closeBtn = screen.getByRole('button', { name: 'Kapat' });
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
 });

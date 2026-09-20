@@ -1,39 +1,215 @@
 :root {
-  /* Brand Palette */
-  --ro-color-primary: #e63946;
-  --ro-color-primary-hover: #d62828;
-  --ro-color-secondary: #1d3557;
-  --ro-color-accent: #457b9d;
+  /* ==========================================================================
+     1. Neutral Color Palette (White, Grayscale 50-950, Black)
+     ========================================================================== */
+  --ro-color-white: #ffffff;
+  --ro-color-black: #000000;
 
-  /* Neutral & Base */
-  --ro-color-bg: #f8f9fa;
-  --ro-color-surface: #ffffff;
-  --ro-color-text: #1a1a1a;
-  --ro-color-text-muted: #6c757d;
-  --ro-color-border: #e9ecef;
+  --ro-color-neutral-50: #fafafa;
+  --ro-color-neutral-100: #f4f4f5;
+  --ro-color-neutral-200: #e4e4e7;
+  --ro-color-neutral-300: #d4d4d8;
+  --ro-color-neutral-400: #a1a1aa;
+  --ro-color-neutral-500: #71717a;
+  --ro-color-neutral-600: #52525b;
+  --ro-color-neutral-700: #3f3f46;
+  --ro-color-neutral-800: #27272a;
+  --ro-color-neutral-900: #18181b;
+  --ro-color-neutral-950: #09090b;
 
-  /* Semantic Status */
-  --ro-color-success: #2a9d8f;
-  --ro-color-warning: #e76f51;
-  --ro-color-danger: #d90429;
-  --ro-color-info: #0077b6;
+  /* ==========================================================================
+     2. Surface, Background & Border Colors
+     ========================================================================== */
+  --ro-color-bg: var(--ro-color-neutral-50);
+  --ro-color-bg-subtle: var(--ro-color-neutral-100);
+  --ro-color-bg-inverse: var(--ro-color-neutral-900);
 
-  /* Typography */
+  --ro-color-surface: var(--ro-color-white);
+  --ro-color-surface-hover: var(--ro-color-neutral-100);
+  --ro-color-surface-subtle: var(--ro-color-neutral-50);
+  --ro-color-surface-elevated: var(--ro-color-white);
+
+  --ro-color-border: var(--ro-color-neutral-200);
+  --ro-color-border-subtle: var(--ro-color-neutral-100);
+  --ro-color-border-strong: var(--ro-color-neutral-300);
+
+  --ro-color-focus: var(--ro-color-primary);
+  --ro-color-focus-ring: var(--ro-color-primary);
+
+  /* ==========================================================================
+     3. Typography Colors
+     ========================================================================== */
+  --ro-color-text-primary: var(--ro-color-neutral-900);
+  --ro-color-text-secondary: var(--ro-color-neutral-600);
+  --ro-color-text-tertiary: var(--ro-color-neutral-400);
+  --ro-color-text-inverse: var(--ro-color-white);
+
+  /* Backward compatibility aliases */
+  --ro-color-text: var(--ro-color-text-primary);
+  --ro-color-text-muted: var(--ro-color-text-secondary);
+
+  /* ==========================================================================
+     4. Semantic Status Colors (Subtle, purposeful, non-decorative)
+     ========================================================================== */
+  /* Success: tickets ready, paid bills, active sessions */
+  --ro-color-success: #16a34a;
+  --ro-color-success-hover: #15803d;
+  --ro-color-success-subtle: #f0fdf4;
+  --ro-color-success-border: #bbf7d0;
+  --ro-color-success-text: #166534;
+
+  /* Error / Danger: overdue tickets, failed payments, voids */
+  --ro-color-error: #dc2626;
+  --ro-color-error-hover: #b91c1c;
+  --ro-color-error-subtle: #fef2f2;
+  --ro-color-error-border: #fecaca;
+  --ro-color-error-text: #991b1b;
+  --ro-color-danger: var(--ro-color-error);
+  --ro-color-danger-hover: var(--ro-color-error-hover);
+
+  /* Warning: approaching latency, service calls, stockout alerts */
+  --ro-color-warning: #d97706;
+  --ro-color-warning-hover: #b45309;
+  --ro-color-warning-subtle: #fffbeb;
+  --ro-color-warning-border: #fde68a;
+  --ro-color-warning-text: #92400e;
+
+  /* Info: informational notes, shift info, table counts */
+  --ro-color-info: #2563eb;
+  --ro-color-info-hover: #1d4ed8;
+  --ro-color-info-subtle: #eff6ff;
+  --ro-color-info-border: #bfdbfe;
+  --ro-color-info-text: #1e40af;
+
+  /* ==========================================================================
+     5. Brand & Tenant-Extensible Primary / Secondary Tokens
+     ========================================================================== */
+  --ro-color-primary: var(--ro-color-neutral-900);
+  --ro-color-primary-hover: var(--ro-color-neutral-800);
+  --ro-color-primary-subtle: var(--ro-color-neutral-100);
+  --ro-color-secondary: var(--ro-color-neutral-700);
+  --ro-color-secondary-hover: var(--ro-color-neutral-600);
+  --ro-color-accent: var(--ro-color-neutral-500);
+
+  /* ==========================================================================
+     6. Typography Scale & Font Weights
+     ========================================================================== */
   --ro-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --ro-font-mono: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --ro-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Sizing & Radius */
+  --ro-font-size-xs: 0.75rem;    /* 12px */
+  --ro-font-size-sm: 0.875rem;   /* 14px */
+  --ro-font-size-base: 1rem;     /* 16px */
+  --ro-font-size-md: 1.125rem;   /* 18px */
+  --ro-font-size-lg: 1.25rem;    /* 20px */
+  --ro-font-size-xl: 1.5rem;     /* 24px */
+  --ro-font-size-2xl: 1.75rem;   /* 28px */
+  --ro-font-size-3xl: 2rem;      /* 32px */
+  --ro-font-size-4xl: 2.5rem;    /* 40px */
+
+  --ro-font-weight-regular: 400;
+  --ro-font-weight-medium: 500;
+  --ro-font-weight-semibold: 600;
+  --ro-font-weight-bold: 700;
+
+  --ro-line-height-none: 1;
+  --ro-line-height-tight: 1.25;
+  --ro-line-height-snug: 1.375;
+  --ro-line-height-normal: 1.5;
+  --ro-line-height-relaxed: 1.625;
+
+  /* ==========================================================================
+     7. Spacing Scale (4px Base Grid)
+     ========================================================================== */
+  --ro-space-0: 0px;
+  --ro-space-1: 4px;
+  --ro-space-2: 8px;
+  --ro-space-3: 12px;
+  --ro-space-4: 16px;
+  --ro-space-5: 20px;
+  --ro-space-6: 24px;
+  --ro-space-8: 32px;
+  --ro-space-10: 40px;
+  --ro-space-12: 48px;
+  --ro-space-16: 64px;
+
+  /* ==========================================================================
+     8. Border Radius System
+     ========================================================================== */
+  --ro-radius-none: 0px;
+  --ro-radius-xs: 2px;
   --ro-radius-sm: 4px;
   --ro-radius-md: 8px;
   --ro-radius-lg: 12px;
+  --ro-radius-xl: 16px;
+  --ro-radius-2xl: 24px;
   --ro-radius-full: 9999px;
 
-  /* Shadows */
-  --ro-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --ro-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --ro-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  /* ==========================================================================
+     9. Elevation & Shadow System (Subtle, neutral-toned)
+     ========================================================================== */
+  --ro-shadow-none: none;
+  --ro-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ro-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ro-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --ro-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --ro-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
 
-  /* Transitions */
-  --ro-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --ro-transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* ==========================================================================
+     10. Z-Index Layers
+     ========================================================================== */
+  --ro-z-base: 0;
+  --ro-z-raised: 1;
+  --ro-z-dropdown: 1000;
+  --ro-z-sticky: 1100;
+  --ro-z-fixed: 1200;
+  --ro-z-backdrop: 1300;
+  --ro-z-modal: 1400;
+  --ro-z-popover: 1500;
+  --ro-z-toast: 1600;
+  --ro-z-tooltip: 1700;
+
+  /* ==========================================================================
+     11. Motion, Duration & Easing
+     ========================================================================== */
+  --ro-duration-instant: 50ms;
+  --ro-duration-fast: 150ms;
+  --ro-duration-normal: 250ms;
+  --ro-duration-slow: 350ms;
+
+  --ro-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ro-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ro-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ro-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --ro-transition-fast: var(--ro-duration-fast) var(--ro-ease-standard);
+  --ro-transition-normal: var(--ro-duration-normal) var(--ro-ease-standard);
+
+  /* ==========================================================================
+     12. Minimum Touch Targets (WCAG 2.5.5 / iOS HIG: 44px)
+     ========================================================================== */
+  --ro-touch-target-min: 44px;
+  --ro-touch-target-dense: 36px;
+
+  /* ==========================================================================
+     13. iOS Safe-Area Inset Support
+     ========================================================================== */
+  --ro-safe-area-top: env(safe-area-inset-top, 0px);
+  --ro-safe-area-right: env(safe-area-inset-right, 0px);
+  --ro-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --ro-safe-area-left: env(safe-area-inset-left, 0px);
+}
+
+/* ==========================================================================
+   14. Reduced-Motion Preparation
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ro-duration-instant: 0ms;
+    --ro-duration-fast: 0ms;
+    --ro-duration-normal: 0ms;
+    --ro-duration-slow: 0ms;
+    --ro-transition-fast: none;
+    --ro-transition-normal: none;
+  }
 }

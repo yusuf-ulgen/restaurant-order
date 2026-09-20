@@ -1,49 +1,57 @@
 @import '@restaurant-order/ui/src/tokens.css';
+@import '@restaurant-order/ui/src/base.css';
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Operations Web Specific Styles using Design Tokens */
+.operations-card-title {
+  font-size: var(--ro-font-size-lg);
+  font-weight: var(--ro-font-weight-semibold);
+  color: var(--ro-color-text-primary);
+  margin: 0 0 var(--ro-space-2) 0;
 }
 
-body {
-  font-family: var(--ro-font-sans);
-  background-color: var(--ro-color-bg);
-  color: var(--ro-color-text);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-}
-
-.container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 16px;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--ro-color-border);
-  margin-bottom: 20px;
-}
-
-.title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--ro-color-secondary);
-}
-
-.subtitle {
-  font-size: 0.875rem;
+.operations-card-text {
   color: var(--ro-color-text-muted);
-  margin-top: 4px;
+  font-size: var(--ro-font-size-sm);
+  line-height: var(--ro-line-height-normal);
+  margin: 0;
 }
 
-.content {
+.operations-actions {
+  display: flex;
+  gap: var(--ro-space-2);
+  margin-top: var(--ro-space-4);
+  flex-wrap: wrap;
+}
+
+.operations-action-btn-primary {
   flex: 1;
+  min-width: 140px;
+}
+
+.operations-quick-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--ro-space-3);
+  margin-top: var(--ro-space-4);
+}
+
+.operations-stat-item {
+  padding: var(--ro-space-3);
+  background-color: var(--ro-color-surface);
+  border: 1px solid var(--ro-color-border);
+  border-radius: var(--ro-radius-md);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ro-space-1);
+}
+
+.operations-stat-label {
+  font-size: var(--ro-font-size-xs);
+  color: var(--ro-color-text-muted);
+}
+
+.operations-stat-value {
+  font-size: var(--ro-font-size-lg);
+  font-weight: var(--ro-font-weight-bold);
+  color: var(--ro-color-text-primary);
 }

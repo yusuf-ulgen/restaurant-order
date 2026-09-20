@@ -14,32 +14,32 @@ export const Badge: React.FC<BadgeProps> = ({
   const baseStyle: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
-    padding: '2px 8px',
+    padding: 'var(--ro-space-1) var(--ro-space-2)',
     borderRadius: 'var(--ro-radius-full)',
-    fontSize: '0.75rem',
-    fontWeight: 600,
+    fontSize: 'var(--ro-font-size-xs)',
+    fontWeight: 'var(--ro-font-weight-semibold)',
     fontFamily: 'var(--ro-font-sans)',
   };
 
-  const variantStyles: Record<string, React.CSSProperties> = {
+  const variantStyles: Record<'primary' | 'success' | 'warning' | 'danger' | 'neutral', React.CSSProperties> = {
     primary: {
-      backgroundColor: 'rgba(230, 57, 70, 0.1)',
+      backgroundColor: 'var(--ro-color-primary-subtle)',
       color: 'var(--ro-color-primary)',
     },
     success: {
-      backgroundColor: 'rgba(42, 157, 143, 0.1)',
+      backgroundColor: 'var(--ro-color-success-subtle)',
       color: 'var(--ro-color-success)',
     },
     warning: {
-      backgroundColor: 'rgba(231, 111, 81, 0.1)',
+      backgroundColor: 'var(--ro-color-warning-subtle)',
       color: 'var(--ro-color-warning)',
     },
     danger: {
-      backgroundColor: 'rgba(217, 4, 41, 0.1)',
+      backgroundColor: 'var(--ro-color-error-subtle)',
       color: 'var(--ro-color-danger)',
     },
     neutral: {
-      backgroundColor: 'var(--ro-color-border)',
+      backgroundColor: 'var(--ro-color-border-subtle)',
       color: 'var(--ro-color-text-muted)',
     },
   };
