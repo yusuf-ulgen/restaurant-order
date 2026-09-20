@@ -22,16 +22,18 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASE 2: DATA & MULTI-TENANCY [NEXT]                                         |
+|  PHASE 2: DATA & MULTI-TENANCY [COMPLETED]                                    |
 |  - Multi-tenant PostgreSQL 16 schema with RLS & tenant resolution             |
-|  - EF Core 10 / Dapper persistence selection & zero-downtime migration        |
+|  - EF Core 10 persistence selection & zero-downtime migration tooling         |
+|  - Tenant, Brand, Branch domain model & strict runtime/migration role split   |
 +---------------------------------------+---------------------------------------+
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASES 3 - 17: SYSTEM CAPABILITIES & PRODUCTION RELEASE [PLANNED]            |
-|  Auth -> Config -> Menu -> Tables -> Customer -> Order -> Realtime -> Waiter  |
-|  -> KDS -> Printing -> Billing -> Admin -> Super Admin -> Payments -> Release |
+|  PHASE 3: AUTHENTICATION & RBAC [NEXT]                                        |
+|  - Identity & Access Management (IAM) module with 8 supported roles           |
+|  - JWT tokens, secure cookies, refresh flows, and fast 4-digit PIN auth       |
+|  - Role-Based Access Control (RBAC) authorization middleware                  |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -58,13 +60,20 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Responsive application shell layouts across Customer, Operations, and Admin surfaces.
 - [x] Integration across `apps/customer-web`, `apps/operations-web`, and `apps/admin-web`.
 
-### Phase 2: Data & Multi-Tenancy (Status: Sıradaki / Next)
-- [ ] Multi-tenant PostgreSQL 16 schema design with Row-Level Security (RLS).
-- [ ] Entity Framework Core 10 or Dapper persistence selection ([ADR-0002](./adr/0002-persistence-selection.md)).
-- [ ] Tenant context resolution middleware and query filter enforcement.
-- [ ] Database migration pipeline with zero-downtime Blue/Green safety.
+### Phase 2: Data & Multi-Tenancy (Status: Tamamlandı / Completed)
+- [x] Multi-tenant PostgreSQL 16 schema design with Row-Level Security (RLS).
+- [x] Entity Framework Core 10 persistence selection ([ADR-0002](./adr/0002-persistence-selection.md) ACCEPTED).
+- [x] Tenant, Brand, and Branch domain aggregate models with strict lifecycle rules and strong IDs.
+- [x] PostgreSQL mapping, composite foreign keys, and initial EF Core migration (`001_initial_tenancy_schema.sql`).
+- [x] Database role separation: `postgres` migration owner vs `restaurant_app_user` (NOSUPERUSER, NOBYPASSRLS) runtime role.
+- [x] Fail-closed RLS policies with `tenancy.get_current_tenant_id()` session variable.
+- [x] Tenant context resolution middleware, RFC 7807 ProblemDetails, and correlation ID propagation.
+- [x] Background worker tenant context propagation (`ITenantWorkerJobRunner`) and cache key namespacing (`TenantCacheKeyFactory`).
+- [x] Database migration tooling (`scripts/migration-ops.mjs`) and zero-downtime Blue/Green expand-contract safety.
+- [x] Idempotent synthetic local development seeder (`DevDataSeeder`).
+- [x] Two-tenant real PostgreSQL Testcontainers integration tests verifying strict tenant isolation.
 
-### Phase 3: Authentication & RBAC (Status: Planlandı / Planned)
+### Phase 3: Authentication & RBAC (Status: Sıradaki / Next)
 - [ ] Identity & Access Management (IAM) module with 8 supported roles.
 - [ ] JWT authentication, token refresh flows, and secure cookie storage.
 - [ ] Fast 4-digit PIN authentication for waiter and operations mobile terminals.

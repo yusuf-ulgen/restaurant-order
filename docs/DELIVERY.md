@@ -83,3 +83,8 @@ Step 1: EXPAND                    Step 2: MIGRATE DATA              Step 3: CONT
 3. **Non-Null Defaults:** New non-nullable columns must have safe default values.
 4. **Concurrent Indexing:** Indexes must be created concurrently (`CREATE INDEX CONCURRENTLY`).
 5. **Rollback Compatibility:** If cutover fails, the database must remain fully compatible with the previous application version.
+6. **Operational Tooling:**
+   - `pnpm migration:validate`: Validates migration files against destructive DDL patterns.
+   - `pnpm migration:script`: Generates audited, idempotent deployment SQL scripts.
+   - `pnpm migration:apply:dev`: Applies migrations to local development database only.
+   - Production API startup never applies migrations automatically. Migrations are executed as a dedicated pre-cutover pipeline step.

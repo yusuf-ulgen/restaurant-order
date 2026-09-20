@@ -36,6 +36,7 @@ export function findMigrationFiles(rootDir = process.cwd()) {
     path.join(rootDir, 'migrations'),
     path.join(rootDir, 'deploy/migrations'),
     path.join(rootDir, 'apps/api/Migrations'),
+    path.join(rootDir, 'packages/infrastructure/Persistence/Migrations'),
   ];
 
   const files = [];

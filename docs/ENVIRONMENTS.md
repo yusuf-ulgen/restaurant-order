@@ -48,6 +48,8 @@ The `restaurant-order` platform maintains 6 strictly isolated operational enviro
 | `VITE_API_URL` | Public API endpoint for web clients | All Web Apps | No | `http://localhost:5000` |
 | `IMAGE_DIGEST` | Immutable container image SHA256 digest | Staging, Prod | No | `sha256:...` |
 | `LOG_LEVEL` | Application logging verbosity | Optional | No | `Information` |
+| `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
+| `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
 
 ---
 
@@ -74,3 +76,4 @@ All containerized workloads adhere to strict operational security guidelines:
 1. **No Production Data Downstream:** Production database dumps must **never** be restored into `local`, `test`, or `development` environments without full anonymization.
 2. **Network Isolation:** Lower environments cannot initiate network requests to production databases or live payment processor endpoints.
 3. **Dedicated Encryption Keys:** Each environment must utilize distinct cryptographic keys and certificates.
+4. **Migration & Seeding Separation:** Automatic database migrations on web API startup are strictly prohibited in Staging and Production. Staging/production migrations are executed as an independent pre-cutover pipeline step using idempotent scripts. Synthetic seeding (`DevDataSeeder`) is strictly restricted to `Development` and throws fail-closed exceptions if executed in Staging or Production.
