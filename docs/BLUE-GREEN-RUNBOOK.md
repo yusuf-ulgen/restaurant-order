@@ -97,7 +97,7 @@ node scripts/blue-green/rollback.mjs --execute --confirm-rollback
 3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md).
 
 ### 4.2. Emergency Override & Manual Redis Reconciliation
-When Redis is unreachable during a rollback, traffic reversion would normally fail closed to avoid split-brain. In catastrophic outages, the operator can force traffic restoration:
+When Redis is unreachable during a rollback, traffic reversion would normally fail closed to avoid split-brain. In catastrophic outages, the operator can force traffic restoration via the `--emergency-override` CLI flag (supported directly via terminal arguments and programmatically):
 
 ```bash
 # Emergency rollback when Redis is unreachable (shifts Nginx traffic only)
@@ -108,7 +108,7 @@ node scripts/blue-green/rollback.mjs --execute --confirm-rollback --emergency-ov
 - Nginx traffic is restored to the previous safe slot (`trafficRestored: true`).
 - The operation returns `success: false` with status `CRITICAL_INCONSISTENT_STATE`.
 - The state file is **NOT** updated with unverified slot data.
-- `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is written to `deploy/blue-green-state/journal.log`.
+- `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is written to `DEPLOYMENT_JOURNAL_FILE` (or default `.deployment-journal.jsonl`).
 - Background workers remain guarded and refuse to process queues in unverified state.
 
 **Mandatory Manual Reconciliation Step:**

@@ -6,7 +6,40 @@ import { setRedisKey, REDIS_ACTIVE_SLOT_KEY } from './lib/redis-state.mjs';
 import { resolveActiveSlot } from './lib/active-slot-resolver.mjs';
 
 const DEFAULT_STATE_FILE = path.join(process.cwd(), '.blue-green-state.json');
+const DEFAULT_JOURNAL_FILE = path.join(process.cwd(), '.deployment-journal.jsonl');
 const INGRESS_CONTAINER = 'restaurant-order-ingress';
+
+/**
+ * Sanitizes Redis error message to ensure no connection URLs, secrets, or passwords
+ * are leaked into deployment journal entries.
+ */
+function sanitizeJournalError(msg) {
+  if (!msg) return 'Unknown Redis error';
+  let sanitized = String(msg);
+  sanitized = sanitized.replace(/(?:redis|rediss):\/\/\S+/gi, '[MASKED_REDIS_URL]');
+  sanitized = sanitized.replace(/(?:password|passwd|token|secret|auth)\s*[:=]\s*\S+/gi, '[MASKED_CREDENTIAL]');
+  return sanitized;
+}
+
+/**
+ * Appends an entry to the deployment journal file in JSONL format.
+ * Creates the directory safely if missing. Throws if writing fails.
+ */
+function appendRollbackJournal(entry, customJournalFile = null) {
+  const journalPath = customJournalFile || process.env.DEPLOYMENT_JOURNAL_FILE || DEFAULT_JOURNAL_FILE;
+  try {
+    const journalDir = path.dirname(journalPath);
+    if (journalDir && !fs.existsSync(journalDir)) {
+      fs.mkdirSync(journalDir, { recursive: true });
+    }
+    const line = JSON.stringify(entry) + '\n';
+    fs.appendFileSync(journalPath, line, 'utf8');
+  } catch (err) {
+    const journalErr = new Error(`CRITICAL: Failed to write to deployment journal '${journalPath}': ${err.message}`);
+    logStep('ROLLBACK', 'FAIL', journalErr.message);
+    throw journalErr;
+  }
+}
 
 /**
  * Builds rollback upstream config using container DNS names on the shared
@@ -228,15 +261,19 @@ export async function runRollback(options = {}) {
       logStep('ROLLBACK', 'WARNING', warningMsg);
       logStep('ROLLBACK', 'WARNING', `Operator must run once Redis recovers: ${reconciliationCommand}`);
 
+      const journalEntry = {
+        timestamp: rollbackPlan.timestamp,
+        event: 'EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED',
+        revertedToSlot: safeSlot,
+        revertedFromSlot: currentSlot,
+        redisError: sanitizeJournalError(redisResult.error),
+        reconciliationCommand,
+      };
+
       if (options.appendJournalFn) {
-        options.appendJournalFn({
-          event: 'EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED',
-          revertedToSlot: safeSlot,
-          revertedFromSlot: currentSlot,
-          redisError: redisResult.error,
-          timestamp: rollbackPlan.timestamp,
-          reconciliationCommand,
-        });
+        options.appendJournalFn(journalEntry);
+      } else {
+        appendRollbackJournal(journalEntry, options.journalFile);
       }
 
       // Do NOT write verified activeSlot to standard state file

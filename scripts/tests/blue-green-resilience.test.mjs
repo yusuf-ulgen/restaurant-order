@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { FakeCommandRunner } from '../blue-green/lib/common.mjs';
+import { FakeCommandRunner, parseArgs } from '../blue-green/lib/common.mjs';
 import { FakeRedisClient, REDIS_ACTIVE_SLOT_KEY } from '../blue-green/lib/redis-state.mjs';
 import { runDrainOld } from '../blue-green/drain-old.mjs';
 import { runCutover } from '../blue-green/cutover.mjs';
@@ -351,5 +351,87 @@ test('resilience: rollback returns CRITICAL_INCONSISTENT_STATE on emergency over
 
     const updatedUpstream = fs.readFileSync(upstreamConf, 'utf8');
     assert.ok(updatedUpstream.includes('restaurant-order-api-blue:5000'));
+  });
+});
+
+test('resilience: parseArgs correctly handles --emergency-override CLI flag', () => {
+  const flags = parseArgs(['--execute', '--confirm-rollback', '--emergency-override']);
+  assert.equal(flags.execute, true);
+  assert.equal(flags.dryRun, false);
+  assert.equal(flags.confirmRollback, true);
+  assert.equal(flags.emergencyOverride, true);
+});
+
+test('resilience: rollback supports --emergency-override via real process.argv and writes journal to file', async () => {
+  const originalArgv = [...process.argv];
+  process.argv = [process.argv[0], 'scripts/blue-green/rollback.mjs', '--execute', '--confirm-rollback', '--emergency-override'];
+
+  await withTempNginx(async ({ tempDir }) => {
+    const stateFile = path.join(tempDir, 'state.json');
+    const journalFile = path.join(tempDir, 'custom-journal.jsonl');
+    fs.writeFileSync(stateFile, JSON.stringify({ activeSlot: 'green', previousActiveSlot: 'blue' }), 'utf8');
+    const fakeRunner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
+
+    try {
+      const result = await runRollback({
+        color: 'green', runner: fakeRunner, nginxDir: tempDir, stateFile, journalFile, targetColor: 'blue',
+        redisClient: {
+          get: async () => ({ success: false, error: 'Connection refused to redis://user:secret123@redis.prod:6379' }),
+          set: async () => ({ success: false, error: 'Connection refused to redis://user:secret123@redis.prod:6379' }),
+        },
+      });
+
+      assert.notEqual(result.status, 'BLOCKED_NO_CENTRAL_STATE');
+      assert.equal(result.success, false);
+      assert.equal(result.status, 'CRITICAL_INCONSISTENT_STATE');
+      assert.equal(result.trafficRestored, true);
+      assert.equal(result.redisReconciled, false);
+      assert.equal(result.requiresManualReconciliation, true);
+
+      assert.ok(fs.existsSync(journalFile), 'Journal file must exist in temporary dir');
+      const journalRaw = fs.readFileSync(journalFile, 'utf8');
+      const lines = journalRaw.trim().split('\n').filter(Boolean);
+      assert.equal(lines.length, 1, 'Exactly one emergency event must be written');
+
+      const entry = JSON.parse(lines[0]);
+      assert.equal(entry.event, 'EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED');
+      assert.equal(entry.revertedToSlot, 'blue');
+      assert.equal(entry.revertedFromSlot, 'green');
+      assert.ok(entry.reconciliationCommand.includes('cutover.mjs') && entry.reconciliationCommand.includes('blue'));
+
+      assert.ok(!journalRaw.includes('secret123'), 'Secret/password must not leak into journal');
+      assert.ok(!journalRaw.includes('redis://user:'), 'Redis connection URL must not leak into journal');
+    } finally {
+      process.argv = originalArgv;
+    }
+  });
+});
+
+test('resilience: rollback without --emergency-override fails-closed without writing emergency journal', async () => {
+  const originalArgv = [...process.argv];
+  process.argv = [process.argv[0], 'scripts/blue-green/rollback.mjs', '--execute', '--confirm-rollback'];
+
+  await withTempNginx(async ({ tempDir }) => {
+    const stateFile = path.join(tempDir, 'state.json');
+    const journalFile = path.join(tempDir, 'fail-closed-journal.jsonl');
+    fs.writeFileSync(stateFile, JSON.stringify({ activeSlot: 'green', previousActiveSlot: 'blue' }), 'utf8');
+    const fakeRunner = new FakeCommandRunner(async () => ({ success: true, exitCode: 0 }));
+
+    try {
+      const result = await runRollback({
+        color: 'green', runner: fakeRunner, nginxDir: tempDir, stateFile, journalFile, targetColor: 'blue',
+        redisClient: {
+          get: async () => ({ success: false, error: 'Redis outage' }),
+          set: async () => ({ success: false, error: 'Redis outage' }),
+        },
+      });
+
+      assert.equal(result.success, false);
+      assert.equal(result.status, 'BLOCKED_NO_CENTRAL_STATE');
+      assert.notEqual(result.trafficRestored, true);
+      assert.ok(!fs.existsSync(journalFile), 'Emergency journal must not be written during fail-closed abort');
+    } finally {
+      process.argv = originalArgv;
+    }
   });
 });

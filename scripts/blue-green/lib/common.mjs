@@ -17,6 +17,7 @@ export function parseArgs(args = process.argv.slice(2), options = {}) {
     workerImageDigest: null,
     confirmCutover: false,
     confirmRollback: false,
+    emergencyOverride: false,
     verbose: false,
   };
 
@@ -32,6 +33,8 @@ export function parseArgs(args = process.argv.slice(2), options = {}) {
       flags.confirmCutover = true;
     } else if (arg === '--confirm-rollback') {
       flags.confirmRollback = true;
+    } else if (arg === '--emergency-override') {
+      flags.emergencyOverride = true;
     } else if (arg === '--verbose') {
       flags.verbose = true;
     } else if (arg.startsWith('--color=')) {
