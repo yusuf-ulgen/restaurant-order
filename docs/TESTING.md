@@ -27,9 +27,20 @@ In `restaurant-order`, quality is an absolute constraint. The **Zero-Unverified-
 - **RBAC Policy Checks:** Verifying that each of the 8 roles is strictly authorized or denied for each system capability.
 
 ### 2.2. Integration Tests (Database & Service Adapters)
-- **PostgreSQL Row-Level Security (RLS):** Explicit cross-tenant query tests verifying that `Tenant A` cannot read or modify `Tenant B` data.
-- **Transactional Consistency:** Testing concurrent order rounds, table transfers, and split bill payments under database transactions.
-- **Printer Spooler & Retry:** Simulating socket timeouts, paper-out flags, and validating exponential backoff retry cycles.
+- **PostgreSQL Row-Level Security (RLS):**
+  - Explicit cross-tenant query tests verifying that `Tenant A` cannot read, update, or delete `Tenant B` data.
+  - Runtime application role (`restaurant_app_user`) configured strictly with `NOSUPERUSER NOBYPASSRLS`.
+  - Fail-closed verification: when `tenancy.get_current_tenant_id()` is unset or invalid, queries return 0 rows.
+  - Bypass resistance: `IgnoreQueryFilters()` and raw SQL queries cannot bypass database-level RLS.
+- **Transactional Consistency & Connection Pool Cleanup:**
+  - Testing connection pool tenant session variable reset across sequential and concurrent pool reuse.
+  - Clean migration application verified against a fresh PostgreSQL 16 instance.
+- **Tenant Context Propagation & Middleware:**
+  - HTTP middleware tenant resolution, RFC 7807 ProblemDetails on missing context, and correlation ID propagation.
+  - Worker tenant context propagation with guaranteed ambient context cleanup.
+- **Testcontainers Fail-Closed Guard:**
+  - `TestcontainersGuard` strictly enforces that Docker is present in CI; tests fail-closed if Docker is missing.
+  - Local developers without Docker can explicitly pass `SKIP_TESTCONTAINERS=true` to run non-container tests without false-positive container PASS reports.
 
 ### 2.3. End-to-End (E2E) Tests
 - **Full Dining Lifecycle:**

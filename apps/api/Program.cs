@@ -42,6 +42,17 @@ var deploymentColor = builder.Configuration["DEPLOYMENT_COLOR"] ?? "unknown";
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    app.MapPost("/api/v1/dev/seed", async (
+        RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder seeder,
+        CancellationToken ct) =>
+    {
+        var result = await seeder.SeedAsync(ct);
+        return Results.Ok(result);
+    })
+    .WithName("DevSeed")
+    .WithSummary("Idempotent synthetic seed for local development only")
+    .WithTags("Development");
 }
 
 app.UseMiddleware<TenantContextMiddleware>();

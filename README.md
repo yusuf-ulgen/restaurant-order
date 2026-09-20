@@ -102,6 +102,10 @@ pnpm verify
 
 # 7. Validate local Docker Compose configuration
 docker compose -f deploy/docker-compose.yml config
+
+# 8. Database migration validation & idempotent script generation
+pnpm migration:validate
+pnpm migration:script
 ```
 
 ---

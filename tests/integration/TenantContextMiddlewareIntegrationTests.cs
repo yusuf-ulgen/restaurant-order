@@ -71,6 +71,18 @@ public class TenantContextMiddlewareIntegrationTests
     }
 
     [Fact]
+    public async Task DevSeed_Endpoint_Is_Not_Mapped_In_Production()
+    {
+        using var factory = CreateCustomFactory(Environments.Production, allowDevHeaderOverride: false);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync("/api/v1/dev/seed", null);
+
+        // Dev seed endpoint must not exist in production
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task DevelopmentEnvironment_With_OptIn_Accepts_Header()
     {
         using var factory = CreateCustomFactory(Environments.Development, allowDevHeaderOverride: true);

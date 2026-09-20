@@ -55,6 +55,11 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantDatabaseSession, TenantDatabaseSession>();
 
+        if (environment.IsDevelopment())
+        {
+            services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();
+        }
+
         return services;
     }
 

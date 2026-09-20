@@ -41,7 +41,7 @@
 |                        DATA PERSISTENCE & HARDWARE LAYER                          |
 |  +-------------------------------------+  +------------------------------------+  |
 |  | Multi-Tenant Relational Database    |  | Branch Network ESC/POS Printers    |  |
-|  | (PostgreSQL + RLS) [Proposed / ADR] |  | (Thermal Print Bridge) [Proposed]  |  |
+|  | (PostgreSQL 16 + RLS) [ACCEPTED]    |  | (Thermal Print Bridge) [Proposed]  |  |
 |  +-------------------------------------+  +------------------------------------+  |
 +-----------------------------------------------------------------------------------+
 ```
@@ -67,8 +67,8 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 
 ### 2.3. Data Storage & Multi-Tenancy Isolation
 - Relational integrity is paramount for financial transactions, bill calculations, and state machines.
-- **Isolation Strategy:** Shared database with Row-Level Security (RLS) enforcing `tenant_id` and `branch_id` filters on every query `[Proposed / ADR Required]`.
-- Alternative: Schema-per-tenant for enterprise isolation `[Requires ADR]`.
+- **Isolation Strategy:** Shared database with Row-Level Security (RLS) enforcing `tenant_id` filters on every query `[ACCEPTED / ADR-0002]`.
+- Alternative: Schema-per-tenant for enterprise isolation `[Rejected for MVP / ADR-0002]`.
 
 ### 2.4. Hardware & Printing Integration
 - Restaurants rely on physical thermal receipt printers (kitchen tickets, customer bills).

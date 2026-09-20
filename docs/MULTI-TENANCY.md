@@ -48,13 +48,20 @@ For every incoming request, the tenant context is resolved and propagated across
 [Client Request] 
       │
       ▼
-[API Gateway / Auth Middleware] [Phase 3 - Proposed]
+[TenantContextMiddleware] [Implemented]
+  - Extract X-Correlation-Id (or generate new RFC 4122 GUID)
+  - Resolve ITenantContext via ITenantContextResolver
+  - Enforce [RequireTenant] metadata on protected endpoints (RFC 7807 ProblemDetails on failure)
+  - Guarantee ambient context cleanup via AsyncLocal on request completion
+      │
+      ▼
+[API Gateway / Auth Middleware] [Phase 3 - Planned]
   - Extract JWT or QR Session Token
   - Validate and resolve: tenant_id, brand_id, branch_id
       │
       ▼
 [Async Context / Request Scope] [Implemented]
-  - Store ITenantContext (TenantContext) in scoped DI
+  - Store ITenantContext (TenantContext) in scoped DI & AsyncLocal
   - Enforce fail-closed validation: RequireTenantId()
       │
       ▼
@@ -83,9 +90,11 @@ For every incoming request, the tenant context is resolved and propagated across
 5. **Connection Pool Isolation:**
    - Uses transaction-local `set_config('app.current_tenant_id', ..., is_local => true)` ensuring settings are reverted when transactions end.
    - `ClearTenantSessionAsync` clears session variables before connections return to the pool.
-6. **Cache Namespace Partitioning [Phase 4 - Proposed]:**
-   - `cache:{tenant_id}:{branch_id}:{resource}:{id}`
-7. **Realtime Event Channel Isolation [Phase 4 - Proposed]:**
+6. **Worker Tenant Context Propagation [Implemented]:**
+   - `ITenantWorkerJobRunner` runs background jobs within an explicit, validated `ITenantJobEnvelope` tenant context with guaranteed cleanup.
+7. **Cache Namespace Partitioning [Implemented]:**
+   - `TenantCacheKeyFactory` strictly formats keys as `cache:{tenant_id}:{branch_id}:{resource}:{id}` with delimiter injection protection.
+8. **Realtime Event Channel Isolation [Phase 9 - Proposed]:**
    - `channel:tenant_{tenant_id}:branch_{branch_id}:kds_kitchen`
 
 ---
