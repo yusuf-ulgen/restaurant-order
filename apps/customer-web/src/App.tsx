@@ -19,6 +19,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
   initialError = false,
 }) => {
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+  const handleCloseServiceSheet = () => setIsServiceSheetOpen(false);
 
   if (initialError) {
     throw new Error('Aktif oturum yüklenemedi.');
@@ -75,7 +76,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
       {/* Service Request Bottom Sheet */}
       <BottomSheet
         isOpen={isServiceSheetOpen}
-        onClose={() => setIsServiceSheetOpen(false)}
+        onClose={handleCloseServiceSheet}
         title="Garson Çağır"
         description="Masanız için servis veya destek talebi iletin."
       >
@@ -83,7 +84,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
           <button
             type="button"
             className="service-option-item"
-            onClick={() => setIsServiceSheetOpen(false)}
+            onClick={handleCloseServiceSheet}
           >
             <span>Masaya Su / Peçete Talebi</span>
             <span aria-hidden="true">→</span>
@@ -91,7 +92,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
           <button
             type="button"
             className="service-option-item"
-            onClick={() => setIsServiceSheetOpen(false)}
+            onClick={handleCloseServiceSheet}
           >
             <span>Hesap İstiyorum</span>
             <span aria-hidden="true">→</span>
@@ -99,7 +100,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
           <button
             type="button"
             className="service-option-item"
-            onClick={() => setIsServiceSheetOpen(false)}
+            onClick={handleCloseServiceSheet}
           >
             <span>Garson ile Görüşme Talebi</span>
             <span aria-hidden="true">→</span>

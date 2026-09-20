@@ -19,6 +19,8 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
   initialError = false,
 }) => {
   const [isCallsModalOpen, setIsCallsModalOpen] = useState(false);
+  const handleOpenCallsModal = () => setIsCallsModalOpen(true);
+  const handleCloseCallsModal = () => setIsCallsModalOpen(false);
 
   if (initialError) {
     throw new Error('Operasyon verileri yüklenemedi.');
@@ -35,7 +37,7 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
       mobileNav={{
         items: [
           { id: 'tables', label: 'Masalar', isActive: true },
-          { id: 'calls', label: 'Çağrılar', onClick: () => setIsCallsModalOpen(true) },
+          { id: 'calls', label: 'Çağrılar', onClick: handleOpenCallsModal },
           { id: 'orders', label: 'Siparişler' },
         ],
       }}
@@ -68,7 +70,7 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
               <Button
                 variant="outline"
                 size="md"
-                onClick={() => setIsCallsModalOpen(true)}
+                onClick={handleOpenCallsModal}
               >
                 Çağrılar (0)
               </Button>
@@ -95,7 +97,7 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
       {/* Calls Modal */}
       <Modal
         isOpen={isCallsModalOpen}
-        onClose={() => setIsCallsModalOpen(false)}
+        onClose={handleCloseCallsModal}
         title="Aktif Çağrılar"
         description="Masalardan gelen servis ve hesap çağrıları"
         size="sm"

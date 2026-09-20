@@ -14,7 +14,7 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASE 1: DESIGN SYSTEM & APPLICATION SHELLS [IN PROGRESS]                    |
+|  PHASE 1: DESIGN SYSTEM & APPLICATION SHELLS [COMPLETED]                      |
 |  - Centralized design token system (neutral palette, typography, spacing)     |
 |  - Global CSS foundations, touch targets (44px), safe areas, reduced motion   |
 |  - Shared UI component library & responsive application shells                |
@@ -22,10 +22,16 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASES 2 - 17: SYSTEM CAPABILITIES & PRODUCTION RELEASE [PLANNED]            |
-|  Data -> Auth -> Config -> Menu -> Tables -> Customer -> Order -> Realtime    |
-|  -> Waiter -> KDS -> Printing -> Billing -> Admin -> Super Admin -> Payments  |
-|  -> Production Release                                                        |
+|  PHASE 2: DATA & MULTI-TENANCY [NEXT]                                         |
+|  - Multi-tenant PostgreSQL 16 schema with RLS & tenant resolution             |
+|  - EF Core 10 / Dapper persistence selection & zero-downtime migration        |
++---------------------------------------+---------------------------------------+
+                                        |
+                                        v
++-------------------------------------------------------------------------------+
+|  PHASES 3 - 17: SYSTEM CAPABILITIES & PRODUCTION RELEASE [PLANNED]            |
+|  Auth -> Config -> Menu -> Tables -> Customer -> Order -> Realtime -> Waiter  |
+|  -> KDS -> Printing -> Billing -> Admin -> Super Admin -> Payments -> Release |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -41,16 +47,18 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Fail-closed Blue/Green deployment engine and automated verification suite.
 - [x] Automated quality gates: file size limits (450/600 lines), secret scanning, link integrity, and 67 verified tests.
 
-### Phase 1: Design System & Application Shells (Status: Devam Ediyor / In Progress)
+### Phase 1: Design System & Application Shells (Status: Tamamlandı / Completed)
 - [x] Centralized, tenant-extensible design token system in `packages/ui` (colors, typography, spacing, radius, elevation).
 - [x] Neutral, modern color palette with semantic status indicators (no decorative gradients).
 - [x] Fundamental global styles: consistent box-sizing, font stacks, focus-visible, mobile overflow protection.
 - [x] Minimum touch target enforcement (44px WCAG / iOS standard) and iOS safe-area support.
 - [x] Reduced-motion accessibility preparation across transitions and animations.
 - [x] Token helper utilities and comprehensive unit test coverage.
-- [ ] Responsive application shell layouts across all 5 surfaces.
+- [x] Accessible overlay primitives (Modal, BottomSheet, Drawer, ConfirmationDialog, Toast).
+- [x] Responsive application shell layouts across Customer, Operations, and Admin surfaces.
+- [x] Integration across `apps/customer-web`, `apps/operations-web`, and `apps/admin-web`.
 
-### Phase 2: Data & Multi-Tenancy (Status: Planlandı / Planned)
+### Phase 2: Data & Multi-Tenancy (Status: Sıradaki / Next)
 - [ ] Multi-tenant PostgreSQL 16 schema design with Row-Level Security (RLS).
 - [ ] Entity Framework Core 10 or Dapper persistence selection ([ADR-0002](./adr/0002-persistence-selection.md)).
 - [ ] Tenant context resolution middleware and query filter enforcement.
