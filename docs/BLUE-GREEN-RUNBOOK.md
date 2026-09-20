@@ -5,32 +5,44 @@
 To guarantee 99.99% availability during peak lunch and dinner services, production releases use a **Blue-Green Deployment** model with two identical production slots:
 
 ```
-[ Ingress / Load Balancer ]
+[ Ingress / Nginx Reverse Proxy ]
             │
-            ├────── (Active 100% Traffic) ─────► [ SLOT BLUE  (v1.2.0 - Port 5001) ]
+            ├────── (Active 100% Traffic) ─────► [ SLOT BLUE  (API: 5000, Web: 8080) ]
+            │                                    (via container DNS: restaurant-order-*-blue)
             │
-            └────── (Idle / Internal Smoke) ───► [ SLOT GREEN (v1.3.0 - Port 5002) ]
+            └────── (Idle / Internal Smoke) ───► [ SLOT GREEN (API: 5000, Web: 8080) ]
+                                                 (via container DNS: restaurant-order-*-green)
 ```
 
-Both slots run the **exact same immutable container image digest** (`IMAGE_DIGEST`), isolating state via environment variables.
+Both slots run **immutable container image digests**, validating all 5 individual component digests during preflight:
+- `API_IMAGE_DIGEST`
+- `WORKER_IMAGE_DIGEST`
+- `CUSTOMER_WEB_IMAGE_DIGEST`
+- `OPERATIONS_WEB_IMAGE_DIGEST`
+- `ADMIN_WEB_IMAGE_DIGEST`
+
+To prevent Docker Compose container or network collisions during simultaneous blue-green execution, independent Compose project names are strictly enforced:
+- Blue Project: `restaurant-order-blue`
+- Green Project: `restaurant-order-green`
+- Ingress Network: `restaurant_order_ingress` bridge network providing internal DNS routing to containers.
 
 ---
 
-## 2. Worker Safety & Concurrent Execution Guard
+## 2. Worker Safety & Central State Management
 
 When Blue and Green containers run concurrently during deployment overlap, background workers must **not** duplicate work:
 
-1. **Activation Guard (`IWorkerActivationGuard`):**
-   - Each worker instance receives its `DEPLOYMENT_COLOR` and the current `ACTIVE_DEPLOYMENT_SLOT`.
-   - If `DEPLOYMENT_COLOR == ACTIVE_DEPLOYMENT_SLOT`, the worker enters `Active` state and processes queues.
-   - If `DEPLOYMENT_COLOR != ACTIVE_DEPLOYMENT_SLOT`, the worker enters `Standby` state: queue consumption, cron schedules, and thermal print spools are paused.
-2. **Fail-Closed Behavior:**
-   - In Staging and Production, if `DEPLOYMENT_COLOR` or `ACTIVE_DEPLOYMENT_SLOT` is unconfigured or invalid, the worker immediately fails closed (`Status = Error`) and refuses to execute work.
-3. **Distributed Lease Contract (`IWorkerLeaseManager`):**
-   - Dynamic lease management across worker replicas requires an external distributed lock provider (`[Requires Distributed Lease Provider: Redis Redlock or Postgres Advisory Lock]`).
-   - If lease renewal fails, the worker fails closed immediately.
-4. **Idempotency Requirement:**
-   - All background jobs (order state transitions, billing updates, push notifications) must enforce idempotency keys to guarantee at-most-once side effects.
+1. **Central Authoritative State in Redis:**
+   - The central Redis key `restaurant-order:active-slot` serves as the single source of truth for the active slot.
+   - `RedisWorkerActivationGuard` continuously queries Redis. If the slot matches, the worker enters `Active` state; otherwise, it stays in `Standby`.
+   - In catastrophic Redis downtime during rollbacks, the `--emergency-override` flag permits operational traffic recovery by reverting Nginx routing to the previous slot. However, because Redis cannot be updated, this enters `CRITICAL_INCONSISTENT_STATE`: traffic is restored (`trafficRestored: true`), but Redis reconciliation is NOT verified (`redisReconciled: false`). Workers remain guarded in standby, `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is logged to the deployment journal, and manual reconciliation is strictly required via the returned reconciliation command once Redis recovers.
+2. **Distributed Lease Contract (`RedisWorkerLeaseManager`):**
+   - Active workers acquire an exclusive distributed lease (`restaurant-order:lease:worker-leadership`) via atomic `SET NX PX` with periodic renewal.
+   - If lease renewal fails or the slot is demoted, consumption immediately halts (fail-closed).
+3. **Idempotency Requirement (`RedisIdempotencyStore`):**
+   - All background jobs (order state transitions, billing updates, push notifications) enforce idempotency keys to guarantee at-most-once side effects across blue/green instances.
+4. **Fail-Closed Behavior:**
+   - In Staging and Production, if Redis is unreachable or credentials/slots are invalid, workers immediately fail closed (`Status = Error`) and refuse to process queues.
 
 ---
 
@@ -82,4 +94,30 @@ node scripts/blue-green/rollback.mjs --execute --confirm-rollback
 ### 4.1. Rollback Invariants
 1. **Immediate Ingress Switch:** Reverts traffic back to the previous safe slot within 60 seconds.
 2. **Forensic Preservation:** The failed slot container is **retained in isolated mode** for memory dump extraction and log analysis.
-3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md).
+3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md).
+
+### 4.2. Emergency Override & Manual Redis Reconciliation
+When Redis is unreachable during a rollback, traffic reversion would normally fail closed to avoid split-brain. In catastrophic outages, the operator can force traffic restoration via the `--emergency-override` CLI flag (supported directly via terminal arguments and programmatically):
+
+```bash
+# Emergency rollback when Redis is unreachable (shifts Nginx traffic only)
+node scripts/blue-green/rollback.mjs --execute --confirm-rollback --emergency-override
+```
+
+**Consequences & State Guarantees:**
+- Nginx traffic is restored to the previous safe slot (`trafficRestored: true`).
+- The operation returns `success: false` with status `CRITICAL_INCONSISTENT_STATE`.
+- The state file is **NOT** updated with unverified slot data.
+- `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is written to `DEPLOYMENT_JOURNAL_FILE` (or default `.deployment-journal.jsonl`).
+- Background workers remain guarded and refuse to process queues in unverified state.
+
+**Mandatory Manual Reconciliation Step:**
+Once Redis connectivity is restored, the operator **must** reconcile the central state immediately:
+```bash
+# Execute the reconciliation command output by rollback.mjs:
+redis-cli -u $REDIS_URL SET restaurant-order:active-slot <restored_slot>
+```
+Verify the active slot value:
+```bash
+redis-cli -u $REDIS_URL GET restaurant-order:active-slot
+```

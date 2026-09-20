@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const API_BASE_URL = process.env.VITE_API_URL || 'http://127.0.0.1:5000';
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -8,14 +10,19 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: process.env.VITE_API_URL || 'http://localhost:5000',
+    baseURL: API_BASE_URL,
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'dotnet run --project ../../apps/api',
-    url: 'http://localhost:5000/health/live',
+    command: 'dotnet run --project ../../apps/api --no-launch-profile',
+    url: `${API_BASE_URL}/health/live`,
     reuseExistingServer: !process.env.CI,
     timeout: 60 * 1000,
+    env: {
+      ASPNETCORE_URLS: API_BASE_URL,
+      ASPNETCORE_ENVIRONMENT: 'Development',
+      DEPLOYMENT_COLOR: 'blue',
+    },
   },
   projects: [
     {

@@ -1,0 +1,50 @@
+# ==============================================================================
+# INGRESS DOCKER COMPOSE (compose.ingress.yml)
+# ==============================================================================
+# Standalone ingress service that runs the Nginx reverse proxy for blue-green routing.
+# Project: restaurant-order-ingress
+# Usage:
+#   docker compose -p restaurant-order-ingress -f compose.ingress.yml up -d
+#
+# Design constraints:
+#   - The ingress project is INDEPENDENT of blue and green slot projects.
+#   - Restarting/recreating blue or green does NOT restart ingress.
+#   - Ingress routes to active slot containers via Docker DNS on the shared
+#     external network 'restaurant_order_ingress'.
+#   - Upstream DNS names are slot container names, not 127.0.0.1 host ports.
+#   - The nginx config directory is bind-mounted so cutover scripts can
+#     atomically replace upstream.conf and send 'nginx -s reload' via docker exec.
+#   - Read-only filesystem with /var/cache/nginx and /var/run as tmpfs for
+#     security hardening.
+# ==============================================================================
+
+services:
+  ingress:
+    image: nginx:1.27-alpine
+    container_name: restaurant-order-ingress
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - restaurant_order_ingress
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t 2>/dev/null && wget -qO- http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  restaurant_order_ingress:
+    external: true
+    name: restaurant_order_ingress

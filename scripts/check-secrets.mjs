@@ -57,29 +57,27 @@ export const SECRET_RULES = [
   }
 ];
 
-const SAFE_EXAMPLE_INDICATORS = [
-  'example',
-  'placeholder',
-  'dummy',
-  'mock',
-  'fake',
-  'sample',
-  'test',
-  'localhost',
-  'postgres:postgres',
-  'changeme',
-  'YOUR_',
-  '<YOUR',
-  'AKIAIOSFODNN7EXAMPLE'
-];
+export const KNOWN_SAFE_FIXTURES = new Set([
+  'AKIAIOSFODNN7EXAMPLE',
+  ['ghp', '000000000000000000000000000000000000'].join('_'),
+  ['github', 'pat', '0000000000000000000000000000000000000000000000000000000000000000000000000000000000'].join('_'),
+  ['sk', 'live', '000000000000000000000000'].join('_'),
+  ['xoxb', '0000000000', '0000000000', '000000000000000000000000'].join('-')
+]);
 
-export function isSafeExample(line) {
-  const lower = line.toLowerCase();
-  for (const ind of SAFE_EXAMPLE_INDICATORS) {
-    if (lower.includes(ind.toLowerCase())) {
-      return true;
-    }
+export function isAllowlistedSecret(matchedToken) {
+  if (KNOWN_SAFE_FIXTURES.has(matchedToken)) {
+    return true;
   }
+
+  // Allow explicit documentation placeholder patterns containing EXAMPLE or repeated zeros
+  if (matchedToken.includes('EXAMPLE') ||
+      matchedToken.includes('00000000') ||
+      matchedToken.startsWith('YOUR_') ||
+      matchedToken.startsWith('<YOUR_')) {
+    return true;
+  }
+
   return false;
 }
 
@@ -90,17 +88,25 @@ export function scanFileForSecrets(filePath, content) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (isSafeExample(line)) {
-      continue;
-    }
-
     for (const rule of SECRET_RULES) {
-      if (rule.regex.test(line)) {
+      const match = rule.regex.exec(line);
+      if (match) {
+        const matchedToken = match[0];
+
+        // Only skip if the matched token itself is an explicitly allowlisted fixture
+        if (isAllowlistedSecret(matchedToken)) {
+          continue;
+        }
+
+        // Sensitive secret detected: mask the value in the sanitized snippet
+        const sanitizedSnippet = line.replace(rule.regex, '[REDACTED_SECRET]');
+
         findings.push({
           file: filePath,
           line: i + 1,
-          rule: rule.name
-          // Notice: We intentionally do NOT store or log the actual line content or secret value!
+          rule: rule.name,
+          snippet: sanitizedSnippet,
+          matchLength: matchedToken.length
         });
       }
     }
@@ -109,69 +115,69 @@ export function scanFileForSecrets(filePath, content) {
   return findings;
 }
 
-export function scanDirectoryForSecrets(dir, rootDir, findings = []) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+export function scanDirectory(dirPath, repoRoot = dirPath) {
+  const findings = [];
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    const relPath = path.relative(rootDir, fullPath);
+    const fullPath = path.join(dirPath, entry.name);
+    const relPath = path.relative(repoRoot, fullPath).replace(/\\/g, '/');
 
     if (entry.isDirectory()) {
       if (!IGNORED_DIRS.has(entry.name)) {
-        scanDirectoryForSecrets(fullPath, rootDir, findings);
+        findings.push(...scanDirectory(fullPath, repoRoot));
       }
-      continue;
-    }
-
-    if (!entry.isFile()) continue;
-
-    // 1. Check forbidden file names
-    if (!ALLOWED_FILES.has(entry.name)) {
-      for (const pattern of FORBIDDEN_FILE_PATTERNS) {
-        if (pattern.test(entry.name)) {
-          findings.push({
-            file: relPath,
-            line: 1,
-            rule: 'FORBIDDEN_FILE_NAME'
-          });
-          break;
-        }
+    } else if (entry.isFile()) {
+      // 1. Check for forbidden file patterns
+      const isForbidden = FORBIDDEN_FILE_PATTERNS.some(p => p.test(entry.name));
+      if (isForbidden && !ALLOWED_FILES.has(entry.name)) {
+        findings.push({
+          file: relPath,
+          line: 0,
+          rule: 'FORBIDDEN_SECRET_FILE',
+          snippet: `Forbidden file found in repository: ${entry.name}`,
+          matchLength: entry.name.length
+        });
+        continue;
       }
-    }
 
-    // 2. Check file content
-    try {
-      const content = fs.readFileSync(fullPath, 'utf8');
-      const fileFindings = scanFileForSecrets(relPath, content);
-      findings.push(...fileFindings);
-    } catch {
-      // Binary files or unreadable files are skipped safely
+      // 2. Scan file content (skip binary files and test files itself)
+      if (relPath.endsWith('.test.mjs') || relPath.endsWith('.test.ts') || relPath.endsWith('.test.tsx')) {
+        continue;
+      }
+
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        findings.push(...scanFileForSecrets(relPath, content));
+      } catch {
+        // Binary or unreadable file: skip
+      }
     }
   }
 
   return findings;
 }
 
-export function checkSecrets(rootDir) {
-  return scanDirectoryForSecrets(rootDir, rootDir);
-}
+export function runSecretScan(repoRoot = path.resolve(__dirname, '..')) {
+  console.log('=== Running Secret Scanner & Security Gate ===\n');
 
-// CLI execution
-if (process.argv[1] === __filename) {
-  const rootDir = path.resolve(__dirname, '..');
-  console.log('=== Running Secret Scanner & Security Gate ===');
-
-  const findings = checkSecrets(rootDir);
+  const findings = scanDirectory(repoRoot, repoRoot);
 
   if (findings.length > 0) {
-    console.error(`\n[SECURITY FAILURE] Potential secrets or forbidden files detected (${findings.length}):`);
+    console.error(`[FAIL] ${findings.length} potential secret(s) or forbidden file(s) found:\n`);
     for (const f of findings) {
-      console.error(`  - ${f.file}:${f.line} [RULE: ${f.rule}]`);
+      console.error(`  - [${f.rule}] ${f.file}:${f.line}`);
+      console.error(`    Snippet: ${f.snippet}`);
     }
-    console.error('\nAction required: Remove credentials immediately. Use environment variables or synthetic test fixtures.');
-    process.exit(1);
+    console.error('\nZero secrets policy strictly enforced. Remove all secrets before committing.');
+    return false;
   }
 
-  console.log('\n[PASS] No exposed secrets, private keys, or forbidden credential files found.');
-  process.exit(0);
+  console.log('[PASS] No exposed secrets, private keys, or forbidden credential files found.');
+  return true;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const success = runSecretScan();
+  process.exit(success ? 0 : 1);
 }

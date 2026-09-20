@@ -3,15 +3,21 @@
  * Enforces dry-run safety and provides consistent logging.
  */
 
-export function parseArgs(args = process.argv.slice(2)) {
+export { CommandRunner, FakeCommandRunner, defaultCommandRunner } from './command-runner.mjs';
+export { resolveDigests, loadReleaseManifest, isValidDigest, isLatestTagForbidden } from './manifest.mjs';
+
+export function parseArgs(args = process.argv.slice(2), options = {}) {
   const flags = {
     dryRun: true, // Safe default: never mutate live state without explicit --execute
     execute: false,
     color: null,
     targetUrl: null,
     imageDigest: null,
+    apiImageDigest: null,
+    workerImageDigest: null,
     confirmCutover: false,
     confirmRollback: false,
+    emergencyOverride: false,
     verbose: false,
   };
 
@@ -27,6 +33,8 @@ export function parseArgs(args = process.argv.slice(2)) {
       flags.confirmCutover = true;
     } else if (arg === '--confirm-rollback') {
       flags.confirmRollback = true;
+    } else if (arg === '--emergency-override') {
+      flags.emergencyOverride = true;
     } else if (arg === '--verbose') {
       flags.verbose = true;
     } else if (arg.startsWith('--color=')) {
@@ -41,10 +49,33 @@ export function parseArgs(args = process.argv.slice(2)) {
       flags.imageDigest = arg.split('=')[1];
     } else if (arg === '--image-digest' && args[i + 1]) {
       flags.imageDigest = args[++i];
+    } else if (arg.startsWith('--api-digest=')) {
+      flags.apiImageDigest = arg.split('=')[1];
+    } else if (arg === '--api-digest' && args[i + 1]) {
+      flags.apiImageDigest = args[++i];
+    } else if (arg.startsWith('--worker-digest=')) {
+      flags.workerImageDigest = arg.split('=')[1];
+    } else if (arg === '--worker-digest' && args[i + 1]) {
+      flags.workerImageDigest = args[++i];
     }
   }
 
+  // Merge programmatic options
+  for (const [key, val] of Object.entries(options)) {
+    if (val !== undefined) {
+      flags[key] = val;
+    }
+  }
+
+  if (flags.execute && options.dryRun === undefined) {
+    flags.dryRun = false;
+  }
+
   return flags;
+}
+
+export function resolveFlags(options = {}, args = process.argv.slice(2)) {
+  return parseArgs(args, options);
 }
 
 export function logStep(stepName, status = 'RUNNING', details = '') {

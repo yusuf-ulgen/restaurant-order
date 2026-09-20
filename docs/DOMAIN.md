@@ -76,7 +76,7 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 
 ### 3.6. Identity & Access Control
 - **User:** A human actor authenticated to the system (staff member or platform operator).
-- **Role:** One of the 8 standard roles defined in [docs/ROLES-AND-PERMISSIONS.md](file:///d:/freelance/restaurant-order/docs/ROLES-AND-PERMISSIONS.md).
+- **Role:** One of the 8 standard roles defined in [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md).
 - **UserBranchAssignment:** Maps staff members to specific branches with an optional quick-access PIN.
 - **AuditLog:** Immutable ledger recording critical actions (order cancellations, discounts, refunds, price overrides).
 

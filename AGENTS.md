@@ -40,7 +40,7 @@
 ### 2.4. Environment Separation
 - Environments are strictly isolated: `local`, `test`, `development`, `staging`, and `production`.
 - Environment configurations must be handled via environment variables with zero hardcoded cross-environment dependencies.
-- Production is designed to operate with **Blue/Green** deployment slots to ensure zero-downtime releases and rapid rollbacks. See [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md).
+- Production is designed to operate with **Blue/Green** deployment slots to ensure zero-downtime releases and rapid rollbacks. See [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md).
 
 ### 2.5. Scope & Decision Governance
 - **No Premature Decisions:** Open architecture and technology decisions must be labeled as `[TBD]`, `[Proposed]`, or `[Requires ADR]`. Do not treat unconfirmed proposals as final.
@@ -51,7 +51,7 @@
 
 ## 3. Supported Roles (RBAC)
 
-All authorization checks throughout the application must adhere to these 8 defined roles (detailed in [docs/ROLES-AND-PERMISSIONS.md](file:///d:/freelance/restaurant-order/docs/ROLES-AND-PERMISSIONS.md)):
+All authorization checks throughout the application must adhere to these 8 defined roles (detailed in [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md)):
 
 1. **Super Admin:** Platform owner; oversees all tenants, billing, and platform-wide configuration.
 2. **Restoran Admini (Restaurant Admin):** Brand/tenant owner; manages brands, branches, high-level financials, and users.
@@ -70,27 +70,27 @@ Agents must consult the relevant document in `docs/` before implementing any fea
 
 | Domain Area | Governing Document |
 | :--- | :--- |
-| Overall Overview & Standards | [docs/README.md](file:///d:/freelance/restaurant-order/docs/README.md) |
-| Product Vision & Scope | [docs/PRODUCT.md](file:///d:/freelance/restaurant-order/docs/PRODUCT.md) |
-| Domain Models & Concepts | [docs/DOMAIN.md](file:///d:/freelance/restaurant-order/docs/DOMAIN.md) |
-| Shared Terminology | [docs/GLOSSARY.md](file:///d:/freelance/restaurant-order/docs/GLOSSARY.md) |
-| Architecture & Bounded Contexts | [docs/ARCHITECTURE.md](file:///d:/freelance/restaurant-order/docs/ARCHITECTURE.md) |
-| Repository Organization & Rules | [docs/REPOSITORY-STRUCTURE.md](file:///d:/freelance/restaurant-order/docs/REPOSITORY-STRUCTURE.md) |
-| Access Control & RBAC | [docs/ROLES-AND-PERMISSIONS.md](file:///d:/freelance/restaurant-order/docs/ROLES-AND-PERMISSIONS.md) |
-| UI & Screen Inventory | [docs/SCREEN-INVENTORY.md](file:///d:/freelance/restaurant-order/docs/SCREEN-INVENTORY.md) |
-| State Machines & Lifecycles | [docs/STATE-MACHINES.md](file:///d:/freelance/restaurant-order/docs/STATE-MACHINES.md) |
-| Negative Flows & Failures | [docs/NEGATIVE-FLOWS.md](file:///d:/freelance/restaurant-order/docs/NEGATIVE-FLOWS.md) |
-| Multi-Tenancy & Isolation | [docs/MULTI-TENANCY.md](file:///d:/freelance/restaurant-order/docs/MULTI-TENANCY.md) |
-| Payments, Tips & Commissions | [docs/PAYMENTS-TIPS-COMMISSIONS.md](file:///d:/freelance/restaurant-order/docs/PAYMENTS-TIPS-COMMISSIONS.md) |
-| Order Routing & ESC/POS Printing | [docs/ORDER-ROUTING-AND-PRINTING.md](file:///d:/freelance/restaurant-order/docs/ORDER-ROUTING-AND-PRINTING.md) |
-| Realtime Events & Notifications | [docs/REALTIME-AND-NOTIFICATIONS.md](file:///d:/freelance/restaurant-order/docs/REALTIME-AND-NOTIFICATIONS.md) |
-| Testing Standards & Verification | [docs/TESTING.md](file:///d:/freelance/restaurant-order/docs/TESTING.md) |
-| Security & Compliance | [docs/SECURITY.md](file:///d:/freelance/restaurant-order/docs/SECURITY.md) |
-| Environments & Configuration | [docs/ENVIRONMENTS.md](file:///d:/freelance/restaurant-order/docs/ENVIRONMENTS.md) |
-| Delivery & Versioning | [docs/DELIVERY.md](file:///d:/freelance/restaurant-order/docs/DELIVERY.md) |
-| Blue-Green Deployment Runbook | [docs/BLUE-GREEN-RUNBOOK.md](file:///d:/freelance/restaurant-order/docs/BLUE-GREEN-RUNBOOK.md) |
-| Incident Response & Post-Mortems | [docs/INCIDENT-RESPONSE.md](file:///d:/freelance/restaurant-order/docs/INCIDENT-RESPONSE.md) |
-| Product Roadmap | [docs/ROADMAP.md](file:///d:/freelance/restaurant-order/docs/ROADMAP.md) |
-| Architecture Decision Records | [docs/adr/README.md](file:///d:/freelance/restaurant-order/docs/adr/README.md) |
-| Operations Runbooks | [docs/runbooks/README.md](file:///d:/freelance/restaurant-order/docs/runbooks/README.md) |
-| Templates | [docs/templates/](file:///d:/freelance/restaurant-order/docs/templates/) |
+| Overall Overview & Standards | [docs/README.md](docs/README.md) |
+| Product Vision & Scope | [docs/PRODUCT.md](docs/PRODUCT.md) |
+| Domain Models & Concepts | [docs/DOMAIN.md](docs/DOMAIN.md) |
+| Shared Terminology | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| Architecture & Bounded Contexts | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Repository Organization & Rules | [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md) |
+| Access Control & RBAC | [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md) |
+| UI & Screen Inventory | [docs/SCREEN-INVENTORY.md](docs/SCREEN-INVENTORY.md) |
+| State Machines & Lifecycles | [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) |
+| Negative Flows & Failures | [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md) |
+| Multi-Tenancy & Isolation | [docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md) |
+| Payments, Tips & Commissions | [docs/PAYMENTS-TIPS-COMMISSIONS.md](docs/PAYMENTS-TIPS-COMMISSIONS.md) |
+| Order Routing & ESC/POS Printing | [docs/ORDER-ROUTING-AND-PRINTING.md](docs/ORDER-ROUTING-AND-PRINTING.md) |
+| Realtime Events & Notifications | [docs/REALTIME-AND-NOTIFICATIONS.md](docs/REALTIME-AND-NOTIFICATIONS.md) |
+| Testing Standards & Verification | [docs/TESTING.md](docs/TESTING.md) |
+| Security & Compliance | [docs/SECURITY.md](docs/SECURITY.md) |
+| Environments & Configuration | [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) |
+| Delivery & Versioning | [docs/DELIVERY.md](docs/DELIVERY.md) |
+| Blue-Green Deployment Runbook | [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md) |
+| Incident Response & Post-Mortems | [docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md) |
+| Product Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Architecture Decision Records | [docs/adr/README.md](docs/adr/README.md) |
+| Operations Runbooks | [docs/runbooks/README.md](docs/runbooks/README.md) |
+| Templates | [docs/templates/](docs/templates/) |

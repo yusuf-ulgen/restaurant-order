@@ -9,29 +9,54 @@ on:
   pull_request:
     branches:
       - main
+      - 'feat/**'
+      - 'fix/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality-and-verification:
     name: Repository Quality Gates & Verification
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.10.0 --activate
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          version: 11.10.0
-          run_install: false
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
@@ -46,13 +71,19 @@ jobs:
       - name: Gate 2 - Documentation & Link Validation
         run: node scripts/check-docs.mjs
 
-      # Gate 3: Secret Scanning
-      - name: Gate 3 - Secret & Credential Scanning
+      # Gate 3a: Repository Secret Scanning
+      - name: Gate 3a - In-Repo Secret & Credential Scanning
         run: node scripts/check-secrets.mjs
+
+      # Gate 3b: Gitleaks Secret Scanner (Pinned to immutable SHA v3.0.0)
+      - name: Gate 3b - Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
       - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests
-        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs
 
       # Gate 5: ESLint
       - name: Gate 5 - ESLint
@@ -62,32 +93,69 @@ jobs:
       - name: Gate 6 - TypeScript Typecheck
         run: pnpm typecheck
 
-      # Gate 7: Architecture Tests
-      - name: Gate 7 - .NET Architecture Boundary Tests
-        run: dotnet test tests/architecture/RestaurantOrder.ArchitectureTests.csproj -c Release
+      # Step: Architecture
+      - name: Architecture - .NET Architecture Boundary Tests
+        run: pnpm test:architecture
 
-      # Gate 8: Unit & Integration Tests
-      - name: Gate 8a - .NET Unit Tests
-        run: dotnet test tests/unit/RestaurantOrder.UnitTests.csproj -c Release
+      # Step: Backend Unit
+      - name: Backend Unit - .NET Domain & Calculation Unit Tests
+        run: pnpm test:unit:backend
 
-      - name: Gate 8b - .NET Integration Tests
-        run: dotnet test tests/integration/RestaurantOrder.IntegrationTests.csproj -c Release
+      # Step: Backend Integration
+      - name: Backend Integration - Testcontainers PostgreSQL & Redis Integration Tests
+        run: pnpm test:integration
 
-      - name: Gate 8c - Frontend Component Tests (Vitest)
-        run: pnpm --filter @restaurant-order/ui test
+      # Step: Frontend Component
+      - name: Frontend Component - Vitest & Testing Library Component Tests
+        run: pnpm test:unit:frontend
 
-      # Gate 9: Production Build
-      - name: Gate 9a - .NET Solution Build
-        run: dotnet build RestaurantOrder.sln -c Release --no-restore
+      # Step: Playwright Setup (Only chromium)
+      - name: E2E Setup - Install Playwright Chromium
+        run: pnpm --filter e2e-tests exec playwright install --with-deps chromium
 
-      - name: Gate 9b - Frontend Applications Build
+      # Step: E2E
+      - name: E2E - Playwright Live API Probes
+        run: pnpm test:e2e
+
+      # Step: Coverage
+      - name: Coverage - Backend & Frontend Coverage Enforcement
+        run: pnpm test:coverage
+
+      # Step: Production Build
+      - name: Build - Backend Solution & Frontend Web Apps Build
         run: pnpm build
 
-      # Gate 10: Docker Compose Validation
-      - name: Gate 10 - Docker Compose Config Validation
+      # Step: Docker Compose Validation
+      - name: Docker - Compose Configuration Validation
+        env:
+          DATABASE_URL: postgresql://ci_test_user:ci_test_pass_123@localhost:5432/restaurant_order_ci
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci_test_jwt_secret_min_32_characters_long_12345' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_postgres_password_12345' }}
+          API_IMAGE_DIGEST: sha256:1111111111111111111111111111111111111111111111111111111111111111
+          WORKER_IMAGE_DIGEST: sha256:2222222222222222222222222222222222222222222222222222222222222222
+          CUSTOMER_WEB_IMAGE_DIGEST: sha256:3333333333333333333333333333333333333333333333333333333333333333
+          OPERATIONS_WEB_IMAGE_DIGEST: sha256:4444444444444444444444444444444444444444444444444444444444444444
+          ADMIN_WEB_IMAGE_DIGEST: sha256:5555555555555555555555555555555555555555555555555555555555555555
         run: |
           docker compose -f compose.yml -f compose.dev.yml config
           docker compose -f compose.yml -f compose.staging.yml config
-          docker compose -f compose.yml -f compose.prod.blue.yml config
-          docker compose -f compose.yml -f compose.prod.green.yml config
+          docker compose -p restaurant-order-blue -f compose.yml -f compose.prod.blue.yml config
+          docker compose -p restaurant-order-green -f compose.yml -f compose.prod.green.yml config
+          docker compose -f compose.ingress.yml config
           docker compose -f deploy/docker-compose.yml config
+
+      # Step: Docker Container Smoke & Hardening Tests
+      - name: Docker - Container Smoke & Hardening Tests
+        run: node --test scripts/tests/container-smoke.test.mjs
+
+      # Step: Repository Cleanliness Check (No modified tracked files or untracked test leftovers)
+      - name: Cleanliness - Verify Untouched Repository State
+        shell: bash
+        run: |
+          git diff --exit-code
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: Untracked or dirty repository files detected after build/test pipeline:"
+            git status --porcelain
+            exit 1
+          fi

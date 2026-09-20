@@ -81,16 +81,16 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 
 | Component | Selected / Proposed Technology | Decision Status | ADR Reference |
 | :--- | :--- | :--- | :--- |
-| **Monorepo & Package Manager**| `pnpm` workspaces + single root lockfile | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Backend Architecture** | Modular Monolith (Clean Architecture) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Backend Runtime** | .NET 10 ASP.NET Core | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Frontend Framework** | React 19 + Vite (TypeScript strict, PWA-first)| `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Realtime Transport** | ASP.NET Core SignalR | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Cache & Realtime Broker** | Redis 7 | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Database Engine** | PostgreSQL 16 (Multi-tenant RLS) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Background Processing** | Separate Worker Host (`apps/worker`) | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Containers & Local Dev** | Docker & Docker Compose | `ACCEPTED` | [ADR-0001](file:///d:/freelance/restaurant-order/docs/adr/0001-technology-stack.md) |
-| **Data Persistence Library**| EF Core 10 vs Dapper vs Marten | `PROPOSED` | [ADR-0002](file:///d:/freelance/restaurant-order/docs/adr/0002-persistence-selection.md) |
+| **Monorepo & Package Manager**| `pnpm` workspaces + single root lockfile | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Backend Architecture** | Modular Monolith (Clean Architecture) | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Backend Runtime** | .NET 10 ASP.NET Core | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Frontend Framework** | React 19 + Vite (TypeScript strict, PWA-first)| `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Realtime Transport** | ASP.NET Core SignalR | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Cache & Realtime Broker** | Redis 7 | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Database Engine** | PostgreSQL 16 (Multi-tenant RLS) | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Background Processing** | Separate Worker Host (`apps/worker`) | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Containers & Local Dev** | Docker & Docker Compose | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
+| **Data Persistence Library**| EF Core 10 vs Dapper vs Marten | `PROPOSED` | [ADR-0002](./adr/0002-persistence-selection.md) |
 | **Thermal Printing Bridge** | Node/Go local socket daemon or direct IP | `[Proposed / ADR Required]` | `ADR-0005` (Pending) |
 | **Payment Gateway** | Multi-provider adapter (Stripe, Iyzico, etc.) | `[Proposed / ADR Required]` | `ADR-0006` (Pending) |
 
@@ -99,6 +99,6 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 ## 4. Architectural Invariants
 
 1. **No Shared Mutable State Across Tenants:** Every query, cache key, and event payload must carry explicit tenant context.
-2. **Deterministic State Transitions:** Orders, tickets, and payments must only transition via verified state machines (see [docs/STATE-MACHINES.md](file:///d:/freelance/restaurant-order/docs/STATE-MACHINES.md)).
+2. **Deterministic State Transitions:** Orders, tickets, and payments must only transition via verified state machines (see [docs/STATE-MACHINES.md](./STATE-MACHINES.md)).
 3. **Idempotency on Financial Operations:** Payment processing, bill closing, and refunds must enforce idempotency keys to prevent double-charging.
 4. **Resilient Hardware Decoupling:** Printer failures must never block KDS progression or order placement.

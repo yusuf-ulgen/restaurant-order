@@ -3,6 +3,9 @@
 # ==============================================================================
 # Usage: docker compose -f compose.yml -f compose.staging.yml up -d
 # Database & Redis ports are strictly internal and NOT bound to the host.
+# Secrets (POSTGRES_PASSWORD, DATABASE_URL, JWT_SECRET) must be injected via
+# environment variables or secret manager. Insecure fallback values are prohibited.
+# Web frontends receive NO backend secrets; only public build variables.
 # ==============================================================================
 
 services:
@@ -13,8 +16,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-restaurant_order_staging}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging_secure_pass_placeholder}
-    # No public port binding! Internal network only.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_staging_data:/var/lib/postgresql/data
     networks:
@@ -29,7 +31,6 @@ services:
     image: redis:7-alpine
     container_name: restaurant-order-redis-staging
     restart: unless-stopped
-    # No public port binding! Internal network only.
     volumes:
       - redis_staging_data:/data
     networks:
@@ -44,9 +45,9 @@ services:
     container_name: restaurant-order-api-staging
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
-      DATABASE_URL: ${DATABASE_URL:-Host=postgres;Port=5432;Database=restaurant_order_staging;Username=postgres;Password=staging_secure_pass_placeholder}
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis:6379}
-      JWT_SECRET: ${JWT_SECRET:-staging-jwt-secret-placeholder-32-chars!}
+      JWT_SECRET: ${JWT_SECRET}
       DEPLOYMENT_COLOR: ${DEPLOYMENT_COLOR:-blue}
       PORT: 5000
     ports:
@@ -61,7 +62,7 @@ services:
     container_name: restaurant-order-worker-staging
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
-      DATABASE_URL: ${DATABASE_URL:-Host=postgres;Port=5432;Database=restaurant_order_staging;Username=postgres;Password=staging_secure_pass_placeholder}
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis:6379}
       DEPLOYMENT_COLOR: ${DEPLOYMENT_COLOR:-blue}
       ACTIVE_DEPLOYMENT_SLOT: ${ACTIVE_DEPLOYMENT_SLOT:-blue}
@@ -70,6 +71,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  customer-web:
+    container_name: restaurant-order-customer-web-staging
+    ports:
+      - "${CUSTOMER_WEB_PORT:-3000}:8080"
+
+  operations-web:
+    container_name: restaurant-order-operations-web-staging
+    ports:
+      - "${OPERATIONS_WEB_PORT:-3001}:8080"
+
+  admin-web:
+    container_name: restaurant-order-admin-web-staging
+    ports:
+      - "${ADMIN_WEB_PORT:-3002}:8080"
 
 volumes:
   postgres_staging_data:

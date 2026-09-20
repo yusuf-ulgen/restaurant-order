@@ -46,7 +46,7 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
 
 ### 2.5. Cancellation of Items Already in Preparation
 - **Scenario:** A guest changes their mind and attempts to cancel an item via the QR web app, but the kitchen has already started cooking (`IN_PREPARATION`).
-- **Detection:** State machine check enforces that `CANCEL_ITEM` is only allowed from `SUBMITTED` state (see [docs/STATE-MACHINES.md](file:///d:/freelance/restaurant-order/docs/STATE-MACHINES.md)).
+- **Detection:** State machine check enforces that `CANCEL_ITEM` is only allowed from `SUBMITTED` state (see [docs/STATE-MACHINES.md](./STATE-MACHINES.md)).
 - **System Response:**
   1. The customer's cancellation request is rejected with message: *"The kitchen has already started preparing this dish. Please speak with your waiter."*
   2. The guest can use the "Call Waiter" button.

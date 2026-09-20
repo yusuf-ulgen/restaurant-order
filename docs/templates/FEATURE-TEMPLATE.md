@@ -54,4 +54,4 @@
 - [ ] **Integration Tests:** [API endpoints, DB queries, RLS isolation]
 - [ ] **E2E / Manual Verification:** [Cross-surface workflow steps]
 
-> **Reminder:** In accordance with [AGENTS.md](file:///d:/freelance/restaurant-order/AGENTS.md), this feature must not be reported as PASS without executing and validating automated tests.
+> **Reminder:** In accordance with [AGENTS.md](../../AGENTS.md), this feature must not be reported as PASS without executing and validating automated tests.
