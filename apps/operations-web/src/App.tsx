@@ -38,7 +38,7 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
         items: [
           { id: 'tables', label: 'Masalar', isActive: true },
           { id: 'calls', label: 'Çağrılar', onClick: handleOpenCallsModal },
-          { id: 'orders', label: 'Siparişler' },
+          { id: 'orders', label: 'Siparişler (Yakında)', disabled: true },
         ],
       }}
     >
@@ -46,9 +46,7 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
         <Card padding="md">
           <EmptyState
             title="Aktif Masa Bulunmuyor"
-            description="Şu anda atanmış veya işlem bekleyen aktif bir masa bulunmamaktadır."
-            actionLabel="Masaları Yenile"
-            onAction={() => {}}
+            description="Şu anda atanmış veya işlem bekleyen aktif bir masa bulunmamaktadır. Masa atama özellikleri Phase 6'da etkinleşecektir."
           />
         </Card>
       ) : (
@@ -64,8 +62,10 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
                 variant="secondary"
                 size="md"
                 className="operations-action-btn-primary"
+                disabled
+                title="Masa planı görünümü Phase 6 kapsamında etkinleşecektir"
               >
-                Masa Planı
+                Masa Planı (Yakında)
               </Button>
               <Button
                 variant="outline"

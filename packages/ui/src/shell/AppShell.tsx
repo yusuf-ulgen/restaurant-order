@@ -43,9 +43,17 @@ export const AppShell: React.FC<AppShellProps> = ({
   style,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
-    sidebar?.isCollapsed ?? false
-  );
+  const [uncontrolledCollapsed, setUncontrolledCollapsed] = useState(false);
+
+  const isControlled = sidebar?.isCollapsed !== undefined;
+  const isSidebarCollapsed = isControlled ? sidebar.isCollapsed! : uncontrolledCollapsed;
+
+  const handleToggleSidebarCollapse = () => {
+    sidebar?.onToggleCollapse?.();
+    if (!isControlled) {
+      setUncontrolledCollapsed((prev) => !prev);
+    }
+  };
 
   // Requirement: Customer screen must not have sidebar
   const showSidebar = variant !== 'customer' && (!!sidebar || !!customSidebar);
@@ -58,7 +66,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       style={{
         display: 'flex',
         minHeight: '100dvh',
-        backgroundColor: 'var(--ro-color-background)',
+        backgroundColor: 'var(--ro-color-bg)',
         color: 'var(--ro-color-text-primary)',
         width: '100%',
         maxWidth: '100vw',
@@ -79,7 +87,7 @@ export const AppShell: React.FC<AppShellProps> = ({
             <Sidebar
               {...sidebar}
               isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+              onToggleCollapse={handleToggleSidebarCollapse}
               isMobileOpen={isMobileMenuOpen}
               onMobileClose={() => setIsMobileMenuOpen(false)}
             />

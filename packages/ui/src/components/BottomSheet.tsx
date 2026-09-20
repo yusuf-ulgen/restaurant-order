@@ -10,6 +10,8 @@ export interface BottomSheetProps {
   onClose: () => void;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
   children: React.ReactNode;
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
@@ -24,6 +26,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   onClose,
   title,
   description,
+  ariaLabel,
+  ariaLabelledBy,
   children,
   closeOnClickOutside = true,
   closeOnEscape = true,
@@ -35,6 +39,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   const generatedId = useId();
   const titleId = title ? `sheet-title-${generatedId}` : undefined;
   const descriptionId = description ? `sheet-desc-${generatedId}` : undefined;
+
+  const accessibleLabelledBy = ariaLabelledBy || titleId;
+  const accessibleLabel = accessibleLabelledBy ? undefined : (ariaLabel || 'Alt Sayfa Menüsü');
 
   useScrollLock(isOpen);
 
@@ -58,7 +65,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           ref={containerRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={titleId}
+          aria-labelledby={accessibleLabelledBy}
+          aria-label={accessibleLabel}
           aria-describedby={descriptionId}
           tabIndex={-1}
           className={className}

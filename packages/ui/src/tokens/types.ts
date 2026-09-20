@@ -65,7 +65,9 @@ export interface TenantThemeOverrides {
   secondaryHover?: string;
   accent?: string;
   surface?: string;
+  surfaceHover?: string;
   bg?: string;
+  focus?: string;
   radiusMd?: string;
   fontSans?: string;
 }

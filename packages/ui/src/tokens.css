@@ -25,12 +25,16 @@
   --ro-color-bg-inverse: var(--ro-color-neutral-900);
 
   --ro-color-surface: var(--ro-color-white);
+  --ro-color-surface-hover: var(--ro-color-neutral-100);
   --ro-color-surface-subtle: var(--ro-color-neutral-50);
   --ro-color-surface-elevated: var(--ro-color-white);
 
   --ro-color-border: var(--ro-color-neutral-200);
   --ro-color-border-subtle: var(--ro-color-neutral-100);
   --ro-color-border-strong: var(--ro-color-neutral-300);
+
+  --ro-color-focus: var(--ro-color-primary);
+  --ro-color-focus-ring: var(--ro-color-primary);
 
   /* ==========================================================================
      3. Typography Colors

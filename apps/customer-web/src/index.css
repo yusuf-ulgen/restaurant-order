@@ -52,8 +52,15 @@
   text-align: left;
 }
 
-.service-option-item:hover {
+.service-option-item:hover:not(:disabled) {
   background-color: var(--ro-color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.service-option-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background-color: var(--ro-color-surface-subtle);
+  color: var(--ro-color-text-muted);
 }
 
 .service-option-item:focus-visible {

@@ -120,10 +120,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             key={section.id}
             {...section}
             isCollapsed={isCollapsed}
-            onItemClick={(item) => {
-              onItemClick?.(item);
-              onMobileClose?.();
-            }}
+            onItemClick={onItemClick}
+            onMobileClose={onMobileClose}
           />
         ))}
       </nav>
@@ -185,10 +183,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={section.id}
                   {...section}
                   isCollapsed={false}
-                  onItemClick={(item) => {
-                    onItemClick?.(item);
-                    onMobileClose?.();
-                  }}
+                  onItemClick={
+                    onItemClick || onMobileClose
+                      ? (item) => {
+                          onItemClick?.(item);
+                          onMobileClose?.();
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </nav>

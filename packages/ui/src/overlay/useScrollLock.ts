@@ -32,3 +32,14 @@ export function useScrollLock(locked: boolean): void {
 export function getScrollLockCount(): number {
   return lockCount;
 }
+
+/**
+ * Resets the scroll lock counter and restores document body overflow.
+ * Useful for nested overlay teardown synchronization and test cleanups.
+ */
+export function resetScrollLock(): void {
+  lockCount = 0;
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = originalOverflow || '';
+  }
+}

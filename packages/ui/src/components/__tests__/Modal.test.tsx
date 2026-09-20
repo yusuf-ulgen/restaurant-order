@@ -2,6 +2,7 @@ import { createRef } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Modal } from '../Modal';
+import { Drawer } from '../Drawer';
 
 describe('Modal Component', () => {
   beforeEach(() => {
@@ -145,5 +146,58 @@ describe('Modal Component', () => {
 
     expect(document.activeElement).toBe(screen.getByTestId('initial-input'));
     vi.useRealTimers();
+  });
+
+  describe('Accessible Name & Fallback', () => {
+    it('provides fallback aria-label when no title is provided', () => {
+      render(
+        <Modal isOpen={true} onClose={vi.fn()}>
+          <p>Content without title</p>
+        </Modal>
+      );
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeDefined();
+      expect(dialog.getAttribute('aria-label')).toBe('İletişim Penceresi');
+      expect(dialog.getAttribute('aria-labelledby')).toBeNull();
+    });
+
+    it('uses custom ariaLabel when provided without title', () => {
+      render(
+        <Modal isOpen={true} onClose={vi.fn()} ariaLabel="Özel Pencere">
+          <p>Content</p>
+        </Modal>
+      );
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.getAttribute('aria-label')).toBe('Özel Pencere');
+    });
+  });
+
+  describe('Nested Modal + Drawer', () => {
+    it('closes only the top overlay when Escape is pressed', () => {
+      const handleCloseModal = vi.fn();
+      const handleCloseDrawer = vi.fn();
+
+      render(
+        <div>
+          <Modal isOpen={true} onClose={handleCloseModal} title="Ana Modal">
+            <p>Modal İçeriği</p>
+          </Modal>
+          <Drawer isOpen={true} onClose={handleCloseDrawer} title="Üst Panel">
+            <p>Drawer İçeriği</p>
+          </Drawer>
+        </div>
+      );
+
+      const dialogs = screen.getAllByRole('dialog');
+      expect(dialogs.length).toBe(2);
+
+      // Press Escape: only the top overlay (Drawer) must close
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(handleCloseDrawer).toHaveBeenCalledTimes(1);
+      expect(handleCloseModal).not.toHaveBeenCalled();
+    });
   });
 });

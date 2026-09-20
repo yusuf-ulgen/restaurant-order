@@ -21,9 +21,9 @@ export const adminSidebarSections: NavSectionConfig[] = [
     title: 'Ana Menü',
     order: 1,
     items: [
-      { id: 'dashboard', label: 'Kontrol Paneli', isActive: true, order: 1 },
-      { id: 'menu', label: 'Menü Yönetimi', order: 2 },
-      { id: 'tables', label: 'Şube & Masalar', order: 3 },
+      { id: 'dashboard', label: 'Kontrol Paneli', href: '/', isActive: true, order: 1 },
+      { id: 'menu', label: 'Menü Yönetimi (Yakında)', order: 2, disabled: true },
+      { id: 'tables', label: 'Şube & Masalar (Yakında)', order: 3, disabled: true },
     ],
   },
   {
@@ -31,8 +31,8 @@ export const adminSidebarSections: NavSectionConfig[] = [
     title: 'Operasyon',
     order: 2,
     items: [
-      { id: 'orders', label: 'Siparişler', order: 1 },
-      { id: 'staff', label: 'Personel & Vardiya', order: 2 },
+      { id: 'orders', label: 'Siparişler (Yakında)', order: 1, disabled: true },
+      { id: 'staff', label: 'Personel & Vardiya (Yakında)', order: 2, disabled: true },
     ],
   },
   {
@@ -40,8 +40,8 @@ export const adminSidebarSections: NavSectionConfig[] = [
     title: 'Sistem',
     order: 3,
     items: [
-      { id: 'reports', label: 'Raporlar', order: 1 },
-      { id: 'settings', label: 'Ayarlar', order: 2 },
+      { id: 'reports', label: 'Raporlar (Yakında)', order: 1, disabled: true },
+      { id: 'settings', label: 'Ayarlar (Yakında)', order: 2, disabled: true },
     ],
   },
 ];
@@ -83,9 +83,7 @@ export const AdminContent: React.FC<AdminAppProps> = ({
         <Card padding="md">
           <EmptyState
             title="Henüz Raporlanmış Veri Yok"
-            description="Seçili şube ve dönem için henüz sipariş veya ciro verisi kaydedilmemiştir."
-            actionLabel="Raporları Yenile"
-            onAction={() => {}}
+            description="Seçili şube ve dönem için henüz sipariş veya ciro verisi kaydedilmemiştir. Raporlama özellikleri Phase 13'te etkinleşecektir."
           />
         </Card>
       ) : (

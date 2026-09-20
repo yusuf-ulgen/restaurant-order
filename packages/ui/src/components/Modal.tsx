@@ -10,6 +10,8 @@ export interface ModalProps {
   onClose: () => void;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   closeOnClickOutside?: boolean;
@@ -25,6 +27,8 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   title,
   description,
+  ariaLabel,
+  ariaLabelledBy,
   children,
   size = 'md',
   closeOnClickOutside = true,
@@ -37,6 +41,9 @@ export const Modal: React.FC<ModalProps> = ({
   const generatedId = useId();
   const titleId = title ? `modal-title-${generatedId}` : undefined;
   const descriptionId = description ? `modal-desc-${generatedId}` : undefined;
+
+  const accessibleLabelledBy = ariaLabelledBy || titleId;
+  const accessibleLabel = accessibleLabelledBy ? undefined : (ariaLabel || 'İletişim Penceresi');
 
   useScrollLock(isOpen);
 
@@ -65,7 +72,8 @@ export const Modal: React.FC<ModalProps> = ({
           ref={containerRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={titleId}
+          aria-labelledby={accessibleLabelledBy}
+          aria-label={accessibleLabel}
           aria-describedby={descriptionId}
           tabIndex={-1}
           className={className}

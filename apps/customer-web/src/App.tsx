@@ -42,9 +42,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
         <Card padding="md">
           <EmptyState
             title="Aktif Sipariş Bulunmuyor"
-            description="Masada henüz aktif bir siparişiniz bulunmamaktadır. Menüyü inceleyerek sipariş verebilirsiniz."
-            actionLabel="Menüyü Aç"
-            onAction={() => {}}
+            description="Masada henüz aktif bir siparişiniz bulunmamaktadır. Menü ve sipariş özellikleri Phase 5'te etkinleşecektir."
           />
         </Card>
       ) : (
@@ -59,8 +57,10 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
               variant="primary"
               size="md"
               className="customer-action-btn-primary"
+              disabled
+              title="Menü inceleme ve sipariş verme Phase 5 kapsamında etkinleşecektir"
             >
-              Menüyü İncele
+              Menüyü İncele (Yakında)
             </Button>
             <Button
               variant="outline"
@@ -80,29 +80,45 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
         title="Garson Çağır"
         description="Masanız için servis veya destek talebi iletin."
       >
+        <p
+          style={{
+            fontSize: 'var(--ro-font-size-sm)',
+            color: 'var(--ro-color-text-muted)',
+            marginTop: 0,
+            marginBottom: 'var(--ro-space-3)',
+          }}
+        >
+          Servis çağrı iletimi Phase 7 (Realtime & Garson) kapsamında etkinleşecektir.
+        </p>
         <div className="service-options-list">
           <button
             type="button"
             className="service-option-item"
-            onClick={handleCloseServiceSheet}
+            disabled
+            aria-disabled="true"
+            title="Su ve peçete talebi Phase 7'de etkinleşecektir"
           >
-            <span>Masaya Su / Peçete Talebi</span>
+            <span>Masaya Su / Peçete Talebi (Yakında)</span>
             <span aria-hidden="true">→</span>
           </button>
           <button
             type="button"
             className="service-option-item"
-            onClick={handleCloseServiceSheet}
+            disabled
+            aria-disabled="true"
+            title="Hesap talebi Phase 7'de etkinleşecektir"
           >
-            <span>Hesap İstiyorum</span>
+            <span>Hesap İstiyorum (Yakında)</span>
             <span aria-hidden="true">→</span>
           </button>
           <button
             type="button"
             className="service-option-item"
-            onClick={handleCloseServiceSheet}
+            disabled
+            aria-disabled="true"
+            title="Garson görüşme talebi Phase 7'de etkinleşecektir"
           >
-            <span>Garson ile Görüşme Talebi</span>
+            <span>Garson ile Görüşme Talebi (Yakında)</span>
             <span aria-hidden="true">→</span>
           </button>
         </div>

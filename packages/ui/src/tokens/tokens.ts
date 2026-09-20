@@ -27,9 +27,11 @@ export const tokens = {
     },
     surface: {
       default: 'var(--ro-color-surface)',
+      hover: 'var(--ro-color-surface-hover)',
       subtle: 'var(--ro-color-surface-subtle)',
       elevated: 'var(--ro-color-surface-elevated)',
     },
+    focus: 'var(--ro-color-focus)',
     border: {
       default: 'var(--ro-color-border)',
       subtle: 'var(--ro-color-border-subtle)',

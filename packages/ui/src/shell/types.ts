@@ -11,6 +11,8 @@ export interface NavItemConfig {
   order?: number;
   isVisible?: boolean;
   disabled?: boolean;
+  isExternal?: boolean;
+  target?: string;
 }
 
 export interface NavSectionConfig {

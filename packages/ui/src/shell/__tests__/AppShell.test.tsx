@@ -133,4 +133,74 @@ describe('AppShell Component', () => {
 
     expect(screen.getByText('Safe Content')).toBeDefined();
   });
+
+  describe('Controlled vs Uncontrolled Sidebar State', () => {
+    it('reflects external prop updates when sidebar.isCollapsed is controlled', () => {
+      const handleToggle = vi.fn();
+      const sections = [{ id: 's1', items: [{ id: 'i1', label: 'Item 1' }] }];
+
+      const { rerender } = render(
+        <AppShell
+          variant="admin"
+          sidebar={{
+            sections,
+            isCollapsed: false,
+            onToggleCollapse: handleToggle,
+          }}
+        >
+          <div>Controlled View</div>
+        </AppShell>
+      );
+
+      const desktopSidebar = screen.getByTestId('desktop-sidebar');
+      expect(desktopSidebar.getAttribute('data-collapsed')).toBeNull();
+
+      // Parent updates isCollapsed to true
+      rerender(
+        <AppShell
+          variant="admin"
+          sidebar={{
+            sections,
+            isCollapsed: true,
+            onToggleCollapse: handleToggle,
+          }}
+        >
+          <div>Controlled View</div>
+        </AppShell>
+      );
+
+      expect(desktopSidebar.getAttribute('data-collapsed')).toBe('true');
+
+      // Clicking collapse button fires onToggleCollapse
+      const collapseBtn = screen.getByTestId('sidebar-collapse-btn');
+      fireEvent.click(collapseBtn);
+      expect(handleToggle).toHaveBeenCalledTimes(1);
+    });
+
+    it('toggles state internally when sidebar.isCollapsed is uncontrolled', () => {
+      const sections = [{ id: 's1', items: [{ id: 'i1', label: 'Item 1' }] }];
+
+      render(
+        <AppShell
+          variant="admin"
+          sidebar={{
+            sections,
+            // isCollapsed is undefined => uncontrolled
+          }}
+        >
+          <div>Uncontrolled View</div>
+        </AppShell>
+      );
+
+      const desktopSidebar = screen.getByTestId('desktop-sidebar');
+      expect(desktopSidebar.getAttribute('data-collapsed')).toBeNull();
+
+      const collapseBtn = screen.getByTestId('sidebar-collapse-btn');
+      fireEvent.click(collapseBtn);
+      expect(desktopSidebar.getAttribute('data-collapsed')).toBe('true');
+
+      fireEvent.click(collapseBtn);
+      expect(desktopSidebar.getAttribute('data-collapsed')).toBeNull();
+    });
+  });
 });

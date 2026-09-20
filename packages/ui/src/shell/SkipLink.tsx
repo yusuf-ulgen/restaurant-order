@@ -26,7 +26,7 @@ export const SkipLink: React.FC<SkipLinkProps> = ({
           zIndex: 'var(--ro-z-tooltip, 1700)',
           padding: 'var(--ro-space-2) var(--ro-space-4)',
           backgroundColor: 'var(--ro-color-primary)',
-          color: 'var(--ro-color-primary-contrast, #ffffff)',
+          color: 'var(--ro-color-text-inverse, #ffffff)',
           borderRadius: 'var(--ro-radius-md)',
           fontWeight: 'var(--ro-font-weight-medium)',
           textDecoration: 'none',

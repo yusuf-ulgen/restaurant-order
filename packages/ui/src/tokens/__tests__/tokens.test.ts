@@ -6,6 +6,8 @@ import {
   getSafeAreaInsets,
   createTenantTheme,
   applyTenantTheme,
+  clearTenantTheme,
+  MANAGED_TENANT_THEME_VARS,
 } from '../theme';
 
 describe('Design Token System', () => {
@@ -28,8 +30,10 @@ describe('Design Token System', () => {
     it('defines surface, background, and border tokens', () => {
       expect(tokens.colors.bg.default).toBe('var(--ro-color-bg)');
       expect(tokens.colors.surface.default).toBe('var(--ro-color-surface)');
+      expect(tokens.colors.surface.hover).toBe('var(--ro-color-surface-hover)');
       expect(tokens.colors.surface.elevated).toBe('var(--ro-color-surface-elevated)');
       expect(tokens.colors.border.default).toBe('var(--ro-color-border)');
+      expect(tokens.colors.focus).toBe('var(--ro-color-focus)');
     });
 
     it('defines typography scale and font weights', () => {
@@ -94,12 +98,16 @@ describe('Design Token System', () => {
         primary: '#112233',
         primaryHover: '#001122',
         surface: '#ffffff',
+        surfaceHover: '#f0f0f0',
+        focus: '#0055ff',
         radiusMd: '10px',
       });
 
       expect(theme['--ro-color-primary']).toBe('#112233');
       expect(theme['--ro-color-primary-hover']).toBe('#001122');
       expect(theme['--ro-color-surface']).toBe('#ffffff');
+      expect(theme['--ro-color-surface-hover']).toBe('#f0f0f0');
+      expect(theme['--ro-color-focus']).toBe('#0055ff');
       expect(theme['--ro-radius-md']).toBe('10px');
       expect(theme['--ro-color-secondary']).toBeUndefined();
     });
@@ -116,6 +124,53 @@ describe('Design Token System', () => {
 
       expect(el.style.getPropertyValue('--ro-color-primary')).toBe('#ff5500');
       expect(el.style.getPropertyValue('--ro-color-bg')).toBe('#f0f0f0');
+    });
+
+    it('clears all managed tenant theme variables without touching global non-tenant styles', () => {
+      const el = document.createElement('div');
+      el.style.setProperty('--ro-color-primary', '#ff0000');
+      el.style.setProperty('--custom-global-var', '#123456');
+
+      clearTenantTheme(el);
+
+      expect(el.style.getPropertyValue('--ro-color-primary')).toBe('');
+      expect(el.style.getPropertyValue('--custom-global-var')).toBe('#123456');
+    });
+
+    it('cleans up Tenant A overrides when switching to Tenant B', () => {
+      const el = document.createElement('div');
+
+      // Tenant A defines primary and accent
+      applyTenantTheme(
+        {
+          primary: '#111111',
+          accent: '#aaaaaa',
+        },
+        el
+      );
+      expect(el.style.getPropertyValue('--ro-color-primary')).toBe('#111111');
+      expect(el.style.getPropertyValue('--ro-color-accent')).toBe('#aaaaaa');
+
+      // Tenant B defines only secondary (no accent)
+      applyTenantTheme(
+        {
+          secondary: '#222222',
+        },
+        el
+      );
+
+      // Tenant A's primary and accent must be cleared
+      expect(el.style.getPropertyValue('--ro-color-primary')).toBe('');
+      expect(el.style.getPropertyValue('--ro-color-accent')).toBe('');
+      // Tenant B's secondary must be set
+      expect(el.style.getPropertyValue('--ro-color-secondary')).toBe('#222222');
+    });
+
+    it('exports MANAGED_TENANT_THEME_VARS list of managed css variables', () => {
+      expect(MANAGED_TENANT_THEME_VARS.length).toBeGreaterThan(0);
+      expect(MANAGED_TENANT_THEME_VARS).toContain('--ro-color-primary');
+      expect(MANAGED_TENANT_THEME_VARS).toContain('--ro-color-secondary');
+      expect(MANAGED_TENANT_THEME_VARS).toContain('--ro-color-accent');
     });
   });
 });

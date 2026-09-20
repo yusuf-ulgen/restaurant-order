@@ -12,24 +12,27 @@ describe('Customer Web App', () => {
       expect(screen.getByText('Açık Oturum')).toBeDefined();
     });
 
-    it('renders welcome card with action buttons', () => {
+    it('renders welcome card with action buttons, where menu is disabled as upcoming', () => {
       render(<App />);
 
       expect(screen.getByText('Hoş Geldiniz')).toBeDefined();
-      expect(screen.getByText('Menüyü İncele')).toBeDefined();
-      expect(screen.getByText('Garson Çağır')).toBeDefined();
+      const menuBtn = screen.getByRole('button', { name: /Menüyü İncele/ });
+      expect(menuBtn).toBeDefined();
+      expect(menuBtn.hasAttribute('disabled')).toBe(true);
+
+      const callWaiterBtn = screen.getByRole('button', { name: 'Garson Çağır' });
+      expect(callWaiterBtn).toBeDefined();
+      expect(callWaiterBtn.hasAttribute('disabled')).toBe(false);
     });
   });
 
   describe('Empty State & Error Boundary', () => {
-    it('renders empty state when there is no active session', () => {
+    it('renders empty state without fake action button when there is no active session', () => {
       render(<App hasActiveSession={false} />);
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Aktif Sipariş Bulunmuyor')).toBeDefined();
-      const actionButton = screen.getByText('Menüyü Aç');
-      expect(actionButton).toBeDefined();
-      fireEvent.click(actionButton);
+      expect(screen.queryByRole('button', { name: 'Menüyü Aç' })).toBeNull();
     });
 
     it('catches render errors and displays error boundary fallback', () => {
@@ -74,7 +77,7 @@ describe('Customer Web App', () => {
       expect(buttons.some((btn) => btn.textContent?.includes('Garson Çağır'))).toBe(true);
     });
 
-    it('opens and closes service request BottomSheet on Garson Çağır click', () => {
+    it('opens BottomSheet, keeps options disabled as upcoming, and closes via close button', () => {
       render(<App />);
 
       const callWaiterBtn = screen.getByRole('button', { name: 'Garson Çağır' });
@@ -83,11 +86,18 @@ describe('Customer Web App', () => {
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeDefined();
       expect(screen.getByText('Masanız için servis veya destek talebi iletin.')).toBeDefined();
-      expect(screen.getByText('Masaya Su / Peçete Talebi')).toBeDefined();
 
-      const optionBtn = screen.getByText('Masaya Su / Peçete Talebi');
+      // Options must be disabled and not pretend to send a request
+      const optionBtn = screen.getByRole('button', { name: /Masaya Su \/ Peçete Talebi/ });
+      expect(optionBtn.hasAttribute('disabled')).toBe(true);
       fireEvent.click(optionBtn);
 
+      // Dialog must NOT close on clicking disabled option
+      expect(screen.getByRole('dialog')).toBeDefined();
+
+      // Close dialog via close button
+      const closeBtn = screen.getByRole('button', { name: 'Kapat' });
+      fireEvent.click(closeBtn);
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });

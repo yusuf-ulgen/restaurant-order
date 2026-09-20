@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useScrollLock, getScrollLockCount } from '../useScrollLock';
+import { useScrollLock, getScrollLockCount, resetScrollLock } from '../useScrollLock';
 
 describe('useScrollLock', () => {
   beforeEach(() => {
@@ -46,5 +46,17 @@ describe('useScrollLock', () => {
     hook2.unmount();
     expect(document.body.style.overflow).toBe('');
     expect(getScrollLockCount()).toBe(0);
+  });
+
+  it('resets lock count and restores body overflow with resetScrollLock', () => {
+    renderHook(() => useScrollLock(true));
+    renderHook(() => useScrollLock(true));
+    expect(getScrollLockCount()).toBe(2);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    resetScrollLock();
+
+    expect(getScrollLockCount()).toBe(0);
+    expect(document.body.style.overflow).toBe('');
   });
 });

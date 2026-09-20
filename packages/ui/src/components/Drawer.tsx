@@ -11,6 +11,8 @@ export interface DrawerProps {
   placement?: 'left' | 'right';
   title?: React.ReactNode;
   description?: React.ReactNode;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   closeOnClickOutside?: boolean;
@@ -27,6 +29,8 @@ export const Drawer: React.FC<DrawerProps> = ({
   placement = 'right',
   title,
   description,
+  ariaLabel,
+  ariaLabelledBy,
   children,
   size = 'md',
   closeOnClickOutside = true,
@@ -39,6 +43,9 @@ export const Drawer: React.FC<DrawerProps> = ({
   const generatedId = useId();
   const titleId = title ? `drawer-title-${generatedId}` : undefined;
   const descriptionId = description ? `drawer-desc-${generatedId}` : undefined;
+
+  const accessibleLabelledBy = ariaLabelledBy || titleId;
+  const accessibleLabel = accessibleLabelledBy ? undefined : (ariaLabel || 'Yan Panel');
 
   useScrollLock(isOpen);
 
@@ -73,7 +80,8 @@ export const Drawer: React.FC<DrawerProps> = ({
           ref={containerRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={titleId}
+          aria-labelledby={accessibleLabelledBy}
+          aria-label={accessibleLabel}
           aria-describedby={descriptionId}
           tabIndex={-1}
           className={className}

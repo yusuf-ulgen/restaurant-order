@@ -87,4 +87,36 @@ describe('MobileNavigation Component', () => {
     fireEvent.click(ordersBtn);
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
+
+  it('renders real <a> element for items with href in MobileNavigation', () => {
+    render(
+      <MobileNavigation
+        items={[
+          { id: 'menu', label: 'Menü', href: '/menu', isActive: true },
+          { id: 'ext', label: 'Yardım', href: 'https://help.example.com', isExternal: true },
+          { id: 'dis', label: 'Geçersiz', href: '/closed', disabled: true },
+          { id: 'inert', label: 'Gelecek' },
+        ]}
+      />
+    );
+
+    const menuLink = screen.getByTestId('mobile-nav-item-menu');
+    expect(menuLink.tagName).toBe('A');
+    expect(menuLink.getAttribute('href')).toBe('/menu');
+    expect(menuLink.getAttribute('aria-current')).toBe('page');
+
+    const extLink = screen.getByTestId('mobile-nav-item-ext');
+    expect(extLink.tagName).toBe('A');
+    expect(extLink.getAttribute('target')).toBe('_blank');
+    expect(extLink.getAttribute('rel')).toBe('noopener noreferrer');
+
+    const disabledLink = screen.getByTestId('mobile-nav-item-dis');
+    expect(disabledLink.tagName).toBe('A');
+    expect(disabledLink.getAttribute('aria-disabled')).toBe('true');
+    expect(disabledLink.getAttribute('href')).toBeNull();
+
+    const inertEl = screen.getByTestId('mobile-nav-item-inert');
+    expect(inertEl.tagName).toBe('DIV');
+    expect(inertEl.getAttribute('aria-disabled')).toBe('true');
+  });
 });
