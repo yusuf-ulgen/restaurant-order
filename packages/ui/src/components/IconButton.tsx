@@ -1,20 +1,22 @@
 import React, { forwardRef } from 'react';
 import { Spinner } from './Spinner';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  'aria-label': string;
+  icon: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
-  children: React.ReactNode;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   {
-    variant = 'primary',
+    'aria-label': ariaLabel,
+    icon,
+    variant = 'ghost',
     size = 'md',
     loading = false,
     disabled = false,
-    children,
     style,
     ...props
   },
@@ -22,40 +24,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const isInactive = disabled || loading;
 
+  const sizeMap: Record<'sm' | 'md' | 'lg', { dimension: string; padding: string }> = {
+    sm: { dimension: 'var(--ro-touch-target-dense, 36px)', padding: 'var(--ro-space-1)' },
+    md: { dimension: 'var(--ro-touch-target-min, 44px)', padding: 'var(--ro-space-2)' },
+    lg: { dimension: '48px', padding: 'var(--ro-space-3)' },
+  };
+
+  const { dimension, padding } = sizeMap[size];
+
   const baseStyles: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 'var(--ro-space-2)',
-    fontWeight: 'var(--ro-font-weight-semibold)',
-    fontFamily: 'var(--ro-font-sans)',
+    width: dimension,
+    height: dimension,
+    minWidth: dimension,
+    minHeight: dimension,
+    padding,
     borderRadius: 'var(--ro-radius-md)',
     border: '1px solid transparent',
     cursor: isInactive ? 'not-allowed' : 'pointer',
     opacity: isInactive ? 0.6 : 1,
     transition: 'all var(--ro-transition-fast)',
-    textDecoration: 'none',
     boxSizing: 'border-box',
     userSelect: 'none',
-    position: 'relative',
-  };
-
-  const sizeStyles: Record<'sm' | 'md' | 'lg', React.CSSProperties> = {
-    sm: {
-      padding: 'var(--ro-space-1) var(--ro-space-3)',
-      fontSize: 'var(--ro-font-size-sm)',
-      minHeight: 'var(--ro-touch-target-dense, 36px)',
-    },
-    md: {
-      padding: 'var(--ro-space-2) var(--ro-space-4)',
-      fontSize: 'var(--ro-font-size-base)',
-      minHeight: 'var(--ro-touch-target-min, 44px)',
-    },
-    lg: {
-      padding: 'var(--ro-space-3) var(--ro-space-6)',
-      fontSize: 'var(--ro-font-size-md)',
-      minHeight: '48px',
-    },
   };
 
   const variantStyles: Record<'primary' | 'secondary' | 'outline' | 'ghost' | 'danger', React.CSSProperties> = {
@@ -86,18 +78,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button
       ref={ref}
+      aria-label={ariaLabel}
+      disabled={isInactive}
+      aria-busy={loading ? 'true' : undefined}
       style={{
         ...baseStyles,
-        ...sizeStyles[size],
         ...variantStyles[variant],
         ...style,
       }}
-      disabled={isInactive}
-      aria-busy={loading ? 'true' : undefined}
       {...props}
     >
-      {loading && <Spinner size="sm" aria-hidden="true" />}
-      <span>{children}</span>
+      {loading ? <Spinner size={size === 'lg' ? 'md' : 'sm'} aria-hidden="true" /> : icon}
     </button>
   );
 });
