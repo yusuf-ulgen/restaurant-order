@@ -53,6 +53,8 @@ public static class DependencyInjection
             }
         });
 
+        services.AddScoped<ITenantDatabaseSession, TenantDatabaseSession>();
+
         return services;
     }
 
