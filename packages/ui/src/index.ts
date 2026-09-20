@@ -30,6 +30,9 @@ export * from './overlay';
 // Toast System
 export * from './toast';
 
+// Application Shell & Layout Primitives
+export * from './shell';
+
 // Design Tokens & Theme Utilities
 export * from './tokens/tokens';
 export * from './tokens/theme';
