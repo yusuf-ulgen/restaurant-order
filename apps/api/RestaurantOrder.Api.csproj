@@ -9,8 +9,18 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.*-*" />
-    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\packages\domain\RestaurantOrder.Domain.csproj" />
+    <ProjectReference Include="..\..\packages\application\RestaurantOrder.Application.csproj" />
+    <ProjectReference Include="..\..\packages\infrastructure\RestaurantOrder.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,12 +2,14 @@ using System.Text.Json;
 using RestaurantOrder.Api;
 using RestaurantOrder.Api.Domain.Pricing;
 using RestaurantOrder.Api.Health;
+using RestaurantOrder.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Fail-fast configuration validation
 ConfigurationValidator.Validate(builder.Configuration, builder.Environment);
 
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();
 builder.Services.AddSingleton<IRedisConnectionProvider, StackExchangeRedisConnectionProvider>();
 builder.Services.AddSingleton<IRedisHealthCheck, StackExchangeRedisHealthCheck>();
@@ -75,5 +77,8 @@ app.Run();
 
 namespace RestaurantOrder.Api
 {
-    public partial class Program { }
+    public partial class Program
+    {
+        public static readonly Type ApplicationLayer = typeof(RestaurantOrder.Application.AssemblyReference);
+    }
 }

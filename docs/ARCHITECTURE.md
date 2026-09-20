@@ -90,7 +90,7 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 | **Database Engine** | PostgreSQL 16 (Multi-tenant RLS) | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
 | **Background Processing** | Separate Worker Host (`apps/worker`) | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
 | **Containers & Local Dev** | Docker & Docker Compose | `ACCEPTED` | [ADR-0001](./adr/0001-technology-stack.md) |
-| **Data Persistence Library**| EF Core 10 vs Dapper vs Marten | `PROPOSED` | [ADR-0002](./adr/0002-persistence-selection.md) |
+| **Data Persistence Library**| EF Core 10 (Npgsql Provider) | `ACCEPTED` | [ADR-0002](./adr/0002-persistence-selection.md) |
 | **Thermal Printing Bridge** | Node/Go local socket daemon or direct IP | `[Proposed / ADR Required]` | `ADR-0005` (Pending) |
 | **Payment Gateway** | Multi-provider adapter (Stripe, Iyzico, etc.) | `[Proposed / ADR Required]` | `ADR-0006` (Pending) |
 
