@@ -1,0 +1,13 @@
+**/.git
+**/.github
+**/.gemini
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/coverage
+.claude
+.idea
+.vscode
+*.md
+docs/

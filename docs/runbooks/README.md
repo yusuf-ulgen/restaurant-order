@@ -12,6 +12,7 @@ Runbooks provide operational procedures, diagnostic checklists, and recovery ste
 | :--- | :--- | :--- |
 | [docs/BLUE-GREEN-RUNBOOK.md](../BLUE-GREEN-RUNBOOK.md) | Zero-downtime production deployment, health checks & traffic cutover. | DevOps / Release Leads |
 | [docs/INCIDENT-RESPONSE.md](../INCIDENT-RESPONSE.md) | Incident severity classification, escalation paths & post-mortem workflows. | On-Call Engineers / Managers |
+| [docs/runbooks/database-migrations.md](./database-migrations.md) | Zero-downtime Expand-Migrate-Contract database migrations and rollback workflows. | DBA / Release Leads |
 
 ---
 

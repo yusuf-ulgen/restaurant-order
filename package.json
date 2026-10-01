@@ -26,7 +26,10 @@
     "build": "pnpm build:backend && pnpm build:frontend",
     "blue-green:check": "node scripts/blue-green/orchestrator.mjs --dry-run",
     "blue-green:test": "node --test scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs",
-    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs",
+    "migration:validate": "node scripts/migration-ops.mjs validate",
+    "migration:script": "node scripts/migration-ops.mjs script",
+    "migration:apply:dev": "node scripts/migration-ops.mjs apply-dev",
+    "verify:gates": "node scripts/check-file-size.mjs && node scripts/check-docs.mjs && node scripts/check-secrets.mjs && node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/migration-ops.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs",
     "verify": "pnpm verify:gates && pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration && pnpm test:e2e && pnpm build"
   },
   "devDependencies": {
