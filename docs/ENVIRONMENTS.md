@@ -50,6 +50,11 @@ The `restaurant-order` platform maintains 6 strictly isolated operational enviro
 | `LOG_LEVEL` | Application logging verbosity | Optional | No | `Information` |
 | `PIN_PEPPER_SECRET` | Secret pepper for staff 4-digit PIN hash | Staging, Prod | Yes | `[Secured in Secret Manager]` |
 | `CORS_ALLOWED_ORIGINS` | Explicit allowed origins (no wildcard/local)| Staging, Prod | No | `https://admin.restaurantorder.app,...` |
+| `NOTIFICATION_PROVIDER` | Notification backend (`TransactionalOutbox`, `Smtp`, `SendGrid`, `Webhook`) | Staging, Prod | No | `TransactionalOutbox` |
+| `FORWARDED_HEADERS_ENABLED` | Enable reverse proxy forwarded headers | Optional | No | `false` / `true` |
+| `FORWARDED_HEADERS_KNOWN_PROXIES` | Trusted reverse proxy IPs (comma-separated)| Staging, Prod (if enabled) | No | `192.0.2.1` |
+| `FORWARDED_HEADERS_KNOWN_NETWORKS` | Trusted CIDR networks (comma-separated)| Staging, Prod (if enabled) | No | `198.51.100.0/24` |
+| `FORWARDED_HEADERS_FORWARD_LIMIT` | Max forwarded proxy limit | Optional | No | `2` |
 | `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
 | `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
 

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Auth;
@@ -10,6 +11,13 @@ public sealed record InviteStaffApiRequest(
     string Email,
     string Role,
     Guid? BranchId = null);
+
+public sealed record InviteStaffApiResponse(
+    Guid UserId,
+    string Email,
+    string Role,
+    Guid? BranchId,
+    DateTimeOffset ExpiresAtUtc);
 
 public sealed record AcceptInvitationApiRequest(
     string InvitationToken,
@@ -24,7 +32,8 @@ public sealed record ResetPasswordApiRequest(
     string NewPassword);
 
 public sealed record UpdateStaffStatusApiRequest(
-    string Status);
+    string Status,
+    Guid? BranchId = null);
 
 public static class StaffEndpoints
 {
@@ -57,7 +66,17 @@ public static class StaffEndpoints
             try
             {
                 var result = await staffService.InviteStaffAsync(tenantId, command, actor, ct);
-                return Results.Ok(result);
+                var response = new InviteStaffApiResponse(
+                    result.UserId,
+                    result.Email,
+                    result.Role.ToString(),
+                    result.BranchId,
+                    result.ExpiresAtUtc);
+                return Results.Ok(response);
+            }
+            catch (InvalidAuthorizationScopeException ex)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -135,8 +154,19 @@ public static class StaffEndpoints
             var actor = parser.ParsePrincipal(claimsDict);
 
             TenantId? tenantId = tenantContext.TenantId.HasValue ? new TenantId(tenantContext.TenantId.Value) : null;
-            var list = await staffService.ListStaffAsync(tenantId, branchId, actor, ct);
-            return Results.Ok(list);
+            try
+            {
+                var list = await staffService.ListStaffAsync(tenantId, branchId, actor, ct);
+                return Results.Ok(list);
+            }
+            catch (InvalidAuthorizationScopeException ex)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         })
         .RequireAuthorization()
         .RequirePermission(Permissions.BranchStaffManage)
@@ -152,7 +182,7 @@ public static class StaffEndpoints
             IStaffIdentityService staffService,
             CancellationToken ct) =>
         {
-            if (!Enum.TryParse<UserStatus>(request.Status, ignoreCase: true, out var status))
+            if (!Enum.TryParse<UserMembershipStatus>(request.Status, ignoreCase: true, out var status))
             {
                 return Results.BadRequest(new { error = $"Invalid status '{request.Status}'." });
             }
@@ -163,12 +193,20 @@ public static class StaffEndpoints
             var actor = parser.ParsePrincipal(claimsDict);
 
             TenantId? tenantId = tenantContext.TenantId.HasValue ? new TenantId(tenantContext.TenantId.Value) : null;
-            var command = new UpdateStaffStatusCommand(id, status);
+            var command = new UpdateStaffStatusCommand(id, status, request.BranchId);
 
             try
             {
                 await staffService.UpdateStaffStatusAsync(tenantId, command, actor, ct);
                 return Results.Ok(new { message = "Staff status updated successfully." });
+            }
+            catch (InvalidAuthorizationScopeException ex)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message);
             }
             catch (InvalidOperationException ex)
             {

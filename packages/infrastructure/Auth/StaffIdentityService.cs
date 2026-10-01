@@ -20,6 +20,8 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
     private readonly IIamBootstrapGateway _bootstrapGateway;
     private readonly IIamUserLookupGateway _userLookupGateway;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IIdentityNotificationSender _notificationSender;
+    private readonly IAuthSessionManager _sessionManager;
     private static readonly TimeSpan DefaultInvitationTtl = TimeSpan.FromDays(2);
     private static readonly TimeSpan DefaultResetTtl = TimeSpan.FromHours(1);
 
@@ -27,12 +29,16 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         RestaurantOrderDbContext dbContext,
         IIamBootstrapGateway bootstrapGateway,
         IIamUserLookupGateway userLookupGateway,
-        IPasswordHasher passwordHasher)
+        IPasswordHasher passwordHasher,
+        IIdentityNotificationSender notificationSender,
+        IAuthSessionManager sessionManager)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
         _userLookupGateway = userLookupGateway ?? throw new ArgumentNullException(nameof(userLookupGateway));
         _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
+        _notificationSender = notificationSender ?? throw new ArgumentNullException(nameof(notificationSender));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
     }
 
     public async Task<InviteStaffResult> InviteStaffAsync(
@@ -114,12 +120,13 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
                 await localTx.CommitAsync(ct);
             }
 
+            await _notificationSender.SendInvitationAsync(command.Email, rawToken, invitation.ExpiresAtUtc, ct);
+
             return new InviteStaffResult(
                 UserId: userId.Value,
                 Email: command.Email,
                 Role: command.Role,
                 BranchId: command.BranchId,
-                InvitationToken: rawToken,
                 ExpiresAtUtc: invitation.ExpiresAtUtc);
         }
         finally
@@ -148,8 +155,9 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.InvitationToken.Trim().ToLowerInvariant());
 
-        var invitationDto = await _bootstrapGateway.LookupInvitationTokenAsync(tokenHash, ct);
-        if (invitationDto == null || invitationDto.IsConsumed || invitationDto.ExpiresAtUtc <= now)
+        // Single-statement atomic consumption: returns consumed token or null if race/expired/consumed
+        var consumed = await _bootstrapGateway.ConsumeInvitationTokenAtomicallyAsync(tokenHash, now, ct);
+        if (consumed == null)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
         }
@@ -158,28 +166,20 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
 
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && invitationDto.TenantId != Guid.Empty)
+        if (!hasAmbientTx && consumed.TenantId != Guid.Empty)
         {
-            localTx = await _dbContext.BeginTenantTransactionAsync(invitationDto.TenantId, cancellationToken: ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(consumed.TenantId, cancellationToken: ct);
         }
 
         try
         {
-            var invitation = await _dbContext.InvitationTokens
-                .FirstOrDefaultAsync(t => t.Id == invitationDto.InvitationId, ct);
-            if (invitation == null || !invitation.IsValid(now))
-            {
-                throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
-            }
-            invitation.Consume(now);
-
-            await _bootstrapGateway.ActivateUserAndSetPasswordAsync(invitationDto.UserId, passwordHash, now, ct);
+            await _bootstrapGateway.ActivateUserAndSetPasswordAsync(consumed.UserId, passwordHash, now, ct);
 
             var audit = SecurityAuditEvent.Create(
-                TenantId.From(invitationDto.TenantId),
+                TenantId.From(consumed.TenantId),
                 SecurityAuditEventType.PasswordChanged,
                 now,
-                UserId.From(invitationDto.UserId),
+                UserId.From(consumed.UserId),
                 detailsJson: "{\"action\":\"invitation_accepted\"}");
             _dbContext.SecurityAuditEvents.Add(audit);
 
@@ -204,12 +204,37 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
-        var query = _dbContext.Memberships.AsQueryable();
-
-        if (tenantId.HasValue)
+        if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
         {
-            query = query.Where(m => m.TenantId == tenantId.Value);
+            throw new InvalidOperationException("Tenant required.");
         }
+
+        if (actor.TenantId.HasValue && actor.TenantId.Value != tenantId.Value.Value)
+        {
+            throw new InvalidAuthorizationScopeException("Actor does not have authority over this tenant.");
+        }
+
+        if (actor.Role == AuthRole.BranchManager)
+        {
+            if (!actor.BranchId.HasValue)
+            {
+                throw new InvalidAuthorizationScopeException("BranchManager requires an assigned branch.");
+            }
+
+            if (branchId.HasValue && branchId.Value != actor.BranchId.Value)
+            {
+                throw new InvalidAuthorizationScopeException("BranchManager cannot list staff from another branch.");
+            }
+
+            branchId = actor.BranchId.Value;
+        }
+        else if (actor.Role != AuthRole.SuperAdmin && actor.Role != AuthRole.RestaurantAdmin)
+        {
+            throw new InvalidAuthorizationScopeException("Actor role is not authorized to list staff.");
+        }
+
+        var query = _dbContext.Memberships.AsQueryable()
+            .Where(m => m.TenantId == tenantId.Value);
 
         if (branchId.HasValue)
         {
@@ -228,8 +253,8 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
                 userSummary?.Email ?? "unknown",
                 m.Role.ToString(),
                 m.BranchId.HasValue ? m.BranchId.Value.Value : (Guid?)null,
-                userSummary != null ? ((UserStatus)userSummary.Status).ToString() : "Unknown",
-                DateTimeOffset.UtcNow));
+                m.Status.ToString(),
+                m.CreatedAtUtc));
         }
 
         return result;
@@ -242,18 +267,19 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
-        var userSummary = await _bootstrapGateway.LookupUserByIdAsync(command.UserId, ct);
-        if (userSummary == null)
-        {
-            throw new InvalidOperationException("User not found.");
-        }
-
         if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
         {
             throw new InvalidOperationException("Tenant required for staff status operations.");
         }
 
+        if (actor.TenantId.HasValue && actor.TenantId.Value != tenantId.Value.Value)
+        {
+            throw new InvalidAuthorizationScopeException("Actor does not have authority over this tenant.");
+        }
+
         var effectiveTenantId = tenantId.Value;
+        var targetUserId = UserId.From(command.UserId);
+
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
         if (!hasAmbientTx)
@@ -263,9 +289,55 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
 
         try
         {
-            await _bootstrapGateway.UpdateUserStatusAsync(command.UserId, command.Status, now, ct);
+            var query = _dbContext.Memberships
+                .Where(m => m.TenantId == effectiveTenantId && m.UserId == targetUserId);
 
-            var eventType = command.Status is UserStatus.Active
+            if (command.BranchId.HasValue)
+            {
+                var cmdBranch = new BranchId(command.BranchId.Value);
+                query = query.Where(m => m.BranchId == cmdBranch);
+            }
+
+            var membership = await query.FirstOrDefaultAsync(ct);
+            if (membership == null)
+            {
+                throw new InvalidOperationException("Staff membership not found.");
+            }
+
+            if (actor.Role == AuthRole.BranchManager)
+            {
+                if (!actor.BranchId.HasValue || membership.BranchId?.Value != actor.BranchId.Value)
+                {
+                    throw new InvalidAuthorizationScopeException("BranchManager may only update staff within their assigned branch.");
+                }
+
+                if (membership.Role is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin or AuthRole.BranchManager)
+                {
+                    throw new InvalidAuthorizationScopeException("BranchManager cannot modify staff at or above their tier.");
+                }
+            }
+            else if (actor.Role == AuthRole.RestaurantAdmin)
+            {
+                if (membership.Role is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin)
+                {
+                    throw new InvalidAuthorizationScopeException("RestaurantAdmin cannot modify staff at or above their tier.");
+                }
+            }
+            else if (actor.Role != AuthRole.SuperAdmin)
+            {
+                throw new InvalidAuthorizationScopeException("Actor role is not authorized to update staff status.");
+            }
+
+            // Update ONLY UserMembership.Status (isolated from global user status)
+            membership.UpdateStatus(command.Status, now);
+
+            // If suspended or disabled, immediately revoke all active sessions for this user
+            if (command.Status is UserMembershipStatus.Suspended or UserMembershipStatus.Disabled)
+            {
+                await _sessionManager.LogoutAllAsync(targetUserId, ct);
+            }
+
+            var eventType = command.Status is UserMembershipStatus.Active
                 ? SecurityAuditEventType.AccountUnlocked
                 : SecurityAuditEventType.AccountLocked;
 
@@ -273,8 +345,9 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
                 effectiveTenantId,
                 eventType,
                 now,
-                UserId.From(command.UserId),
-                detailsJson: $"{{\"newStatus\":\"{command.Status}\",\"updatedBy\":\"{actor.SubjectId}\"}}");
+                targetUserId,
+                membership.BranchId,
+                detailsJson: $"{{\"newMembershipStatus\":\"{command.Status}\",\"updatedBy\":\"{actor.SubjectId}\"}}");
             _dbContext.SecurityAuditEvents.Add(audit);
 
             await _dbContext.SaveChangesAsync(ct);
@@ -309,7 +382,7 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
             case AuthRole.SuperAdmin:
                 if (targetRole is not AuthRole.RestaurantAdmin)
                 {
-                    throw new InvalidOperationException("SuperAdmin may only provision RestaurantAdmin roles via staff invitation.");
+                    throw new InvalidAuthorizationScopeException("SuperAdmin may only provision RestaurantAdmin roles via staff invitation.");
                 }
                 if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
                 {
@@ -318,9 +391,13 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
                 break;
 
             case AuthRole.RestaurantAdmin:
+                if (actor.TenantId.HasValue && (!tenantId.HasValue || actor.TenantId.Value != tenantId.Value.Value))
+                {
+                    throw new InvalidAuthorizationScopeException("Actor does not have authority over this tenant.");
+                }
                 if (targetRole is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin)
                 {
-                    throw new InvalidOperationException("RestaurantAdmin cannot provision administrative roles at or above their tier.");
+                    throw new InvalidAuthorizationScopeException("RestaurantAdmin cannot provision administrative roles at or above their tier.");
                 }
                 if (!tenantId.HasValue)
                 {
@@ -329,18 +406,22 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
                 break;
 
             case AuthRole.BranchManager:
+                if (actor.TenantId.HasValue && (!tenantId.HasValue || actor.TenantId.Value != tenantId.Value.Value))
+                {
+                    throw new InvalidAuthorizationScopeException("Actor does not have authority over this tenant.");
+                }
+                if (!actor.BranchId.HasValue || !branchId.HasValue || actor.BranchId.Value != branchId.Value)
+                {
+                    throw new InvalidAuthorizationScopeException("BranchManager cannot invite staff outside their assigned branch.");
+                }
                 if (targetRole is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin or AuthRole.BranchManager)
                 {
-                    throw new InvalidOperationException("BranchManager may only provision operational floor staff (Cashier, Kitchen, Bar, Waiter).");
-                }
-                if (!branchId.HasValue)
-                {
-                    throw new InvalidOperationException("Branch required for BranchManager operations.");
+                    throw new InvalidAuthorizationScopeException("BranchManager may only provision operational floor staff (Cashier, Kitchen, Bar, Waiter).");
                 }
                 break;
 
             default:
-                throw new InvalidOperationException("Actor role is not authorized to provision staff.");
+                throw new InvalidAuthorizationScopeException("Actor role is not authorized to provision staff.");
         }
     }
 

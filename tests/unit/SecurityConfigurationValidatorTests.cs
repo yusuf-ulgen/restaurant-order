@@ -25,7 +25,9 @@ public class SecurityConfigurationValidatorTests
             ["DEPLOYMENT_COLOR"] = "blue",
             ["PIN_PEPPER_SECRET"] = "high-entropy-server-pin-pepper-secret-32-chars-min",
             ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app",
-            ["Cors:AllowedOrigins:1"] = "https://ops.restaurantorder.app"
+            ["Cors:AllowedOrigins:1"] = "https://ops.restaurantorder.app",
+            ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox",
+            ["FORWARDED_HEADERS_ENABLED"] = "false"
         };
     }
 
@@ -40,6 +42,114 @@ public class SecurityConfigurationValidatorTests
             .Build();
 
         ConfigurationValidator.Validate(config, env);
+    }
+
+    [Fact]
+    public void Validate_OnlyAppPinPepperProvidedInProduction_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict.Remove("PIN_PEPPER_SECRET");
+        dict["APP_PIN_PEPPER"] = "high-entropy-server-pin-pepper-secret-32-chars-min";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("PIN_PEPPER_SECRET", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_HttpCorsOriginInProduction_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["Cors:AllowedOrigins:0"] = "http://example.com";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("HTTPS origins", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ForwardedHeadersEnabledWithoutProxiesOrNetworks_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["FORWARDED_HEADERS_ENABLED"] = "true";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("neither KnownProxies nor KnownNetworks", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ForwardedHeadersInvalidIpProxy_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["FORWARDED_HEADERS_ENABLED"] = "true";
+        dict["ForwardedHeaders:KnownProxies:0"] = "999.999.999.999";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("invalid IP address", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ForwardedHeadersInvalidCidrNetwork_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["FORWARDED_HEADERS_ENABLED"] = "true";
+        dict["ForwardedHeaders:KnownNetworks:0"] = "10.0.0.1/99"; // Invalid prefix
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("invalid CIDR notation", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ForwardedHeadersValidCidrAndProxy_Passes()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["FORWARDED_HEADERS_ENABLED"] = "true";
+        dict["ForwardedHeaders:KnownProxies:0"] = "10.0.1.5";
+        dict["ForwardedHeaders:KnownNetworks:0"] = "10.0.1.0/24";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        ConfigurationValidator.Validate(config, env);
+    }
+
+    [Fact]
+    public void Validate_MissingNotificationProvider_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict.Remove("NOTIFICATION_PROVIDER");
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("Notification:Provider", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_UnsupportedNotificationProvider_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["NOTIFICATION_PROVIDER"] = "UnsupportedEmailService";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("Unsupported Notification:Provider", ex.Message);
     }
 
     [Fact]
@@ -139,7 +249,7 @@ public class SecurityConfigurationValidatorTests
         var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
 
         var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
-        Assert.Contains("not a valid absolute http/https URI", ex.Message);
+        Assert.Contains("not a valid absolute https URI", ex.Message);
     }
 
     [Fact]
@@ -151,5 +261,71 @@ public class SecurityConfigurationValidatorTests
 
         // Must not throw in Development
         ConfigurationValidator.Validate(config, env);
+    }
+
+    [Fact]
+    public void Validate_WhitespaceCorsOrigin_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["Cors:AllowedOrigins:0"] = "   ";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("empty or whitespace entry", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_CorsViaEnvironmentVariable_Valid_Passes()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict.Remove("Cors:AllowedOrigins:0");
+        dict.Remove("Cors:AllowedOrigins:1");
+        dict["CORS_ALLOWED_ORIGINS"] = "https://app1.example.com, https://app2.example.com";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        ConfigurationValidator.Validate(config, env);
+    }
+
+    [Fact]
+    public void Validate_ForwardedHeadersViaEnvVars_Valid_Passes()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["FORWARDED_HEADERS_ENABLED"] = "true";
+        dict["FORWARDED_HEADERS_KNOWN_PROXIES"] = "192.0.2.1, 192.0.2.2";
+        dict["FORWARDED_HEADERS_KNOWN_NETWORKS"] = "198.51.100.0/24, 2001:db8::/64";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        ConfigurationValidator.Validate(config, env);
+    }
+
+    [Theory]
+    [InlineData("2001:db8::/64", true)]
+    [InlineData("2001:db8::/128", true)]
+    [InlineData("2001:db8::/129", false)]
+    [InlineData("10.0.0.0/0", true)]
+    [InlineData("10.0.0.0/32", true)]
+    [InlineData("10.0.0.0/33", false)]
+    [InlineData("10.0.0.0/-1", false)]
+    [InlineData("10.0.0.0", false)]
+    [InlineData("10.0.0.0/24/12", false)]
+    [InlineData("invalid-ip/24", false)]
+    [InlineData("10.0.0.0/not-a-number", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void TryParseCidr_ValidatesCidrFormatsCorrectly(string? cidr, bool expectedResult)
+    {
+        var result = ConfigurationValidator.TryParseCidr(cidr!, out var ip, out var prefix);
+        Assert.Equal(expectedResult, result);
+        if (expectedResult)
+        {
+            Assert.NotNull(ip);
+            Assert.True(prefix >= 0);
+        }
     }
 }

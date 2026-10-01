@@ -62,7 +62,7 @@ Phase 3 implements comprehensive authentication and authorization hardening acro
 - **No Standalone PIN:** 4-digit PIN is strictly prohibited from authenticating from arbitrary or public clients. PIN entry is only valid from an enrolled `TrustedTerminal`.
 - **Peppered PIN Hashing:** Two-layer security: server-side pepper via HMAC-SHA256 (`PIN_PEPPER_SECRET`) followed by PBKDF2 slow hashing. Even a database dump cannot brute-force 4-digit PINs without the environment pepper.
 - **Terminal Rate Limiting & Lockout:** Terminal-scoped rate limiting with progressive delay (1s after 3 failures, 2s after 4 failures) and 15-minute lockout after 5 consecutive failed attempts.
-- **Trusted Terminal Enrollment:** Two-step enrollment using high-entropy single-use pairing codes. Terminals receive a device secret whose SHA-256 digest is stored at rest. Terminal revocation immediately cascades to all staff sessions on that device.
+- **Cookie-Only Terminal Authentication:** Terminal credentials are transmitted strictly via `HttpOnly`, `SameSite=Lax` cookies (`restaurant_terminal_cred` containing Base64 `terminalId:secret`). Device secrets are never returned in API responses or accepted via request headers or body payloads. Terminal cookies are classified as ambient credentials requiring valid CSRF tokens on all mutations (including PIN login and terminal deactivation).
 
 ### 5.3. Token Architecture & Refresh Session Lifecycle
 - **Short-Lived Access Tokens:** Signed JWT access tokens with 15-minute expiration, containing verified tenant and role claims.
@@ -83,8 +83,15 @@ Phase 3 implements comprehensive authentication and authorization hardening acro
 
 ### 5.6. Production Hardening & Fail-Closed Transport Security
 - **End-to-End CSRF Architecture:** Double-submit cookie with timing-safe HMAC validation via centralized `fetchWithCsrf` client. Strict validation on mutation methods (`POST`/`PUT`/`PATCH`/`DELETE`). Client cookies cleared upon logout.
-- **Fail-Closed CORS Governance:** In Staging and Production, `Cors:AllowedOrigins` (or `CORS_ALLOWED_ORIGINS`) is mandatory. Wildcard `*` and `localhost` origins trigger fail-fast startup termination.
-- **Reverse Proxy & Forwarded Headers:** Configured `ForwardedHeadersOptions` with trusted private CIDRs (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and configurable proxy IPs ensure accurate `Request.IsHttps` and client IP resolution behind TLS-terminating proxies.
+- **Fail-Closed CORS Governance:** In Staging and Production, `Cors:AllowedOrigins` (or `CORS_ALLOWED_ORIGINS`) is mandatory and strictly requires `https://` schemes. Wildcard `*`, HTTP, and `localhost` origins trigger fail-fast startup termination.
+- **Reverse Proxy & Forwarded Headers Boundary:** Broad private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) are strictly rejected as default trusted proxies. Forwarded headers require explicit configuration via `FORWARDED_HEADERS_ENABLED=true` and explicit CIDR/IP validation for `FORWARDED_HEADERS_KNOWN_PROXIES` and `FORWARDED_HEADERS_KNOWN_NETWORKS`. If enabled without explicit proxies/networks in Staging or Production, startup terminates fail-fast.
 - **Strict Cookie Security:** `Secure` flag is unconditionally enforced on all authentication and terminal credential cookies in Staging and Production.
 - **Unmapped Test Scaffolding in Production:** Test endpoints such as `/api/v1/test/tenant-scope` and `/api/v1/dev/seed` are strictly unmapped in Staging and Production environments.
+
+### 5.7. Membership Status Isolation & Single-Statement Token Consumption
+- **Decoupled User Membership Status (`UserMembershipStatus`):** Status lifecycle (`Active`, `Suspended`, `Disabled`) is scoped per tenant membership rather than globally across users. A staff suspension in Tenant A does not affect the user's active membership in Tenant B. Suspending or disabling a membership triggers immediate distributed session revocation across all instances.
+- **Atomic Single-Statement Token Consumption:** Invitation and password reset tokens are consumed via PostgreSQL `SECURITY DEFINER` functions using single-statement atomic queries (`UPDATE ... WHERE is_consumed = FALSE AND expires_at_utc > now RETURNING ...`). Concurrency race conditions and duplicate consumption attacks are eliminated at the database level.
+- **Zero Token Leakage:** Raw invitation and password reset tokens are never exposed in API response payloads. Tokens are dispatched strictly out-of-band via `IIdentityNotificationSender`.
+- **Fail-Closed Notification Provider:** Staging and Production strictly require a validated notification provider (`NOTIFICATION_PROVIDER` set to `TransactionalOutbox`, `Smtp`, `SendGrid`, or `Webhook`). Ephemeral test sinks are prohibited outside development.
+
 

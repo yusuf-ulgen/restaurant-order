@@ -12,7 +12,6 @@ public sealed record InviteStaffResult(
     string Email,
     AuthRole Role,
     Guid? BranchId,
-    string InvitationToken,
     DateTimeOffset ExpiresAtUtc);
 
 public sealed record AcceptInvitationCommand(
@@ -29,7 +28,8 @@ public sealed record ResetPasswordCommand(
 
 public sealed record UpdateStaffStatusCommand(
     Guid UserId,
-    UserStatus Status);
+    UserMembershipStatus Status,
+    Guid? BranchId = null);
 
 public sealed record StaffMemberDto(
     Guid UserId,

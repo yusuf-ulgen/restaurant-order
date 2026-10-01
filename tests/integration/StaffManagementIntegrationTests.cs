@@ -183,7 +183,7 @@ public class StaffManagementIntegrationTests : IClassFixture<TestcontainersFixtu
         var mockStaffService = new Mock<IStaffIdentityService>();
         mockStaffService.Setup(s => s.InviteStaffAsync(
                 It.IsAny<TenantId?>(), It.IsAny<InviteStaffCommand>(), It.IsAny<AuthenticatedPrincipal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new InviteStaffResult(Guid.NewGuid(), "waiter@test.com", AuthRole.Waiter, null, "invite_token_123", DateTimeOffset.UtcNow.AddHours(24)));
+            .ReturnsAsync(new InviteStaffResult(Guid.NewGuid(), "waiter@test.com", AuthRole.Waiter, null, DateTimeOffset.UtcNow.AddHours(24)));
 
         var client = CreateClient(mockStaffService);
         var tenantId = Guid.NewGuid();
@@ -289,7 +289,90 @@ public class StaffManagementIntegrationTests : IClassFixture<TestcontainersFixtu
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    private string GenerateToken(Guid userId, Guid sessionId, Guid? tenantId = null, string role = "RestaurantAdmin")
+    [Fact]
+    public async Task InviteStaff_WhenBranchManagerInvitesOutsideBranch_Returns403()
+    {
+        var mockStaffService = new Mock<IStaffIdentityService>();
+        mockStaffService.Setup(s => s.InviteStaffAsync(
+                It.IsAny<TenantId?>(), It.IsAny<InviteStaffCommand>(), It.IsAny<AuthenticatedPrincipal>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("BranchManager cannot invite staff outside their assigned branch."));
+
+        var client = CreateClient(mockStaffService);
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var token = GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId: tenantId, branchId: branchId, role: "BranchManager");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString("D"));
+
+        var request = new InviteStaffApiRequest("waiter@test.com", "Waiter", Guid.NewGuid());
+        var response = await client.PostAsJsonAsync("/api/v1/staff/invite", request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListStaff_WhenBranchManagerRequestsDifferentBranch_Returns403()
+    {
+        var mockStaffService = new Mock<IStaffIdentityService>();
+        mockStaffService.Setup(s => s.ListStaffAsync(
+                It.IsAny<TenantId?>(), It.IsAny<Guid?>(), It.IsAny<AuthenticatedPrincipal>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("BranchManager cannot list staff from another branch."));
+
+        var client = CreateClient(mockStaffService);
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var otherBranchId = Guid.NewGuid();
+        var token = GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId: tenantId, branchId: branchId, role: "BranchManager");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString("D"));
+
+        var response = await client.GetAsync($"/api/v1/staff?branchId={otherBranchId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateStaffStatus_WhenBranchManagerUpdatesOutsideBranch_Returns403()
+    {
+        var mockStaffService = new Mock<IStaffIdentityService>();
+        mockStaffService.Setup(s => s.UpdateStaffStatusAsync(
+                It.IsAny<TenantId?>(), It.IsAny<UpdateStaffStatusCommand>(), It.IsAny<AuthenticatedPrincipal>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("BranchManager may only update staff within their assigned branch."));
+
+        var client = CreateClient(mockStaffService);
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var token = GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId: tenantId, branchId: branchId, role: "BranchManager");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString("D"));
+
+        var request = new UpdateStaffStatusApiRequest("Suspended");
+        var response = await client.PostAsJsonAsync($"/api/v1/staff/{Guid.NewGuid()}/status", request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateStaffStatus_WhenMembershipNotFound_Returns404()
+    {
+        var mockStaffService = new Mock<IStaffIdentityService>();
+        mockStaffService.Setup(s => s.UpdateStaffStatusAsync(
+                It.IsAny<TenantId?>(), It.IsAny<UpdateStaffStatusCommand>(), It.IsAny<AuthenticatedPrincipal>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Staff membership not found."));
+
+        var client = CreateClient(mockStaffService);
+        var tenantId = Guid.NewGuid();
+        var token = GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId: tenantId, role: "RestaurantAdmin");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString("D"));
+
+        var request = new UpdateStaffStatusApiRequest("Suspended");
+        var response = await client.PostAsJsonAsync($"/api/v1/staff/{Guid.NewGuid()}/status", request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private string GenerateToken(Guid userId, Guid sessionId, Guid? tenantId = null, Guid? branchId = null, string role = "RestaurantAdmin")
     {
         var effectiveTenantId = tenantId ?? Guid.NewGuid();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(RestaurantOrder.Api.ConfigurationValidator.InsecureDevJwtSecret))
@@ -310,6 +393,10 @@ public class StaffManagementIntegrationTests : IClassFixture<TestcontainersFixtu
             new(JwtRegisteredClaimNames.Iss, "restaurant-order"),
             new(JwtRegisteredClaimNames.Aud, "restaurant-order-clients")
         };
+        if (branchId.HasValue)
+        {
+            claims.Add(new Claim(JwtClaimNames.BranchId, branchId.Value.ToString()));
+        }
         var token = new JwtSecurityToken(
             issuer: "restaurant-order",
             audience: "restaurant-order-clients",

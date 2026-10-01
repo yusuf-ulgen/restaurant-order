@@ -199,5 +199,51 @@ public class CsrfValidationMiddlewareTests
         Assert.DoesNotContain("exception", responseBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("internal", responseBody, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task PinLogin_WithTerminalCookie_MissingCsrfHeader_Returns403()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/auth/pin/login";
+        context.Request.Headers.Cookie = $"{AuthCookieService.TerminalCredCookieName}=encoded_terminal_cred; {AuthCookieService.CsrfTokenCookieName}=csrf_secret";
+        context.Response.Body = new MemoryStream();
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PinLogin_WithTerminalCookie_MatchingCsrfHeader_PassesThrough()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var token = "terminal_csrf_token_987654";
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/auth/pin/login";
+        context.Request.Headers.Cookie = $"{AuthCookieService.TerminalCredCookieName}=encoded_terminal_cred; {AuthCookieService.CsrfTokenCookieName}={token}";
+        context.Request.Headers[AuthCookieService.CsrfHeaderName] = token;
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+    }
 }
 

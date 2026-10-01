@@ -22,13 +22,41 @@ public sealed partial class StaffIdentityService
             return null; // Non-enumerating
         }
 
-        var membership = await _bootstrapGateway.LookupFirstActiveMembershipByUserIdAsync(lookupUser.UserId, ct);
-        if (membership == null || membership.TenantId == Guid.Empty)
+        Guid resolvedTenantId;
+        if (!string.IsNullOrWhiteSpace(command.TenantSlug))
         {
-            return null; // Non-enumerating: SuperAdmin or users without active tenant membership
-        }
-        var tenantId = TenantId.From(membership.TenantId);
+            var tenant = await _bootstrapGateway.LookupTenantBySlugAsync(command.TenantSlug.Trim(), ct);
+            if (tenant == null || tenant.Status != (int)TenantStatus.Active)
+            {
+                return null; // Non-enumerating
+            }
 
+            var membership = await _bootstrapGateway.LookupMembershipForLoginAsync(tenant.TenantId, lookupUser.UserId, ct);
+            if (membership == null || !membership.IsActive)
+            {
+                return null; // Non-enumerating
+            }
+
+            resolvedTenantId = tenant.TenantId;
+        }
+        else
+        {
+            var activeMemberships = await _bootstrapGateway.LookupActiveMembershipsByUserIdAsync(lookupUser.UserId, ct);
+            if (activeMemberships.Count == 0)
+            {
+                return null; // Non-enumerating
+            }
+
+            if (activeMemberships.Count > 1)
+            {
+                // Multi-tenant user without explicit TenantSlug: reject arbitrary selection
+                return null; // Non-enumerating
+            }
+
+            resolvedTenantId = activeMemberships[0].TenantId;
+        }
+
+        var tenantId = TenantId.From(resolvedTenantId);
         var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var tokenHash = ComputeSha256(rawToken);
 
@@ -36,7 +64,7 @@ public sealed partial class StaffIdentityService
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
         if (!hasAmbientTx)
         {
-            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(resolvedTenantId, cancellationToken: ct);
         }
 
         try
@@ -57,6 +85,8 @@ public sealed partial class StaffIdentityService
             {
                 await localTx.CommitAsync(ct);
             }
+
+            await _notificationSender.SendPasswordResetAsync(command.Email, rawToken, resetToken.ExpiresAtUtc, ct);
 
             return rawToken;
         }
@@ -86,37 +116,31 @@ public sealed partial class StaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.ResetToken.Trim().ToLowerInvariant());
 
-        var tokenDto = await _bootstrapGateway.LookupPasswordResetTokenAsync(tokenHash, ct);
-        if (tokenDto == null || tokenDto.IsConsumed || tokenDto.ExpiresAtUtc <= now)
+        // Single-statement atomic consumption: returns consumed token or null if race/expired/consumed
+        var consumed = await _bootstrapGateway.ConsumePasswordResetTokenAtomicallyAsync(tokenHash, now, ct);
+        if (consumed == null)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
         }
 
+        var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
+
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && tokenDto.TenantId != Guid.Empty)
+        if (!hasAmbientTx && consumed.TenantId != Guid.Empty)
         {
-            localTx = await _dbContext.BeginTenantTransactionAsync(tokenDto.TenantId, cancellationToken: ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(consumed.TenantId, cancellationToken: ct);
         }
 
         try
         {
-            var resetToken = await _dbContext.PasswordResetTokens
-                .FirstOrDefaultAsync(t => t.Id == tokenDto.ResetTokenId, ct);
-            if (resetToken == null || !resetToken.IsValid(now))
-            {
-                throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
-            }
-            resetToken.Consume(now);
-
-            var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
-            await _bootstrapGateway.ResetUserPasswordAsync(tokenDto.UserId, passwordHash, now, ct);
+            await _bootstrapGateway.ResetUserPasswordAsync(consumed.UserId, passwordHash, now, ct);
 
             var audit = SecurityAuditEvent.Create(
-                TenantId.From(tokenDto.TenantId),
+                TenantId.From(consumed.TenantId),
                 SecurityAuditEventType.PasswordChanged,
                 now,
-                UserId.From(tokenDto.UserId),
+                UserId.From(consumed.UserId),
                 detailsJson: "{\"action\":\"password_reset_completed\"}");
             _dbContext.SecurityAuditEvents.Add(audit);
 
@@ -125,6 +149,9 @@ public sealed partial class StaffIdentityService
             {
                 await localTx.CommitAsync(ct);
             }
+
+            // Invalidate all active sessions and refresh tokens across distributed instances and caches
+            await _sessionManager.LogoutAllAsync(UserId.From(consumed.UserId), ct);
         }
         finally
         {

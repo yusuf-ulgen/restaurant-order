@@ -6,8 +6,6 @@ using RestaurantOrder.Domain.Auth;
 namespace RestaurantOrder.Api.Auth;
 
 public sealed record PinLoginApiRequest(
-    Guid? TerminalId,
-    string? DeviceSecret,
     Guid? UserId,
     string? Email,
     string Pin);
@@ -32,24 +30,7 @@ public static class PinAuthEndpoints
             CancellationToken ct) =>
         {
             var creds = cookieService.GetTerminalCredentials(httpContext.Request);
-            var terminalId = creds?.TerminalId ?? request.TerminalId;
-            var deviceSecret = creds?.DeviceSecret ?? request.DeviceSecret;
-
-            if (terminalId == null || terminalId == Guid.Empty)
-            {
-                var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
-                if (Guid.TryParse(terminalIdHeader, out var tid))
-                {
-                    terminalId = tid;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(deviceSecret))
-            {
-                deviceSecret = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
-            }
-
-            if (terminalId == null || terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
+            if (creds == null)
             {
                 return Results.Json(new
                 {
@@ -60,13 +41,16 @@ public static class PinAuthEndpoints
                 }, statusCode: StatusCodes.Status401Unauthorized, contentType: "application/problem+json");
             }
 
+            var terminalId = creds.Value.TerminalId;
+            var deviceSecret = creds.Value.DeviceSecret;
+
             var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
             var userAgent = httpContext.Request.Headers.UserAgent.ToString();
 
             try
             {
                 var command = new PinLoginCommand(
-                    TerminalId: terminalId.Value,
+                    TerminalId: terminalId,
                     DeviceSecret: deviceSecret,
                     UserId: request.UserId,
                     Email: request.Email,
@@ -124,15 +108,17 @@ public static class PinAuthEndpoints
             CancellationToken ct) =>
         {
             var sidStr = httpContext.User.FindFirst(JwtClaimNames.SessionId)?.Value;
-            var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
-            Guid.TryParse(terminalIdHeader, out var terminalId);
+            var creds = cookieService.GetTerminalCredentials(httpContext.Request);
+            var terminalId = creds?.TerminalId;
 
             if (Guid.TryParse(sidStr, out var sessionId))
             {
-                await pinAuthService.LogoutPinSessionAsync(sessionId, terminalId, ct);
+                await pinAuthService.LogoutPinSessionAsync(sessionId, terminalId ?? Guid.Empty, ct);
             }
 
             cookieService.ClearAuthCookies(httpContext.Response, httpContext.Request.IsHttps);
+            // Re-issue fresh CSRF token cookie for the active enrolled terminal session
+            cookieService.SetCsrfCookie(httpContext.Response, httpContext.Request.IsHttps);
             return Results.Ok(new { message = "Logged out from terminal successfully." });
         })
         .WithName("PinLogout")
@@ -157,13 +143,29 @@ public static class PinAuthEndpoints
             }
 
             var isSelf = actorGuid == request.UserId;
-            var hasStaffManagePermission = httpContext.User.HasClaim("perm", Permissions.BranchStaffManage)
-                || httpContext.User.IsInRole("RestaurantAdmin")
-                || httpContext.User.IsInRole("BranchManager");
-
-            if (!isSelf && !hasStaffManagePermission)
+            if (!isSelf)
             {
-                return Results.Forbid();
+                var isBranchManager = httpContext.User.IsInRole("BranchManager")
+                    || httpContext.User.FindFirst(ClaimTypes.Role)?.Value == "BranchManager";
+
+                var hasStaffManagePermission = httpContext.User.HasClaim("perm", Permissions.BranchStaffManage)
+                    || httpContext.User.IsInRole("RestaurantAdmin")
+                    || isBranchManager;
+
+                if (!hasStaffManagePermission)
+                {
+                    return Results.Forbid();
+                }
+
+                if (isBranchManager)
+                {
+                    var branchClaim = httpContext.User.FindFirst(JwtClaimNames.BranchId)?.Value
+                        ?? httpContext.User.FindFirst("branch_id")?.Value;
+                    if (!Guid.TryParse(branchClaim, out var actorBranchId) || actorBranchId != request.BranchId)
+                    {
+                        return Results.Forbid();
+                    }
+                }
             }
 
             try
@@ -174,6 +176,10 @@ public static class PinAuthEndpoints
                 return Results.Ok(new { message = "Staff PIN updated successfully." });
             }
             catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });
             }

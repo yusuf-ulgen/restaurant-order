@@ -190,6 +190,7 @@ public class TenantContextMiddlewareIntegrationTests
             builder.UseSetting("JWT_SECRET", "super-secure-production-jwt-secret-key-32-chars-long!");
             builder.UseSetting("PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!");
             builder.UseSetting("Cors:AllowedOrigins:0", "https://admin.restaurantorder.app");
+            builder.UseSetting("NOTIFICATION_PROVIDER", "TransactionalOutbox");
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -201,7 +202,8 @@ public class TenantContextMiddlewareIntegrationTests
                     ["REDIS_URL"] = "localhost:6379",
                     ["JWT_SECRET"] = "super-secure-production-jwt-secret-key-32-chars-long!",
                     ["PIN_PEPPER_SECRET"] = "super-secure-production-pin-pepper-key-32-chars-long!",
-                    ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app"
+                    ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app",
+                    ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox"
                 });
             });
         });

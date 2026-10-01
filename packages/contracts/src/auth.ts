@@ -35,7 +35,6 @@ export interface TerminalContextDto {
 
 export interface ActivateTerminalResultDto {
   terminalId: string;
-  deviceSecret: string;
   tenantId: string;
   branchId: string;
   terminalName: string;

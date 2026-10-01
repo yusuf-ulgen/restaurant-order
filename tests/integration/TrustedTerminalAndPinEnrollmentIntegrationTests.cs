@@ -189,7 +189,7 @@ public class TrustedTerminalAndPinEnrollmentIntegrationTests : IClassFixture<Tes
     }
 
     [Fact]
-    public async Task PinLogin_WhenCredentialsProvidedViaHeaders_Returns200()
+    public async Task PinLogin_WhenCredentialsProvidedViaCookie_Returns200()
     {
         var (client, _, mockPinService, _) = CreateTestEnvironment();
         var terminalId = Guid.NewGuid();
@@ -198,20 +198,38 @@ public class TrustedTerminalAndPinEnrollmentIntegrationTests : IClassFixture<Tes
         var now = DateTimeOffset.UtcNow;
 
         mockPinService.Setup(s => s.LoginWithPinAsync(
-                It.Is<PinLoginCommand>(c => c.TerminalId == terminalId && c.DeviceSecret == "hdr_secret"),
+                It.Is<PinLoginCommand>(c => c.TerminalId == terminalId && c.DeviceSecret == "cookie_secret"),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AuthResult(
                 "token", "refresh", now.AddMinutes(15), now.AddHours(8),
                 new UserPrincipalDto(userId, "u@test.com", "Waiter", Guid.NewGuid(), Guid.NewGuid(), 1),
                 new SessionDto(sessionId, "Pin", "Active", now, now, now.AddHours(8), true)));
 
-        client.DefaultRequestHeaders.Add("X-Terminal-Id", terminalId.ToString("D"));
-        client.DefaultRequestHeaders.Add("X-Device-Secret", "hdr_secret");
+        var csrfToken = "csrf_test_token_1234567890123456";
+        var terminalCred = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret"));
+        client.DefaultRequestHeaders.Add("Cookie", $"restaurant_terminal_cred={terminalCred}; restaurant_csrf_token={csrfToken}");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
 
-        var request = new PinLoginApiRequest(null, null, userId, null, "1234");
+        var request = new PinLoginApiRequest(userId, null, "1234");
         var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PinLogin_WhenCredentialsProvidedViaHeadersOnly_Returns401()
+    {
+        var (client, _, _, _) = CreateTestEnvironment();
+        var terminalId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        client.DefaultRequestHeaders.Add("X-Terminal-Id", terminalId.ToString("D"));
+        client.DefaultRequestHeaders.Add("X-Device-Secret", "hdr_secret");
+
+        var request = new PinLoginApiRequest(userId, null, "1234");
+        var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -219,7 +237,7 @@ public class TrustedTerminalAndPinEnrollmentIntegrationTests : IClassFixture<Tes
     {
         var (client, _, _, _) = CreateTestEnvironment();
 
-        var request = new PinLoginApiRequest(null, null, Guid.NewGuid(), null, "1234");
+        var request = new PinLoginApiRequest(Guid.NewGuid(), null, "1234");
         var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

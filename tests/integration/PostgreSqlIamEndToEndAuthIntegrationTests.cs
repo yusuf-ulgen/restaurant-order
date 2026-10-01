@@ -226,11 +226,17 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
         var bootstrapGateway = new PostgreSqlIamBootstrapGateway(runtimeCtx);
         var userLookupGateway = new PostgreSqlIamUserLookupGateway(runtimeCtx);
 
+        var notificationSender = new TestSinkIdentityNotificationSender(NullLogger<TestSinkIdentityNotificationSender>.Instance);
+        var platformSessionStore = new PostgreSqlPlatformSessionStore(runtimeCtx);
+        var sessionManager = new AuthSessionManager(platformSessionStore, bootstrapGateway);
+
         var identityService = new StaffIdentityService(
             runtimeCtx,
             bootstrapGateway,
             userLookupGateway,
-            passwordHasher);
+            passwordHasher,
+            notificationSender,
+            sessionManager);
 
         var adminPrincipal = AuthenticatedPrincipal.CreateStaff(
             userId: Guid.NewGuid(),
@@ -245,21 +251,23 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
             new InviteStaffCommand(email, AuthRole.Waiter, branchId.Value),
             adminPrincipal);
 
-        Assert.NotNull(inviteResult.InvitationToken);
+        Assert.NotNull(notificationSender.LastInvitationToken);
+        var invitationToken = notificationSender.LastInvitationToken!;
 
         // 2. Accept Invitation
         var newPassword = "StaffNewPassword123!";
         await identityService.AcceptInvitationAsync(new AcceptInvitationCommand(
-            inviteResult.InvitationToken,
+            invitationToken,
             newPassword));
 
         // 3. Request Password Reset
         var resetToken = await identityService.RequestPasswordResetAsync(new RequestPasswordResetCommand(email));
         Assert.NotNull(resetToken);
+        Assert.NotNull(notificationSender.LastResetToken);
 
         // 4. Complete Password Reset
         var finalPassword = "StaffResetPassword456!";
-        await identityService.ResetPasswordAsync(new ResetPasswordCommand(resetToken, finalPassword));
+        await identityService.ResetPasswordAsync(new ResetPasswordCommand(notificationSender.LastResetToken!, finalPassword));
     }
 
     [Fact]

@@ -18,6 +18,10 @@ public interface IAuthCookieService
 
     void ClearTerminalCookie(HttpResponse response, bool isHttps);
 
+    void SetCsrfCookie(HttpResponse response, bool isHttps, DateTimeOffset? expires = null);
+
+    void ClearCsrfCookie(HttpResponse response, bool isHttps);
+
     (Guid TerminalId, string DeviceSecret)? GetTerminalCredentials(HttpRequest request);
 
     string? GetRefreshToken(HttpRequest request);
@@ -115,6 +119,33 @@ public sealed class AuthCookieService : IAuthCookieService
         });
     }
 
+    public void SetCsrfCookie(HttpResponse response, bool isHttps, DateTimeOffset? expires = null)
+    {
+        var csrfToken = GenerateCsrfToken();
+        var secure = ResolveSecure(isHttps);
+
+        response.Cookies.Append(CsrfTokenCookieName, csrfToken, new CookieOptions
+        {
+            HttpOnly = false,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            Expires = expires ?? DateTimeOffset.UtcNow.AddDays(7)
+        });
+    }
+
+    public void ClearCsrfCookie(HttpResponse response, bool isHttps)
+    {
+        var secure = ResolveSecure(isHttps);
+        response.Cookies.Delete(CsrfTokenCookieName, new CookieOptions
+        {
+            HttpOnly = false,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/"
+        });
+    }
+
     public void SetTerminalCookie(HttpResponse response, Guid terminalId, string deviceSecret, bool isHttps)
     {
         var secure = ResolveSecure(isHttps);
@@ -129,6 +160,9 @@ public sealed class AuthCookieService : IAuthCookieService
             Path = "/api/v1",
             Expires = DateTimeOffset.UtcNow.AddYears(1)
         });
+
+        // Concurrently issue fresh CSRF cookie for the enrolled terminal
+        SetCsrfCookie(response, isHttps, DateTimeOffset.UtcNow.AddYears(1));
     }
 
     public void ClearTerminalCookie(HttpResponse response, bool isHttps)
@@ -141,6 +175,7 @@ public sealed class AuthCookieService : IAuthCookieService
             SameSite = SameSiteMode.Lax,
             Path = "/api/v1"
         });
+        ClearCsrfCookie(response, isHttps);
     }
 
     public (Guid TerminalId, string DeviceSecret)? GetTerminalCredentials(HttpRequest request)

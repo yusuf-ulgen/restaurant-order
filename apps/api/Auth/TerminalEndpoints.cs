@@ -43,6 +43,19 @@ public static class TerminalEndpoints
                 return Results.Unauthorized();
             }
 
+            var branchClaim = httpContext.User.FindFirst(JwtClaimNames.BranchId)?.Value
+                ?? httpContext.User.FindFirst("branch_id")?.Value;
+            var isBranchManager = httpContext.User.IsInRole("BranchManager")
+                || httpContext.User.FindFirst(ClaimTypes.Role)?.Value == "BranchManager";
+
+            if (isBranchManager)
+            {
+                if (!Guid.TryParse(branchClaim, out var actorBranchId) || actorBranchId != request.BranchId)
+                {
+                    return Results.Forbid();
+                }
+            }
+
             var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
             var actorUserId = Guid.TryParse(subStr, out var userGuid) ? new UserId(userGuid) : UserId.New();
 
@@ -138,27 +151,12 @@ public static class TerminalEndpoints
             CancellationToken ct) =>
         {
             var creds = cookieService.GetTerminalCredentials(httpContext.Request);
-            Guid terminalId = creds?.TerminalId ?? Guid.Empty;
-            string? deviceSecret = creds?.DeviceSecret;
-
-            if (terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
-            {
-                var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
-                var deviceSecretHeader = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
-
-                if (Guid.TryParse(terminalIdHeader, out var tid))
-                {
-                    terminalId = tid;
-                }
-                deviceSecret = deviceSecretHeader;
-            }
-
-            if (terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
+            if (creds == null)
             {
                 return Results.Unauthorized();
             }
 
-            var context = await terminalService.GetCurrentTerminalAsync(terminalId, deviceSecret, ct);
+            var context = await terminalService.GetCurrentTerminalAsync(creds.Value.TerminalId, creds.Value.DeviceSecret, ct);
             if (context == null || !context.IsActive)
             {
                 cookieService.ClearTerminalCookie(httpContext.Response, httpContext.Request.IsHttps);

@@ -64,7 +64,7 @@ public static class DependencyInjection
             section.Bind(options);
 
             options.Environment = environment.EnvironmentName;
-            var envPepper = configuration["PIN_PEPPER_SECRET"] ?? configuration["APP_PIN_PEPPER"];
+            var envPepper = configuration["PIN_PEPPER_SECRET"];
             if (!string.IsNullOrWhiteSpace(envPepper))
             {
                 options.PepperValue = envPepper;
@@ -117,6 +117,10 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
+
+        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IIdentityNotificationSender>(sp =>
+            sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>());
 
         if (environment.IsDevelopment())
         {

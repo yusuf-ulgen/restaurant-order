@@ -105,4 +105,18 @@ public record UserSessionSummaryDto(
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset LastSeenAtUtc,
     DateTimeOffset ExpiresAtUtc);
+/// <summary>
+/// Result of atomic single-statement invitation token consumption.
+/// </summary>
+public record ConsumedInvitationTokenDto(
+    Guid InvitationId,
+    Guid TenantId,
+    Guid UserId);
 
+/// <summary>
+/// Result of atomic single-statement password reset token consumption.
+/// </summary>
+public record ConsumedPasswordResetTokenDto(
+    Guid ResetTokenId,
+    Guid TenantId,
+    Guid UserId);

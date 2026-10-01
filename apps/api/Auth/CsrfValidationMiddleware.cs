@@ -38,12 +38,10 @@ public sealed class CsrfValidationMiddleware
         // Documented exemptions:
         // - /api/v1/auth/login: Initial email/password pre-authentication (no ambient cookie yet)
         // - /api/v1/terminals/activate: Device enrollment pairing (no terminal credentials yet)
-        // - /api/v1/auth/pin/login: Initial terminal staff PIN login (no staff auth cookie yet)
         // - /health/: Infrastructure probes
         // - /api/v1/dev/: Local synthetic seed endpoints
         if (path.Equals("/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("/api/v1/terminals/activate", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/api/v1/auth/pin/login", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/v1/dev/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/health/", StringComparison.OrdinalIgnoreCase))
         {
@@ -51,9 +49,10 @@ public sealed class CsrfValidationMiddleware
             return;
         }
 
-        // Enforce CSRF if client has any ambient authentication/session cookies or supplies a CSRF header
+        // Enforce CSRF if client has any ambient authentication/session/terminal cookies or supplies a CSRF header
         var hasAuthCookie = context.Request.Cookies.ContainsKey(AuthCookieService.AccessTokenCookieName) ||
                             context.Request.Cookies.ContainsKey(AuthCookieService.RefreshTokenCookieName) ||
+                            context.Request.Cookies.ContainsKey(AuthCookieService.TerminalCredCookieName) ||
                             context.Request.Cookies.ContainsKey(AuthCookieService.CsrfTokenCookieName);
         var hasCsrfHeader = context.Request.Headers.ContainsKey(AuthCookieService.CsrfHeaderName);
 

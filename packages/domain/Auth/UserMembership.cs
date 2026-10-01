@@ -15,6 +15,7 @@ public sealed class UserMembership
     public UserId UserId { get; private set; }
     public AuthRole Role { get; private set; }
     public BranchId? BranchId { get; private set; }
+    public UserMembershipStatus Status { get; private set; }
     public bool IsActive { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
@@ -31,7 +32,8 @@ public sealed class UserMembership
         AuthRole role,
         BranchId? branchId,
         DateTimeOffset nowUtc,
-        Guid? id = null)
+        Guid? id = null,
+        UserMembershipStatus initialStatus = UserMembershipStatus.Active)
     {
         ValidateRoleAndScope(role, branchId);
 
@@ -42,7 +44,8 @@ public sealed class UserMembership
             UserId = userId,
             Role = role,
             BranchId = branchId,
-            IsActive = true,
+            Status = initialStatus,
+            IsActive = initialStatus == UserMembershipStatus.Active,
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc,
             ConcurrencyToken = Guid.CreateVersion7()
@@ -59,18 +62,27 @@ public sealed class UserMembership
         ConcurrencyToken = Guid.CreateVersion7();
     }
 
-    public void Deactivate(DateTimeOffset nowUtc)
+    public void UpdateStatus(UserMembershipStatus status, DateTimeOffset nowUtc)
     {
-        IsActive = false;
+        Status = status;
+        IsActive = status == UserMembershipStatus.Active;
         UpdatedAtUtc = nowUtc;
         ConcurrencyToken = Guid.CreateVersion7();
     }
 
+    public void Deactivate(DateTimeOffset nowUtc)
+    {
+        UpdateStatus(UserMembershipStatus.Disabled, nowUtc);
+    }
+
     public void Reactivate(DateTimeOffset nowUtc)
     {
-        IsActive = true;
-        UpdatedAtUtc = nowUtc;
-        ConcurrencyToken = Guid.CreateVersion7();
+        UpdateStatus(UserMembershipStatus.Active, nowUtc);
+    }
+
+    public void Suspend(DateTimeOffset nowUtc)
+    {
+        UpdateStatus(UserMembershipStatus.Suspended, nowUtc);
     }
 
     private static void ValidateRoleAndScope(AuthRole role, BranchId? branchId)

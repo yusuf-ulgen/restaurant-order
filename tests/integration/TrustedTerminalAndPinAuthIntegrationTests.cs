@@ -111,40 +111,19 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
     }
 
     [Fact]
-    public async Task GetCurrentTerminal_WithValidHeaders_Returns200()
+    public async Task GetCurrentTerminal_WithHeadersOnly_Returns401()
     {
-        var mockTerminalService = new Mock<ITrustedTerminalService>();
-        var terminalId = Guid.NewGuid();
-        var tenantId = Guid.NewGuid();
-        var branchId = Guid.NewGuid();
-
-        mockTerminalService.Setup(s => s.GetCurrentTerminalAsync(
-                terminalId,
-                "valid_device_secret",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TerminalContext(
-                TerminalId: terminalId,
-                TenantId: tenantId,
-                BranchId: branchId,
-                TerminalName: "Kitchen Line 1",
-                DeviceIdentifier: "kds-01",
-                IsActive: true));
-
-        var client = CreateClient(mockTerminalService: mockTerminalService);
-        client.DefaultRequestHeaders.Add("X-Terminal-Id", terminalId.ToString("D"));
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Terminal-Id", Guid.NewGuid().ToString("D"));
         client.DefaultRequestHeaders.Add("X-Device-Secret", "valid_device_secret");
 
         var response = await client.GetAsync("/api/v1/terminals/current");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var content = await response.Content.ReadFromJsonAsync<TerminalContext>();
-        Assert.NotNull(content);
-        Assert.Equal("Kitchen Line 1", content.TerminalName);
-        Assert.True(content.IsActive);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetCurrentTerminal_MissingHeaders_Returns401()
+    public async Task GetCurrentTerminal_MissingHeadersAndCookie_Returns401()
     {
         var client = CreateClient();
         var response = await client.GetAsync("/api/v1/terminals/current");
@@ -153,12 +132,65 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
     }
 
     [Fact]
+    public async Task PinLogin_WithoutTerminalCookie_Returns401()
+    {
+        var client = CreateClient();
+        var request = new PinLoginApiRequest(
+            UserId: Guid.NewGuid(),
+            Email: null,
+            Pin: "1234");
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PinLogin_WithTerminalCookie_MissingCsrfHeader_Returns403()
+    {
+        var client = CreateClient();
+        var terminalId = Guid.NewGuid();
+        var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}=csrf_secret");
+
+        var request = new PinLoginApiRequest(
+            UserId: Guid.NewGuid(),
+            Email: null,
+            Pin: "1234");
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PinLogin_WithTerminalCookie_MismatchedCsrfHeader_Returns403()
+    {
+        var client = CreateClient();
+        var terminalId = Guid.NewGuid();
+        var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}=csrf_secret");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", "wrong_csrf");
+
+        var request = new PinLoginApiRequest(
+            UserId: Guid.NewGuid(),
+            Email: null,
+            Pin: "1234");
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PinLogin_ValidCredentials_SetsCookiesAndReturns200()
     {
         var mockPinAuthService = new Mock<IStaffPinAuthService>();
+        var terminalId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
+        var csrfToken = "valid_csrf_token_999";
 
         var authResult = new AuthResult(
             AccessToken: "pin.access.token",
@@ -174,10 +206,11 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
             .ReturnsAsync(authResult);
 
         var client = CreateClient(mockPinAuthService: mockPinAuthService);
+        var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}={csrfToken}");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
 
         var request = new PinLoginApiRequest(
-            TerminalId: Guid.NewGuid(),
-            DeviceSecret: "valid_secret",
             UserId: userId,
             Email: null,
             Pin: "1234");
@@ -196,16 +229,20 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
     public async Task PinLogin_InvalidPin_Returns401WithGenericMessage()
     {
         var mockPinAuthService = new Mock<IStaffPinAuthService>();
+        var terminalId = Guid.NewGuid();
+        var csrfToken = "csrf_123";
+
         mockPinAuthService.Setup(s => s.LoginWithPinAsync(
                 It.IsAny<PinLoginCommand>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new PinAuthFailureException("Internal PIN check failed"));
 
         var client = CreateClient(mockPinAuthService: mockPinAuthService);
+        var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}={csrfToken}");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
 
         var request = new PinLoginApiRequest(
-            TerminalId: Guid.NewGuid(),
-            DeviceSecret: "valid_secret",
             UserId: Guid.NewGuid(),
             Email: null,
             Pin: "0000");
@@ -219,16 +256,20 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
     public async Task PinLogin_RateLimited_Returns429WithRetryAfterHeader()
     {
         var mockPinAuthService = new Mock<IStaffPinAuthService>();
+        var terminalId = Guid.NewGuid();
+        var csrfToken = "csrf_123";
+
         mockPinAuthService.Setup(s => s.LoginWithPinAsync(
                 It.IsAny<PinLoginCommand>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new AuthRateLimitException(retryAfterSeconds: 60, message: "Terminal temporarily locked."));
 
         var client = CreateClient(mockPinAuthService: mockPinAuthService);
+        var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}={csrfToken}");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
 
         var request = new PinLoginApiRequest(
-            TerminalId: Guid.NewGuid(),
-            DeviceSecret: "valid_secret",
             UserId: Guid.NewGuid(),
             Email: null,
             Pin: "9999");
@@ -309,14 +350,14 @@ public class TrustedTerminalAndPinAuthIntegrationTests : IClassFixture<WebApplic
 
         var client = CreateClient(mockPinAuthService: mockPinAuthService);
         var rawCookie = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{terminalId:D}:cookie_secret_123"));
-        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}");
+        var csrfToken = "csrf_test_token_1234567890123456";
+        client.DefaultRequestHeaders.Add("Cookie", $"{AuthCookieService.TerminalCredCookieName}={rawCookie}; {AuthCookieService.CsrfTokenCookieName}={csrfToken}");
+        client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
 
         var request = new PinLoginApiRequest(
-            TerminalId: null,
-            DeviceSecret: null,
-            UserId: userId,
+            Pin: "1234",
             Email: null,
-            Pin: "1234");
+            UserId: userId);
 
         var response = await client.PostAsJsonAsync("/api/v1/auth/pin/login", request);
 

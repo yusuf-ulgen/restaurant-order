@@ -40,6 +40,12 @@ public class UserMembershipConfiguration : IEntityTypeConfiguration<UserMembersh
                 value => value.HasValue ? new BranchId(value.Value) : null)
             .IsRequired(false);
 
+        builder.Property(m => m.Status)
+            .HasColumnName("status")
+            .HasConversion<int>()
+            .HasDefaultValue(UserMembershipStatus.Active)
+            .IsRequired();
+
         builder.Property(m => m.IsActive)
             .HasColumnName("is_active")
             .HasDefaultValue(true)

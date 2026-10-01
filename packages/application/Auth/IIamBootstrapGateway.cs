@@ -140,5 +140,25 @@ public interface IIamBootstrapGateway
     /// Looks up active tenant sessions for a user without requiring blanket tenant context.
     /// </summary>
     Task<IReadOnlyList<UserSessionSummaryDto>> LookupActiveUserSessionsAsync(Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Looks up all active memberships for a user across tenants using dedicated pre-auth function.
+    /// Used by forgot-password to verify membership and detect ambiguous multi-tenant accounts when TenantSlug is omitted.
+    /// </summary>
+    Task<IReadOnlyList<UserActiveMembershipSummaryDto>> LookupActiveMembershipsByUserIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically consumes an invitation token in a single UPDATE statement with RETURNING clause.
+    /// Returns the consumed token details if valid and unconsumed, or null if invalid, expired, or already consumed.
+    /// Guarantees that only one concurrent request can consume the token.
+    /// </summary>
+    Task<ConsumedInvitationTokenDto?> ConsumeInvitationTokenAtomicallyAsync(string tokenHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically consumes a password reset token in a single UPDATE statement with RETURNING clause.
+    /// Returns the consumed token details if valid and unconsumed, or null if invalid, expired, or already consumed.
+    /// Guarantees that only one concurrent request can consume the token.
+    /// </summary>
+    Task<ConsumedPasswordResetTokenDto?> ConsumePasswordResetTokenAtomicallyAsync(string tokenHash, DateTimeOffset nowUtc, CancellationToken ct = default);
 }
 

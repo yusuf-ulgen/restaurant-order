@@ -182,7 +182,7 @@ export const TerminalProvider: React.FC<{
     } catch {
       // Ignore network errors on logout
     } finally {
-      clearClientCookies();
+      // Note: do not clear client cookies here; terminal credentials and terminal CSRF cookie are preserved
       setStaffUser(null);
     }
   }, []);

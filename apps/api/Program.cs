@@ -31,32 +31,55 @@ builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<ITenantCo
 
 builder.Services.AddSingleton<RestaurantOrder.Api.Auth.IAuthCookieService, RestaurantOrder.Api.Auth.AuthCookieService>();
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
+var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled")
+    || string.Equals(builder.Configuration["FORWARDED_HEADERS_ENABLED"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (forwardedHeadersEnabled)
 {
-    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
-
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
-
-    var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
-    if (knownProxiesConfig != null)
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
-        foreach (var proxy in knownProxiesConfig)
+        options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+        options.RequireHeaderSymmetry = true;
+        options.ForwardLimit = builder.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit")
+            ?? (int.TryParse(builder.Configuration["FORWARDED_HEADERS_FORWARD_LIMIT"], out var fl) ? fl : 2);
+
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+
+        var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>()
+            ?? builder.Configuration["FORWARDED_HEADERS_KNOWN_PROXIES"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (knownProxiesConfig != null)
         {
-            if (System.Net.IPAddress.TryParse(proxy, out var ip))
+            foreach (var proxy in knownProxiesConfig)
             {
-                options.KnownProxies.Add(ip);
+                if (System.Net.IPAddress.TryParse(proxy.Trim(), out var ip))
+                {
+                    options.KnownProxies.Add(ip);
+                }
             }
         }
-    }
 
-    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
-    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
-    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("192.168.0.0"), 16));
-    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("127.0.0.1"), 8));
-    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.IPv6Loopback, 128));
-});
+        var knownNetworksConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>()
+            ?? builder.Configuration["FORWARDED_HEADERS_KNOWN_NETWORKS"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (knownNetworksConfig != null)
+        {
+            foreach (var net in knownNetworksConfig)
+            {
+                if (RestaurantOrder.Api.ConfigurationValidator.TryParseCidr(net.Trim(), out var ip, out var prefix))
+                {
+                    options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
+                }
+            }
+        }
+
+        if (builder.Environment.IsDevelopment())
+        {
+            options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Loopback, 8));
+            options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.IPv6Loopback, 128));
+        }
+    });
+}
 
 builder.Services.AddCors(options =>
 {
@@ -208,7 +231,10 @@ if (app.Environment.IsDevelopment())
     .WithTags("Development");
 }
 
-app.UseForwardedHeaders();
+if (forwardedHeadersEnabled)
+{
+    app.UseForwardedHeaders();
+}
 
 app.Use(async (context, next) =>
 {

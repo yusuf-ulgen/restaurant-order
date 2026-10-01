@@ -159,7 +159,8 @@ public class EnvironmentValidatorTests
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
                 { "DEPLOYMENT_COLOR", "blue" },
                 { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
-                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" },
+                { "NOTIFICATION_PROVIDER", "TransactionalOutbox" }
             })
             .Build();
 
@@ -265,7 +266,8 @@ public class EnvironmentValidatorTests
                 { "Jwt:Secret", "super-secure-production-key-at-least-32-chars-long!" },
                 { "DEPLOYMENT_COLOR", "green" },
                 { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
-                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" },
+                { "NOTIFICATION_PROVIDER", "TransactionalOutbox" }
             })
             .Build();
 
@@ -287,7 +289,8 @@ public class EnvironmentValidatorTests
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
                 { "DEPLOYMENT_COLOR", "blue" },
                 { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
-                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" },
+                { "NOTIFICATION_PROVIDER", "TransactionalOutbox" }
             })
             .Build();
 
@@ -307,7 +310,8 @@ public class EnvironmentValidatorTests
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
                 { "DEPLOYMENT_COLOR", "blue" },
                 { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
-                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" },
+                { "NOTIFICATION_PROVIDER", "TransactionalOutbox" }
             })
             .Build();
 
