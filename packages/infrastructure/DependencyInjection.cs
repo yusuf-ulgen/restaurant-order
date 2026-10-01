@@ -55,6 +55,24 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantDatabaseSession, TenantDatabaseSession>();
 
+        // IAM Security & Hashing Services
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPasswordHasher, RestaurantOrder.Infrastructure.Auth.AspNetCorePasswordHasher>();
+
+        services.Configure<RestaurantOrder.Application.Auth.PinHasherOptions>(options =>
+        {
+            var section = configuration.GetSection(RestaurantOrder.Application.Auth.PinHasherOptions.DefaultSectionName);
+            section.Bind(options);
+
+            options.Environment = environment.EnvironmentName;
+            var envPepper = configuration["APP_PIN_PEPPER"];
+            if (!string.IsNullOrWhiteSpace(envPepper))
+            {
+                options.PepperValue = envPepper;
+            }
+        });
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPinHasher, RestaurantOrder.Infrastructure.Auth.PepperedPinHasher>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IIamUserLookupGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamUserLookupGateway>();
+
         if (environment.IsDevelopment())
         {
             services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();

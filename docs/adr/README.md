@@ -36,6 +36,7 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 | [ADR-0007](./0007-health-checks-and-dependency-verification.md) | Infrastructure Health Checks & Dependency Verification | `ACCEPTED` | Fail-closed liveness/readiness separation, zero-leak health checks |
 | [ADR-0008](./0008-blue-green-compose-project-isolation-and-container-dns-ingress.md) | Blue-Green Compose Project Isolation & Container DNS Ingress Routing | `ACCEPTED` | Separate `-p` projects per slot, shared external network, docker exec cutover |
 | [ADR-0009](./0009-authentication-and-session-strategy.md) | Authentication, Session & Multi-Tenant Authorization Strategy | `ACCEPTED` | Staff vs Customer QR separation, trusted terminals, JWT/cookie rotation, RBAC matrix |
+| [ADR-0010](./0010-least-privilege-iam-login-and-security-definer.md) | Least-Privilege IAM Login Lookup & SECURITY DEFINER Threat Model | `ACCEPTED` | SECURITY DEFINER function, pinned search_path, runtime SELECT denial |
 
 ---
 

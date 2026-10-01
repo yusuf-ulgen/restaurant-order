@@ -9,6 +9,18 @@
     {
       "path": "RestaurantOrder.sln",
       "reason": "Machine-generated .NET solution file linking projects and build configurations."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/RestaurantOrderDbContextModelSnapshot.cs",
+      "reason": "Machine-generated EF Core model metadata snapshot capturing whole-database schema."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261001114508_AddIamPersistenceAndTenantIsolation.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for IAM schema."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261001114628_AddIamRowLevelSecurity.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for IAM RLS."
     }
   ]
 }

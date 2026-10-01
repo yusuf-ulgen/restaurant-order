@@ -49,6 +49,10 @@ public class BranchConfiguration : IEntityTypeConfiguration<Branch>
             .IsUnique()
             .HasDatabaseName("ix_branches_tenant_id_slug");
 
+        // Composite alternate key on (TenantId, Id) to allow composite foreign key references from IAM entities
+        builder.HasAlternateKey(br => new { br.TenantId, br.Id })
+            .HasName("ak_branches_tenant_id_id");
+
         builder.Property(br => br.Timezone)
             .HasColumnName("timezone")
             .HasMaxLength(50)

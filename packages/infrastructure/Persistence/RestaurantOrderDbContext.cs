@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using RestaurantOrder.Application.Tenancy;
+using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Brands;
 using RestaurantOrder.Domain.Tenants;
@@ -20,6 +21,17 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Branch> Branches => Set<Branch>();
+
+    // IAM Entities
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserMembership> Memberships => Set<UserMembership>();
+    public DbSet<AuthSession> Sessions => Set<AuthSession>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PinCredential> PinCredentials => Set<PinCredential>();
+    public DbSet<TrustedTerminal> TrustedTerminals => Set<TrustedTerminal>();
+    public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
+    public DbSet<InvitationToken> InvitationTokens => Set<InvitationToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     public RestaurantOrderDbContext(
         DbContextOptions<RestaurantOrderDbContext> options,
@@ -55,10 +67,18 @@ public class RestaurantOrderDbContext : DbContext
         // Note: PostgreSQL Row-Level Security (RLS) remains the definitive security boundary.
         // Even if IgnoreQueryFilters() is called, PostgreSQL RLS prevents cross-tenant access.
         modelBuilder.Entity<Tenant>().HasQueryFilter(t => HasTenant && t.Id == CurrentTenantId);
-
         modelBuilder.Entity<Brand>().HasQueryFilter(b => HasTenant && b.TenantId == CurrentTenantId);
-
         modelBuilder.Entity<Branch>().HasQueryFilter(br => HasTenant && br.TenantId == CurrentTenantId);
+
+        // IAM tenant-scoped entity filters
+        modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
+        modelBuilder.Entity<AuthSession>().HasQueryFilter(s => HasTenant && s.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RefreshToken>().HasQueryFilter(rt => HasTenant && rt.TenantId == CurrentTenantId);
+        modelBuilder.Entity<PinCredential>().HasQueryFilter(p => HasTenant && p.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TrustedTerminal>().HasQueryFilter(t => HasTenant && t.TenantId == CurrentTenantId);
+        modelBuilder.Entity<SecurityAuditEvent>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
+        modelBuilder.Entity<InvitationToken>().HasQueryFilter(it => HasTenant && it.TenantId == CurrentTenantId);
+        modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(pr => HasTenant && pr.TenantId == CurrentTenantId);
     }
 
     /// <summary>
