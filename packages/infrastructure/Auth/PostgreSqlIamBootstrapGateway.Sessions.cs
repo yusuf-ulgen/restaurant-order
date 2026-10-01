@@ -73,4 +73,111 @@ public sealed partial class PostgreSqlIamBootstrapGateway
 
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    public async Task<IReadOnlyList<Guid>> RevokeMembershipSessionsAsync(
+        Guid userId,
+        Guid tenantId,
+        Guid? branchId,
+        DateTimeOffset nowUtc,
+        CancellationToken ct = default)
+    {
+        var conn = await GetOpenConnectionAsync(ct);
+        await using var cmd = CreateCommand(conn, "SELECT session_id FROM iam.revoke_membership_sessions(@userId, @tenantId, @branchId, @nowUtc);");
+
+        var pUser = cmd.CreateParameter();
+        pUser.ParameterName = "userId";
+        pUser.Value = userId;
+        cmd.Parameters.Add(pUser);
+
+        var pTenant = cmd.CreateParameter();
+        pTenant.ParameterName = "tenantId";
+        pTenant.Value = tenantId;
+        cmd.Parameters.Add(pTenant);
+
+        var pBranch = cmd.CreateParameter();
+        pBranch.ParameterName = "branchId";
+        pBranch.Value = (object?)branchId ?? DBNull.Value;
+        cmd.Parameters.Add(pBranch);
+
+        var pNow = cmd.CreateParameter();
+        pNow.ParameterName = "nowUtc";
+        pNow.Value = nowUtc;
+        cmd.Parameters.Add(pNow);
+
+        var revokedSessionIds = new List<Guid>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            revokedSessionIds.Add(reader.GetGuid(0));
+        }
+
+        return revokedSessionIds;
+    }
+
+    public async Task<IReadOnlyList<Guid>> RevokeAllUserSessionsInTransactionAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        Guid userId,
+        DateTimeOffset nowUtc,
+        CancellationToken ct = default)
+    {
+        // 1. Revoke matching refresh tokens
+        await using (var cmdRt = connection.CreateCommand())
+        {
+            cmdRt.Transaction = transaction;
+            cmdRt.CommandText = @"
+                UPDATE iam.refresh_tokens rt
+                SET is_revoked = true,
+                    revoked_at_utc = @nowUtc
+                FROM iam.sessions s
+                WHERE rt.session_id = s.id
+                  AND s.user_id = @userId
+                  AND rt.is_revoked = false;";
+
+            var pUser = cmdRt.CreateParameter();
+            pUser.ParameterName = "userId";
+            pUser.Value = userId;
+            cmdRt.Parameters.Add(pUser);
+
+            var pNow = cmdRt.CreateParameter();
+            pNow.ParameterName = "nowUtc";
+            pNow.Value = nowUtc;
+            cmdRt.Parameters.Add(pNow);
+
+            await cmdRt.ExecuteNonQueryAsync(ct);
+        }
+
+        // 2. Revoke matching sessions and return their IDs
+        var revokedSessionIds = new List<Guid>();
+        await using (var cmdSessions = connection.CreateCommand())
+        {
+            cmdSessions.Transaction = transaction;
+            cmdSessions.CommandText = @"
+                UPDATE iam.sessions
+                SET is_revoked = true,
+                    revocation_reason = 'password_reset',
+                    revoked_at_utc = @nowUtc
+                WHERE user_id = @userId
+                  AND is_revoked = false
+                RETURNING id;";
+
+            var pUser = cmdSessions.CreateParameter();
+            pUser.ParameterName = "userId";
+            pUser.Value = userId;
+            cmdSessions.Parameters.Add(pUser);
+
+            var pNow = cmdSessions.CreateParameter();
+            pNow.ParameterName = "nowUtc";
+            pNow.Value = nowUtc;
+            cmdSessions.Parameters.Add(pNow);
+
+            await using var reader = await cmdSessions.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                revokedSessionIds.Add(reader.GetGuid(0));
+            }
+        }
+
+        return revokedSessionIds;
+    }
 }

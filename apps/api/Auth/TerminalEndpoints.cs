@@ -40,7 +40,7 @@ public static class TerminalEndpoints
         {
             if (!tenantContext.IsAuthenticated || !tenantContext.TenantId.HasValue)
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Authentication required.", type: "https://httpstatuses.com/401");
             }
 
             var branchClaim = httpContext.User.FindFirst(JwtClaimNames.BranchId)?.Value
@@ -52,7 +52,7 @@ public static class TerminalEndpoints
             {
                 if (!Guid.TryParse(branchClaim, out var actorBranchId) || actorBranchId != request.BranchId)
                 {
-                    return Results.Forbid();
+                    return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "BranchManager cannot enroll terminal for another branch.", type: "https://httpstatuses.com/403");
                 }
             }
 
@@ -109,13 +109,7 @@ public static class TerminalEndpoints
             }
             catch (PinAuthFailureException ex)
             {
-                return Results.Json(new
-                {
-                    type = "https://httpstatuses.com/401",
-                    title = "Unauthorized",
-                    status = 401,
-                    detail = ex.Message
-                }, statusCode: StatusCodes.Status401Unauthorized, contentType: "application/problem+json");
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: ex.Message, type: "https://httpstatuses.com/401");
             }
         })
         .WithName("ActivateTerminal")
@@ -130,14 +124,14 @@ public static class TerminalEndpoints
         {
             if (!tenantContext.IsAuthenticated || !tenantContext.TenantId.HasValue)
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Authentication required.", type: "https://httpstatuses.com/401");
             }
 
             var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
             var actorUserId = Guid.TryParse(subStr, out var userGuid) ? new UserId(userGuid) : UserId.New();
 
             var revoked = await terminalService.RevokeTerminalAsync(new TenantId(tenantContext.TenantId.Value), id, actorUserId, ct);
-            return revoked ? Results.NoContent() : Results.NotFound();
+            return revoked ? Results.NoContent() : Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: "Terminal not found or already revoked.", type: "https://httpstatuses.com/404");
         })
         .RequireAuthorization(policy => policy.RequireAuthenticatedUser())
         .RequirePermission(Permissions.BranchStaffManage)
@@ -153,14 +147,14 @@ public static class TerminalEndpoints
             var creds = cookieService.GetTerminalCredentials(httpContext.Request);
             if (creds == null)
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Trusted terminal credentials required.", type: "https://httpstatuses.com/401");
             }
 
             var context = await terminalService.GetCurrentTerminalAsync(creds.Value.TerminalId, creds.Value.DeviceSecret, ct);
             if (context == null || !context.IsActive)
             {
                 cookieService.ClearTerminalCookie(httpContext.Response, httpContext.Request.IsHttps);
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Terminal is inactive or invalid.", type: "https://httpstatuses.com/401");
             }
 
             return Results.Ok(context);

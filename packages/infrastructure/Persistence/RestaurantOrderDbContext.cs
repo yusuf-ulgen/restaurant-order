@@ -34,6 +34,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<PlatformSession> PlatformSessions => Set<PlatformSession>();
     public DbSet<PlatformRefreshToken> PlatformRefreshTokens => Set<PlatformRefreshToken>();
+    public DbSet<IdentityNotificationOutboxMessage> IdentityNotificationOutbox => Set<IdentityNotificationOutboxMessage>();
 
     public RestaurantOrderDbContext(
         DbContextOptions<RestaurantOrderDbContext> options,
@@ -88,6 +89,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<SecurityAuditEvent>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
         modelBuilder.Entity<InvitationToken>().HasQueryFilter(it => HasTenant && it.TenantId == CurrentTenantId);
         modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(pr => HasTenant && pr.TenantId == CurrentTenantId);
+        modelBuilder.Entity<IdentityNotificationOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
     }
 
     /// <summary>

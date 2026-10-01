@@ -115,4 +115,50 @@ public sealed class AuthSessionManager : IAuthSessionManager
             await _tokenValidator.InvalidateSessionCacheAsync(token.SessionId, ct);
         }
     }
+
+    public async Task<IReadOnlyList<Guid>> RevokeMembershipSessionsAsync(
+        UserId userId,
+        Guid tenantId,
+        Guid? branchId = null,
+        CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var revokedSessionIds = await _bootstrapGateway.RevokeMembershipSessionsAsync(
+            userId.Value,
+            tenantId,
+            branchId,
+            now,
+            ct);
+
+        if (_tokenValidator != null)
+        {
+            foreach (var sid in revokedSessionIds)
+            {
+                await _tokenValidator.InvalidateSessionCacheAsync(sid, ct);
+            }
+        }
+
+        return revokedSessionIds;
+    }
+
+    public async Task InvalidateSessionCacheAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        if (_tokenValidator != null)
+        {
+            await _tokenValidator.InvalidateSessionCacheAsync(sessionId, ct);
+        }
+    }
+
+    public async Task InvalidateUserCacheAsync(Guid userId, CancellationToken ct = default)
+    {
+        if (_tokenValidator != null)
+        {
+            await _tokenValidator.InvalidateUserCacheAsync(userId, ct);
+        }
+    }
+
+    public async Task RevokePlatformSessionsAsync(UserId userId, DateTimeOffset nowUtc)
+    {
+        await _platformSessionStore.RevokeAllUserSessionsAsync(userId, nowUtc);
+    }
 }

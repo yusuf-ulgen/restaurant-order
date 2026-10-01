@@ -15,18 +15,24 @@ public class SecurityConfigurationValidatorTests
         return mock.Object;
     }
 
+    private static string TestHexKey() => Convert.ToHexString(new byte[32]);
+    private static string TestSecret(string name) => $"test_{name}_{new string('x', 32)}";
+
     private static Dictionary<string, string?> CreateValidStagingConfig()
     {
         return new Dictionary<string, string?>
         {
             ["DATABASE_URL"] = "postgres://user:strong_production_pass_987@db.internal:5432/ro_prod",
             ["REDIS_URL"] = "redis://redis.internal:6379",
-            ["JWT_SECRET"] = "a-very-strong-production-jwt-secret-min-32-chars-long-12345",
+            ["JWT_SECRET"] = TestSecret("jwt"),
             ["DEPLOYMENT_COLOR"] = "blue",
-            ["PIN_PEPPER_SECRET"] = "high-entropy-server-pin-pepper-secret-32-chars-min",
+            ["PIN_PEPPER_SECRET"] = TestSecret("pin_pepper"),
             ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app",
             ["Cors:AllowedOrigins:1"] = "https://ops.restaurantorder.app",
             ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox",
+            ["NOTIFICATION_ENCRYPTION_KEY"] = TestHexKey(),
+            ["WEBHOOK_NOTIFICATION_URL"] = "https://notifications.internal/webhook",
+            ["WEBHOOK_NOTIFICATION_SECRET"] = TestSecret("webhook"),
             ["FORWARDED_HEADERS_ENABLED"] = "false"
         };
     }
@@ -50,7 +56,7 @@ public class SecurityConfigurationValidatorTests
         var env = CreateEnvironment("Production");
         var dict = CreateValidStagingConfig();
         dict.Remove("PIN_PEPPER_SECRET");
-        dict["APP_PIN_PEPPER"] = "high-entropy-server-pin-pepper-secret-32-chars-min";
+        dict["APP_PIN_PEPPER"] = TestSecret("pin_pepper");
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
 
@@ -150,6 +156,58 @@ public class SecurityConfigurationValidatorTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
         Assert.Contains("Unsupported Notification:Provider", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_TestSinkInProduction_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["NOTIFICATION_PROVIDER"] = "TestSink";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("TransactionalOutbox", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_MissingNotificationEncryptionKey_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict.Remove("NOTIFICATION_ENCRYPTION_KEY");
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("NOTIFICATION_ENCRYPTION_KEY", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_HttpWebhookNotificationUrl_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["WEBHOOK_NOTIFICATION_URL"] = "http://notifications.internal/webhook";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("HTTPS endpoints", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ShortWebhookNotificationSecret_ThrowsFailFast()
+    {
+        var env = CreateEnvironment("Production");
+        var dict = CreateValidStagingConfig();
+        dict["WEBHOOK_NOTIFICATION_SECRET"] = "short-secret";
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+        Assert.Contains("WEBHOOK_NOTIFICATION_SECRET", ex.Message);
     }
 
     [Fact]

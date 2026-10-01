@@ -14,4 +14,12 @@ public interface IAuthSessionManager
     Task<IReadOnlyList<SessionDto>> GetActiveSessionsAsync(UserId userId, Guid? currentSessionId = null, CancellationToken ct = default);
 
     Task HandleTokenReuseAsync(RefreshToken token, DateTimeOffset now, CancellationToken ct = default);
+
+    Task<IReadOnlyList<Guid>> RevokeMembershipSessionsAsync(UserId userId, Guid tenantId, Guid? branchId = null, CancellationToken ct = default);
+
+    Task InvalidateSessionCacheAsync(Guid sessionId, CancellationToken ct = default);
+
+    Task InvalidateUserCacheAsync(Guid userId, CancellationToken ct = default);
+
+    Task RevokePlatformSessionsAsync(UserId userId, DateTimeOffset nowUtc);
 }

@@ -118,9 +118,45 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
 
-        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>();
-        services.AddSingleton<RestaurantOrder.Application.Auth.IIdentityNotificationSender>(sp =>
-            sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>());
+        // Identity Notifications & Outbox Infrastructure
+        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
+        services.AddHttpClient();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationTransport, RestaurantOrder.Infrastructure.Auth.WebhookIdentityNotificationTransport>();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationOutboxDispatcher, RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxDispatcher>();
+
+        var rawNotificationProvider = configuration["NOTIFICATION_PROVIDER"] ?? configuration["Notification:Provider"];
+        var isProdOrStaging = environment.IsProduction() || environment.IsEnvironment("Staging");
+
+        if (isProdOrStaging)
+        {
+            if (string.Equals(rawNotificationProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("FATAL CONFIGURATION ERROR: TestSink notification provider is strictly prohibited in Staging/Production.");
+            }
+
+            if (!string.Equals(rawNotificationProvider, "TransactionalOutbox", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: Unsupported Notification:Provider '{rawNotificationProvider}' in '{environment.EnvironmentName}'. Must be 'TransactionalOutbox'.");
+            }
+
+            services.AddScoped<RestaurantOrder.Application.Auth.IIdentityNotificationSender, RestaurantOrder.Infrastructure.Auth.TransactionalOutboxIdentityNotificationSender>();
+            services.AddHostedService<RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxBackgroundService>();
+        }
+        else
+        {
+            if (string.Equals(rawNotificationProvider, "TransactionalOutbox", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddScoped<RestaurantOrder.Application.Auth.IIdentityNotificationSender, RestaurantOrder.Infrastructure.Auth.TransactionalOutboxIdentityNotificationSender>();
+                services.AddHostedService<RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxBackgroundService>();
+            }
+            else
+            {
+                services.AddSingleton<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>();
+                services.AddSingleton<RestaurantOrder.Application.Auth.IIdentityNotificationSender>(sp =>
+                    sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>());
+            }
+        }
 
         if (environment.IsDevelopment())
         {

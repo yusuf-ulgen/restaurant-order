@@ -160,5 +160,37 @@ public interface IIamBootstrapGateway
     /// Guarantees that only one concurrent request can consume the token.
     /// </summary>
     Task<ConsumedPasswordResetTokenDto?> ConsumePasswordResetTokenAtomicallyAsync(string tokenHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes active sessions and refresh tokens for a user strictly scoped to a tenant (and optional branch),
+    /// leaving global user status and other tenant sessions unaffected.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> RevokeMembershipSessionsAsync(Guid userId, Guid tenantId, Guid? branchId, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically consumes an invitation token within an active transactional connection.
+    /// </summary>
+    Task<ConsumedInvitationTokenDto?> ConsumeInvitationTokenInTransactionAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, string tokenHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Activates user and sets new password hash within an active transactional connection.
+    /// </summary>
+    Task ActivateUserAndSetPasswordInTransactionAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, Guid userId, string passwordHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically consumes a password reset token within an active transactional connection.
+    /// </summary>
+    Task<ConsumedPasswordResetTokenDto?> ConsumePasswordResetTokenInTransactionAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, string tokenHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates user password hash and increments security version within an active transactional connection.
+    /// </summary>
+    Task ResetUserPasswordInTransactionAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, Guid userId, string passwordHash, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes all active user sessions and refresh tokens across all tenants within an active transactional connection.
+    /// Returns the revoked session IDs for post-commit cache invalidation.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> RevokeAllUserSessionsInTransactionAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default);
 }
 

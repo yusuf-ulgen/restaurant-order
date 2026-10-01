@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
@@ -115,12 +116,14 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
             _dbContext.SecurityAuditEvents.Add(audit);
 
             await _dbContext.SaveChangesAsync(ct);
+
+            // Send notification within transaction so failure rolls back invitation token
+            await _notificationSender.SendInvitationAsync(command.Email, rawToken, invitation.ExpiresAtUtc, ct);
+
             if (localTx != null)
             {
                 await localTx.CommitAsync(ct);
             }
-
-            await _notificationSender.SendInvitationAsync(command.Email, rawToken, invitation.ExpiresAtUtc, ct);
 
             return new InviteStaffResult(
                 UserId: userId.Value,
@@ -155,31 +158,65 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.InvitationToken.Trim().ToLowerInvariant());
 
-        // Single-statement atomic consumption: returns consumed token or null if race/expired/consumed
-        var consumed = await _bootstrapGateway.ConsumeInvitationTokenAtomicallyAsync(tokenHash, now, ct);
-        if (consumed == null)
+        // 1. Look up token metadata before beginning transaction to resolve tenant ID
+        var tokenLookup = await _bootstrapGateway.LookupInvitationTokenAsync(tokenHash, ct);
+        if (tokenLookup == null || tokenLookup.IsConsumed || tokenLookup.ExpiresAtUtc <= now)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
         }
 
+        var tenantId = tokenLookup.TenantId;
+        var userId = tokenLookup.UserId;
         var passwordHash = _passwordHasher.HashPassword(command.Password).Hash;
 
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && consumed.TenantId != Guid.Empty)
+        if (!hasAmbientTx && tenantId != Guid.Empty)
         {
-            localTx = await _dbContext.BeginTenantTransactionAsync(consumed.TenantId, cancellationToken: ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
         }
 
         try
         {
-            await _bootstrapGateway.ActivateUserAndSetPasswordAsync(consumed.UserId, passwordHash, now, ct);
+            var dbConn = _dbContext.Database.GetDbConnection();
+            var dbTx = _dbContext.Database.CurrentTransaction!.GetDbTransaction();
 
+            // 2. Consume token atomically inside transaction
+            var consumed = await _bootstrapGateway.ConsumeInvitationTokenInTransactionAsync(
+                dbConn,
+                dbTx,
+                tokenHash,
+                now,
+                ct);
+
+            if (consumed == null)
+            {
+                throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
+            }
+
+            // 3. Activate user & set password inside transaction
+            await _bootstrapGateway.ActivateUserAndSetPasswordInTransactionAsync(
+                dbConn,
+                dbTx,
+                userId,
+                passwordHash,
+                now,
+                ct);
+
+            // 4. Update UserMembership to Active in DbContext if found
+            var membership = await _dbContext.Memberships
+                .FirstOrDefaultAsync(m => m.TenantId == TenantId.From(tenantId) && m.UserId == UserId.From(userId), ct);
+            if (membership != null && membership.Status != UserMembershipStatus.Active)
+            {
+                membership.UpdateStatus(UserMembershipStatus.Active, now);
+            }
+
+            // 5. Security audit event
             var audit = SecurityAuditEvent.Create(
-                TenantId.From(consumed.TenantId),
+                TenantId.From(tenantId),
                 SecurityAuditEventType.PasswordChanged,
                 now,
-                UserId.From(consumed.UserId),
+                UserId.From(userId),
                 detailsJson: "{\"action\":\"invitation_accepted\"}");
             _dbContext.SecurityAuditEvents.Add(audit);
 
@@ -188,6 +225,14 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
             {
                 await localTx.CommitAsync(ct);
             }
+        }
+        catch
+        {
+            if (localTx != null)
+            {
+                await localTx.RollbackAsync(ct);
+            }
+            throw;
         }
         finally
         {
@@ -258,111 +303,6 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         }
 
         return result;
-    }
-
-    public async Task UpdateStaffStatusAsync(
-        TenantId? tenantId,
-        UpdateStaffStatusCommand command,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var now = DateTimeOffset.UtcNow;
-        if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
-        {
-            throw new InvalidOperationException("Tenant required for staff status operations.");
-        }
-
-        if (actor.TenantId.HasValue && actor.TenantId.Value != tenantId.Value.Value)
-        {
-            throw new InvalidAuthorizationScopeException("Actor does not have authority over this tenant.");
-        }
-
-        var effectiveTenantId = tenantId.Value;
-        var targetUserId = UserId.From(command.UserId);
-
-        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx)
-        {
-            localTx = await _dbContext.BeginTenantTransactionAsync(effectiveTenantId.Value, cancellationToken: ct);
-        }
-
-        try
-        {
-            var query = _dbContext.Memberships
-                .Where(m => m.TenantId == effectiveTenantId && m.UserId == targetUserId);
-
-            if (command.BranchId.HasValue)
-            {
-                var cmdBranch = new BranchId(command.BranchId.Value);
-                query = query.Where(m => m.BranchId == cmdBranch);
-            }
-
-            var membership = await query.FirstOrDefaultAsync(ct);
-            if (membership == null)
-            {
-                throw new InvalidOperationException("Staff membership not found.");
-            }
-
-            if (actor.Role == AuthRole.BranchManager)
-            {
-                if (!actor.BranchId.HasValue || membership.BranchId?.Value != actor.BranchId.Value)
-                {
-                    throw new InvalidAuthorizationScopeException("BranchManager may only update staff within their assigned branch.");
-                }
-
-                if (membership.Role is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin or AuthRole.BranchManager)
-                {
-                    throw new InvalidAuthorizationScopeException("BranchManager cannot modify staff at or above their tier.");
-                }
-            }
-            else if (actor.Role == AuthRole.RestaurantAdmin)
-            {
-                if (membership.Role is AuthRole.SuperAdmin or AuthRole.RestaurantAdmin)
-                {
-                    throw new InvalidAuthorizationScopeException("RestaurantAdmin cannot modify staff at or above their tier.");
-                }
-            }
-            else if (actor.Role != AuthRole.SuperAdmin)
-            {
-                throw new InvalidAuthorizationScopeException("Actor role is not authorized to update staff status.");
-            }
-
-            // Update ONLY UserMembership.Status (isolated from global user status)
-            membership.UpdateStatus(command.Status, now);
-
-            // If suspended or disabled, immediately revoke all active sessions for this user
-            if (command.Status is UserMembershipStatus.Suspended or UserMembershipStatus.Disabled)
-            {
-                await _sessionManager.LogoutAllAsync(targetUserId, ct);
-            }
-
-            var eventType = command.Status is UserMembershipStatus.Active
-                ? SecurityAuditEventType.AccountUnlocked
-                : SecurityAuditEventType.AccountLocked;
-
-            var audit = SecurityAuditEvent.Create(
-                effectiveTenantId,
-                eventType,
-                now,
-                targetUserId,
-                membership.BranchId,
-                detailsJson: $"{{\"newMembershipStatus\":\"{command.Status}\",\"updatedBy\":\"{actor.SubjectId}\"}}");
-            _dbContext.SecurityAuditEvents.Add(audit);
-
-            await _dbContext.SaveChangesAsync(ct);
-            if (localTx != null)
-            {
-                await localTx.CommitAsync(ct);
-            }
-        }
-        finally
-        {
-            if (localTx != null)
-            {
-                await localTx.DisposeAsync();
-            }
-        }
     }
 
     private static void ValidateInviteAuthorization(

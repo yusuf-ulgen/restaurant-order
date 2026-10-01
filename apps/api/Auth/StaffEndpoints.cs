@@ -52,7 +52,7 @@ public static class StaffEndpoints
         {
             if (!Enum.TryParse<AuthRole>(request.Role, ignoreCase: true, out var role))
             {
-                return Results.BadRequest(new { error = $"Invalid role '{request.Role}'." });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: $"Invalid role '{request.Role}'.", type: "https://httpstatuses.com/400");
             }
 
             var claimsDict = httpContext.User.Claims
@@ -76,11 +76,11 @@ public static class StaffEndpoints
             }
             catch (InvalidAuthorizationScopeException ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .RequireAuthorization()
@@ -101,7 +101,7 @@ public static class StaffEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .WithName("AcceptInvitation")
@@ -134,7 +134,7 @@ public static class StaffEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .WithName("ResetPassword")
@@ -161,11 +161,11 @@ public static class StaffEndpoints
             }
             catch (InvalidAuthorizationScopeException ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .RequireAuthorization()
@@ -184,7 +184,7 @@ public static class StaffEndpoints
         {
             if (!Enum.TryParse<UserMembershipStatus>(request.Status, ignoreCase: true, out var status))
             {
-                return Results.BadRequest(new { error = $"Invalid status '{request.Status}'." });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: $"Invalid status '{request.Status}'.", type: "https://httpstatuses.com/400");
             }
 
             var claimsDict = httpContext.User.Claims
@@ -202,15 +202,15 @@ public static class StaffEndpoints
             }
             catch (InvalidAuthorizationScopeException ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
             {
-                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message, type: "https://httpstatuses.com/404");
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .RequireAuthorization()

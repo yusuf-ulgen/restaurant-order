@@ -204,7 +204,7 @@ public static class AuthEndpoints
 
             if (!Guid.TryParse(subStr, out var userIdGuid))
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Invalid token claims.", type: "https://httpstatuses.com/401");
             }
 
             Guid.TryParse(sidStr, out var currentSessionId);
@@ -227,7 +227,7 @@ public static class AuthEndpoints
 
             if (!Guid.TryParse(subStr, out var userIdGuid))
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Invalid token claims.", type: "https://httpstatuses.com/401");
             }
 
             var revoked = await authService.RevokeSessionAsync(new UserId(userIdGuid), id, ct);

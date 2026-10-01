@@ -1,3 +1,5 @@
+using RestaurantOrder.Infrastructure.Auth;
+
 namespace RestaurantOrder.Api;
 
 /// <summary>
@@ -115,6 +117,36 @@ public static class ConfigurationValidator
             else
             {
                 ValidateNotificationProvider(notificationProvider);
+
+                var encryptionKey = configuration["NOTIFICATION_ENCRYPTION_KEY"] ?? configuration["Notification:EncryptionKey"];
+                if (string.IsNullOrWhiteSpace(encryptionKey))
+                {
+                    missingKeys.Add("NOTIFICATION_ENCRYPTION_KEY");
+                }
+                else
+                {
+                    ValidateNotificationEncryptionKey(encryptionKey);
+                }
+
+                var webhookUrl = configuration["WEBHOOK_NOTIFICATION_URL"] ?? configuration["Notification:Webhook:Url"];
+                if (string.IsNullOrWhiteSpace(webhookUrl))
+                {
+                    missingKeys.Add("WEBHOOK_NOTIFICATION_URL");
+                }
+                else
+                {
+                    ValidateWebhookUrl(webhookUrl);
+                }
+
+                var webhookSecret = configuration["WEBHOOK_NOTIFICATION_SECRET"] ?? configuration["Notification:Webhook:Secret"];
+                if (string.IsNullOrWhiteSpace(webhookSecret))
+                {
+                    missingKeys.Add("WEBHOOK_NOTIFICATION_SECRET");
+                }
+                else
+                {
+                    ValidateWebhookSecret(webhookSecret);
+                }
             }
 
             if (missingKeys.Count > 0)
@@ -178,7 +210,7 @@ public static class ConfigurationValidator
         return prefixLength >= 0 && prefixLength <= maxPrefix;
     }
 
-    private static readonly string[] AllowedNotificationProviders = ["TransactionalOutbox", "Smtp", "SendGrid", "Webhook"];
+    private static readonly string[] AllowedNotificationProviders = ["TransactionalOutbox"];
 
     private static void ValidateNotificationProvider(string provider)
     {
@@ -186,6 +218,51 @@ public static class ConfigurationValidator
         {
             throw new InvalidOperationException(
                 $"FATAL CONFIGURATION ERROR: Unsupported Notification:Provider '{provider}'. Must be one of: [{string.Join(", ", AllowedNotificationProviders)}]. Development test sink is strictly prohibited in Staging/Production.");
+        }
+    }
+
+    private static void ValidateNotificationEncryptionKey(string key)
+    {
+        foreach (var keyword in InsecureKeywords)
+        {
+            if (key.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: NOTIFICATION_ENCRYPTION_KEY contains insecure placeholder pattern. A high-entropy secret from a secret manager is required.");
+            }
+        }
+
+        if (!AesKeyValidator.TryParseKey(key, out _, out var errorMessage))
+        {
+            throw new InvalidOperationException(
+                $"FATAL CONFIGURATION ERROR: {errorMessage}");
+        }
+    }
+
+    private static void ValidateWebhookUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                $"FATAL CONFIGURATION ERROR: WEBHOOK_NOTIFICATION_URL '{url}' is not a valid absolute https URI. Production and Staging strictly require HTTPS endpoints.");
+        }
+    }
+
+    private static void ValidateWebhookSecret(string secret)
+    {
+        if (secret.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "FATAL CONFIGURATION ERROR: WEBHOOK_NOTIFICATION_SECRET must be at least 32 characters long for cryptographic security in Staging/Production.");
+        }
+
+        foreach (var keyword in InsecureKeywords)
+        {
+            if (secret.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: WEBHOOK_NOTIFICATION_SECRET contains insecure placeholder pattern. A high-entropy secret from a secret manager is required.");
+            }
         }
     }
 

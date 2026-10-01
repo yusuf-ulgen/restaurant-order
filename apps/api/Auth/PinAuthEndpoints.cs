@@ -133,13 +133,13 @@ public static class PinAuthEndpoints
         {
             if (!tenantContext.IsAuthenticated || !tenantContext.TenantId.HasValue)
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Authentication required.", type: "https://httpstatuses.com/401");
             }
 
             var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
             if (!Guid.TryParse(subStr, out var actorGuid))
             {
-                return Results.Unauthorized();
+                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Unauthorized", detail: "Invalid token claims.", type: "https://httpstatuses.com/401");
             }
 
             var isSelf = actorGuid == request.UserId;
@@ -154,7 +154,7 @@ public static class PinAuthEndpoints
 
                 if (!hasStaffManagePermission)
                 {
-                    return Results.Forbid();
+                    return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "Staff management permission required.", type: "https://httpstatuses.com/403");
                 }
 
                 if (isBranchManager)
@@ -163,7 +163,7 @@ public static class PinAuthEndpoints
                         ?? httpContext.User.FindFirst("branch_id")?.Value;
                     if (!Guid.TryParse(branchClaim, out var actorBranchId) || actorBranchId != request.BranchId)
                     {
-                        return Results.Forbid();
+                        return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "BranchManager cannot configure PIN for another branch.", type: "https://httpstatuses.com/403");
                     }
                 }
             }
@@ -177,11 +177,11 @@ public static class PinAuthEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
             }
         })
         .RequireAuthorization()

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Common;
@@ -81,12 +82,14 @@ public sealed partial class StaffIdentityService
             _dbContext.SecurityAuditEvents.Add(audit);
 
             await _dbContext.SaveChangesAsync(ct);
+
+            // Send notification within transaction so failure rolls back reset token
+            await _notificationSender.SendPasswordResetAsync(command.Email, rawToken, resetToken.ExpiresAtUtc, ct);
+
             if (localTx != null)
             {
                 await localTx.CommitAsync(ct);
             }
-
-            await _notificationSender.SendPasswordResetAsync(command.Email, rawToken, resetToken.ExpiresAtUtc, ct);
 
             return rawToken;
         }
@@ -116,31 +119,65 @@ public sealed partial class StaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.ResetToken.Trim().ToLowerInvariant());
 
-        // Single-statement atomic consumption: returns consumed token or null if race/expired/consumed
-        var consumed = await _bootstrapGateway.ConsumePasswordResetTokenAtomicallyAsync(tokenHash, now, ct);
-        if (consumed == null)
+        // 1. Look up token metadata before beginning transaction to resolve tenant ID
+        var tokenLookup = await _bootstrapGateway.LookupPasswordResetTokenAsync(tokenHash, ct);
+        if (tokenLookup == null || tokenLookup.IsConsumed || tokenLookup.ExpiresAtUtc <= now)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
         }
 
+        var tenantId = tokenLookup.TenantId;
+        var userId = tokenLookup.UserId;
         var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
 
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && consumed.TenantId != Guid.Empty)
+        if (!hasAmbientTx && tenantId != Guid.Empty)
         {
-            localTx = await _dbContext.BeginTenantTransactionAsync(consumed.TenantId, cancellationToken: ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
         }
 
         try
         {
-            await _bootstrapGateway.ResetUserPasswordAsync(consumed.UserId, passwordHash, now, ct);
+            var dbConn = _dbContext.Database.GetDbConnection();
+            var dbTx = _dbContext.Database.CurrentTransaction!.GetDbTransaction();
 
+            // 2. Consume token atomically inside transaction
+            var consumed = await _bootstrapGateway.ConsumePasswordResetTokenInTransactionAsync(
+                dbConn,
+                dbTx,
+                tokenHash,
+                now,
+                ct);
+
+            if (consumed == null)
+            {
+                throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
+            }
+
+            // 3. Reset user password inside transaction
+            await _bootstrapGateway.ResetUserPasswordInTransactionAsync(
+                dbConn,
+                dbTx,
+                userId,
+                passwordHash,
+                now,
+                ct);
+
+            // 4. Revoke all user sessions and refresh tokens atomically in the same transaction
+            var revokedSessionIds = await _bootstrapGateway.RevokeAllUserSessionsInTransactionAsync(
+                dbConn,
+                dbTx,
+                userId,
+                now,
+                ct);
+
+            // 5. Security audit event
             var audit = SecurityAuditEvent.Create(
-                TenantId.From(consumed.TenantId),
+                TenantId.From(tenantId),
                 SecurityAuditEventType.PasswordChanged,
                 now,
-                UserId.From(consumed.UserId),
+                UserId.From(userId),
                 detailsJson: "{\"action\":\"password_reset_completed\"}");
             _dbContext.SecurityAuditEvents.Add(audit);
 
@@ -150,8 +187,23 @@ public sealed partial class StaffIdentityService
                 await localTx.CommitAsync(ct);
             }
 
-            // Invalidate all active sessions and refresh tokens across distributed instances and caches
-            await _sessionManager.LogoutAllAsync(UserId.From(consumed.UserId), ct);
+            // 6. Post-commit: Invalidate user and session cache across distributed Redis instances
+            await _sessionManager.InvalidateUserCacheAsync(userId, ct);
+            foreach (var sid in revokedSessionIds)
+            {
+                await _sessionManager.InvalidateSessionCacheAsync(sid, ct);
+            }
+
+            // 7. Post-commit: Revoke platform session store for the user
+            await _sessionManager.RevokePlatformSessionsAsync(UserId.From(userId), now);
+        }
+        catch
+        {
+            if (localTx != null)
+            {
+                await localTx.RollbackAsync(ct);
+            }
+            throw;
         }
         finally
         {

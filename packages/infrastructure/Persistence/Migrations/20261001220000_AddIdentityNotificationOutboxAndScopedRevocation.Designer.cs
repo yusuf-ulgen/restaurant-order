@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RestaurantOrder.Infrastructure.Persistence;
@@ -11,9 +12,10 @@ using RestaurantOrder.Infrastructure.Persistence;
 namespace RestaurantOrder.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(RestaurantOrderDbContext))]
-    partial class RestaurantOrderDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001220000_AddIdentityNotificationOutboxAndScopedRevocation")]
+    partial class AddIdentityNotificationOutboxAndScopedRevocation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

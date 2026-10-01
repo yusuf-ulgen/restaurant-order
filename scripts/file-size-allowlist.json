@@ -37,6 +37,10 @@
     {
       "path": "packages/infrastructure/Persistence/Migrations/20261001200000_AddUserMembershipStatusAndAtomicTokens.Designer.cs",
       "reason": "Machine-generated EF Core migration designer metadata for user membership status and atomic token consumption functions."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261001220000_AddIdentityNotificationOutboxAndScopedRevocation.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for identity notification outbox and scoped revocation functions."
     }
   ]
 }
