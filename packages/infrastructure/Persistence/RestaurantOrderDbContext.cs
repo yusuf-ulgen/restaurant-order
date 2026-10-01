@@ -29,6 +29,21 @@ public class RestaurantOrderDbContext : DbContext
         _tenantContext = tenantContext ?? TenantContext.Empty;
     }
 
+    /// <summary>
+    /// Evaluates whether a valid tenant context is present.
+    /// Parameterized directly by EF Core in global query filters to enforce server-side fail-closed execution.
+    /// </summary>
+    public bool HasTenant => _tenantContext.HasTenant && _tenantContext.TenantId.HasValue;
+
+    /// <summary>
+    /// Current tenant ID exposed as a pre-constructed, stable property on the DbContext.
+    /// EF Core parameterizes this property directly in global query filters without invoking constructors in the LINQ expression tree.
+    /// When HasTenant is false, returns default (empty) which, combined with HasTenant, guarantees fail-closed behavior.
+    /// </summary>
+    public TenantId CurrentTenantId => HasTenant
+        ? new TenantId(_tenantContext.TenantId!.Value)
+        : default;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -39,14 +54,11 @@ public class RestaurantOrderDbContext : DbContext
         // Secondary defense-in-depth: EF Core Global Query Filters
         // Note: PostgreSQL Row-Level Security (RLS) remains the definitive security boundary.
         // Even if IgnoreQueryFilters() is called, PostgreSQL RLS prevents cross-tenant access.
-        modelBuilder.Entity<Tenant>().HasQueryFilter(t =>
-            _tenantContext.HasTenant && t.Id == new TenantId(_tenantContext.TenantId!.Value));
+        modelBuilder.Entity<Tenant>().HasQueryFilter(t => HasTenant && t.Id == CurrentTenantId);
 
-        modelBuilder.Entity<Brand>().HasQueryFilter(b =>
-            _tenantContext.HasTenant && b.TenantId == new TenantId(_tenantContext.TenantId!.Value));
+        modelBuilder.Entity<Brand>().HasQueryFilter(b => HasTenant && b.TenantId == CurrentTenantId);
 
-        modelBuilder.Entity<Branch>().HasQueryFilter(br =>
-            _tenantContext.HasTenant && br.TenantId == new TenantId(_tenantContext.TenantId!.Value));
+        modelBuilder.Entity<Branch>().HasQueryFilter(br => HasTenant && br.TenantId == CurrentTenantId);
     }
 
     /// <summary>
