@@ -122,6 +122,22 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
         {
             await Task.WhenAll(_postgresContainer.StartAsync(), _redisContainer.StartAsync());
             _isStarted = true;
+
+            // Provision the unprivileged NOLOGIN group role 'restaurant_app_runtime'
+            // required by the database schema migrations.
+            await using (var conn = new NpgsqlConnection(_postgresContainer.GetConnectionString()))
+            {
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            CREATE ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                        END IF;
+                    END $$;";
+                await cmd.ExecuteNonQueryAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -169,7 +185,7 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
         }
     }
 
-    private static bool CheckDockerAvailability()
+    public static bool CheckDockerAvailability()
     {
         try
         {

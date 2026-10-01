@@ -60,14 +60,12 @@ DO $EF$
 BEGIN
     IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260920182029_AddTenantRowLevelSecurity') THEN
 
-                    DO $ROLE$
+                    DO $CHECK$
                     BEGIN
                         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
-                            CREATE ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                        ELSE
-                            ALTER ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                            RAISE EXCEPTION 'Required group role "restaurant_app_runtime" does not exist. Ensure database bootstrap script (deploy/bootstrap/001_create_runtime_login_role.sql) has been executed by a privileged administrator prior to applying schema migrations.';
                         END IF;
-                    END $ROLE$;
+                    END $CHECK$;
 
                     GRANT USAGE ON SCHEMA tenancy TO restaurant_app_runtime;
                     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_runtime;
