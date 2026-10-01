@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Common;
@@ -137,6 +138,8 @@ public sealed partial class StaffIdentityService
             localTx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
         }
 
+        IReadOnlyList<Guid> revokedSessionIds = Array.Empty<Guid>();
+
         try
         {
             var dbConn = _dbContext.Database.GetDbConnection();
@@ -165,7 +168,7 @@ public sealed partial class StaffIdentityService
                 ct);
 
             // 4. Revoke all user sessions and refresh tokens atomically in the same transaction
-            var revokedSessionIds = await _bootstrapGateway.RevokeAllUserSessionsInTransactionAsync(
+            revokedSessionIds = await _bootstrapGateway.RevokeAllUserSessionsInTransactionAsync(
                 dbConn,
                 dbTx,
                 userId,
@@ -186,16 +189,6 @@ public sealed partial class StaffIdentityService
             {
                 await localTx.CommitAsync(ct);
             }
-
-            // 6. Post-commit: Invalidate user and session cache across distributed Redis instances
-            await _sessionManager.InvalidateUserCacheAsync(userId, ct);
-            foreach (var sid in revokedSessionIds)
-            {
-                await _sessionManager.InvalidateSessionCacheAsync(sid, ct);
-            }
-
-            // 7. Post-commit: Revoke platform session store for the user
-            await _sessionManager.RevokePlatformSessionsAsync(UserId.From(userId), now);
         }
         catch
         {
@@ -211,6 +204,27 @@ public sealed partial class StaffIdentityService
             {
                 await localTx.DisposeAsync();
             }
+        }
+
+        // 6. Post-commit: Cache and platform session invalidations outside the transaction.
+        // If cache invalidation or platform session cleanup fails, the persistent database
+        // changes (password hash, security version, session and refresh token revocations) have already
+        // successfully committed. We log safely without exposing secrets and do not throw.
+        try
+        {
+            await _sessionManager.InvalidateUserCacheAsync(userId, ct);
+            foreach (var sid in revokedSessionIds)
+            {
+                await _sessionManager.InvalidateSessionCacheAsync(sid, ct);
+            }
+            await _sessionManager.RevokePlatformSessionsAsync(UserId.From(userId), now);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Post-commit cache or platform session invalidation failed for user {UserId}. Database password update and session revocations were committed successfully.",
+                userId);
         }
     }
 }

@@ -109,6 +109,7 @@ public sealed class IdentityNotificationOutboxMessage
     {
         Status = IdentityNotificationStatus.Delivered;
         ClaimToken = null;
+        ClaimedAtUtc = null;
         LockedUntilUtc = null;
         DeliveredAtUtc = nowUtc;
         UpdatedAtUtc = nowUtc;
@@ -118,6 +119,7 @@ public sealed class IdentityNotificationOutboxMessage
     {
         Status = isDeadLetter ? IdentityNotificationStatus.DeadLetter : IdentityNotificationStatus.Pending;
         ClaimToken = null;
+        ClaimedAtUtc = null;
         LockedUntilUtc = null;
         LastError = error != null && error.Length > 500 ? error[..500] : error;
         NextAttemptUtc = nextAttemptUtc;

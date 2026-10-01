@@ -147,7 +147,26 @@ public sealed partial class PostgreSqlIamBootstrapGateway
             await cmdRt.ExecuteNonQueryAsync(ct);
         }
 
-        // 2. Revoke matching sessions and return their IDs
+        // 2. Revoke platform sessions for user in the same transaction
+        await using (var cmdPlatform = connection.CreateCommand())
+        {
+            cmdPlatform.Transaction = transaction;
+            cmdPlatform.CommandText = "SELECT iam.revoke_all_user_platform_sessions(@userId, @nowUtc);";
+
+            var pUser = cmdPlatform.CreateParameter();
+            pUser.ParameterName = "userId";
+            pUser.Value = userId;
+            cmdPlatform.Parameters.Add(pUser);
+
+            var pNow = cmdPlatform.CreateParameter();
+            pNow.ParameterName = "nowUtc";
+            pNow.Value = nowUtc;
+            cmdPlatform.Parameters.Add(pNow);
+
+            await cmdPlatform.ExecuteNonQueryAsync(ct);
+        }
+
+        // 3. Revoke matching sessions and return their IDs
         var revokedSessionIds = new List<Guid>();
         await using (var cmdSessions = connection.CreateCommand())
         {

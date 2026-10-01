@@ -189,7 +189,14 @@ public sealed class IdentityNotificationOutboxDispatcher : IIdentityNotification
                 pNow.Value = DateTimeOffset.UtcNow;
                 failCmd.Parameters.Add(pNow);
 
-                await failCmd.ExecuteScalarAsync(ct);
+                var failResult = await failCmd.ExecuteScalarAsync(ct);
+                if (failResult is not bool failedSuccessfully || !failedSuccessfully)
+                {
+                    _logger.LogWarning(
+                        "Notification outbox message {Id} failure was not recorded because its lease expired or was reclaimed by another worker.",
+                        item.Id);
+                    continue;
+                }
 
                 _logger.LogError(
                     "Failed to deliver outbox notification {Id} of type '{NotificationType}' (Attempt {Attempt}/{MaxAttempts}). DeadLetter: {IsDeadLetter}. Error: {ErrorMessage}",

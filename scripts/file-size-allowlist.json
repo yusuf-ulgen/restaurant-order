@@ -41,6 +41,10 @@
     {
       "path": "packages/infrastructure/Persistence/Migrations/20261001220000_AddIdentityNotificationOutboxAndScopedRevocation.Designer.cs",
       "reason": "Machine-generated EF Core migration designer metadata for identity notification outbox and scoped revocation functions."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261002010000_ClearClaimedAtUtcInOutboxCompletion.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for clearing claimed_at_utc in outbox completion functions."
     }
   ]
 }

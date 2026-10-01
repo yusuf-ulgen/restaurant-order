@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
@@ -23,6 +25,7 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IIdentityNotificationSender _notificationSender;
     private readonly IAuthSessionManager _sessionManager;
+    private readonly ILogger<StaffIdentityService> _logger;
     private static readonly TimeSpan DefaultInvitationTtl = TimeSpan.FromDays(2);
     private static readonly TimeSpan DefaultResetTtl = TimeSpan.FromHours(1);
 
@@ -32,7 +35,8 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         IIamUserLookupGateway userLookupGateway,
         IPasswordHasher passwordHasher,
         IIdentityNotificationSender notificationSender,
-        IAuthSessionManager sessionManager)
+        IAuthSessionManager sessionManager,
+        ILogger<StaffIdentityService>? logger = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
@@ -40,6 +44,7 @@ public sealed partial class StaffIdentityService : IStaffIdentityService
         _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
         _notificationSender = notificationSender ?? throw new ArgumentNullException(nameof(notificationSender));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+        _logger = logger ?? NullLogger<StaffIdentityService>.Instance;
     }
 
     public async Task<InviteStaffResult> InviteStaffAsync(
