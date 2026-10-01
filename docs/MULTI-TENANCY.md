@@ -104,32 +104,40 @@ For every incoming request, the tenant context is resolved and propagated across
 ### 5.1. NOLOGIN Runtime Group Role vs LOGIN Role
 To enforce strict zero-secret compliance in source control and database migrations:
 1. **`restaurant_app_runtime` (NOLOGIN Group Role):**
-   - Defined in EF Core migrations (`20260920182029_AddTenantRowLevelSecurity.cs`) and migration scripts.
+   - Provisioned via privileged bootstrap script (`deploy/bootstrap/001_create_runtime_login_role.sql`).
    - Configured with `NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
-   - Granted DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on schema `tenancy`.
+   - Granted DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and sequence usage on schema `tenancy` by EF Core migrations (`20260920182029_AddTenantRowLevelSecurity.cs`).
    - Has `CREATE` revoked on schema `tenancy`.
+   - Migration verifies presence of this group role and fails fast with a descriptive error if missing.
    - Cannot log in directly and contains NO passwords.
 2. **`restaurant_app_user` (Production LOGIN Role):**
    - Created exclusively by deployment pipelines / secret managers / DBAs prior to application startup using `deploy/bootstrap/001_create_runtime_login_role.sql`.
+   - Ingests password securely via `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` and `format(%L)`.
+   - Configured with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
    - Granted membership in `restaurant_app_runtime` (`GRANT restaurant_app_runtime TO restaurant_app_user`).
    - Receives a cryptographically random, high-entropy password injected via environment variables (`DATABASE_URL`).
+   - Supports idempotent in-place credential rotation without interrupting schema grants.
    - Never committed to git, migrations, test fixtures, or container images.
 
 ### 5.2. Credential Provisioning Across Environments
 - **Local Development:** Developers use docker-compose with local credentials defined in uncommitted `.env` files.
-- **Integration Tests:** The test fixture (`TestcontainersFixture`) provisions a unique, ephemeral login role (e.g. `test_rt_<random_suffix>`) with a 256-bit cryptographically secure random password per test run, grants membership in `restaurant_app_runtime`, and drops the role on disposal.
+- **Integration Tests:** The test fixture (`TestcontainersFixture`) provisions `restaurant_app_runtime` and creates a unique, ephemeral login role (e.g. `test_rt_<random_suffix>`) with a 256-bit cryptographically secure random password per test run, grants membership in `restaurant_app_runtime`, and drops the role on disposal.
 - **Staging & Production:** Managed cloud identity or vault-generated credentials injected via environment secrets into the application container.
 
 ### 5.3. Deployment & Migration Sequence
-All production releases follow this deterministic sequence:
-1. **Privileged Role & Bootstrap Preparation:**
-   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (e.g., `postgres` / DBA) with secret injection to ensure runtime login users exist with proper group memberships.
+All production releases follow this deterministic 6-step sequence:
+1. **Privileged DBA Bootstrap:**
+   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (e.g., `postgres` / DBA) with secure environment secret injection (`APP_RUNTIME_PASSWORD`) to provision `restaurant_app_runtime` and `restaurant_app_user`.
 2. **Pre-Cutover Schema Migration:**
    Execute migrations (`dotnet ef database update` or `scripts/migration-ops.mjs`) as the migration owner role before starting the new application release.
-3. **Runtime Credential Injection:**
-   Inject the production database connection string (with the runtime login user credentials) into the inactive (Green) slot container configuration.
-4. **Application Slot Startup & Verification:**
-   Start the application slot, run synthetic health probes, and execute cutover once healthy.
+3. **Runtime Credential Secret Injection:**
+   Inject the production database connection string (with the runtime login user credentials) into the inactive (Green) slot container configuration via the deployment secret manager / vault.
+4. **Runtime Connection & RLS Smoke Verification:**
+   Verify `restaurant_app_user` can connect, fail-closed RLS returns 0 records without tenant context, and returns only authorized tenant records with context.
+5. **Green Application Slot Startup:**
+   Start candidate slot containers (`apps/api`), warming up connection pools and background services.
+6. **Health Verification & Blue/Green Cutover:**
+   Execute synthetic health checks (`/health/live`, `/health/ready`), verify error rates, and perform traffic cutover via the Nginx ingress router.
 
 ### 5.4. Connection Pooling Security Assumptions
 1. **Transaction-Local Setting Scope:**

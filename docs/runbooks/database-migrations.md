@@ -50,18 +50,24 @@ dotnet ef migrations script \
 
 ### 3.3. Staging / Production Deployment Sequence
 
-All staging and production deployments follow this strictly ordered, zero-downtime procedure:
+All staging and production deployments follow this strictly ordered, zero-downtime 6-step procedure:
 
 1. **Step 1: Privileged Role & Bootstrap Preparation (DBA / Operator)**
-   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (`postgres` / DBA) with secret injection to ensure runtime login users exist and belong to the `restaurant_app_runtime` group:
+   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (`postgres` / DBA) with secure environment secret injection. The script idempotently provisions:
+   - `restaurant_app_runtime` group role (`NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
+   - `restaurant_app_user` login role (`LOGIN`, `PASSWORD`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
+   - Grants membership of `restaurant_app_runtime` to `restaurant_app_user`.
+
+   The script securely ingests credentials via `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` and `format(%L)` to prevent plaintext secrets from appearing in process listings or logs:
    ```bash
+   export APP_RUNTIME_PASSWORD="<STRONG_CRYPTOGRAPHIC_PASSWORD>"
    psql -v ON_ERROR_STOP=1 "$DBA_CONNECTION_URL" -f deploy/bootstrap/001_create_runtime_login_role.sql
+   unset APP_RUNTIME_PASSWORD
    ```
 
-2. **Step 2: Pre-Cutover Schema Migration (Migration Owner)**
-   Apply migrations as the migration owner role before warming the candidate slot:
+2. **Step 2: Pre-Cutover Schema Migration (Migration Owner / CI)**
+   Apply EF Core migrations as the privileged migration owner role before warming the candidate slot. The migration enforces a fail-fast prerequisite check ensuring `restaurant_app_runtime` exists, creates RLS helper functions, policies, and grants DML/sequence permissions on schema `tenancy`:
    ```bash
-   # Set connection string and backup verification flag
    export DATABASE_URL="postgresql://${MIGRATION_USER}:${MIGRATION_PASSWORD}@${DB_HOST}:5432/restaurant_order_prod"
    export BACKUP_VERIFIED="true"
 
@@ -70,16 +76,24 @@ All staging and production deployments follow this strictly ordered, zero-downti
      --startup-project apps/api/RestaurantOrder.Api.csproj
    ```
 
-3. **Step 3: Runtime Login Role Membership & Secret Injection**
-   Verify the unprivileged application user inherits permissions from `restaurant_app_runtime`. Inject the runtime connection string into the candidate slot (`Green`) container environment via the deployment secret manager / vault.
+3. **Step 3: Runtime Credential Secret Injection (Candidate Slot)**
+   Inject the runtime connection string (using `restaurant_app_user` and the provisioned password) into the candidate slot (`Green`) container environment via the deployment secret manager / vault (e.g. AWS Secrets Manager, HashiCorp Vault, Kubernetes Secret).
 
-4. **Step 4: Application Slot Startup & Health Verification**
-   Launch candidate slot containers, perform synthetic health checks (`/health/ready`), and complete cutover.
+4. **Step 4: Runtime Connection & RLS Smoke Verification**
+   Verify the unprivileged runtime role connects cleanly and that Row-Level Security fail-closed protections are enforced:
+   - Unauthenticated / missing tenant context: Queries return 0 rows (`SELECT COUNT(*) FROM tenancy.tenants` yields 0).
+   - Authenticated tenant context: Queries return only records belonging to `app.current_tenant_id`.
 
-### 3.4. Emergency Credential Rotation
-If runtime credentials are ever suspected compromised:
+5. **Step 5: Green Application Slot Startup**
+   Launch candidate slot containers (`apps/api`), warming up EF Core connection pools and background workers against the migrated database.
+
+6. **Step 6: Health Verification & Blue/Green Cutover**
+   Execute synthetic health checks (`/health/live`, `/health/ready`), verify error rates, and perform traffic cutover via the Nginx ingress router (`node scripts/blue-green/cutover.mjs --execute`).
+
+### 3.4. Idempotent Credential Rotation
+If runtime credentials are ever suspected compromised or due for routine rotation:
 1. Generate new high-entropy credentials in the deployment secret manager / vault.
-2. Execute `ALTER ROLE restaurant_app_user WITH PASSWORD '<NEW_PASSWORD>';` as DBA.
+2. Re-run `deploy/bootstrap/001_create_runtime_login_role.sql` with the new `APP_RUNTIME_PASSWORD` exported in the DBA environment. The script idempotently updates the password via `ALTER ROLE restaurant_app_user WITH PASSWORD %L` without altering existing schema privileges or group memberships.
 3. Update connection strings across deployment slots and perform rolling container restarts.
 4. Review PostgreSQL audit logs for unauthorized queries during the incident window.
 
