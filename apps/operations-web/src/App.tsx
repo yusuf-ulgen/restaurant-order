@@ -8,6 +8,9 @@ import {
   AppShell,
   Modal,
 } from '@restaurant-order/ui';
+import { TerminalProvider, useTerminal } from './auth/TerminalContext';
+import { TerminalActivationModal } from './auth/TerminalActivationModal';
+import { PinAuthModal } from './auth/PinAuthModal';
 
 export interface OperationsAppProps {
   hasActiveTables?: boolean;
@@ -19,8 +22,21 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
   initialError = false,
 }) => {
   const [isCallsModalOpen, setIsCallsModalOpen] = useState(false);
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+
   const handleOpenCallsModal = () => setIsCallsModalOpen(true);
   const handleCloseCallsModal = () => setIsCallsModalOpen(false);
+
+  let isEnrolled = false;
+  let staffUser = null;
+  try {
+    const terminalCtx = useTerminal();
+    isEnrolled = terminalCtx.isEnrolled;
+    staffUser = terminalCtx.staffUser;
+  } catch {
+    // Graceful fallback outside TerminalProvider
+  }
 
   if (initialError) {
     throw new Error('Operasyon verileri yüklenemedi.');
@@ -32,7 +48,30 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
       header={{
         title: <h1 className="title">Garson & Operasyon</h1>,
         subtitle: <p className="subtitle">Şube: Kadıköy • Aktif Vardiya</p>,
-        actions: <Badge variant="primary">Garson Modu</Badge>,
+        actions: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Badge variant={isEnrolled ? 'primary' : 'warning'}>
+              {staffUser ? staffUser.role : isEnrolled ? 'Terminal Aktif' : 'Garson Modu'}
+            </Badge>
+            {!isEnrolled ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsActivationModalOpen(true)}
+              >
+                Terminal Kaydet
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPinModalOpen(true)}
+              >
+                {staffUser ? 'PIN Değiştir' : 'PIN Girişi'}
+              </Button>
+            )}
+          </div>
+        ),
       }}
       mobileNav={{
         items: [
@@ -107,6 +146,18 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
           description="Şu anda masalardan iletilen açık bir garson veya hesap çağrısı bulunmamaktadır."
         />
       </Modal>
+
+      {/* Terminal Activation Modal */}
+      <TerminalActivationModal
+        isOpen={isActivationModalOpen}
+        onClose={() => setIsActivationModalOpen(false)}
+      />
+
+      {/* PIN Auth Modal */}
+      <PinAuthModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+      />
     </AppShell>
   );
 };
@@ -114,7 +165,9 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
 export const App: React.FC<OperationsAppProps> = (props) => {
   return (
     <ErrorBoundary>
-      <OperationsContent {...props} />
+      <TerminalProvider>
+        <OperationsContent {...props} />
+      </TerminalProvider>
     </ErrorBoundary>
   );
 };

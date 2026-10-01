@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddSingleton<RestaurantOrder.Application.Auth.ITerminalPinRateLimiter, RestaurantOrder.Infrastructure.Auth.TerminalPinRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
 
         if (environment.IsDevelopment())
         {

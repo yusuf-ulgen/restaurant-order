@@ -13,7 +13,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 3.3** | Password Authentication, JWT & Refresh Session Flow | **COMPLETED** | Login, refresh, logout endpoints, HttpOnly cookies, token rotation, reuse detection |
 | **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
 | **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
-| **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | Planned / Pending | Staff invitation, role assignment, Admin & Operations Web auth integration |
+| **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | **COMPLETED** | Staff invitation, role assignment, Admin & Operations Web auth integration |
 
 ---
 
@@ -60,7 +60,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Terminal revocation cascade
 
 ### Phase 3.6: Staff Identity Management & Frontend Integration
-- [ ] Staff invitation, activation, suspension API
-- [ ] Admin Web login, protected routes, session restoration
-- [ ] Operations Web terminal activation and PIN entry bottom sheet
-- [ ] Single-flight refresh token queue in frontend HTTP client
+- [x] Staff invitation, activation, suspension API
+- [x] Admin Web login, protected routes, session restoration
+- [x] Operations Web terminal activation and PIN entry bottom sheet
+- [x] Single-flight refresh token queue in frontend HTTP client
