@@ -28,13 +28,14 @@ All architectural decisions begin in the `PROPOSED` state and require user or te
 | ADR ID | Title | Status | Primary Focus |
 | :--- | :--- | :--- | :--- |
 | [ADR-0001](./0001-technology-stack.md) | Core Technology Stack & Monorepo Foundation | `ACCEPTED` | React 19, .NET 10, Modular Monolith, SignalR, Redis, Postgres |
-| [ADR-0002](./0002-persistence-selection.md) | Data Persistence Library Selection | `PROPOSED` | Comparative evaluation of EF Core, Dapper, and Marten |
+| [ADR-0002](./0002-persistence-selection.md) | Data Persistence Library Selection | `ACCEPTED` | Comparative evaluation of EF Core, Dapper, and Marten |
 | `ADR-0003` | Multi-Tenant Data Isolation Strategy | `PROPOSED` | PostgreSQL Row-Level Security vs Schema-per-tenant |
 | `ADR-0004` | Realtime Event Transport Architecture | `PROPOSED` | SignalR Hubs & Redis Backplane Design |
 | `ADR-0005` | ESC/POS Thermal Printing Integration Pattern | `PROPOSED` | Local Branch Print Agent vs Cloud Direct Socket |
 | `ADR-0006` | Digital Payment Gateway Integration Strategy | `PROPOSED` | Multi-gateway abstraction layer |
 | [ADR-0007](./0007-health-checks-and-dependency-verification.md) | Infrastructure Health Checks & Dependency Verification | `ACCEPTED` | Fail-closed liveness/readiness separation, zero-leak health checks |
 | [ADR-0008](./0008-blue-green-compose-project-isolation-and-container-dns-ingress.md) | Blue-Green Compose Project Isolation & Container DNS Ingress Routing | `ACCEPTED` | Separate `-p` projects per slot, shared external network, docker exec cutover |
+| [ADR-0009](./0009-authentication-and-session-strategy.md) | Authentication, Session & Multi-Tenant Authorization Strategy | `ACCEPTED` | Staff vs Customer QR separation, trusted terminals, JWT/cookie rotation, RBAC matrix |
 
 ---
 
