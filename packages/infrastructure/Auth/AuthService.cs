@@ -260,11 +260,11 @@ public sealed class AuthService : IAuthService
         var (isPlatformSuccess, isReuse, platformSession) = await _platformSessionStore.RotateTokenAsync(tokenHash, newTokenHash, tokenLifetime, now);
         if (isPlatformSuccess && platformSession != null)
         {
-            var pUser = await _dbContext.Users.FirstAsync(u => u.Id == platformSession.UserId, ct);
-            if (pUser.Status != UserStatus.Active) throw new AuthFailureException("User account is not active.");
+            var pUser = await _bootstrapGateway.LookupUserByIdAsync(platformSession.UserId.Value, ct);
+            if (pUser == null || pUser.Status != (int)UserStatus.Active) throw new AuthFailureException("User account is not active.");
 
             var pTokenResult = _jwtTokenGenerator.GenerateAccessToken(
-                pUser.Id,
+                platformSession.UserId,
                 platformSession.SessionId,
                 PrincipalType.Staff,
                 AuthRole.SuperAdmin,
@@ -278,52 +278,76 @@ public sealed class AuthService : IAuthService
                 RefreshToken: newRawToken,
                 AccessTokenExpiresAt: pTokenResult.ExpiresAtUtc,
                 RefreshTokenExpiresAt: now.Add(tokenLifetime),
-                User: new UserPrincipalDto(pUser.Id.Value, pUser.Email, AuthRole.SuperAdmin.ToString(), null, null, pUser.SecurityVersion),
+                User: new UserPrincipalDto(pUser.UserId, pUser.Email, AuthRole.SuperAdmin.ToString(), null, null, pUser.SecurityVersion),
                 Session: new SessionDto(platformSession.SessionId, "Password", "Active", platformSession.CreatedAtUtc, now, platformSession.ExpiresAtUtc, IsCurrent: true));
         }
 
         if (isReuse) throw new AuthFailureException("Refresh token reuse detected.");
 
-        var token = await _dbContext.RefreshTokens
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, ct);
-
-        if (token == null || !token.IsActive(now))
+        var lookup = await _bootstrapGateway.LookupRefreshTokenForRotationAsync(tokenHash, ct);
+        if (lookup == null)
         {
-            if (token != null && (token.IsRevoked || token.ReplacedByTokenId.HasValue))
-            {
-                await _sessionManager.HandleTokenReuseAsync(token, now, ct);
-            }
             throw new AuthFailureException("Invalid or expired refresh token.");
         }
 
-        var session = await _dbContext.Sessions.IgnoreQueryFilters().FirstOrDefaultAsync(s => s.Id == token.SessionId, ct);
-        if (session == null || !session.IsActive(now)) throw new AuthFailureException("Session is revoked or expired.");
+        if (lookup.IsRevoked || lookup.ReplacedByTokenId.HasValue)
+        {
+            await _bootstrapGateway.HandleTenantTokenReuseAsync(lookup.TenantId, lookup.TokenFamilyId, lookup.SessionId, now, ct);
+            throw new AuthFailureException("Refresh token reuse detected.");
+        }
 
-        var user = await _dbContext.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.Id == session.UserId, ct);
-        if (user == null || user.Status != UserStatus.Active) throw new AuthFailureException("User is inactive.");
+        if (lookup.ExpiresAtUtc <= now || lookup.SessionIsRevoked || lookup.SessionExpiresAtUtc <= now)
+        {
+            throw new AuthFailureException("Invalid or expired refresh token.");
+        }
 
-        var membership = await _dbContext.Memberships.IgnoreQueryFilters().FirstOrDefaultAsync(m => m.Id == session.MembershipId, ct);
-        if (membership == null || !membership.IsActive) throw new AuthFailureException("Membership is inactive.");
+        var newTokenId = Guid.NewGuid();
+        var rotated = await _bootstrapGateway.RotateTenantRefreshTokenAsync(
+            lookup.TenantId,
+            lookup.TokenId,
+            newTokenId,
+            lookup.SessionId,
+            lookup.TokenFamilyId,
+            newTokenHash,
+            tokenLifetime,
+            now,
+            ct);
 
-        var newRefreshToken = RefreshToken.Create(token.TenantId, session.Id, token.TokenFamilyId, newTokenHash, tokenLifetime, now);
-        token.Revoke(now, newRefreshToken.Id);
-        session.RecordActivity(now);
-        _dbContext.RefreshTokens.Add(newRefreshToken);
+        if (!rotated)
+        {
+            await _bootstrapGateway.HandleTenantTokenReuseAsync(lookup.TenantId, lookup.TokenFamilyId, lookup.SessionId, now, ct);
+            throw new AuthFailureException("Refresh token reuse detected.");
+        }
 
-        await _dbContext.SaveChangesAsync(ct);
+        var user = await _bootstrapGateway.LookupUserByIdAsync(lookup.UserId, ct);
+        if (user == null || user.Status != (int)UserStatus.Active)
+        {
+            throw new AuthFailureException("User is inactive.");
+        }
 
-        var scope = membership.Role == AuthRole.RestaurantAdmin
-            ? AuthorizationScope.ForTenant(token.TenantId)
-            : AuthorizationScope.ForBranch(token.TenantId, membership.BranchId!.Value);
+        var membership = await _bootstrapGateway.LookupMembershipForLoginAsync(lookup.TenantId, lookup.UserId, ct);
+        if (membership == null || !membership.IsActive)
+        {
+            throw new AuthFailureException("Membership is inactive.");
+        }
 
+        if (!Enum.TryParse<AuthRole>(membership.Role, out var role))
+        {
+            throw new AuthFailureException("Invalid membership role.");
+        }
+
+        var scope = role == AuthRole.RestaurantAdmin
+            ? AuthorizationScope.ForTenant(TenantId.From(lookup.TenantId))
+            : AuthorizationScope.ForBranch(TenantId.From(lookup.TenantId), BranchId.From(membership.BranchId!.Value));
+
+        var authMethod = (AuthenticationMethod)lookup.AuthMethod;
         var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
-            user.Id,
-            session.Id,
+            UserId.From(user.UserId),
+            lookup.SessionId,
             PrincipalType.Staff,
-            membership.Role,
+            role,
             scope,
-            session.AuthMethod,
+            authMethod,
             user.SecurityVersion,
             now);
 
@@ -331,9 +355,9 @@ public sealed class AuthService : IAuthService
             AccessToken: tokenResult.Token,
             RefreshToken: newRawToken,
             AccessTokenExpiresAt: tokenResult.ExpiresAtUtc,
-            RefreshTokenExpiresAt: newRefreshToken.ExpiresAtUtc,
-            User: new UserPrincipalDto(user.Id.Value, user.Email, membership.Role.ToString(), token.TenantId.Value, membership.BranchId?.Value, user.SecurityVersion),
-            Session: new SessionDto(session.Id, session.AuthMethod.ToString(), "Active", session.CreatedAtUtc, now, session.ExpiresAtUtc, IsCurrent: true));
+            RefreshTokenExpiresAt: now.Add(tokenLifetime),
+            User: new UserPrincipalDto(user.UserId, user.Email, role.ToString(), lookup.TenantId, membership.BranchId, user.SecurityVersion),
+            Session: new SessionDto(lookup.SessionId, authMethod.ToString(), "Active", now, now, lookup.SessionExpiresAtUtc, IsCurrent: true));
     }
 
     public Task LogoutAsync(Guid sessionId, CancellationToken ct = default) =>

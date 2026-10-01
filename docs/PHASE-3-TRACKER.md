@@ -75,6 +75,12 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Single-flight concurrent token refresh queue verified
 - [x] Deterministic migration lifecycle and pre-auth bootstrap SECURITY DEFINER gateway
 - [x] Tenant transaction fail-closed boundary and connection pool context isolation verified
-- [x] All test suites passing (629 backend unit + 10 arch + 185 frontend unit + 78 integration = 902 automated tests)
+- [x] Platform session and refresh token persistence in dedicated global tables (`iam.platform_sessions`, `iam.platform_refresh_tokens`), fully isolating tenant data
+- [x] Distributed atomic token rotation using PostgreSQL row locks (`FOR UPDATE`) with immediate family revocation on reuse race
+- [x] Distributed ephemeral auth state in Redis (login rate limiting Lua scripts, progressive terminal PIN backoff/lockout, single-use enrollment `GETDEL`)
+- [x] Fail-closed Redis architecture: returns HTTP 503 rather than bypassing security gates if Redis is unavailable
+- [x] Multi-instance distributed integration test suite (`PostgreSqlDistributedAuthIntegrationTests`) passing across simulated API instances
+- [x] All test suites passing (629 backend unit + 10 arch + 84 integration = 723 backend tests; 100% green)
 - [x] Zero files exceeding 600 lines strict ceiling
 - [x] Zero secrets and clean documentation integrity verified
+

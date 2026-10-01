@@ -93,11 +93,15 @@ public static class DependencyInjection
 
         services.Configure<RestaurantOrder.Application.Auth.AuthSettings>(configuration.GetSection(RestaurantOrder.Application.Auth.AuthSettings.SectionName));
 
+        // Distributed Redis Infrastructure
+        services.AddSingleton<RestaurantOrder.Infrastructure.Redis.IRedisDatabaseProvider, RestaurantOrder.Infrastructure.Redis.StackExchangeRedisDatabaseProvider>();
+
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.JwtTokenService>();
         services.AddSingleton<RestaurantOrder.Application.Auth.IJwtTokenGenerator>(sp => sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.JwtTokenService>());
         services.AddSingleton<RestaurantOrder.Application.Auth.IRefreshTokenService, RestaurantOrder.Infrastructure.Auth.RefreshTokenService>();
-        services.AddSingleton<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.InMemoryPlatformSessionStore>();
-        services.AddSingleton<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.LoginRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.PostgreSqlPlatformSessionStore>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisLoginRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITokenRevocationValidator, RestaurantOrder.Infrastructure.Auth.DistributedTokenRevocationValidator>();
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
         services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
 
@@ -108,8 +112,8 @@ public static class DependencyInjection
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RestaurantOrder.Infrastructure.Auth.PermissionAuthorizationHandler>();
 
         // Trusted Terminal & Staff PIN Authentication
-        services.AddSingleton<RestaurantOrder.Application.Auth.ITerminalEnrollmentStore, RestaurantOrder.Infrastructure.Auth.InMemoryTerminalEnrollmentStore>();
-        services.AddSingleton<RestaurantOrder.Application.Auth.ITerminalPinRateLimiter, RestaurantOrder.Infrastructure.Auth.TerminalPinRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITerminalEnrollmentStore, RestaurantOrder.Infrastructure.Auth.RedisTerminalEnrollmentStore>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITerminalPinRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisTerminalPinRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();

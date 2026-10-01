@@ -32,6 +32,8 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<SecurityAuditEvent> SecurityAuditEvents => Set<SecurityAuditEvent>();
     public DbSet<InvitationToken> InvitationTokens => Set<InvitationToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PlatformSession> PlatformSessions => Set<PlatformSession>();
+    public DbSet<PlatformRefreshToken> PlatformRefreshTokens => Set<PlatformRefreshToken>();
 
     public RestaurantOrderDbContext(
         DbContextOptions<RestaurantOrderDbContext> options,
@@ -41,11 +43,18 @@ public class RestaurantOrderDbContext : DbContext
         _tenantContext = tenantContext ?? TenantContext.Empty;
     }
 
+    private Guid? _transactionTenantId;
+
+    internal void ResetTransactionTenant()
+    {
+        _transactionTenantId = null;
+    }
+
     /// <summary>
-    /// Evaluates whether a valid tenant context is present.
+    /// Evaluates whether a valid tenant context is present either via ambient ITenantContext or active tenant transaction.
     /// Parameterized directly by EF Core in global query filters to enforce server-side fail-closed execution.
     /// </summary>
-    public bool HasTenant => _tenantContext.HasTenant && _tenantContext.TenantId.HasValue;
+    public bool HasTenant => (_transactionTenantId.HasValue && _transactionTenantId.Value != Guid.Empty) || (_tenantContext.HasTenant && _tenantContext.TenantId.HasValue);
 
     /// <summary>
     /// Current tenant ID exposed as a pre-constructed, stable property on the DbContext.
@@ -53,7 +62,7 @@ public class RestaurantOrderDbContext : DbContext
     /// When HasTenant is false, returns default (empty) which, combined with HasTenant, guarantees fail-closed behavior.
     /// </summary>
     public TenantId CurrentTenantId => HasTenant
-        ? new TenantId(_tenantContext.TenantId!.Value)
+        ? new TenantId(_transactionTenantId ?? _tenantContext.TenantId!.Value)
         : default;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -110,6 +119,7 @@ public class RestaurantOrderDbContext : DbContext
         cmd.Parameters.Add(param);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
+        _transactionTenantId = tenantId;
     }
 
     /// <summary>
@@ -123,7 +133,7 @@ public class RestaurantOrderDbContext : DbContext
     {
         var tx = await Database.BeginTransactionAsync(isolationLevel, cancellationToken);
         await SetTenantSessionAsync(tenantId, cancellationToken);
-        return tx;
+        return new TenantDbContextTransaction(tx, this);
     }
 
     /// <summary>
@@ -131,6 +141,7 @@ public class RestaurantOrderDbContext : DbContext
     /// </summary>
     public async Task ClearTenantSessionAsync(CancellationToken cancellationToken = default)
     {
+        _transactionTenantId = null;
         var conn = Database.GetDbConnection();
         if (conn.State == ConnectionState.Open)
         {
@@ -138,6 +149,56 @@ public class RestaurantOrderDbContext : DbContext
             cmd.Transaction = Database.CurrentTransaction?.GetDbTransaction();
             cmd.CommandText = "SELECT set_config('app.current_tenant_id', '', false);";
             await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private sealed class TenantDbContextTransaction : IDbContextTransaction
+    {
+        private readonly IDbContextTransaction _inner;
+        private readonly RestaurantOrderDbContext _context;
+
+        public TenantDbContextTransaction(IDbContextTransaction inner, RestaurantOrderDbContext context)
+        {
+            _inner = inner;
+            _context = context;
+        }
+
+        public Guid TransactionId => _inner.TransactionId;
+
+        public void Commit()
+        {
+            _inner.Commit();
+            _context.ResetTransactionTenant();
+        }
+
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            await _inner.CommitAsync(cancellationToken);
+            _context.ResetTransactionTenant();
+        }
+
+        public void Rollback()
+        {
+            _inner.Rollback();
+            _context.ResetTransactionTenant();
+        }
+
+        public async Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            await _inner.RollbackAsync(cancellationToken);
+            _context.ResetTransactionTenant();
+        }
+
+        public void Dispose()
+        {
+            _inner.Dispose();
+            _context.ResetTransactionTenant();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _inner.DisposeAsync();
+            _context.ResetTransactionTenant();
         }
     }
 }

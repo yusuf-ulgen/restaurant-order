@@ -74,3 +74,10 @@ Phase 3 implements comprehensive authentication and authorization hardening acro
 ### 5.4. Fail-Closed RBAC & Tenant Isolation
 - **Deny-by-Default:** Centralized `PermissionAuthorizationHandler` enforcing 31 machine-readable capabilities across 8 roles. Unregistered permissions or unmapped scopes result in strict 403 Forbidden with RFC 7807 ProblemDetails.
 - **PostgreSQL RLS:** Defense-in-depth isolation: all `iam.*` tables enforce Row-Level Security policies tied to `app.current_tenant_id`.
+
+### 5.5. Distributed State & Multi-Instance Security
+- **Platform Session Isolation:** Platform-level SuperAdmin sessions and refresh tokens reside in dedicated PostgreSQL global tables (`iam.platform_sessions`, `iam.platform_refresh_tokens`). `Guid.Empty` is never injected into tenant-scoped tables.
+- **Atomic Rotation with PostgreSQL Locks:** Multi-instance refresh token rotation uses explicit PostgreSQL row-level locks (`SELECT ... FOR UPDATE`), eliminating race conditions across distributed API instances.
+- **Distributed Redis Rate Limiting & Fail-Closed Gate:** Login rate limiting (atomic Lua scripts) and terminal PIN progressive delays/lockouts are coordinated across instances via Redis. If Redis becomes unreachable, security policies fail closed: requests are rejected with HTTP 503 (Service Unavailable) rather than bypassing protection.
+- **Immediate Distributed Revocation:** JWT access token validation in `OnTokenValidated` queries `iam.validate_token_session` with short-lived Redis caching. Immediate cache invalidation on `LogoutAll` revokes tokens across all instances simultaneously without waiting for expiration.
+

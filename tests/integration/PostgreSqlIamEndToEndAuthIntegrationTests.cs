@@ -132,6 +132,7 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
 
         var now = DateTimeOffset.UtcNow;
         var tenantId = TenantId.New();
+        var tenantSlug = $"login-{Guid.NewGuid():N}"[..12];
         var email = $"login.{Guid.NewGuid():N}@example.com";
         var password = "SecurePassword123!";
         var passwordHasher = new AspNetCorePasswordHasher();
@@ -143,7 +144,7 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
             var user = User.Create(email, passwordHash, now);
             adminCtx.Users.Add(user);
 
-            var tenant = Tenant.Create("Login Tenant", $"login-{Guid.NewGuid():N}"[..12], tenantId);
+            var tenant = Tenant.Create("Login Tenant", tenantSlug, tenantId);
             adminCtx.Tenants.Add(tenant);
 
             var membership = UserMembership.Create(tenantId, user.Id, AuthRole.RestaurantAdmin, null, now);
@@ -166,9 +167,9 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
         });
         var jwtGen = new JwtTokenService(jwtSettings);
         var refreshSvc = new RefreshTokenService();
-        var platformStore = new InMemoryPlatformSessionStore();
+        var platformStore = new PostgreSqlPlatformSessionStore(runtimeCtx);
         var rateLimiter = new LoginRateLimiter();
-        var sessionMgr = new AuthSessionManager(runtimeCtx, platformStore);
+        var sessionMgr = new AuthSessionManager(platformStore, bootstrapGateway);
         var authSettings = Options.Create(new AuthSettings());
 
         var authService = new AuthService(
@@ -187,7 +188,7 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
         var loginResult = await authService.LoginAsync(new LoginCommand(
             Email: email,
             Password: password,
-            TenantSlug: null));
+            TenantSlug: tenantSlug));
 
         Assert.NotNull(loginResult);
         Assert.NotNull(loginResult.AccessToken);
@@ -202,6 +203,7 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
 
         var now = DateTimeOffset.UtcNow;
         var tenantId = TenantId.New();
+        var branchId = BranchId.New();
         var email = $"invitee.{Guid.NewGuid():N}@example.com";
         var passwordHasher = new AspNetCorePasswordHasher();
 
@@ -209,6 +211,13 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
         {
             var tenant = Tenant.Create("Invite Tenant", $"invite-{Guid.NewGuid():N}"[..12], tenantId);
             adminCtx.Tenants.Add(tenant);
+
+            var brand = RestaurantOrder.Domain.Brands.Brand.Create(tenantId, "Invite Brand", $"ib-{Guid.NewGuid():N}"[..10]);
+            adminCtx.Brands.Add(brand);
+
+            var branch = Branch.Create(tenantId, brand, "Invite Branch", $"ibr-{Guid.NewGuid():N}"[..10], "Europe/Istanbul", "TRY", branchId);
+            adminCtx.Branches.Add(branch);
+
             await adminCtx.SaveChangesAsync();
         }
 
@@ -233,7 +242,7 @@ public class PostgreSqlIamEndToEndAuthIntegrationTests : IClassFixture<Testconta
 
         var inviteResult = await identityService.InviteStaffAsync(
             tenantId,
-            new InviteStaffCommand(email, AuthRole.Waiter, null),
+            new InviteStaffCommand(email, AuthRole.Waiter, branchId.Value),
             adminPrincipal);
 
         Assert.NotNull(inviteResult.InvitationToken);

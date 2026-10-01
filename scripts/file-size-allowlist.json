@@ -25,6 +25,10 @@
     {
       "path": "packages/infrastructure/Persistence/Migrations/20261001140000_AddIamPreAuthBootstrapFunctionsAndTransactions.Designer.cs",
       "reason": "Machine-generated EF Core migration designer metadata for IAM pre-auth bootstrap functions."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261001160000_AddDistributedAuthStateAndPlatformSessions.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for distributed auth and platform sessions."
     }
   ]
 }

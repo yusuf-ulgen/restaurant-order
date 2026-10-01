@@ -13,7 +13,7 @@ namespace RestaurantOrder.Infrastructure.Auth;
 /// Calls dedicated SECURITY DEFINER functions with pinned search_paths and executes
 /// column-level updates on iam.users, strictly adhering to ADR-0010 without requiring blanket SELECT.
 /// </summary>
-public sealed class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
+public sealed partial class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
 {
     private readonly RestaurantOrderDbContext _dbContext;
 
@@ -56,11 +56,16 @@ public sealed class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))
         {
+            var statusStr = reader.GetString(3);
+            var statusInt = Enum.TryParse<RestaurantOrder.Domain.Tenants.TenantStatus>(statusStr, true, out var parsedStatus)
+                ? (int)parsedStatus
+                : (int.TryParse(statusStr, out var parsedInt) ? parsedInt : 0);
+
             return new TenantLookupDto(
                 reader.GetGuid(0),
                 reader.GetString(1),
                 reader.GetString(2),
-                reader.GetInt32(3));
+                statusInt);
         }
 
         return null;
@@ -213,15 +218,23 @@ public sealed class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
     public async Task RecordSuccessfulLoginAsync(Guid userId, DateTimeOffset nowUtc, string? newPasswordHash = null, CancellationToken ct = default)
     {
         var conn = await GetOpenConnectionAsync(ct);
-        await using var cmd = CreateCommand(conn, @"
-            UPDATE iam.users
-            SET last_login_at_utc = @nowUtc,
-                failed_login_attempts = 0,
-                lockout_end_utc = NULL,
-                password_hash = COALESCE(@newPasswordHash, password_hash),
-                updated_at_utc = @nowUtc,
-                concurrency_token = gen_random_uuid()
-            WHERE id = @userId;");
+        var hasNewHash = !string.IsNullOrWhiteSpace(newPasswordHash);
+        var sql = hasNewHash
+            ? @"UPDATE iam.users
+                SET failed_login_attempts = 0,
+                    lockout_end_utc = NULL,
+                    password_hash = @newPasswordHash,
+                    updated_at_utc = @nowUtc,
+                    concurrency_token = gen_random_uuid()
+                WHERE id = @userId;"
+            : @"UPDATE iam.users
+                SET failed_login_attempts = 0,
+                    lockout_end_utc = NULL,
+                    updated_at_utc = @nowUtc,
+                    concurrency_token = gen_random_uuid()
+                WHERE id = @userId;";
+
+        await using var cmd = CreateCommand(conn, sql);
 
         var pUser = cmd.CreateParameter();
         pUser.ParameterName = "userId";
@@ -233,10 +246,13 @@ public sealed class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
         pNow.Value = nowUtc;
         cmd.Parameters.Add(pNow);
 
-        var pHash = cmd.CreateParameter();
-        pHash.ParameterName = "newPasswordHash";
-        pHash.Value = (object?)newPasswordHash ?? DBNull.Value;
-        cmd.Parameters.Add(pHash);
+        if (hasNewHash)
+        {
+            var pHash = cmd.CreateParameter();
+            pHash.ParameterName = "newPasswordHash";
+            pHash.Value = newPasswordHash!;
+            cmd.Parameters.Add(pHash);
+        }
 
         await cmd.ExecuteNonQueryAsync(ct);
     }

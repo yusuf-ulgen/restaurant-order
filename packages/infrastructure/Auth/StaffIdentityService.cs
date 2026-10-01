@@ -14,7 +14,7 @@ namespace RestaurantOrder.Infrastructure.Auth;
 /// Implements staff identity lifecycle management: hierarchical invitations,
 /// cryptographic single-use activation and reset tokens, and status transitions.
 /// </summary>
-public sealed class StaffIdentityService : IStaffIdentityService
+public sealed partial class StaffIdentityService : IStaffIdentityService
 {
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IIamBootstrapGateway _bootstrapGateway;
@@ -60,12 +60,22 @@ public sealed class StaffIdentityService : IStaffIdentityService
             userId = UserId.From(lookupUser.UserId);
         }
 
-        var effectiveTenantId = tenantId ?? (command.Role == AuthRole.SuperAdmin ? TenantId.From(Guid.Empty) : throw new InvalidOperationException("Tenant required."));
+        if (command.Role == AuthRole.SuperAdmin)
+        {
+            throw new InvalidOperationException("SuperAdmin cannot be assigned as a tenant member via staff invitation. SuperAdmin accounts must be provisioned via platform bootstrap scripts. See docs/runbooks/database-migrations.md.");
+        }
+
+        if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
+        {
+            throw new InvalidOperationException("Tenant required.");
+        }
+
+        var effectiveTenantId = tenantId.Value;
         var branchId = command.BranchId.HasValue ? new BranchId(command.BranchId.Value) : (BranchId?)null;
 
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && effectiveTenantId.Value != Guid.Empty)
+        if (!hasAmbientTx)
         {
             localTx = await _dbContext.BeginTenantTransactionAsync(effectiveTenantId.Value, cancellationToken: ct);
         }
@@ -188,128 +198,6 @@ public sealed class StaffIdentityService : IStaffIdentityService
         }
     }
 
-    public async Task<string?> RequestPasswordResetAsync(
-        RequestPasswordResetCommand command,
-        CancellationToken ct = default)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var normalizedEmail = User.NormalizeEmail(command.Email);
-
-        var lookupUser = await _userLookupGateway.LookupUserForLoginAsync(normalizedEmail, ct);
-        if (lookupUser == null || lookupUser.Status != (int)UserStatus.Active)
-        {
-            return null; // Non-enumerating
-        }
-
-        var membership = await _bootstrapGateway.LookupFirstActiveMembershipByUserIdAsync(lookupUser.UserId, ct);
-        var tenantId = membership != null ? TenantId.From(membership.TenantId) : TenantId.From(Guid.Empty);
-
-        var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var tokenHash = ComputeSha256(rawToken);
-
-        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && tenantId.Value != Guid.Empty)
-        {
-            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
-        }
-
-        try
-        {
-            var resetToken = PasswordResetToken.Create(tenantId, UserId.From(lookupUser.UserId), tokenHash, DefaultResetTtl, now);
-            _dbContext.PasswordResetTokens.Add(resetToken);
-
-            var audit = SecurityAuditEvent.Create(
-                tenantId,
-                SecurityAuditEventType.PasswordReset,
-                now,
-                UserId.From(lookupUser.UserId),
-                detailsJson: "{\"action\":\"reset_requested\"}");
-            _dbContext.SecurityAuditEvents.Add(audit);
-
-            await _dbContext.SaveChangesAsync(ct);
-            if (localTx != null)
-            {
-                await localTx.CommitAsync(ct);
-            }
-
-            return rawToken;
-        }
-        finally
-        {
-            if (localTx != null)
-            {
-                await localTx.DisposeAsync();
-            }
-        }
-    }
-
-    public async Task ResetPasswordAsync(
-        ResetPasswordCommand command,
-        CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(command.ResetToken))
-        {
-            throw new ArgumentException("Reset token is required.", nameof(command));
-        }
-
-        if (string.IsNullOrWhiteSpace(command.NewPassword) || command.NewPassword.Length < 8)
-        {
-            throw new ArgumentException("New password must be at least 8 characters.", nameof(command));
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var tokenHash = ComputeSha256(command.ResetToken.Trim().ToLowerInvariant());
-
-        var tokenDto = await _bootstrapGateway.LookupPasswordResetTokenAsync(tokenHash, ct);
-        if (tokenDto == null || tokenDto.IsConsumed || tokenDto.ExpiresAtUtc <= now)
-        {
-            throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
-        }
-
-        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && tokenDto.TenantId != Guid.Empty)
-        {
-            localTx = await _dbContext.BeginTenantTransactionAsync(tokenDto.TenantId, cancellationToken: ct);
-        }
-
-        try
-        {
-            var resetToken = await _dbContext.PasswordResetTokens
-                .FirstOrDefaultAsync(t => t.Id == tokenDto.ResetTokenId, ct);
-            if (resetToken == null || !resetToken.IsValid(now))
-            {
-                throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
-            }
-            resetToken.Consume(now);
-
-            var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
-            await _bootstrapGateway.ResetUserPasswordAsync(tokenDto.UserId, passwordHash, now, ct);
-
-            var audit = SecurityAuditEvent.Create(
-                TenantId.From(tokenDto.TenantId),
-                SecurityAuditEventType.PasswordChanged,
-                now,
-                UserId.From(tokenDto.UserId),
-                detailsJson: "{\"action\":\"password_reset_completed\"}");
-            _dbContext.SecurityAuditEvents.Add(audit);
-
-            await _dbContext.SaveChangesAsync(ct);
-            if (localTx != null)
-            {
-                await localTx.CommitAsync(ct);
-            }
-        }
-        finally
-        {
-            if (localTx != null)
-            {
-                await localTx.DisposeAsync();
-            }
-        }
-    }
-
     public async Task<IReadOnlyList<StaffMemberDto>> ListStaffAsync(
         TenantId? tenantId,
         Guid? branchId,
@@ -360,10 +248,15 @@ public sealed class StaffIdentityService : IStaffIdentityService
             throw new InvalidOperationException("User not found.");
         }
 
-        var effectiveTenantId = tenantId ?? TenantId.From(Guid.Empty);
+        if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
+        {
+            throw new InvalidOperationException("Tenant required for staff status operations.");
+        }
+
+        var effectiveTenantId = tenantId.Value;
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
         Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
-        if (!hasAmbientTx && effectiveTenantId.Value != Guid.Empty)
+        if (!hasAmbientTx)
         {
             localTx = await _dbContext.BeginTenantTransactionAsync(effectiveTenantId.Value, cancellationToken: ct);
         }
@@ -405,12 +298,22 @@ public sealed class StaffIdentityService : IStaffIdentityService
         TenantId? tenantId,
         Guid? branchId)
     {
+        if (targetRole == AuthRole.SuperAdmin)
+        {
+            throw new InvalidOperationException(
+                "SuperAdmin cannot be assigned as a tenant member via staff invitation. SuperAdmin accounts must be provisioned via platform bootstrap scripts. See docs/runbooks/database-migrations.md.");
+        }
+
         switch (actor.Role)
         {
             case AuthRole.SuperAdmin:
-                if (targetRole is not (AuthRole.SuperAdmin or AuthRole.RestaurantAdmin))
+                if (targetRole is not AuthRole.RestaurantAdmin)
                 {
-                    throw new InvalidOperationException("SuperAdmin may only provision SuperAdmin or RestaurantAdmin roles.");
+                    throw new InvalidOperationException("SuperAdmin may only provision RestaurantAdmin roles via staff invitation.");
+                }
+                if (!tenantId.HasValue || tenantId.Value.Value == Guid.Empty)
+                {
+                    throw new InvalidOperationException("Tenant required for provisioning RestaurantAdmin.");
                 }
                 break;
 

@@ -106,3 +106,30 @@ Cross-tenant combinations (e.g. Tenant A token with Tenant B branch) are rejecte
 - **Negative Scope Tests:** SuperAdmin with tenant claim, Waiter without branch, and Tenant A/B cross-scoping must throw validation errors.
 - **Claim Parser Tests:** Malformed GUIDs, missing claims, duplicate claims, and expired tokens must fail-closed.
 - **Resource Ownership Tests:** Own-scope permissions must be rejected without valid ownership context.
+
+---
+
+## 6. Distributed Authentication State & Platform Persistence Addendum
+
+### 6.1. Platform Sessions & SuperAdmin Persistence
+- SuperAdmin and platform-level credentials, sessions, and refresh tokens are persisted in dedicated global IAM tables (`iam.platform_sessions`, `iam.platform_refresh_tokens`) in PostgreSQL.
+- Under NO circumstances is `Guid.Empty` written into tenant-scoped tables (`iam.sessions`, `iam.refresh_tokens`). The multi-tenant boundary is strictly preserved.
+- Platform sessions persist across API instances, process restarts, and Blue/Green deployment slots.
+- SuperAdmin provisioning cannot be initiated through tenant staff invite endpoints (strictly rejected). SuperAdmin accounts are provisioned exclusively via secure out-of-band bootstrap scripts.
+
+### 6.2. Atomic Distributed Token Rotation (FOR UPDATE)
+- Distributed refresh token rotation executes inside an explicit PostgreSQL transaction using row-level locks (`SELECT ... FOR UPDATE`).
+- If multiple requests race with the same refresh token across distinct API instances, exactly one request acquires the row lock and succeeds with atomic rotation; all concurrent or subsequent attempts detect token reuse and trigger immediate token family revocation.
+
+### 6.3. Ephemeral State & Redis Fail-Closed Strategy
+- Ephemeral, cross-instance state is managed via Redis:
+  - **Login Rate Limiter:** Atomic `INCR` + `EXPIRE` implemented via Lua scripts.
+  - **Terminal PIN Brute-Force:** Distributed progressive delays (1s, 2s, 4s, 8s) and lockout thresholds shared across instances.
+  - **Terminal Enrollment:** Single-use cryptographic enrollment codes consumed atomically via `GETDEL`.
+- **Fail-Closed Policy:** If Redis becomes unavailable, rate limiting and security gates do not degrade to open access. Operations fail closed, throwing `DistributedSecurityStateUnavailableException` and returning HTTP 503 (Service Unavailable).
+
+### 6.4. Distributed Revocation & Multi-Level Invalidation
+- Access token validity is checked during `OnTokenValidated` against the distributed state source of truth (`iam.validate_token_session`).
+- To minimize database query volume, positive validation results are cached in Redis with a 60-second TTL.
+- When `LogoutAll` or user security version increment occurs, the user's active session keys and security version entry in Redis are immediately invalidated across all API instances, guaranteeing instant token revocation without waiting for token expiration.
+

@@ -59,6 +59,34 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
                 }
                 return Task.CompletedTask;
             },
+            OnTokenValidated = async context =>
+            {
+                var validator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Auth.ITokenRevocationValidator>();
+
+                var sidClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.SessionId)?.Value
+                    ?? context.Principal?.FindFirst("sid")?.Value;
+                var subClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.Subject)?.Value
+                    ?? context.Principal?.FindFirst("sub")?.Value
+                    ?? context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var secVerClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.SecurityVersion)?.Value
+                    ?? context.Principal?.FindFirst("security_version")?.Value
+                    ?? context.Principal?.FindFirst("sec_ver")?.Value;
+
+                if (Guid.TryParse(sidClaim, out var sessionId) &&
+                    Guid.TryParse(subClaim, out var userId) &&
+                    int.TryParse(secVerClaim, out var securityVersion))
+                {
+                    var isValid = await validator.ValidateTokenActiveAsync(sessionId, userId, securityVersion, context.HttpContext.RequestAborted);
+                    if (!isValid)
+                    {
+                        context.Fail("Token session has been revoked or security version has expired.");
+                    }
+                }
+                else
+                {
+                    context.Fail("Token is missing required session or security claims.");
+                }
+            },
             OnChallenge = async context =>
             {
                 context.HandleResponse();
@@ -128,6 +156,31 @@ if (app.Environment.IsDevelopment())
     .WithSummary("Idempotent synthetic seed for local development only")
     .WithTags("Development");
 }
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (RestaurantOrder.Application.Auth.DistributedSecurityStateUnavailableException ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        context.Response.ContentType = "application/problem+json";
+        var correlationId = context.Response.Headers["X-Correlation-Id"].ToString();
+        if (string.IsNullOrWhiteSpace(correlationId)) correlationId = Guid.NewGuid().ToString("D");
+        var problemJson = JsonSerializer.Serialize(new
+        {
+            type = "https://httpstatuses.com/503",
+            title = "Security State Unavailable",
+            status = StatusCodes.Status503ServiceUnavailable,
+            detail = ex.Message,
+            instance = context.Request.Path.Value,
+            correlationId
+        });
+        await context.Response.WriteAsync(problemJson);
+    }
+});
 
 app.UseCors("DefaultCorsPolicy");
 app.UseMiddleware<RestaurantOrder.Api.Auth.CsrfValidationMiddleware>();

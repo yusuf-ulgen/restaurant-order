@@ -71,4 +71,60 @@ public interface IIamBootstrapGateway
     /// Updates user status and security version without requiring SELECT on iam.users.
     /// </summary>
     Task UpdateUserStatusAsync(Guid userId, RestaurantOrder.Domain.Auth.UserStatus status, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pre-rotation lookup for tenant refresh token metadata by token hash.
+    /// </summary>
+    Task<RefreshTokenRotationLookupDto?> LookupRefreshTokenForRotationAsync(string tokenHash, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically rotates a tenant refresh token under an active tenant transaction.
+    /// Returns true if old token was active and replaced; returns false if token was already consumed (reuse race).
+    /// </summary>
+    Task<bool> RotateTenantRefreshTokenAsync(
+        Guid tenantId,
+        Guid oldTokenId,
+        Guid newTokenId,
+        Guid sessionId,
+        Guid familyId,
+        string newTokenHash,
+        TimeSpan tokenLifetime,
+        DateTimeOffset nowUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes an entire tenant token family and session upon token reuse detection under tenant transaction.
+    /// </summary>
+    Task HandleTenantTokenReuseAsync(
+        Guid tenantId,
+        Guid familyId,
+        Guid sessionId,
+        DateTimeOffset nowUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Increments user security version to immediately invalidate all distributed active tokens.
+    /// </summary>
+    Task IncrementSecurityVersionAsync(Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes a tenant session and all its active refresh tokens under tenant transaction.
+    /// </summary>
+    Task RevokeTenantSessionAsync(
+        Guid tenantId,
+        Guid sessionId,
+        string reason,
+        DateTimeOffset nowUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes all active tenant sessions and refresh tokens for a user across tenants.
+    /// </summary>
+    Task RevokeAllUserSessionsAsync(Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default);
+
+    /// <summary>
+    /// Looks up active tenant sessions for a user without requiring blanket tenant context.
+    /// </summary>
+    Task<IReadOnlyList<UserSessionSummaryDto>> LookupActiveUserSessionsAsync(Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default);
 }
+

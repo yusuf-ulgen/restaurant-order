@@ -32,12 +32,20 @@ public class RbacAuthorizationIntegrationTests : IClassFixture<WebApplicationFac
             builder.UseEnvironment("Development");
             builder.ConfigureServices(services =>
             {
+                services.AddScoped<ITokenRevocationValidator, AllowAllTokenRevocationValidator>();
                 var sp = services.BuildServiceProvider();
                 jwtService = sp.GetRequiredService<JwtTokenService>();
             });
         }).CreateClient();
 
         return (client, jwtService!);
+    }
+
+    private sealed class AllowAllTokenRevocationValidator : ITokenRevocationValidator
+    {
+        public Task<bool> ValidateTokenActiveAsync(Guid sessionId, Guid userId, int securityVersion, CancellationToken ct = default) => Task.FromResult(true);
+        public Task InvalidateSessionCacheAsync(Guid sessionId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task InvalidateUserCacheAsync(Guid userId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     [Fact]

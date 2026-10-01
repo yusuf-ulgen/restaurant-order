@@ -17,7 +17,7 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     tenant_id uuid,
                     name text,
                     slug text,
-                    status integer
+                    status text
                 )
                 LANGUAGE plpgsql
                 SECURITY DEFINER
@@ -25,7 +25,7 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                 AS $$
                 BEGIN
                     RETURN QUERY
-                    SELECT t.id, t.name::text, t.slug::text, t.status
+                    SELECT t.id, t.name::text, t.slug::text, t.status::text
                     FROM tenancy.tenants t
                     WHERE t.slug = p_slug
                     LIMIT 1;

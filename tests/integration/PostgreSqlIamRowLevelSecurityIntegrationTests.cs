@@ -98,7 +98,8 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
 
         // Negative test: Tenant A attempts to UPDATE Tenant B membership
         var rawUpdate = await clientA.Database.ExecuteSqlRawAsync(
-            "UPDATE iam.memberships SET role = 'Kitchen' WHERE tenant_id = {0};",
+            "UPDATE iam.memberships SET role = {0} WHERE tenant_id = {1};",
+            (int)AuthRole.Kitchen,
             tenantBId.Value);
         Assert.Equal(0, rawUpdate);
 
@@ -109,7 +110,7 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
         Assert.Equal(0, rawDelete);
 
         // Negative test: Tenant A attempts to INSERT a membership for Tenant B
-        var illegalCrossTenantMembership = UserMembership.Create(tenantBId, userAId, AuthRole.Waiter, null, now);
+        var illegalCrossTenantMembership = UserMembership.Create(tenantBId, userAId, AuthRole.RestaurantAdmin, null, now);
         clientA.Memberships.Add(illegalCrossTenantMembership);
         await Assert.ThrowsAnyAsync<Exception>(() => clientA.SaveChangesAsync());
     }

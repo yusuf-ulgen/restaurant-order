@@ -79,3 +79,30 @@ public record SessionTenantLookupDto(
     Guid SessionId,
     Guid TenantId);
 
+/// <summary>
+/// Minimal projection returned by pre-rotation tenant refresh token lookup.
+/// </summary>
+public record RefreshTokenRotationLookupDto(
+    Guid TokenId,
+    Guid TenantId,
+    Guid SessionId,
+    Guid TokenFamilyId,
+    DateTimeOffset ExpiresAtUtc,
+    bool IsRevoked,
+    Guid? ReplacedByTokenId,
+    Guid UserId,
+    int AuthMethod,
+    bool SessionIsRevoked,
+    DateTimeOffset SessionExpiresAtUtc);
+
+/// <summary>
+/// Minimal projection for active user session listing.
+/// </summary>
+public record UserSessionSummaryDto(
+    Guid SessionId,
+    Guid TenantId,
+    string AuthMethod,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset LastSeenAtUtc,
+    DateTimeOffset ExpiresAtUtc);
+
