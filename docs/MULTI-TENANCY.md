@@ -99,9 +99,61 @@ For every incoming request, the tenant context is resolved and propagated across
 
 ---
 
-## 5. Multi-Tenant Testing Requirements
+## 5. Security & Role Architecture
+
+### 5.1. NOLOGIN Runtime Group Role vs LOGIN Role
+To enforce strict zero-secret compliance in source control and database migrations:
+1. **`restaurant_app_runtime` (NOLOGIN Group Role):**
+   - Defined in EF Core migrations (`20260920182029_AddTenantRowLevelSecurity.cs`) and migration scripts.
+   - Configured with `NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
+   - Granted DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on schema `tenancy`.
+   - Has `CREATE` revoked on schema `tenancy`.
+   - Cannot log in directly and contains NO passwords.
+2. **`restaurant_app_user` (Production LOGIN Role):**
+   - Created exclusively by deployment pipelines / secret managers / DBAs prior to application startup using `deploy/bootstrap/001_create_runtime_login_role.sql`.
+   - Granted membership in `restaurant_app_runtime` (`GRANT restaurant_app_runtime TO restaurant_app_user`).
+   - Receives a cryptographically random, high-entropy password injected via environment variables (`DATABASE_URL`).
+   - Never committed to git, migrations, test fixtures, or container images.
+
+### 5.2. Credential Provisioning Across Environments
+- **Local Development:** Developers use docker-compose with local credentials defined in uncommitted `.env` files.
+- **Integration Tests:** The test fixture (`TestcontainersFixture`) provisions a unique, ephemeral login role (e.g. `test_rt_<random_suffix>`) with a 256-bit cryptographically secure random password per test run, grants membership in `restaurant_app_runtime`, and drops the role on disposal.
+- **Staging & Production:** Managed cloud identity or vault-generated credentials injected via environment secrets into the application container.
+
+### 5.3. Deployment & Migration Sequence
+All production releases follow this deterministic sequence:
+1. **Privileged Role & Bootstrap Preparation:**
+   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (e.g., `postgres` / DBA) with secret injection to ensure runtime login users exist with proper group memberships.
+2. **Pre-Cutover Schema Migration:**
+   Execute migrations (`dotnet ef database update` or `scripts/migration-ops.mjs`) as the migration owner role before starting the new application release.
+3. **Runtime Credential Injection:**
+   Inject the production database connection string (with the runtime login user credentials) into the inactive (Green) slot container configuration.
+4. **Application Slot Startup & Verification:**
+   Start the application slot, run synthetic health probes, and execute cutover once healthy.
+
+### 5.4. Connection Pooling Security Assumptions
+1. **Transaction-Local Setting Scope:**
+   `set_config('app.current_tenant_id', @tenantId, true)` is strictly scoped to the active database transaction (`is_local => true`). When the transaction commits, rolls back, or fails due to an exception, PostgreSQL automatically purges the setting.
+2. **Session Cleanup Guarantee:**
+   `RestaurantOrderDbContext.ClearTenantSessionAsync()` explicitly resets `app.current_tenant_id` to an empty value to guarantee no ambient leakage when physical connections return to the Npgsql pool.
+3. **Non-Owner Enforcement:**
+   Runtime connections strictly execute under the non-owner runtime role where `FORCE ROW LEVEL SECURITY` prevents bypass. The role lacks `BYPASSRLS` and `SUPERUSER`.
+4. **Fail-Closed Default:**
+   If `app.current_tenant_id` is missing, empty string, malformed, or references a nonexistent tenant, `tenancy.get_current_tenant_id()` yields `NULL`, causing RLS policies to evaluate false and return 0 rows.
+
+### 5.5. Incident Response & Credential Rotation Note
+If runtime database credentials are ever exposed or suspected compromised:
+1. Generate a new high-entropy password in the deployment secret manager / vault.
+2. Execute `ALTER ROLE restaurant_app_user WITH PASSWORD '<NEW_STRONG_PASSWORD>';` via DBA connection.
+3. Update connection strings across deployment slots and perform an immediate rolling restart.
+4. Verify audit logs in PostgreSQL for anomalous queries during the exposure window.
+
+---
+
+## 6. Multi-Tenant Testing Requirements
 
 - **Cross-Tenant Test Suite:** Every integration test executes with at least two test tenants (`Tenant A` and `Tenant B`).
 - **Assertion:** Ensure that queries from `Tenant A` explicitly return 0 records when querying IDs belonging to `Tenant B`.
-- **Runtime Role Requirement:** Integration tests execute with the non-owner `restaurant_app_user` role to prevent false-positive PASS reports.
+- **Runtime Role Requirement:** Integration tests execute with the non-owner runtime role to prevent false-positive PASS reports.
+- **Fail-Closed Verification:** Explicitly verify that missing tenant context, empty string, invalid UUID, and nonexistent tenant UUID return 0 rows.
 - Any vulnerability permitting cross-tenant visibility is classified as a **Sev-1 Security Incident**.

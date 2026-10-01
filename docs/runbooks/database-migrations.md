@@ -48,20 +48,40 @@ dotnet ef migrations script \
   --output deploy/migrations/001_initial_tenancy_schema.sql
 ```
 
-### 3.3. Staging / Production Application
+### 3.3. Staging / Production Deployment Sequence
 
-Apply migrations to the database before launching or warming the inactive slot:
+All staging and production deployments follow this strictly ordered, zero-downtime procedure:
 
-```bash
-# Set connection string and backup verification flag
-export DATABASE_URL="postgresql://user:password@host:5432/restaurant_order_prod"
-export BACKUP_VERIFIED="true"
+1. **Step 1: Privileged Role & Bootstrap Preparation (DBA / Operator)**
+   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (`postgres` / DBA) with secret injection to ensure runtime login users exist and belong to the `restaurant_app_runtime` group:
+   ```bash
+   psql -v ON_ERROR_STOP=1 "$DBA_CONNECTION_URL" -f deploy/bootstrap/001_create_runtime_login_role.sql
+   ```
 
-# Apply via EF Core CLI or psql
-dotnet ef database update \
-  --project packages/infrastructure/RestaurantOrder.Infrastructure.csproj \
-  --startup-project apps/api/RestaurantOrder.Api.csproj
-```
+2. **Step 2: Pre-Cutover Schema Migration (Migration Owner)**
+   Apply migrations as the migration owner role before warming the candidate slot:
+   ```bash
+   # Set connection string and backup verification flag
+   export DATABASE_URL="postgresql://${MIGRATION_USER}:${MIGRATION_PASSWORD}@${DB_HOST}:5432/restaurant_order_prod"
+   export BACKUP_VERIFIED="true"
+
+   dotnet ef database update \
+     --project packages/infrastructure/RestaurantOrder.Infrastructure.csproj \
+     --startup-project apps/api/RestaurantOrder.Api.csproj
+   ```
+
+3. **Step 3: Runtime Login Role Membership & Secret Injection**
+   Verify the unprivileged application user inherits permissions from `restaurant_app_runtime`. Inject the runtime connection string into the candidate slot (`Green`) container environment via the deployment secret manager / vault.
+
+4. **Step 4: Application Slot Startup & Health Verification**
+   Launch candidate slot containers, perform synthetic health checks (`/health/ready`), and complete cutover.
+
+### 3.4. Emergency Credential Rotation
+If runtime credentials are ever suspected compromised:
+1. Generate new high-entropy credentials in the deployment secret manager / vault.
+2. Execute `ALTER ROLE restaurant_app_user WITH PASSWORD '<NEW_PASSWORD>';` as DBA.
+3. Update connection strings across deployment slots and perform rolling container restarts.
+4. Review PostgreSQL audit logs for unauthorized queries during the incident window.
 
 ---
 
