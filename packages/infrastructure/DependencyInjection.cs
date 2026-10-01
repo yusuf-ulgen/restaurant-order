@@ -73,6 +73,33 @@ public static class DependencyInjection
         services.AddSingleton<RestaurantOrder.Application.Auth.IPinHasher, RestaurantOrder.Infrastructure.Auth.PepperedPinHasher>();
         services.AddScoped<RestaurantOrder.Application.Auth.IIamUserLookupGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamUserLookupGateway>();
 
+        // JWT & Authentication Services
+        services.Configure<RestaurantOrder.Application.Auth.JwtSettings>(options =>
+        {
+            var section = configuration.GetSection(RestaurantOrder.Application.Auth.JwtSettings.SectionName);
+            section.Bind(options);
+
+            var envSecret = configuration["JWT_SECRET"];
+            if (!string.IsNullOrWhiteSpace(envSecret))
+            {
+                options.Secret = envSecret;
+            }
+            else if (string.IsNullOrWhiteSpace(options.Secret) && environment.IsDevelopment())
+            {
+                options.Secret = "dev-only-insecure-jwt-secret-min-32-chars-long!";
+            }
+        });
+
+        services.Configure<RestaurantOrder.Application.Auth.AuthSettings>(configuration.GetSection(RestaurantOrder.Application.Auth.AuthSettings.SectionName));
+
+        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.JwtTokenService>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IJwtTokenGenerator>(sp => sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.JwtTokenService>());
+        services.AddSingleton<RestaurantOrder.Application.Auth.IRefreshTokenService, RestaurantOrder.Infrastructure.Auth.RefreshTokenService>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.InMemoryPlatformSessionStore>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.LoginRateLimiter>();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
+
         if (environment.IsDevelopment())
         {
             services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();

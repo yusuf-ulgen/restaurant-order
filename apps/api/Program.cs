@@ -24,10 +24,48 @@ builder.Services.AddScoped<ITenantContextResolver>(sp =>
     {
         return ActivatorUtilities.CreateInstance<DevelopmentHeaderTenantContextResolver>(sp);
     }
-    return new DefaultTenantContextResolver();
+    return ActivatorUtilities.CreateInstance<DefaultTenantContextResolver>(sp);
 });
 
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<ITenantContextAccessor>().TenantContext);
+
+builder.Services.AddSingleton<RestaurantOrder.Api.Auth.IAuthCookieService, RestaurantOrder.Api.Auth.AuthCookieService>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DefaultCorsPolicy", policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
+builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+    .Configure<RestaurantOrder.Infrastructure.Auth.JwtTokenService>((options, jwtService) =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = jwtService.GetTokenValidationParameters();
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token))
+                {
+                    context.Token = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
+                }
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();
 builder.Services.AddSingleton<IRedisConnectionProvider, StackExchangeRedisConnectionProvider>();
@@ -55,7 +93,11 @@ if (app.Environment.IsDevelopment())
     .WithTags("Development");
 }
 
+app.UseCors("DefaultCorsPolicy");
+app.UseMiddleware<RestaurantOrder.Api.Auth.CsrfValidationMiddleware>();
+app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
+app.UseAuthorization();
 
 // Liveness probe indicating process is alive (never checks external dependencies)
 app.MapGet("/health/live", () => Results.Ok(new HealthLiveResponse(
@@ -114,6 +156,8 @@ app.MapGet("/api/v1/test/tenant-scope", (ITenantContext context) => Results.Ok(n
 .WithMetadata(new RequireTenantAttribute())
 .WithName("TestTenantScope")
 .WithSummary("Test endpoint enforcing tenant presence verification");
+
+RestaurantOrder.Api.Auth.AuthEndpoints.MapAuthEndpoints(app);
 
 app.Run();
 
