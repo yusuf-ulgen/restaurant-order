@@ -46,3 +46,31 @@ All high-impact actions generate an immutable audit log record in the database:
 - Tenant configuration modifications
 
 Audit log entries cannot be modified or deleted by any application role, including `Restoran Admini`.
+
+---
+
+## 5. IAM & Authentication Architecture (Phase 3 Implementation)
+
+Phase 3 implements comprehensive authentication and authorization hardening across all product surfaces:
+
+### 5.1. Password Security
+- **Password Hasher:** ASP.NET Core `IPasswordHasher<T>` utilizing PBKDF2 with HMAC-SHA512 and configurable production iteration count (100,000 iterations default).
+- **Constant-Time Verification:** Password verification and hash upgrade checking via `CryptographicOperations.FixedTimeEquals` to mitigate timing attacks.
+- **Account Protection:** Consecutive failed login attempt tracking, exponential backoff, and automatic account lockout after 5 failed attempts.
+
+### 5.2. Fast Staff PIN on Trusted Terminals
+- **No Standalone PIN:** 4-digit PIN is strictly prohibited from authenticating from arbitrary or public clients. PIN entry is only valid from an enrolled `TrustedTerminal`.
+- **Peppered PIN Hashing:** Two-layer security: server-side pepper via HMAC-SHA256 (`PIN_PEPPER_SECRET`) followed by PBKDF2 slow hashing. Even a database dump cannot brute-force 4-digit PINs without the environment pepper.
+- **Terminal Rate Limiting & Lockout:** Terminal-scoped rate limiting with progressive delay (1s after 3 failures, 2s after 4 failures) and 15-minute lockout after 5 consecutive failed attempts.
+- **Trusted Terminal Enrollment:** Two-step enrollment using high-entropy single-use pairing codes. Terminals receive a device secret whose SHA-256 digest is stored at rest. Terminal revocation immediately cascades to all staff sessions on that device.
+
+### 5.3. Token Architecture & Refresh Session Lifecycle
+- **Short-Lived Access Tokens:** Signed JWT access tokens with 15-minute expiration, containing verified tenant and role claims.
+- **Opaque Refresh Tokens:** 256-bit cryptographically secure random tokens stored only as SHA-256 hashes in `iam.refresh_tokens`.
+- **HttpOnly Cookies:** Refresh tokens are transmitted exclusively in `HttpOnly`, `Secure`, `SameSite=Strict` cookies.
+- **Rotation & Reuse Detection:** Every refresh rotates the token. If an already-consumed token is presented (replay attack), the entire session family is instantly revoked.
+- **Frontend Single-Flight Queue:** Browser client coordinates simultaneous 401 responses into a single refresh request (`SingleFlightRefreshQueue`), preventing concurrent refresh collisions.
+
+### 5.4. Fail-Closed RBAC & Tenant Isolation
+- **Deny-by-Default:** Centralized `PermissionAuthorizationHandler` enforcing 31 machine-readable capabilities across 8 roles. Unregistered permissions or unmapped scopes result in strict 403 Forbidden with RFC 7807 ProblemDetails.
+- **PostgreSQL RLS:** Defense-in-depth isolation: all `iam.*` tables enforce Row-Level Security policies tied to `app.current_tenant_id`.

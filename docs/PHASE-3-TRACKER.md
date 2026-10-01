@@ -14,6 +14,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
 | **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
 | **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | **COMPLETED** | Staff invitation, role assignment, Admin & Operations Web auth integration |
+| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, RBAC denial-by-default tests, documentation update, PR |
 
 ---
 
@@ -64,3 +65,14 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Admin Web login, protected routes, session restoration
 - [x] Operations Web terminal activation and PIN entry bottom sheet
 - [x] Single-flight refresh token queue in frontend HTTP client
+
+### Phase 3.7: Security Hardening & Final Verification
+- [x] Full RBAC matrix verification (all 31 permissions × 8 roles)
+- [x] Denial-by-default and fail-closed authorization verification
+- [x] RFC 7807 ProblemDetails compliance on 401 Unauthorized and 403 Forbidden
+- [x] Password hasher and peppered PIN hasher security properties verified
+- [x] Terminal progressive delay and brute-force lockout verified
+- [x] Single-flight concurrent token refresh queue verified
+- [x] All test suites passing (629 backend unit + 10 arch + 185 frontend unit + 73 integration = 897 automated tests)
+- [x] Zero files exceeding 600 lines strict ceiling
+- [x] Zero secrets and clean documentation integrity verified

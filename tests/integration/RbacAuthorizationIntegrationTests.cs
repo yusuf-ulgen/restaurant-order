@@ -110,4 +110,35 @@ public class RbacAuthorizationIntegrationTests : IClassFixture<WebApplicationFac
         Assert.Contains(tenantId.Value.ToString(), content);
         Assert.Contains(branchId.Value.ToString(), content);
     }
+
+    [Fact]
+    public async Task ProtectedEndpoint_WhenRoleLacksRequiredPermission_Returns403_WithRfc7807ProblemDetails()
+    {
+        var (client, jwtService) = CreateTestClient();
+
+        var tenantId = TenantId.New();
+        var branchId = BranchId.New();
+        // Waiter role does not possess BranchStaffManage permission
+        var token = jwtService.GenerateAccessToken(
+            UserId.New(),
+            Guid.NewGuid(),
+            PrincipalType.Staff,
+            AuthRole.Waiter,
+            AuthorizationScope.ForBranch(tenantId, branchId),
+            AuthenticationMethod.Password,
+            1,
+            DateTimeOffset.UtcNow);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/staff");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("403", content);
+        Assert.Contains("Forbidden", content);
+    }
 }

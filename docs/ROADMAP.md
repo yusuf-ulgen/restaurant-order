@@ -73,13 +73,13 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Idempotent synthetic local development seeder (`DevDataSeeder`).
 - [x] Two-tenant real PostgreSQL Testcontainers integration tests verifying strict tenant isolation.
 
-### Phase 3: Authentication & RBAC (Status: Sıradaki / Next)
-- [ ] Identity & Access Management (IAM) module with 8 supported roles.
-- [ ] JWT authentication, token refresh flows, and secure cookie storage.
-- [ ] Fast 4-digit PIN authentication for waiter and operations mobile terminals.
-- [ ] Role-Based Access Control (RBAC) authorization middleware and permission matrix.
+### Phase 3: Authentication & RBAC (Status: Tamamlandı / Completed)
+- [x] Identity & Access Management (IAM) module with 8 supported roles.
+- [x] JWT authentication, token refresh flows, and secure cookie storage.
+- [x] Fast 4-digit PIN authentication for waiter and operations mobile terminals.
+- [x] Role-Based Access Control (RBAC) authorization middleware and permission matrix.
 
-### Phase 4: Restaurant Configuration (Status: Planlandı / Planned)
+### Phase 4: Restaurant Configuration (Status: Sıradaki / Next)
 - [ ] Brand and branch configuration data models.
 - [ ] Operating hours, service charge settings, and tax rate configuration.
 - [ ] Branch dining areas (Indoor, Terrace, Garden) and station definitions.
