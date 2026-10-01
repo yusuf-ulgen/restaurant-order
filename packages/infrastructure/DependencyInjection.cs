@@ -100,6 +100,12 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
         services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
 
+        // Central Authorization & Capability Registry
+        services.AddSingleton<RestaurantOrder.Application.Auth.IJwtClaimPrincipalParser, RestaurantOrder.Application.Auth.JwtClaimPrincipalParser>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IResourceOwnershipRequirement, RestaurantOrder.Application.Auth.DefaultResourceOwnershipRequirement>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPermissionRegistry, RestaurantOrder.Application.Auth.PermissionRegistry>();
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RestaurantOrder.Infrastructure.Auth.PermissionAuthorizationHandler>();
+
         if (environment.IsDevelopment())
         {
             services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();

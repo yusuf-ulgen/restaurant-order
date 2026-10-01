@@ -58,6 +58,41 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
                     context.Token = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
                 }
                 return Task.CompletedTask;
+            },
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/problem+json";
+                var correlationId = context.Response.Headers["X-Correlation-Id"].ToString();
+                if (string.IsNullOrWhiteSpace(correlationId)) correlationId = Guid.NewGuid().ToString("D");
+                var problemJson = JsonSerializer.Serialize(new
+                {
+                    type = "https://httpstatuses.com/401",
+                    title = "Unauthorized",
+                    status = 401,
+                    detail = "Authentication required or invalid credentials.",
+                    instance = context.Request.Path.Value,
+                    correlationId
+                });
+                await context.Response.WriteAsync(problemJson);
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/problem+json";
+                var correlationId = context.Response.Headers["X-Correlation-Id"].ToString();
+                if (string.IsNullOrWhiteSpace(correlationId)) correlationId = Guid.NewGuid().ToString("D");
+                var problemJson = JsonSerializer.Serialize(new
+                {
+                    type = "https://httpstatuses.com/403",
+                    title = "Forbidden",
+                    status = 403,
+                    detail = "You do not have permission to perform this action.",
+                    instance = context.Request.Path.Value,
+                    correlationId
+                });
+                await context.Response.WriteAsync(problemJson);
             }
         };
     });
@@ -65,6 +100,7 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
 builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
 
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider, RestaurantOrder.Api.Auth.PermissionPolicyProvider>();
 builder.Services.AddAuthorization();
 
 builder.Services.AddSingleton<IDatabaseHealthCheck, NpgsqlDatabaseHealthCheck>();

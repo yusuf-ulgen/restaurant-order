@@ -9,9 +9,9 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | Sub-Phase | Title | Status | Primary Output |
 | :--- | :--- | :--- | :--- |
 | **Phase 3.1** | IAM Architecture & Authorization Contracts | **COMPLETED** | ADR-0009, 8 Roles, Scope Models, Permission Registry, JWT Claim Models, Unit Tests |
-| **Phase 3.2** | IAM Persistence, Sessions & Tenant Isolation | Planned / Pending | EF Core IAM entities, PostgreSQL `iam` schema, RLS policies, audit logs, Hasher contracts |
-| **Phase 3.3** | Password Authentication, JWT & Refresh Session Flow | Planned / Pending | Login, refresh, logout endpoints, HttpOnly cookies, token rotation, reuse detection |
-| **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | Planned / Pending | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
+| **Phase 3.2** | IAM Persistence, Sessions & Tenant Isolation | **COMPLETED** | EF Core IAM entities, PostgreSQL `iam` schema, RLS policies, audit logs, Hasher contracts |
+| **Phase 3.3** | Password Authentication, JWT & Refresh Session Flow | **COMPLETED** | Login, refresh, logout endpoints, HttpOnly cookies, token rotation, reuse detection |
+| **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
 | **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | Planned / Pending | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
 | **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | Planned / Pending | Staff invitation, role assignment, Admin & Operations Web auth integration |
 
@@ -30,28 +30,28 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] **Matrix & Scope Tests:** Unit tests covering all 31 permissions across all 8 roles and negative scope/claim scenarios
 
 ### Phase 3.2: IAM Persistence, Sessions & Tenant Isolation
-- [ ] User/Account entity (`iam.users`)
-- [ ] Tenant/Branch Membership entity (`iam.memberships`)
-- [ ] Auth Session entity (`iam.sessions`)
-- [ ] Refresh Token state with family tracking (`iam.refresh_tokens`)
-- [ ] Trusted Terminal entity (`iam.trusted_terminals`)
-- [ ] Append-Only Security Audit Log (`iam.audit_events`)
-- [ ] PostgreSQL Row-Level Security for `iam.*` tables
-- [ ] Password and peppered PIN hasher contracts
+- [x] User/Account entity (`iam.users`)
+- [x] Tenant/Branch Membership entity (`iam.memberships`)
+- [x] Auth Session entity (`iam.sessions`)
+- [x] Refresh Token state with family tracking (`iam.refresh_tokens`)
+- [x] Trusted Terminal entity (`iam.trusted_terminals`)
+- [x] Append-Only Security Audit Log (`iam.audit_events`)
+- [x] PostgreSQL Row-Level Security for `iam.*` tables
+- [x] Password and peppered PIN hasher contracts
 
 ### Phase 3.3: Password Authentication, JWT & Refresh Session Flow
-- [ ] `POST /api/v1/auth/login` (Email + Password)
-- [ ] `POST /api/v1/auth/refresh` (Rotating refresh tokens)
-- [ ] `POST /api/v1/auth/logout` & `POST /api/v1/auth/logout-all`
-- [ ] `GET /api/v1/auth/session` & `GET /api/v1/auth/sessions`
-- [ ] HttpOnly, Secure, SameSite=Strict cookies
-- [ ] Token reuse detection and session family revocation
+- [x] `POST /api/v1/auth/login` (Email + Password)
+- [x] `POST /api/v1/auth/refresh` (Rotating refresh tokens)
+- [x] `POST /api/v1/auth/logout` & `POST /api/v1/auth/logout-all`
+- [x] `GET /api/v1/auth/session` & `GET /api/v1/auth/sessions`
+- [x] HttpOnly, Secure, SameSite=Strict cookies
+- [x] Token reuse detection and session family revocation
 
 ### Phase 3.4: Central Authorization, RBAC & Authenticated Tenant Context
-- [ ] `PermissionRequirement` & `PermissionAuthorizationHandler`
-- [ ] `[RequirePermission(...)]` attribute and policy provider
-- [ ] Authenticated tenant context resolver (from verified JWT claims only)
-- [ ] Resource ownership and station assignment validators
+- [x] `PermissionRequirement` & `PermissionAuthorizationHandler`
+- [x] `[RequirePermission(...)]` attribute and policy provider
+- [x] Authenticated tenant context resolver (from verified JWT claims only)
+- [x] Resource ownership and station assignment validators
 
 ### Phase 3.5: Secure Staff PIN & Trusted Terminal Authentication
 - [ ] Terminal enrollment code generation and activation
