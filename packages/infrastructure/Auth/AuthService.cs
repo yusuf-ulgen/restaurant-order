@@ -366,7 +366,7 @@ public sealed class AuthService : IAuthService
     public Task LogoutAllAsync(UserId userId, CancellationToken ct = default) =>
         _sessionManager.LogoutAllAsync(userId, ct);
 
-    public Task RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default) =>
+    public Task<bool> RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default) =>
         _sessionManager.RevokeSessionAsync(currentUserId, targetSessionId, ct);
 
     public Task<IReadOnlyList<SessionDto>> GetActiveSessionsAsync(UserId userId, Guid? currentSessionId = null, CancellationToken ct = default) =>
@@ -374,13 +374,11 @@ public sealed class AuthService : IAuthService
 
     private async Task RecordFailedLoginAsync(Guid userId, DateTimeOffset now, CancellationToken ct)
     {
-        var failedAttempts = 1;
-        DateTimeOffset? lockoutEnd = null;
-        if (failedAttempts >= _authSettings.MaxFailedLoginAttempts)
-        {
-            lockoutEnd = now.AddMinutes(_authSettings.LockoutMinutes);
-        }
-
-        await _bootstrapGateway.RecordFailedLoginAttemptAsync(userId, failedAttempts, lockoutEnd, now, ct);
+        await _bootstrapGateway.RecordFailedLoginAttemptAsync(
+            userId,
+            _authSettings.MaxFailedLoginAttempts,
+            _authSettings.LockoutMinutes,
+            now,
+            ct);
     }
 }

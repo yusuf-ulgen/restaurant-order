@@ -16,7 +16,7 @@ public interface IAuthService
 
     Task LogoutAllAsync(UserId userId, CancellationToken ct = default);
 
-    Task RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default);
+    Task<bool> RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default);
 
     Task<IReadOnlyList<SessionDto>> GetActiveSessionsAsync(UserId userId, Guid? currentSessionId = null, CancellationToken ct = default);
 }

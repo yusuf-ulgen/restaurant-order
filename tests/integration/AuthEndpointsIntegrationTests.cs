@@ -10,6 +10,7 @@ using Moq;
 using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
+using RestaurantOrder.Domain.Tenants;
 using Xunit;
 
 namespace RestaurantOrder.IntegrationTests;
@@ -23,7 +24,9 @@ public class AuthEndpointsIntegrationTests : IClassFixture<WebApplicationFactory
         _factory = factory;
     }
 
-    private HttpClient CreateClientWithAuthService(Mock<IAuthService> mockAuthService)
+    private HttpClient CreateClientWithAuthService(
+        Mock<IAuthService> mockAuthService,
+        Mock<ITokenRevocationValidator>? mockValidator = null)
     {
         return _factory.WithWebHostBuilder(builder =>
         {
@@ -31,11 +34,35 @@ public class AuthEndpointsIntegrationTests : IClassFixture<WebApplicationFactory
             builder.ConfigureServices(services =>
             {
                 services.AddScoped(_ => mockAuthService.Object);
+                if (mockValidator != null)
+                {
+                    services.AddScoped(_ => mockValidator.Object);
+                }
             });
         }).CreateClient(new WebApplicationFactoryClientOptions
         {
             HandleCookies = false // We inspect cookies directly
         });
+    }
+
+    private string GenerateTestToken(Guid userId, Guid sessionId, Guid? tenantId = null, string role = "RestaurantAdmin")
+    {
+        using var scope = _factory.Services.CreateScope();
+        var jwtGen = scope.ServiceProvider.GetRequiredService<IJwtTokenGenerator>();
+        var authScope = tenantId.HasValue
+            ? AuthorizationScope.ForTenant(TenantId.From(tenantId.Value))
+            : AuthorizationScope.Platform();
+        var authRole = Enum.Parse<AuthRole>(role);
+        var result = jwtGen.GenerateAccessToken(
+            UserId.From(userId),
+            sessionId,
+            PrincipalType.Staff,
+            authRole,
+            authScope,
+            AuthenticationMethod.Password,
+            1,
+            DateTimeOffset.UtcNow);
+        return result.Token;
     }
 
     [Fact]
@@ -145,5 +172,217 @@ public class AuthEndpointsIntegrationTests : IClassFixture<WebApplicationFactory
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("CSRF token missing or invalid.", content);
+    }
+
+    [Fact]
+    public async Task Refresh_ValidToken_Returns200_WithNewCookies()
+    {
+        var mockAuth = new Mock<IAuthService>();
+        var now = DateTimeOffset.UtcNow;
+        var authResult = new AuthResult(
+            AccessToken: "new.access.token",
+            RefreshToken: "new_refresh_token_64_chars_long_opaque_value_1234567890abcdef12345678",
+            AccessTokenExpiresAt: now.AddMinutes(10),
+            RefreshTokenExpiresAt: now.AddDays(7),
+            User: new UserPrincipalDto(Guid.NewGuid(), "admin@test.com", "RestaurantAdmin", Guid.NewGuid(), null, 1),
+            Session: new SessionDto(Guid.NewGuid(), "Password", "Active", now, now, now.AddDays(7), IsCurrent: true));
+
+        mockAuth.Setup(a => a.RefreshSessionAsync("valid_refresh_token", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(authResult);
+
+        var client = CreateClientWithAuthService(mockAuth);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        request.Headers.Add("Cookie", $"{AuthCookieService.RefreshTokenCookieName}=valid_refresh_token; {AuthCookieService.CsrfTokenCookieName}=csrf_test_value");
+        request.Headers.Add("X-CSRF-Token", "csrf_test_value");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.Contains("Set-Cookie"));
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Contains(cookies, c => c.Contains(AuthCookieService.AccessTokenCookieName));
+        Assert.Contains(cookies, c => c.Contains(AuthCookieService.RefreshTokenCookieName));
+    }
+
+    [Fact]
+    public async Task Refresh_TokenReuse_Returns401_AndClearsCookies()
+    {
+        var mockAuth = new Mock<IAuthService>();
+        mockAuth.Setup(a => a.RefreshSessionAsync("stolen_token", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new AuthFailureException("Token reuse detected"));
+
+        var client = CreateClientWithAuthService(mockAuth);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        request.Headers.Add("Cookie", $"{AuthCookieService.RefreshTokenCookieName}=stolen_token; {AuthCookieService.CsrfTokenCookieName}=csrf_test_value");
+        request.Headers.Add("X-CSRF-Token", "csrf_test_value");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.True(response.Headers.Contains("Set-Cookie"));
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Contains(cookies, c => c.Contains(AuthCookieService.AccessTokenCookieName) && c.Contains("expires="));
+    }
+
+    [Fact]
+    public async Task GetCurrentUser_WithValidToken_Returns200()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        var mockAuth = new Mock<IAuthService>();
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(sessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, sessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/me");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains(userId.ToString(), content);
+    }
+
+    [Fact]
+    public async Task GetActiveSessions_WithValidToken_Returns200WithSessions()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        var mockAuth = new Mock<IAuthService>();
+        mockAuth.Setup(a => a.GetActiveSessionsAsync(new UserId(userId), sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SessionDto>
+            {
+                new SessionDto(sessionId, "Password", "Active", now, now, now.AddDays(7), IsCurrent: true)
+            });
+
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(sessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, sessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/sessions");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains(sessionId.ToString(), content);
+    }
+
+    [Fact]
+    public async Task RevokeSession_OwnedSession_Returns204NoContent()
+    {
+        var userId = Guid.NewGuid();
+        var currentSessionId = Guid.NewGuid();
+        var targetSessionId = Guid.NewGuid();
+
+        var mockAuth = new Mock<IAuthService>();
+        mockAuth.Setup(a => a.RevokeSessionAsync(new UserId(userId), targetSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(currentSessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, currentSessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/auth/sessions/{targetSessionId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RevokeSession_UnownedSession_Returns404NotFound()
+    {
+        var userId = Guid.NewGuid();
+        var currentSessionId = Guid.NewGuid();
+        var targetSessionId = Guid.NewGuid();
+
+        var mockAuth = new Mock<IAuthService>();
+        mockAuth.Setup(a => a.RevokeSessionAsync(new UserId(userId), targetSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false); // IDOR blocked / not found
+
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(currentSessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, currentSessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/auth/sessions/{targetSessionId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_WithValidTokenAndCsrf_ClearsCookiesAndReturns200()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        var mockAuth = new Mock<IAuthService>();
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(sessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, sessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("Cookie", $"{AuthCookieService.CsrfTokenCookieName}=csrf123");
+        request.Headers.Add("X-CSRF-Token", "csrf123");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.Contains("Set-Cookie"));
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Contains(cookies, c => c.Contains(AuthCookieService.AccessTokenCookieName) && c.Contains("expires="));
+    }
+
+    [Fact]
+    public async Task LogoutAll_WithValidTokenAndCsrf_ClearsCookiesAndReturns200()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        var mockAuth = new Mock<IAuthService>();
+        var mockValidator = new Mock<ITokenRevocationValidator>();
+        mockValidator.Setup(v => v.ValidateTokenActiveAsync(sessionId, userId, 1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var client = CreateClientWithAuthService(mockAuth, mockValidator);
+        var token = GenerateTestToken(userId, sessionId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout-all");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("Cookie", $"{AuthCookieService.CsrfTokenCookieName}=csrf123");
+        request.Headers.Add("X-CSRF-Token", "csrf123");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.Contains("Set-Cookie"));
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Contains(cookies, c => c.Contains(AuthCookieService.AccessTokenCookieName) && c.Contains("expires="));
     }
 }

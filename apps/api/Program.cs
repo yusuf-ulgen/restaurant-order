@@ -76,10 +76,21 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
                     Guid.TryParse(subClaim, out var userId) &&
                     int.TryParse(secVerClaim, out var securityVersion))
                 {
-                    var isValid = await validator.ValidateTokenActiveAsync(sessionId, userId, securityVersion, context.HttpContext.RequestAborted);
-                    if (!isValid)
+                    try
                     {
-                        context.Fail("Token session has been revoked or security version has expired.");
+                        var isValid = await validator.ValidateTokenActiveAsync(sessionId, userId, securityVersion, context.HttpContext.RequestAborted);
+                        if (!isValid)
+                        {
+                            context.Fail("Token session has been revoked or security version has expired.");
+                        }
+                    }
+                    catch (RestaurantOrder.Application.Auth.DistributedSecurityStateUnavailableException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.Fail($"Token validation failed closed: {ex.Message}");
                     }
                 }
                 else

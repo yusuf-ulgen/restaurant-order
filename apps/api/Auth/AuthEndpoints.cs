@@ -230,7 +230,14 @@ public static class AuthEndpoints
                 return Results.Unauthorized();
             }
 
-            await authService.RevokeSessionAsync(new UserId(userIdGuid), id, ct);
+            var revoked = await authService.RevokeSessionAsync(new UserId(userIdGuid), id, ct);
+            if (!revoked)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Session not found",
+                    detail: "The specified session was not found.");
+            }
 
             if (Guid.TryParse(sidStr, out var currentSessionId) && currentSessionId == id)
             {

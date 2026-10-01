@@ -58,13 +58,14 @@ public sealed class CsrfValidationMiddleware
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 context.Response.ContentType = "application/problem+json";
-                await context.Response.WriteAsJsonAsync(new
+                var problemJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     type = "https://httpstatuses.com/403",
                     title = "Forbidden",
                     status = 403,
                     detail = "CSRF token missing or invalid."
                 });
+                await context.Response.WriteAsync(problemJson);
                 return;
             }
         }

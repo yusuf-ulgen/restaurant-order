@@ -42,9 +42,12 @@ public interface IIamBootstrapGateway
     Task<UserSummaryLookupDto?> LookupUserByIdAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Looks up session tenant ID by session ID before tenant context is set.
-    /// </summary>
     Task<SessionTenantLookupDto?> LookupSessionTenantAsync(Guid sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Looks up session tenant ID verified for a specific user ID to prevent IDOR.
+    /// </summary>
+    Task<SessionTenantLookupDto?> LookupSessionTenantAsync(Guid sessionId, Guid? userId, CancellationToken ct = default);
 
     /// <summary>
     /// Updates user login timestamp, resets failed attempt count, and optionally rehashes password.
@@ -53,9 +56,9 @@ public interface IIamBootstrapGateway
     Task RecordSuccessfulLoginAsync(Guid userId, DateTimeOffset nowUtc, string? newPasswordHash = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Records failed login attempt and potential lockout on user without requiring SELECT on iam.users.
+    /// Records failed login attempt and potential lockout on user atomically without requiring SELECT on iam.users.
     /// </summary>
-    Task RecordFailedLoginAttemptAsync(Guid userId, int failedAttempts, DateTimeOffset? lockoutEndUtc, DateTimeOffset nowUtc, CancellationToken ct = default);
+    Task RecordFailedLoginAttemptAsync(Guid userId, int maxAttempts, int lockoutMinutes, DateTimeOffset nowUtc, CancellationToken ct = default);
 
     /// <summary>
     /// Activates user and sets new password hash during invitation accept flow.
@@ -110,11 +113,22 @@ public interface IIamBootstrapGateway
     /// <summary>
     /// Revokes a tenant session and all its active refresh tokens under tenant transaction.
     /// </summary>
-    Task RevokeTenantSessionAsync(
+    Task<bool> RevokeTenantSessionAsync(
         Guid tenantId,
         Guid sessionId,
         string reason,
         DateTimeOffset nowUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes a tenant session and all its active refresh tokens verified for a specific user ID to prevent IDOR.
+    /// </summary>
+    Task<bool> RevokeTenantSessionAsync(
+        Guid tenantId,
+        Guid sessionId,
+        string reason,
+        DateTimeOffset nowUtc,
+        Guid? userId,
         CancellationToken ct = default);
 
     /// <summary>

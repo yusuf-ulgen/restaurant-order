@@ -117,21 +117,27 @@ public sealed class InMemoryPlatformSessionStore : IPlatformSessionStore
         }
     }
 
-    public Task RevokeSessionAsync(Guid sessionId, string reason, DateTimeOffset nowUtc)
+    public Task<bool> RevokeSessionAsync(Guid sessionId, string reason, DateTimeOffset nowUtc, UserId? userId = null)
     {
         lock (_syncLock)
         {
             if (_sessions.TryGetValue(sessionId, out var session))
             {
+                if (userId.HasValue && session.UserId != userId.Value)
+                {
+                    return Task.FromResult(false);
+                }
+
                 _sessions[sessionId] = session with { IsRevoked = true };
                 foreach (var kvp in _tokens.Where(t => t.Value.SessionId == sessionId))
                 {
                     kvp.Value.IsConsumed = true;
                 }
+                return Task.FromResult(true);
             }
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(false);
     }
 
     public Task RevokeAllUserSessionsAsync(UserId userId, DateTimeOffset nowUtc)

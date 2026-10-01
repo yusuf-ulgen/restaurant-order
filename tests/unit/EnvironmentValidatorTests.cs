@@ -251,4 +251,177 @@ public class EnvironmentValidatorTests
         var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
         Assert.Throws<InvalidOperationException>(() => WorkerConfigurationValidator.Validate(config, env));
     }
+
+    [Fact]
+    public void ApiValidate_WhenFallbackConnectionStringsUsed_ValidatesSuccessfully()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "ConnectionStrings:Database", "Host=localhost;Database=test" },
+                { "ConnectionStrings:Redis", "localhost:6379" },
+                { "Jwt:Secret", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "green" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        var exception = Record.Exception(() => ConfigurationValidator.Validate(config, env));
+        Assert.Null(exception);
+    }
+
+    [Theory]
+    [InlineData("postgres://app_user:strong_password@localhost:5432/restaurant_db")]
+    [InlineData("postgresql://app_user:strong_password@localhost:5432/restaurant_db")]
+    public void ApiValidate_WhenPostgresUriFormat_ValidatesSuccessfully(string dbUri)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", dbUri },
+                { "REDIS_URL", "redis://redis_user:secret_auth_token@localhost:6379" },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        var exception = Record.Exception(() => ConfigurationValidator.Validate(config, env));
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ApiValidate_WhenRedisUriValid_ValidatesSuccessfully()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", "Host=localhost;Database=test" },
+                { "REDIS_URL", "redis://redis_user:secret_auth_token@localhost:6379" },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        var exception = Record.Exception(() => ConfigurationValidator.Validate(config, env));
+        Assert.Null(exception);
+    }
+
+    [Theory]
+    [InlineData("postgres:///missing_host")]
+    [InlineData("postgresql://:5432/missing_host")]
+    public void ApiValidate_WhenPostgresUriInvalidHost_Throws(string invalidUri)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", invalidUri },
+                { "REDIS_URL", "localhost:6379" },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
+
+    [Theory]
+    [InlineData("Host=localhost")] // Missing Database
+    [InlineData("Database=test")]  // Missing Host
+    [InlineData("Port=5432")]      // Missing both
+    public void ApiValidate_WhenAdoNetDatabaseUrlMissingHostOrDb_Throws(string invalidConnStr)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", invalidConnStr },
+                { "REDIS_URL", "localhost:6379" },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
+
+    [Theory]
+    [InlineData("redis:///missing_host")]
+    [InlineData("redis://:6379/")]
+    public void ApiValidate_WhenRedisUriInvalidHost_Throws(string invalidRedisUri)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", "Host=localhost;Database=test" },
+                { "REDIS_URL", invalidRedisUri },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
+
+    [Theory]
+    [InlineData(":6379")]           // Empty host
+    [InlineData("host:6379:extra")]  // Too many colons
+    public void ApiValidate_WhenRedisHostPortFormatInvalid_Throws(string invalidHostPort)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", "Host=localhost;Database=test" },
+                { "REDIS_URL", invalidHostPort },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
+
+    [Theory]
+    [InlineData("yellow")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void ApiValidate_WhenDeploymentColorInvalid_Throws(string? invalidColor)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", "Host=localhost;Database=test" },
+                { "REDIS_URL", "localhost:6379" },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", invalidColor }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
+
+    [Theory]
+    [InlineData("Host=localhost;Database=test;Password=changeme", "localhost:6379")]
+    [InlineData("Host=localhost;Database=test", "localhost:6379,password=default")]
+    public void ApiValidate_WhenInsecureKeywordsInUrls_Throws(string dbUrl, string redisUrl)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "DATABASE_URL", dbUrl },
+                { "REDIS_URL", redisUrl },
+                { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
+                { "DEPLOYMENT_COLOR", "blue" }
+            })
+            .Build();
+
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        Assert.Throws<InvalidOperationException>(() => ConfigurationValidator.Validate(config, env));
+    }
 }
+

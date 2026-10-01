@@ -191,11 +191,20 @@ public sealed partial class PostgreSqlIamBootstrapGateway
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task RevokeTenantSessionAsync(
+    public Task<bool> RevokeTenantSessionAsync(
         Guid tenantId,
         Guid sessionId,
         string reason,
         DateTimeOffset nowUtc,
+        CancellationToken ct = default) =>
+        RevokeTenantSessionAsync(tenantId, sessionId, reason, nowUtc, null, ct);
+
+    public async Task<bool> RevokeTenantSessionAsync(
+        Guid tenantId,
+        Guid sessionId,
+        string reason,
+        DateTimeOffset nowUtc,
+        Guid? userId,
         CancellationToken ct = default)
     {
         var conn = await GetOpenConnectionAsync(ct);
@@ -203,28 +212,22 @@ public sealed partial class PostgreSqlIamBootstrapGateway
         await using var localTx = hasAmbientTx ? null : await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
 
         await using var cmd = CreateCommand(conn, @"
-            UPDATE iam.sessions
-            SET is_revoked = true,
-                revocation_reason = @reason,
-                revoked_at_utc = @nowUtc
-            WHERE id = @sessionId AND tenant_id = @tenantId;
+            SELECT iam.revoke_tenant_session_for_user(@tenantId, @userId, @sessionId, @reason, @nowUtc);");
 
-            UPDATE iam.refresh_tokens
-            SET is_revoked = true,
-                revoked_at_utc = @nowUtc
-            WHERE session_id = @sessionId AND tenant_id = @tenantId;");
-
-        var pSid = cmd.CreateParameter(); pSid.ParameterName = "sessionId"; pSid.Value = sessionId; cmd.Parameters.Add(pSid);
         var pTen = cmd.CreateParameter(); pTen.ParameterName = "tenantId"; pTen.Value = tenantId; cmd.Parameters.Add(pTen);
+        var pUser = cmd.CreateParameter(); pUser.ParameterName = "userId"; pUser.Value = (object?)userId ?? DBNull.Value; cmd.Parameters.Add(pUser);
+        var pSid = cmd.CreateParameter(); pSid.ParameterName = "sessionId"; pSid.Value = sessionId; cmd.Parameters.Add(pSid);
         var pRea = cmd.CreateParameter(); pRea.ParameterName = "reason"; pRea.Value = reason; cmd.Parameters.Add(pRea);
         var pNow = cmd.CreateParameter(); pNow.ParameterName = "nowUtc"; pNow.Value = nowUtc; cmd.Parameters.Add(pNow);
 
-        await cmd.ExecuteNonQueryAsync(ct);
+        var result = await cmd.ExecuteScalarAsync(ct);
 
         if (localTx != null)
         {
             await localTx.CommitAsync(ct);
         }
+
+        return result is bool b && b;
     }
 
     public async Task RevokeAllUserSessionsAsync(Guid userId, DateTimeOffset nowUtc, CancellationToken ct = default)

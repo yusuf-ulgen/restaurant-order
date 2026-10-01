@@ -28,7 +28,7 @@ public interface IPlatformSessionStore
         TimeSpan tokenLifetime,
         DateTimeOffset nowUtc);
 
-    Task RevokeSessionAsync(Guid sessionId, string reason, DateTimeOffset nowUtc);
+    Task<bool> RevokeSessionAsync(Guid sessionId, string reason, DateTimeOffset nowUtc, UserId? userId = null);
 
     Task RevokeAllUserSessionsAsync(UserId userId, DateTimeOffset nowUtc);
 

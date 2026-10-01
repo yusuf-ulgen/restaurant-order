@@ -14,7 +14,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
 | **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
 | **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | **COMPLETED** | Staff invitation, role assignment, Admin & Operations Web auth integration |
-| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, tenant transaction determinism, RLS isolation, tests |
+| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, distributed auth fixes, coverage closure, audit remediation |
 
 ---
 
@@ -80,7 +80,16 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Distributed ephemeral auth state in Redis (login rate limiting Lua scripts, progressive terminal PIN backoff/lockout, single-use enrollment `GETDEL`)
 - [x] Fail-closed Redis architecture: returns HTTP 503 rather than bypassing security gates if Redis is unavailable
 - [x] Multi-instance distributed integration test suite (`PostgreSqlDistributedAuthIntegrationTests`) passing across simulated API instances
-- [x] All test suites passing (629 backend unit + 10 arch + 84 integration = 723 backend tests; 100% green)
+- [x] Backend combined test coverage >= 80% threshold closure (Line: 94.16%, Branch: 83.02%, Method: 96.00%)
+- [x] Frontend test coverage >= 80% threshold closure across all apps and packages
+- [x] Platform refresh token reuse SQL column fix and verification
+- [x] Session revoke IDOR vulnerability closure and tenant/platform ownership integration tests
+- [x] Atomic account lockout counter in PostgreSQL
+- [x] PIN rate-limit email/userId key consistency across distributed instances
+- [x] JWT session-user binding verification in iam.validate_token_session (forward migration)
+- [x] Platform session least-privilege direct table access revocation
 - [x] Zero files exceeding 600 lines strict ceiling
 - [x] Zero secrets and clean documentation integrity verified
+
+
 

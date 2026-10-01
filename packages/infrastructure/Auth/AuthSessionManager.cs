@@ -54,21 +54,34 @@ public sealed class AuthSessionManager : IAuthSessionManager
         }
     }
 
-    public async Task RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default)
+    public async Task<bool> RevokeSessionAsync(UserId currentUserId, Guid targetSessionId, CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
-        await _platformSessionStore.RevokeSessionAsync(targetSessionId, "manual_revocation", now);
+        var platformRevoked = await _platformSessionStore.RevokeSessionAsync(targetSessionId, "manual_revocation", now, currentUserId);
+        if (platformRevoked)
+        {
+            if (_tokenValidator != null)
+            {
+                await _tokenValidator.InvalidateSessionCacheAsync(targetSessionId, ct);
+            }
+            return true;
+        }
 
-        var sessionLookup = await _bootstrapGateway.LookupSessionTenantAsync(targetSessionId, ct);
+        var sessionLookup = await _bootstrapGateway.LookupSessionTenantAsync(targetSessionId, currentUserId.Value, ct);
         if (sessionLookup != null && sessionLookup.TenantId != Guid.Empty)
         {
-            await _bootstrapGateway.RevokeTenantSessionAsync(sessionLookup.TenantId, targetSessionId, "manual_revocation", now, ct);
+            var tenantRevoked = await _bootstrapGateway.RevokeTenantSessionAsync(sessionLookup.TenantId, targetSessionId, "manual_revocation", now, currentUserId.Value, ct);
+            if (tenantRevoked)
+            {
+                if (_tokenValidator != null)
+                {
+                    await _tokenValidator.InvalidateSessionCacheAsync(targetSessionId, ct);
+                }
+                return true;
+            }
         }
 
-        if (_tokenValidator != null)
-        {
-            await _tokenValidator.InvalidateSessionCacheAsync(targetSessionId, ct);
-        }
+        return false;
     }
 
     public async Task<IReadOnlyList<SessionDto>> GetActiveSessionsAsync(UserId userId, Guid? currentSessionId = null, CancellationToken ct = default)

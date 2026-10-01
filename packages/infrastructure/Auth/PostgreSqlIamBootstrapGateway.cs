@@ -220,16 +220,18 @@ public sealed partial class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
         var conn = await GetOpenConnectionAsync(ct);
         var hasNewHash = !string.IsNullOrWhiteSpace(newPasswordHash);
         var sql = hasNewHash
-            ? @"UPDATE iam.users
+            ? $@"UPDATE iam.users
                 SET failed_login_attempts = 0,
                     lockout_end_utc = NULL,
+                    status = CASE WHEN status = {(int)UserStatus.Locked} THEN {(int)UserStatus.Active} ELSE status END,
                     password_hash = @newPasswordHash,
                     updated_at_utc = @nowUtc,
                     concurrency_token = gen_random_uuid()
                 WHERE id = @userId;"
-            : @"UPDATE iam.users
+            : $@"UPDATE iam.users
                 SET failed_login_attempts = 0,
                     lockout_end_utc = NULL,
+                    status = CASE WHEN status = {(int)UserStatus.Locked} THEN {(int)UserStatus.Active} ELSE status END,
                     updated_at_utc = @nowUtc,
                     concurrency_token = gen_random_uuid()
                 WHERE id = @userId;";
@@ -257,31 +259,26 @@ public sealed partial class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task RecordFailedLoginAttemptAsync(Guid userId, int failedAttempts, DateTimeOffset? lockoutEndUtc, DateTimeOffset nowUtc, CancellationToken ct = default)
+    public async Task RecordFailedLoginAttemptAsync(Guid userId, int maxAttempts, int lockoutMinutes, DateTimeOffset nowUtc, CancellationToken ct = default)
     {
         var conn = await GetOpenConnectionAsync(ct);
-        await using var cmd = CreateCommand(conn, $@"
-            UPDATE iam.users
-            SET failed_login_attempts = @failedAttempts,
-                lockout_end_utc = @lockoutEndUtc,
-                status = CASE WHEN @lockoutEndUtc IS NOT NULL THEN {(int)UserStatus.Locked} ELSE status END,
-                updated_at_utc = @nowUtc,
-                concurrency_token = gen_random_uuid()
-            WHERE id = @userId;");
+        await using var cmd = CreateCommand(conn, @"
+            SELECT new_failed_attempts, new_status, new_lockout_end
+            FROM iam.record_failed_login_attempt(@userId, @maxAttempts, @lockoutMinutes, @nowUtc);");
 
         var pUser = cmd.CreateParameter();
         pUser.ParameterName = "userId";
         pUser.Value = userId;
         cmd.Parameters.Add(pUser);
 
-        var pAttempts = cmd.CreateParameter();
-        pAttempts.ParameterName = "failedAttempts";
-        pAttempts.Value = failedAttempts;
-        cmd.Parameters.Add(pAttempts);
+        var pMax = cmd.CreateParameter();
+        pMax.ParameterName = "maxAttempts";
+        pMax.Value = maxAttempts;
+        cmd.Parameters.Add(pMax);
 
         var pLockout = cmd.CreateParameter();
-        pLockout.ParameterName = "lockoutEndUtc";
-        pLockout.Value = (object?)lockoutEndUtc ?? DBNull.Value;
+        pLockout.ParameterName = "lockoutMinutes";
+        pLockout.Value = lockoutMinutes;
         cmd.Parameters.Add(pLockout);
 
         var pNow = cmd.CreateParameter();
@@ -384,18 +381,30 @@ public sealed partial class PostgreSqlIamBootstrapGateway : IIamBootstrapGateway
         return null;
     }
 
-    public async Task<SessionTenantLookupDto?> LookupSessionTenantAsync(Guid sessionId, CancellationToken ct = default)
+    public Task<SessionTenantLookupDto?> LookupSessionTenantAsync(Guid sessionId, CancellationToken ct = default) =>
+        LookupSessionTenantAsync(sessionId, null, ct);
+
+    public async Task<SessionTenantLookupDto?> LookupSessionTenantAsync(Guid sessionId, Guid? userId, CancellationToken ct = default)
     {
         if (sessionId == Guid.Empty) return null;
 
         var conn = await GetOpenConnectionAsync(ct);
-        await using var cmd = CreateCommand(conn,
-            "SELECT session_id, tenant_id FROM iam.lookup_session_tenant(@sessionId);");
+        await using var cmd = userId.HasValue
+            ? CreateCommand(conn, "SELECT session_id, tenant_id FROM iam.lookup_session_tenant_for_user(@sessionId, @userId);")
+            : CreateCommand(conn, "SELECT session_id, tenant_id FROM iam.lookup_session_tenant(@sessionId);");
 
         var param = cmd.CreateParameter();
         param.ParameterName = "sessionId";
         param.Value = sessionId;
         cmd.Parameters.Add(param);
+
+        if (userId.HasValue)
+        {
+            var pUser = cmd.CreateParameter();
+            pUser.ParameterName = "userId";
+            pUser.Value = userId.Value;
+            cmd.Parameters.Add(pUser);
+        }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))

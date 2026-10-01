@@ -57,15 +57,24 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         }
 
         // Step 2: Rate limit check on terminal and user
-        var rateLimit = await _rateLimiter.CheckAttemptAllowedAsync(command.TerminalId, command.UserId, ct);
-        if (rateLimit.IsLockedOut)
+        var terminalRateLimit = await _rateLimiter.CheckAttemptAllowedAsync(command.TerminalId, null, ct);
+        if (terminalRateLimit.IsLockedOut)
         {
-            throw new AuthRateLimitException(rateLimit.RetryAfterSeconds, rateLimit.Message ?? "Terminal locked.");
+            throw new AuthRateLimitException(terminalRateLimit.RetryAfterSeconds, terminalRateLimit.Message ?? "Terminal locked.");
         }
 
-        if (rateLimit.BackoffDelay.HasValue && rateLimit.BackoffDelay.Value > TimeSpan.Zero)
+        if (command.UserId.HasValue)
         {
-            await Task.Delay(rateLimit.BackoffDelay.Value, ct);
+            var userRateLimit = await _rateLimiter.CheckAttemptAllowedAsync(command.TerminalId, command.UserId.Value, ct);
+            if (userRateLimit.IsLockedOut)
+            {
+                throw new AuthRateLimitException(userRateLimit.RetryAfterSeconds, userRateLimit.Message ?? "Terminal user locked.");
+            }
+        }
+
+        if (terminalRateLimit.BackoffDelay.HasValue && terminalRateLimit.BackoffDelay.Value > TimeSpan.Zero)
+        {
+            await Task.Delay(terminalRateLimit.BackoffDelay.Value, ct);
         }
 
         // Step 3: Fetch user projection via gateway (least privilege, no blanket SELECT)
@@ -101,9 +110,22 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
             }
         }
 
+        if (!command.UserId.HasValue && effectiveUserId != Guid.Empty)
+        {
+            var userRateLimit = await _rateLimiter.CheckAttemptAllowedAsync(command.TerminalId, effectiveUserId, ct);
+            if (userRateLimit.IsLockedOut)
+            {
+                throw new AuthRateLimitException(userRateLimit.RetryAfterSeconds, userRateLimit.Message ?? "Terminal user locked.");
+            }
+        }
+
         if (effectiveUserId == Guid.Empty || userStatus != (int)UserStatus.Active || (lockoutEnd.HasValue && lockoutEnd.Value > now))
         {
-            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, command.UserId, ct);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, null, ct);
+            if (effectiveUserId != Guid.Empty)
+            {
+                await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
+            }
             throw new PinAuthFailureException("User not found or inactive.");
         }
 
@@ -119,6 +141,7 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
 
         if (membership == null)
         {
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, null, ct);
             await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("No active membership in branch.");
         }
@@ -129,12 +152,14 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
 
         if (pinCred == null)
         {
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, null, ct);
             await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("No PIN configured for user in this branch.");
         }
 
         if (pinCred.IsLocked(now))
         {
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, null, ct);
             await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("PIN credential is temporarily locked.");
         }
@@ -144,6 +169,7 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         if (verifyResult == PinVerificationResult.Failed)
         {
             pinCred.RecordFailedAttempt(5, TimeSpan.FromMinutes(15), now);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, null, ct);
             await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
 
             var failAudit = SecurityAuditEvent.Create(
