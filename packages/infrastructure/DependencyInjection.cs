@@ -72,6 +72,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<RestaurantOrder.Application.Auth.IPinHasher, RestaurantOrder.Infrastructure.Auth.PepperedPinHasher>();
         services.AddScoped<RestaurantOrder.Application.Auth.IIamUserLookupGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamUserLookupGateway>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IIamBootstrapGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamBootstrapGateway>();
 
         // JWT & Authentication Services
         services.Configure<RestaurantOrder.Application.Auth.JwtSettings>(options =>

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Domain.Auth;
+using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Common;
 using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure.Persistence;
@@ -17,6 +18,7 @@ public sealed class AuthService : IAuthService
 {
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IIamUserLookupGateway _userLookupGateway;
+    private readonly IIamBootstrapGateway _bootstrapGateway;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IRefreshTokenService _refreshTokenService;
@@ -29,6 +31,7 @@ public sealed class AuthService : IAuthService
     public AuthService(
         RestaurantOrderDbContext dbContext,
         IIamUserLookupGateway userLookupGateway,
+        IIamBootstrapGateway bootstrapGateway,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
         IRefreshTokenService refreshTokenService,
@@ -40,6 +43,7 @@ public sealed class AuthService : IAuthService
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _userLookupGateway = userLookupGateway ?? throw new ArgumentNullException(nameof(userLookupGateway));
+        _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
         _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
         _jwtTokenGenerator = jwtTokenGenerator ?? throw new ArgumentNullException(nameof(jwtTokenGenerator));
         _refreshTokenService = refreshTokenService ?? throw new ArgumentNullException(nameof(refreshTokenService));
@@ -66,19 +70,19 @@ public sealed class AuthService : IAuthService
         {
             await _rateLimiter.RecordFailedAttemptAsync(ip, normalizedEmail, command.TenantSlug, ct);
             _passwordHasher.VerifyPassword(command.Password, "AQAAAAIAAYagAAAAEO5dummyhashdummyhashdummyhashdummyhash==");
-            throw new AuthFailureException("User not found.");
+            throw new AuthFailureException("Invalid credentials.");
         }
 
         if (lookupUser.Status == (int)UserStatus.Locked && lookupUser.LockoutEndUtc.HasValue && now < lookupUser.LockoutEndUtc.Value)
         {
             await _rateLimiter.RecordFailedAttemptAsync(ip, normalizedEmail, command.TenantSlug, ct);
-            throw new AuthFailureException("Account is locked.");
+            throw new AuthFailureException("Invalid credentials.");
         }
 
         if (lookupUser.Status != (int)UserStatus.Active && lookupUser.Status != (int)UserStatus.Locked)
         {
             await _rateLimiter.RecordFailedAttemptAsync(ip, normalizedEmail, command.TenantSlug, ct);
-            throw new AuthFailureException("Account is inactive.");
+            throw new AuthFailureException("Invalid credentials.");
         }
 
         var verificationResult = _passwordHasher.VerifyPassword(command.Password, lookupUser.PasswordHash);
@@ -96,7 +100,7 @@ public sealed class AuthService : IAuthService
             if (!isSuperAdmin)
             {
                 await _rateLimiter.RecordFailedAttemptAsync(ip, normalizedEmail, command.TenantSlug, ct);
-                throw new AuthFailureException("Tenant context required for non-superadmin.");
+                throw new AuthFailureException("Invalid credentials.");
             }
 
             return await HandleSuperAdminLoginAsync(lookupUser, command, verificationResult, now, ct);
@@ -112,15 +116,12 @@ public sealed class AuthService : IAuthService
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var user = await _dbContext.Users.FirstAsync(u => u.Id == new UserId(lookupUser.UserId), ct);
-        user.RecordSuccessfulLogin(now);
-        if (verificationResult == PasswordVerificationResult.SuccessRehashNeeded)
-        {
-            user.ChangePassword(_passwordHasher.HashPassword(command.Password).Hash, now);
-        }
+        string? newPasswordHash = verificationResult == PasswordVerificationResult.SuccessRehashNeeded
+            ? _passwordHasher.HashPassword(command.Password).Hash
+            : null;
 
-        await _dbContext.SaveChangesAsync(ct);
-        await _rateLimiter.ResetAttemptsAsync(command.IpAddress ?? "unknown", user.NormalizedEmail, null, ct);
+        await _bootstrapGateway.RecordSuccessfulLoginAsync(lookupUser.UserId, now, newPasswordHash, ct);
+        await _rateLimiter.ResetAttemptsAsync(command.IpAddress ?? "unknown", lookupUser.NormalizedEmail, null, ct);
 
         var sessionId = Guid.CreateVersion7();
         var familyId = Guid.CreateVersion7();
@@ -128,17 +129,17 @@ public sealed class AuthService : IAuthService
         var tokenHash = _refreshTokenService.HashToken(rawRefreshToken);
         var sessionLifetime = TimeSpan.FromDays(_authSettings.RefreshTokenLifetimeDays);
 
-        await _platformSessionStore.CreateSessionAsync(user.Id, sessionId, familyId, tokenHash, sessionLifetime, now);
+        await _platformSessionStore.CreateSessionAsync(UserId.From(lookupUser.UserId), sessionId, familyId, tokenHash, sessionLifetime, now);
 
         var scope = AuthorizationScope.Platform();
         var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
-            user.Id,
+            UserId.From(lookupUser.UserId),
             sessionId,
             PrincipalType.Staff,
             AuthRole.SuperAdmin,
             scope,
             AuthenticationMethod.Password,
-            user.SecurityVersion,
+            lookupUser.SecurityVersion,
             now);
 
         var sessionExpiresAt = now.Add(sessionLifetime);
@@ -147,7 +148,7 @@ public sealed class AuthService : IAuthService
             RefreshToken: rawRefreshToken,
             AccessTokenExpiresAt: tokenResult.ExpiresAtUtc,
             RefreshTokenExpiresAt: sessionExpiresAt,
-            User: new UserPrincipalDto(user.Id.Value, user.Email, AuthRole.SuperAdmin.ToString(), null, null, user.SecurityVersion),
+            User: new UserPrincipalDto(lookupUser.UserId, lookupUser.NormalizedEmail, AuthRole.SuperAdmin.ToString(), null, null, lookupUser.SecurityVersion),
             Session: new SessionDto(sessionId, "Password", "Active", now, now, sessionExpiresAt, IsCurrent: true));
     }
 
@@ -158,36 +159,40 @@ public sealed class AuthService : IAuthService
         DateTimeOffset now,
         CancellationToken ct)
     {
-        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Slug == command.TenantSlug, ct);
-        if (tenant == null || tenant.Status != TenantStatus.Active)
+        var tenant = await _bootstrapGateway.LookupTenantBySlugAsync(command.TenantSlug!, ct);
+        if (tenant == null || tenant.Status != (int)TenantStatus.Active)
         {
             await _rateLimiter.RecordFailedAttemptAsync(command.IpAddress ?? "unknown", lookupUser.NormalizedEmail, command.TenantSlug, ct);
-            throw new AuthFailureException("Tenant not found or inactive.");
+            throw new AuthFailureException("Invalid credentials.");
         }
 
-        var membership = await _dbContext.Memberships
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(m => m.TenantId == tenant.Id && m.UserId == new UserId(lookupUser.UserId) && m.IsActive, ct);
-
-        if (membership == null)
+        var membership = await _bootstrapGateway.LookupMembershipForLoginAsync(tenant.TenantId, lookupUser.UserId, ct);
+        if (membership == null || !membership.IsActive)
         {
             await _rateLimiter.RecordFailedAttemptAsync(command.IpAddress ?? "unknown", lookupUser.NormalizedEmail, command.TenantSlug, ct);
-            throw new AuthFailureException("No active membership in tenant.");
+            throw new AuthFailureException("Invalid credentials.");
         }
 
-        var user = await _dbContext.Users.FirstAsync(u => u.Id == new UserId(lookupUser.UserId), ct);
-        user.RecordSuccessfulLogin(now);
-        if (verificationResult == PasswordVerificationResult.SuccessRehashNeeded)
+        if (!Enum.TryParse<AuthRole>(membership.Role, out var role))
         {
-            user.ChangePassword(_passwordHasher.HashPassword(command.Password).Hash, now);
+            await _rateLimiter.RecordFailedAttemptAsync(command.IpAddress ?? "unknown", lookupUser.NormalizedEmail, command.TenantSlug, ct);
+            throw new AuthFailureException("Invalid credentials.");
         }
+
+        await using var tx = await _dbContext.BeginTenantTransactionAsync(tenant.TenantId, cancellationToken: ct);
+
+        string? newPasswordHash = verificationResult == PasswordVerificationResult.SuccessRehashNeeded
+            ? _passwordHasher.HashPassword(command.Password).Hash
+            : null;
+
+        await _bootstrapGateway.RecordSuccessfulLoginAsync(lookupUser.UserId, now, newPasswordHash, ct);
 
         var sessionLifetime = TimeSpan.FromDays(_authSettings.RefreshTokenLifetimeDays);
         var session = AuthSession.Create(
-            tenant.Id,
-            user.Id,
-            membership.Id,
-            membership.BranchId,
+            TenantId.From(tenant.TenantId),
+            UserId.From(lookupUser.UserId),
+            membership.MembershipId,
+            membership.BranchId.HasValue ? BranchId.From(membership.BranchId.Value) : null,
             AuthenticationMethod.Password,
             sessionLifetime,
             now,
@@ -198,34 +203,36 @@ public sealed class AuthService : IAuthService
         var rawRefreshToken = _refreshTokenService.GenerateOpaqueToken();
         var tokenHash = _refreshTokenService.HashToken(rawRefreshToken);
         var familyId = Guid.CreateVersion7();
-        var refreshToken = RefreshToken.Create(tenant.Id, session.Id, familyId, tokenHash, sessionLifetime, now);
+        var refreshToken = RefreshToken.Create(TenantId.From(tenant.TenantId), session.Id, familyId, tokenHash, sessionLifetime, now);
         _dbContext.RefreshTokens.Add(refreshToken);
 
         var audit = SecurityAuditEvent.Create(
-            tenant.Id,
+            TenantId.From(tenant.TenantId),
             SecurityAuditEventType.LoginSucceeded,
             now,
-            user.Id,
-            membership.BranchId,
+            UserId.From(lookupUser.UserId),
+            membership.BranchId.HasValue ? BranchId.From(membership.BranchId.Value) : null,
             command.IpAddress,
             command.UserAgent);
         _dbContext.SecurityAuditEvents.Add(audit);
 
         await _dbContext.SaveChangesAsync(ct);
-        await _rateLimiter.ResetAttemptsAsync(command.IpAddress ?? "unknown", user.NormalizedEmail, command.TenantSlug, ct);
+        await tx.CommitAsync(ct);
 
-        var scope = membership.Role == AuthRole.RestaurantAdmin
-            ? AuthorizationScope.ForTenant(tenant.Id)
-            : AuthorizationScope.ForBranch(tenant.Id, membership.BranchId!.Value);
+        await _rateLimiter.ResetAttemptsAsync(command.IpAddress ?? "unknown", lookupUser.NormalizedEmail, command.TenantSlug, ct);
+
+        var scope = role == AuthRole.RestaurantAdmin
+            ? AuthorizationScope.ForTenant(TenantId.From(tenant.TenantId))
+            : AuthorizationScope.ForBranch(TenantId.From(tenant.TenantId), BranchId.From(membership.BranchId!.Value));
 
         var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
-            user.Id,
+            UserId.From(lookupUser.UserId),
             session.Id,
             PrincipalType.Staff,
-            membership.Role,
+            role,
             scope,
             AuthenticationMethod.Password,
-            user.SecurityVersion,
+            lookupUser.SecurityVersion,
             now);
 
         return new AuthResult(
@@ -233,7 +240,7 @@ public sealed class AuthService : IAuthService
             RefreshToken: rawRefreshToken,
             AccessTokenExpiresAt: tokenResult.ExpiresAtUtc,
             RefreshTokenExpiresAt: refreshToken.ExpiresAtUtc,
-            User: new UserPrincipalDto(user.Id.Value, user.Email, membership.Role.ToString(), tenant.Id.Value, membership.BranchId?.Value, user.SecurityVersion),
+            User: new UserPrincipalDto(lookupUser.UserId, lookupUser.NormalizedEmail, role.ToString(), tenant.TenantId, membership.BranchId, lookupUser.SecurityVersion),
             Session: new SessionDto(session.Id, "Password", "Active", now, now, session.ExpiresAtUtc, IsCurrent: true));
     }
 
@@ -343,20 +350,13 @@ public sealed class AuthService : IAuthService
 
     private async Task RecordFailedLoginAsync(Guid userId, DateTimeOffset now, CancellationToken ct)
     {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == new UserId(userId), ct);
-        if (user != null)
+        var failedAttempts = 1;
+        DateTimeOffset? lockoutEnd = null;
+        if (failedAttempts >= _authSettings.MaxFailedLoginAttempts)
         {
-            user.RecordFailedLogin(
-                maxAttempts: _authSettings.MaxFailedLoginAttempts,
-                lockoutDuration: TimeSpan.FromMinutes(_authSettings.LockoutMinutes),
-                nowUtc: now);
-
-            if (user.Status == UserStatus.Locked)
-            {
-                _logger.LogWarning("Account {UserId} locked due to exceeding maximum failed login attempts.", user.Id);
-            }
-
-            await _dbContext.SaveChangesAsync(ct);
+            lockoutEnd = now.AddMinutes(_authSettings.LockoutMinutes);
         }
+
+        await _bootstrapGateway.RecordFailedLoginAttemptAsync(userId, failedAttempts, lockoutEnd, now, ct);
     }
 }

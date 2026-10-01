@@ -15,6 +15,8 @@ namespace RestaurantOrder.Infrastructure.Auth;
 public sealed class StaffPinAuthService : IStaffPinAuthService
 {
     private readonly RestaurantOrderDbContext _dbContext;
+    private readonly IIamBootstrapGateway _bootstrapGateway;
+    private readonly IIamUserLookupGateway _userLookupGateway;
     private readonly ITrustedTerminalService _terminalService;
     private readonly ITerminalPinRateLimiter _rateLimiter;
     private readonly IPinHasher _pinHasher;
@@ -23,6 +25,8 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
 
     public StaffPinAuthService(
         RestaurantOrderDbContext dbContext,
+        IIamBootstrapGateway bootstrapGateway,
+        IIamUserLookupGateway userLookupGateway,
         ITrustedTerminalService terminalService,
         ITerminalPinRateLimiter rateLimiter,
         IPinHasher pinHasher,
@@ -30,6 +34,8 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         IRefreshTokenService refreshTokenService)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
+        _userLookupGateway = userLookupGateway ?? throw new ArgumentNullException(nameof(userLookupGateway));
         _terminalService = terminalService ?? throw new ArgumentNullException(nameof(terminalService));
         _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
         _pinHasher = pinHasher ?? throw new ArgumentNullException(nameof(pinHasher));
@@ -62,51 +68,74 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
             await Task.Delay(rateLimit.BackoffDelay.Value, ct);
         }
 
-        // Step 3: Fetch user
-        User? user = null;
+        // Step 3: Fetch user projection via gateway (least privilege, no blanket SELECT)
+        Guid effectiveUserId = Guid.Empty;
+        string userEmail = string.Empty;
+        int userSecurityVersion = 1;
+        int userStatus = (int)UserStatus.Active;
+        DateTimeOffset? lockoutEnd = null;
+
         if (command.UserId.HasValue)
         {
-            var userId = new UserId(command.UserId.Value);
-            user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+            var userSummary = await _bootstrapGateway.LookupUserByIdAsync(command.UserId.Value, ct);
+            if (userSummary != null)
+            {
+                effectiveUserId = userSummary.UserId;
+                userEmail = userSummary.Email;
+                userSecurityVersion = userSummary.SecurityVersion;
+                userStatus = userSummary.Status;
+                lockoutEnd = userSummary.LockoutEndUtc;
+            }
         }
         else if (!string.IsNullOrWhiteSpace(command.Email))
         {
             var normalizedEmail = User.NormalizeEmail(command.Email);
-            user = await _dbContext.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
+            var lookup = await _userLookupGateway.LookupUserForLoginAsync(normalizedEmail, ct);
+            if (lookup != null)
+            {
+                effectiveUserId = lookup.UserId;
+                userEmail = lookup.NormalizedEmail;
+                userSecurityVersion = lookup.SecurityVersion;
+                userStatus = lookup.Status;
+                lockoutEnd = lookup.LockoutEndUtc;
+            }
         }
 
-        if (user == null || user.Status != UserStatus.Active || user.IsLockedOut(now))
+        if (effectiveUserId == Guid.Empty || userStatus != (int)UserStatus.Active || (lockoutEnd.HasValue && lockoutEnd.Value > now))
         {
             await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, command.UserId, ct);
             throw new PinAuthFailureException("User not found or inactive.");
         }
 
-        // Step 4: Fetch user membership for this terminal's tenant & branch
         var tenantId = TenantId.From(terminal.TenantId);
         var branchId = BranchId.From(terminal.BranchId);
+        var userIdVo = UserId.From(effectiveUserId);
+
+        // Step 4: Execute tenant-scoped checks inside explicit tenant transaction (enforcing RLS)
+        await using var tx = await _dbContext.BeginTenantTransactionAsync(terminal.TenantId, cancellationToken: ct);
 
         var membership = await _dbContext.Memberships
-            .FirstOrDefaultAsync(m => m.UserId == user.Id && m.TenantId == tenantId && m.BranchId == branchId && m.IsActive, ct);
+            .FirstOrDefaultAsync(m => m.UserId == userIdVo && m.TenantId == tenantId && m.BranchId == branchId && m.IsActive, ct);
 
         if (membership == null)
         {
-            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, user.Id.Value, ct);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("No active membership in branch.");
         }
 
         // Step 5: Fetch PIN credential
         var pinCred = await _dbContext.PinCredentials
-            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.BranchId == branchId && p.UserId == user.Id, ct);
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.BranchId == branchId && p.UserId == userIdVo, ct);
 
         if (pinCred == null)
         {
-            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, user.Id.Value, ct);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("No PIN configured for user in this branch.");
         }
 
         if (pinCred.IsLocked(now))
         {
-            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, user.Id.Value, ct);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
             throw new PinAuthFailureException("PIN credential is temporarily locked.");
         }
 
@@ -115,32 +144,33 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         if (verifyResult == PinVerificationResult.Failed)
         {
             pinCred.RecordFailedAttempt(5, TimeSpan.FromMinutes(15), now);
-            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, user.Id.Value, ct);
+            await _rateLimiter.RecordFailedAttemptAsync(command.TerminalId, effectiveUserId, ct);
 
             var failAudit = SecurityAuditEvent.Create(
                 tenantId: tenantId,
                 eventType: SecurityAuditEventType.LoginFailed,
                 nowUtc: now,
-                userId: user.Id,
+                userId: userIdVo,
                 branchId: branchId,
                 ipAddress: command.IpAddress,
                 userAgent: $"terminal:{terminal.TerminalId}",
                 detailsJson: $"{{\"terminal\":\"{terminal.TerminalName}\"}}");
             _dbContext.SecurityAuditEvents.Add(failAudit);
             await _dbContext.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
 
             throw new PinAuthFailureException("Invalid PIN.");
         }
 
         // Success: Reset rate limiter and pin attempts
         pinCred.RecordSuccessfulAttempt(now);
-        await _rateLimiter.ResetAttemptsAsync(command.TerminalId, user.Id.Value, ct);
+        await _rateLimiter.ResetAttemptsAsync(command.TerminalId, effectiveUserId, ct);
 
         // Step 7: Create session
         var sessionLifetime = TimeSpan.FromHours(8);
         var session = AuthSession.Create(
             tenantId: tenantId,
-            userId: user.Id,
+            userId: userIdVo,
             membershipId: membership.Id,
             branchId: branchId,
             authMethod: AuthenticationMethod.Pin,
@@ -154,13 +184,13 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         // Step 8: Generate Access Token
         var scope = AuthorizationScope.ForBranch(tenantId, branchId);
         var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
-            userId: user.Id,
+            userId: userIdVo,
             sessionId: session.Id,
             principalType: PrincipalType.Staff,
             role: membership.Role,
             scope: scope,
             authMethod: AuthenticationMethod.Pin,
-            securityVersion: user.SecurityVersion,
+            securityVersion: userSecurityVersion,
             nowUtc: now);
 
         var rawRefreshToken = _refreshTokenService.GenerateOpaqueToken();
@@ -179,7 +209,7 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
             tenantId: tenantId,
             eventType: SecurityAuditEventType.LoginSucceeded,
             nowUtc: now,
-            userId: user.Id,
+            userId: userIdVo,
             branchId: branchId,
             ipAddress: command.IpAddress,
             userAgent: $"terminal:{terminal.TerminalId}",
@@ -187,14 +217,15 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         _dbContext.SecurityAuditEvents.Add(successAudit);
 
         await _dbContext.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         var userDto = new UserPrincipalDto(
-            UserId: user.Id.Value,
-            Email: user.Email,
+            UserId: effectiveUserId,
+            Email: userEmail,
             Role: membership.Role.ToString(),
             TenantId: tenantId.Value,
             BranchId: branchId.Value,
-            SecurityVersion: user.SecurityVersion);
+            SecurityVersion: userSecurityVersion);
 
         var sessionExpiresAt = now.Add(sessionLifetime);
         var sessionDto = new SessionDto(
@@ -232,39 +263,60 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
 
         var hashResult = _pinHasher.HashPin(command.Pin);
 
-        var existing = await _dbContext.PinCredentials
-            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.UserId == targetUserId && p.BranchId == branchId, ct);
-
-        if (existing != null)
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && tenantId.Value != Guid.Empty)
         {
-            existing.UpdatePin(hashResult.Hash, hashResult.AlgorithmVersion, hashResult.PepperKeyId, now);
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
         }
-        else
+
+        try
         {
-            var pinCred = PinCredential.Create(
+            var existing = await _dbContext.PinCredentials
+                .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.UserId == targetUserId && p.BranchId == branchId, ct);
+
+            if (existing != null)
+            {
+                existing.UpdatePin(hashResult.Hash, hashResult.AlgorithmVersion, hashResult.PepperKeyId, now);
+            }
+            else
+            {
+                var pinCred = PinCredential.Create(
+                    tenantId: tenantId,
+                    userId: targetUserId,
+                    branchId: branchId,
+                    pinHash: hashResult.Hash,
+                    algorithmVersion: hashResult.AlgorithmVersion,
+                    pepperKeyId: hashResult.PepperKeyId,
+                    nowUtc: now);
+
+                _dbContext.PinCredentials.Add(pinCred);
+            }
+
+            var auditEvent = SecurityAuditEvent.Create(
                 tenantId: tenantId,
-                userId: targetUserId,
+                eventType: SecurityAuditEventType.PinChanged,
+                nowUtc: now,
+                userId: actorUserId,
                 branchId: branchId,
-                pinHash: hashResult.Hash,
-                algorithmVersion: hashResult.AlgorithmVersion,
-                pepperKeyId: hashResult.PepperKeyId,
-                nowUtc: now);
+                ipAddress: null,
+                userAgent: null,
+                detailsJson: $"{{\"targetUserId\":\"{command.TargetUserId}\",\"branchId\":\"{command.BranchId}\"}}");
 
-            _dbContext.PinCredentials.Add(pinCred);
+            _dbContext.SecurityAuditEvents.Add(auditEvent);
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
         }
-
-        var auditEvent = SecurityAuditEvent.Create(
-            tenantId: tenantId,
-            eventType: SecurityAuditEventType.PinChanged,
-            nowUtc: now,
-            userId: actorUserId,
-            branchId: branchId,
-            ipAddress: null,
-            userAgent: null,
-            detailsJson: $"{{\"targetUserId\":\"{command.TargetUserId}\",\"branchId\":\"{command.BranchId}\"}}");
-
-        _dbContext.SecurityAuditEvents.Add(auditEvent);
-        await _dbContext.SaveChangesAsync(ct);
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task LogoutPinSessionAsync(
@@ -272,11 +324,36 @@ public sealed class StaffPinAuthService : IStaffPinAuthService
         Guid terminalId,
         CancellationToken ct = default)
     {
-        var session = await _dbContext.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
-        if (session != null && !session.IsRevoked)
+        var sessionLookup = await _bootstrapGateway.LookupSessionTenantAsync(sessionId, ct);
+        if (sessionLookup == null) return;
+
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && sessionLookup.TenantId != Guid.Empty)
         {
-            session.Revoke($"PIN session quick-logout from terminal {terminalId}", DateTimeOffset.UtcNow);
-            await _dbContext.SaveChangesAsync(ct);
+            localTx = await _dbContext.BeginTenantTransactionAsync(sessionLookup.TenantId, cancellationToken: ct);
+        }
+
+        try
+        {
+            var session = await _dbContext.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+            if (session != null && !session.IsRevoked)
+            {
+                session.Revoke($"PIN session quick-logout from terminal {terminalId}", DateTimeOffset.UtcNow);
+                await _dbContext.SaveChangesAsync(ct);
+            }
+
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
         }
     }
 }

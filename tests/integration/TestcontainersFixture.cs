@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using DotNet.Testcontainers.Builders;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using RestaurantOrder.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
@@ -137,6 +139,19 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
                         END IF;
                     END $$;";
                 await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Apply all pending EF Core database schema migrations once upfront deterministically
+            var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+                .UseNpgsql(_postgresContainer.GetConnectionString(), npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly(typeof(RestaurantOrderDbContext).Assembly.FullName);
+                })
+                .Options;
+
+            await using (var migrationContext = new RestaurantOrderDbContext(options))
+            {
+                await migrationContext.Database.MigrateAsync();
             }
         }
         catch (Exception ex)

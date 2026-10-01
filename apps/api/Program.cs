@@ -134,6 +134,7 @@ app.UseMiddleware<RestaurantOrder.Api.Auth.CsrfValidationMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
 app.UseAuthorization();
+app.UseMiddleware<RestaurantOrder.Api.Tenancy.TenantTransactionMiddleware>();
 
 // Liveness probe indicating process is alive (never checks external dependencies)
 app.MapGet("/health/live", () => Results.Ok(new HealthLiveResponse(

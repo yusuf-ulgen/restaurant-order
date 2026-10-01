@@ -82,11 +82,18 @@ public class RestaurantOrderDbContext : DbContext
     }
 
     /// <summary>
-    /// Binds the active PostgreSQL transaction or connection to the specified tenant context.
+    /// Binds the active PostgreSQL transaction to the specified tenant context.
+    /// Strictly requires an active database transaction; throws InvalidOperationException if called without one.
     /// Uses transaction-local 'set_config(..., is_local => true)' so the context does not leak across pooled connections.
     /// </summary>
     public async Task SetTenantSessionAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
+        if (Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException(
+                "Cannot set tenant session context without an active database transaction. An explicit transaction is required for transaction-local tenant context isolation.");
+        }
+
         var conn = Database.GetDbConnection();
         if (conn.State != ConnectionState.Open)
         {
@@ -94,7 +101,7 @@ public class RestaurantOrderDbContext : DbContext
         }
 
         await using var cmd = conn.CreateCommand();
-        cmd.Transaction = Database.CurrentTransaction?.GetDbTransaction();
+        cmd.Transaction = Database.CurrentTransaction.GetDbTransaction();
         cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, true);";
 
         var param = cmd.CreateParameter();
@@ -103,6 +110,20 @@ public class RestaurantOrderDbContext : DbContext
         cmd.Parameters.Add(param);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Atomically begins a database transaction and binds it to the specified tenant context.
+    /// Returns the IDbContextTransaction which manages commit/rollback and automatic context revert.
+    /// </summary>
+    public async Task<IDbContextTransaction> BeginTenantTransactionAsync(
+        Guid tenantId,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
+    {
+        var tx = await Database.BeginTransactionAsync(isolationLevel, cancellationToken);
+        await SetTenantSessionAsync(tenantId, cancellationToken);
+        return tx;
     }
 
     /// <summary>

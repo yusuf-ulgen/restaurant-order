@@ -84,7 +84,7 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
         // Connect as unprivileged runtime user in Tenant A context
         var contextA = new TenantContext(tenantAId.Value, isAuthenticated: true);
         await using var clientA = await CreateRuntimeDbContextAsync(contextA);
-        await clientA.SetTenantSessionAsync(tenantAId.Value);
+        await using var txA = await clientA.BeginTenantTransactionAsync(tenantAId.Value);
 
         var membershipsA = await clientA.Memberships.ToListAsync();
         Assert.Single(membershipsA);
@@ -95,6 +95,23 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
         var foreignMembership = await clientA.Memberships
             .FirstOrDefaultAsync(m => m.TenantId == tenantBId);
         Assert.Null(foreignMembership);
+
+        // Negative test: Tenant A attempts to UPDATE Tenant B membership
+        var rawUpdate = await clientA.Database.ExecuteSqlRawAsync(
+            "UPDATE iam.memberships SET role = 'Kitchen' WHERE tenant_id = {0};",
+            tenantBId.Value);
+        Assert.Equal(0, rawUpdate);
+
+        // Negative test: Tenant A attempts to DELETE Tenant B membership
+        var rawDelete = await clientA.Database.ExecuteSqlRawAsync(
+            "DELETE FROM iam.memberships WHERE tenant_id = {0};",
+            tenantBId.Value);
+        Assert.Equal(0, rawDelete);
+
+        // Negative test: Tenant A attempts to INSERT a membership for Tenant B
+        var illegalCrossTenantMembership = UserMembership.Create(tenantBId, userAId, AuthRole.Waiter, null, now);
+        clientA.Memberships.Add(illegalCrossTenantMembership);
+        await Assert.ThrowsAnyAsync<Exception>(() => clientA.SaveChangesAsync());
     }
 
     [Fact]
@@ -134,7 +151,7 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
         // Query under Tenant A runtime session
         var contextA = new TenantContext(tenantAId.Value, isAuthenticated: true);
         await using var clientA = await CreateRuntimeDbContextAsync(contextA);
-        await clientA.SetTenantSessionAsync(tenantAId.Value);
+        await using var txA = await clientA.BeginTenantTransactionAsync(tenantAId.Value);
 
         var sessions = await clientA.Sessions.ToListAsync();
         Assert.Single(sessions);
@@ -174,7 +191,7 @@ public class PostgreSqlIamRowLevelSecurityIntegrationTests : IClassFixture<Testc
         // Connect as Tenant A
         var contextA = new TenantContext(tenantAId.Value, isAuthenticated: true);
         await using var clientA = await CreateRuntimeDbContextAsync(contextA);
-        await clientA.SetTenantSessionAsync(tenantAId.Value);
+        await using var txA = await clientA.BeginTenantTransactionAsync(tenantAId.Value);
 
         // 1. IgnoreQueryFilters MUST NOT bypass PostgreSQL RLS
         var ignoredFilters = await clientA.Memberships.IgnoreQueryFilters().ToListAsync();

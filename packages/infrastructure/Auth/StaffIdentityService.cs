@@ -17,15 +17,21 @@ namespace RestaurantOrder.Infrastructure.Auth;
 public sealed class StaffIdentityService : IStaffIdentityService
 {
     private readonly RestaurantOrderDbContext _dbContext;
+    private readonly IIamBootstrapGateway _bootstrapGateway;
+    private readonly IIamUserLookupGateway _userLookupGateway;
     private readonly IPasswordHasher _passwordHasher;
     private static readonly TimeSpan DefaultInvitationTtl = TimeSpan.FromDays(2);
     private static readonly TimeSpan DefaultResetTtl = TimeSpan.FromHours(1);
 
     public StaffIdentityService(
         RestaurantOrderDbContext dbContext,
+        IIamBootstrapGateway bootstrapGateway,
+        IIamUserLookupGateway userLookupGateway,
         IPasswordHasher passwordHasher)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
+        _userLookupGateway = userLookupGateway ?? throw new ArgumentNullException(nameof(userLookupGateway));
         _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
     }
 
@@ -40,52 +46,79 @@ public sealed class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var normalizedEmail = User.NormalizeEmail(command.Email);
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
-        if (user == null)
+        var lookupUser = await _userLookupGateway.LookupUserForLoginAsync(normalizedEmail, ct);
+        UserId userId;
+        if (lookupUser == null)
         {
             var initialDummyHash = _passwordHasher.HashPassword(Guid.NewGuid().ToString("N")).Hash;
-            user = User.Create(command.Email, initialDummyHash, now, initialStatus: UserStatus.Pending);
+            var user = User.Create(command.Email, initialDummyHash, now, initialStatus: UserStatus.Pending);
             _dbContext.Users.Add(user);
+            userId = user.Id;
+        }
+        else
+        {
+            userId = UserId.From(lookupUser.UserId);
         }
 
         var effectiveTenantId = tenantId ?? (command.Role == AuthRole.SuperAdmin ? TenantId.From(Guid.Empty) : throw new InvalidOperationException("Tenant required."));
         var branchId = command.BranchId.HasValue ? new BranchId(command.BranchId.Value) : (BranchId?)null;
 
-        var existingMembership = await _dbContext.Memberships
-            .FirstOrDefaultAsync(m => m.UserId == user.Id && m.TenantId == effectiveTenantId && m.BranchId == branchId && m.IsActive, ct);
-
-        if (existingMembership != null)
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && effectiveTenantId.Value != Guid.Empty)
         {
-            throw new InvalidOperationException("User already has an active membership with this scope.");
+            localTx = await _dbContext.BeginTenantTransactionAsync(effectiveTenantId.Value, cancellationToken: ct);
         }
 
-        var membership = UserMembership.Create(effectiveTenantId, user.Id, command.Role, branchId, now);
-        _dbContext.Memberships.Add(membership);
+        try
+        {
+            var existingMembership = await _dbContext.Memberships
+                .FirstOrDefaultAsync(m => m.UserId == userId && m.TenantId == effectiveTenantId && m.BranchId == branchId && m.IsActive, ct);
 
-        var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var tokenHash = ComputeSha256(rawToken);
+            if (existingMembership != null)
+            {
+                throw new InvalidOperationException("User already has an active membership with this scope.");
+            }
 
-        var invitation = InvitationToken.Create(effectiveTenantId, user.Id, tokenHash, DefaultInvitationTtl, now);
-        _dbContext.InvitationTokens.Add(invitation);
+            var membership = UserMembership.Create(effectiveTenantId, userId, command.Role, branchId, now);
+            _dbContext.Memberships.Add(membership);
 
-        var audit = SecurityAuditEvent.Create(
-            effectiveTenantId,
-            SecurityAuditEventType.RoleAssigned,
-            now,
-            user.Id,
-            branchId,
-            detailsJson: $"{{\"role\":\"{command.Role}\",\"invitedBy\":\"{actor.SubjectId}\"}}");
-        _dbContext.SecurityAuditEvents.Add(audit);
+            var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            var tokenHash = ComputeSha256(rawToken);
 
-        await _dbContext.SaveChangesAsync(ct);
+            var invitation = InvitationToken.Create(effectiveTenantId, userId, tokenHash, DefaultInvitationTtl, now);
+            _dbContext.InvitationTokens.Add(invitation);
 
-        return new InviteStaffResult(
-            UserId: user.Id.Value,
-            Email: user.Email,
-            Role: command.Role,
-            BranchId: command.BranchId,
-            InvitationToken: rawToken,
-            ExpiresAtUtc: invitation.ExpiresAtUtc);
+            var audit = SecurityAuditEvent.Create(
+                effectiveTenantId,
+                SecurityAuditEventType.RoleAssigned,
+                now,
+                userId,
+                branchId,
+                detailsJson: $"{{\"role\":\"{command.Role}\",\"invitedBy\":\"{actor.SubjectId}\"}}");
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+
+            return new InviteStaffResult(
+                UserId: userId.Value,
+                Email: command.Email,
+                Role: command.Role,
+                BranchId: command.BranchId,
+                InvitationToken: rawToken,
+                ExpiresAtUtc: invitation.ExpiresAtUtc);
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task AcceptInvitationAsync(
@@ -105,32 +138,54 @@ public sealed class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.InvitationToken.Trim().ToLowerInvariant());
 
-        var invitation = await _dbContext.InvitationTokens
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
-
-        if (invitation == null || !invitation.IsValid(now))
+        var invitationDto = await _bootstrapGateway.LookupInvitationTokenAsync(tokenHash, ct);
+        if (invitationDto == null || invitationDto.IsConsumed || invitationDto.ExpiresAtUtc <= now)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
         }
 
-        invitation.Consume(now);
-
-        var user = await _dbContext.Users.FirstAsync(u => u.Id == invitation.UserId, ct);
         var passwordHash = _passwordHasher.HashPassword(command.Password).Hash;
 
-        user.Activate(now);
-        user.ChangePassword(passwordHash, now);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && invitationDto.TenantId != Guid.Empty)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(invitationDto.TenantId, cancellationToken: ct);
+        }
 
-        var audit = SecurityAuditEvent.Create(
-            invitation.TenantId,
-            SecurityAuditEventType.PasswordChanged,
-            now,
-            user.Id,
-            detailsJson: "{\"action\":\"invitation_accepted\"}");
-        _dbContext.SecurityAuditEvents.Add(audit);
+        try
+        {
+            var invitation = await _dbContext.InvitationTokens
+                .FirstOrDefaultAsync(t => t.Id == invitationDto.InvitationId, ct);
+            if (invitation == null || !invitation.IsValid(now))
+            {
+                throw new InvalidOperationException("Invalid, expired, or already consumed invitation token.");
+            }
+            invitation.Consume(now);
 
-        await _dbContext.SaveChangesAsync(ct);
+            await _bootstrapGateway.ActivateUserAndSetPasswordAsync(invitationDto.UserId, passwordHash, now, ct);
+
+            var audit = SecurityAuditEvent.Create(
+                TenantId.From(invitationDto.TenantId),
+                SecurityAuditEventType.PasswordChanged,
+                now,
+                UserId.From(invitationDto.UserId),
+                detailsJson: "{\"action\":\"invitation_accepted\"}");
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<string?> RequestPasswordResetAsync(
@@ -140,38 +195,53 @@ public sealed class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var normalizedEmail = User.NormalizeEmail(command.Email);
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
-        if (user == null || user.Status != UserStatus.Active)
+        var lookupUser = await _userLookupGateway.LookupUserForLoginAsync(normalizedEmail, ct);
+        if (lookupUser == null || lookupUser.Status != (int)UserStatus.Active)
         {
             return null; // Non-enumerating
         }
 
-        var tenantId = TenantId.From(Guid.Empty);
-        var membership = await _dbContext.Memberships
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(m => m.UserId == user.Id && m.IsActive, ct);
-
-        if (membership != null)
-        {
-            tenantId = membership.TenantId;
-        }
+        var membership = await _bootstrapGateway.LookupFirstActiveMembershipByUserIdAsync(lookupUser.UserId, ct);
+        var tenantId = membership != null ? TenantId.From(membership.TenantId) : TenantId.From(Guid.Empty);
 
         var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var tokenHash = ComputeSha256(rawToken);
 
-        var resetToken = PasswordResetToken.Create(tenantId, user.Id, tokenHash, DefaultResetTtl, now);
-        _dbContext.PasswordResetTokens.Add(resetToken);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && tenantId.Value != Guid.Empty)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        }
 
-        var audit = SecurityAuditEvent.Create(
-            tenantId,
-            SecurityAuditEventType.PasswordReset,
-            now,
-            user.Id,
-            detailsJson: "{\"action\":\"reset_requested\"}");
-        _dbContext.SecurityAuditEvents.Add(audit);
+        try
+        {
+            var resetToken = PasswordResetToken.Create(tenantId, UserId.From(lookupUser.UserId), tokenHash, DefaultResetTtl, now);
+            _dbContext.PasswordResetTokens.Add(resetToken);
 
-        await _dbContext.SaveChangesAsync(ct);
-        return rawToken;
+            var audit = SecurityAuditEvent.Create(
+                tenantId,
+                SecurityAuditEventType.PasswordReset,
+                now,
+                UserId.From(lookupUser.UserId),
+                detailsJson: "{\"action\":\"reset_requested\"}");
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+
+            return rawToken;
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task ResetPasswordAsync(
@@ -191,31 +261,53 @@ public sealed class StaffIdentityService : IStaffIdentityService
         var now = DateTimeOffset.UtcNow;
         var tokenHash = ComputeSha256(command.ResetToken.Trim().ToLowerInvariant());
 
-        var resetToken = await _dbContext.PasswordResetTokens
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct);
-
-        if (resetToken == null || !resetToken.IsValid(now))
+        var tokenDto = await _bootstrapGateway.LookupPasswordResetTokenAsync(tokenHash, ct);
+        if (tokenDto == null || tokenDto.IsConsumed || tokenDto.ExpiresAtUtc <= now)
         {
             throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
         }
 
-        resetToken.Consume(now);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && tokenDto.TenantId != Guid.Empty)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(tokenDto.TenantId, cancellationToken: ct);
+        }
 
-        var user = await _dbContext.Users.FirstAsync(u => u.Id == resetToken.UserId, ct);
-        var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
+        try
+        {
+            var resetToken = await _dbContext.PasswordResetTokens
+                .FirstOrDefaultAsync(t => t.Id == tokenDto.ResetTokenId, ct);
+            if (resetToken == null || !resetToken.IsValid(now))
+            {
+                throw new InvalidOperationException("Invalid, expired, or already consumed password reset token.");
+            }
+            resetToken.Consume(now);
 
-        user.ChangePassword(passwordHash, now); // Automatically increments security version
+            var passwordHash = _passwordHasher.HashPassword(command.NewPassword).Hash;
+            await _bootstrapGateway.ResetUserPasswordAsync(tokenDto.UserId, passwordHash, now, ct);
 
-        var audit = SecurityAuditEvent.Create(
-            resetToken.TenantId,
-            SecurityAuditEventType.PasswordChanged,
-            now,
-            user.Id,
-            detailsJson: "{\"action\":\"password_reset_completed\"}");
-        _dbContext.SecurityAuditEvents.Add(audit);
+            var audit = SecurityAuditEvent.Create(
+                TenantId.From(tokenDto.TenantId),
+                SecurityAuditEventType.PasswordChanged,
+                now,
+                UserId.From(tokenDto.UserId),
+                detailsJson: "{\"action\":\"password_reset_completed\"}");
+            _dbContext.SecurityAuditEvents.Add(audit);
 
-        await _dbContext.SaveChangesAsync(ct);
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<IReadOnlyList<StaffMemberDto>> ListStaffAsync(
@@ -237,20 +329,22 @@ public sealed class StaffIdentityService : IStaffIdentityService
             query = query.Where(m => m.BranchId == bId);
         }
 
-        var list = await query
-            .Join(_dbContext.Users,
-                m => m.UserId,
-                u => u.Id,
-                (m, u) => new StaffMemberDto(
-                    u.Id.Value,
-                    u.Email,
-                    m.Role.ToString(),
-                    m.BranchId.HasValue ? m.BranchId.Value.Value : (Guid?)null,
-                    u.Status.ToString(),
-                    u.CreatedAtUtc))
-            .ToListAsync(ct);
+        var memberships = await query.ToListAsync(ct);
+        var result = new List<StaffMemberDto>();
 
-        return list;
+        foreach (var m in memberships)
+        {
+            var userSummary = await _bootstrapGateway.LookupUserByIdAsync(m.UserId.Value, ct);
+            result.Add(new StaffMemberDto(
+                m.UserId.Value,
+                userSummary?.Email ?? "unknown",
+                m.Role.ToString(),
+                m.BranchId.HasValue ? m.BranchId.Value.Value : (Guid?)null,
+                userSummary != null ? ((UserStatus)userSummary.Status).ToString() : "Unknown",
+                DateTimeOffset.UtcNow));
+        }
+
+        return result;
     }
 
     public async Task UpdateStaffStatusAsync(
@@ -260,45 +354,49 @@ public sealed class StaffIdentityService : IStaffIdentityService
         CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
-        var userId = new UserId(command.UserId);
-
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
-        if (user == null)
+        var userSummary = await _bootstrapGateway.LookupUserByIdAsync(command.UserId, ct);
+        if (userSummary == null)
         {
             throw new InvalidOperationException("User not found.");
         }
 
         var effectiveTenantId = tenantId ?? TenantId.From(Guid.Empty);
-
-        switch (command.Status)
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && effectiveTenantId.Value != Guid.Empty)
         {
-            case UserStatus.Active:
-                user.Activate(now);
-                break;
-            case UserStatus.Suspended:
-                user.Suspend(now);
-                break;
-            case UserStatus.Disabled:
-                user.Disable(now);
-                break;
-            case UserStatus.Locked:
-                user.Lock(now.AddMinutes(15), now);
-                break;
+            localTx = await _dbContext.BeginTenantTransactionAsync(effectiveTenantId.Value, cancellationToken: ct);
         }
 
-        var eventType = command.Status is UserStatus.Active
-            ? SecurityAuditEventType.AccountUnlocked
-            : SecurityAuditEventType.AccountLocked;
+        try
+        {
+            await _bootstrapGateway.UpdateUserStatusAsync(command.UserId, command.Status, now, ct);
 
-        var audit = SecurityAuditEvent.Create(
-            effectiveTenantId,
-            eventType,
-            now,
-            user.Id,
-            detailsJson: $"{{\"newStatus\":\"{command.Status}\",\"updatedBy\":\"{actor.SubjectId}\"}}");
-        _dbContext.SecurityAuditEvents.Add(audit);
+            var eventType = command.Status is UserStatus.Active
+                ? SecurityAuditEventType.AccountUnlocked
+                : SecurityAuditEventType.AccountLocked;
 
-        await _dbContext.SaveChangesAsync(ct);
+            var audit = SecurityAuditEvent.Create(
+                effectiveTenantId,
+                eventType,
+                now,
+                UserId.From(command.UserId),
+                detailsJson: $"{{\"newStatus\":\"{command.Status}\",\"updatedBy\":\"{actor.SubjectId}\"}}");
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     private static void ValidateInviteAuthorization(

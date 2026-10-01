@@ -17,15 +17,18 @@ namespace RestaurantOrder.Infrastructure.Auth;
 public sealed class TrustedTerminalService : ITrustedTerminalService
 {
     private readonly RestaurantOrderDbContext _dbContext;
+    private readonly IIamBootstrapGateway _bootstrapGateway;
     private readonly ITerminalEnrollmentStore _enrollmentStore;
     private static readonly TimeSpan DefaultEnrollmentTtl = TimeSpan.FromMinutes(15);
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     public TrustedTerminalService(
         RestaurantOrderDbContext dbContext,
+        IIamBootstrapGateway bootstrapGateway,
         ITerminalEnrollmentStore enrollmentStore)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _bootstrapGateway = bootstrapGateway ?? throw new ArgumentNullException(nameof(bootstrapGateway));
         _enrollmentStore = enrollmentStore ?? throw new ArgumentNullException(nameof(enrollmentStore));
     }
 
@@ -101,41 +104,62 @@ public sealed class TrustedTerminalService : ITrustedTerminalService
             ? ticket.TerminalName
             : command.TerminalName.Trim();
 
-        var existingTerminal = await _dbContext.TrustedTerminals
-            .FirstOrDefaultAsync(t => t.TenantId == tenantId && t.BranchId == branchId && t.DeviceIdentifier == deviceId, ct);
-
-        TrustedTerminal terminal;
-        if (existingTerminal != null)
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && ticket.TenantId != Guid.Empty)
         {
-            _dbContext.TrustedTerminals.Remove(existingTerminal);
-            terminal = TrustedTerminal.Enroll(tenantId, branchId, deviceId, terminalName, secretHash, now);
-            _dbContext.TrustedTerminals.Add(terminal);
-        }
-        else
-        {
-            terminal = TrustedTerminal.Enroll(tenantId, branchId, deviceId, terminalName, secretHash, now);
-            _dbContext.TrustedTerminals.Add(terminal);
+            localTx = await _dbContext.BeginTenantTransactionAsync(ticket.TenantId, cancellationToken: ct);
         }
 
-        var auditEvent = SecurityAuditEvent.Create(
-            tenantId: tenantId,
-            eventType: SecurityAuditEventType.TrustedTerminalEnrolled,
-            nowUtc: now,
-            userId: null,
-            branchId: branchId,
-            ipAddress: null,
-            userAgent: $"terminal:{terminal.Id}",
-            detailsJson: $"{{\"terminalName\":\"{terminalName}\",\"deviceIdentifier\":\"{deviceId}\",\"branchId\":\"{ticket.BranchId}\"}}");
+        try
+        {
+            var existingTerminal = await _dbContext.TrustedTerminals
+                .FirstOrDefaultAsync(t => t.TenantId == tenantId && t.BranchId == branchId && t.DeviceIdentifier == deviceId, ct);
 
-        _dbContext.SecurityAuditEvents.Add(auditEvent);
-        await _dbContext.SaveChangesAsync(ct);
+            TrustedTerminal terminal;
+            if (existingTerminal != null)
+            {
+                _dbContext.TrustedTerminals.Remove(existingTerminal);
+                terminal = TrustedTerminal.Enroll(tenantId, branchId, deviceId, terminalName, secretHash, now);
+                _dbContext.TrustedTerminals.Add(terminal);
+            }
+            else
+            {
+                terminal = TrustedTerminal.Enroll(tenantId, branchId, deviceId, terminalName, secretHash, now);
+                _dbContext.TrustedTerminals.Add(terminal);
+            }
 
-        return new ActivateTerminalResult(
-            TerminalId: terminal.Id,
-            DeviceSecret: rawDeviceSecret,
-            TenantId: tenantId.Value,
-            BranchId: ticket.BranchId,
-            TerminalName: terminal.TerminalName);
+            var auditEvent = SecurityAuditEvent.Create(
+                tenantId: tenantId,
+                eventType: SecurityAuditEventType.TrustedTerminalEnrolled,
+                nowUtc: now,
+                userId: null,
+                branchId: branchId,
+                ipAddress: null,
+                userAgent: $"terminal:{terminal.Id}",
+                detailsJson: $"{{\"terminalName\":\"{terminalName}\",\"deviceIdentifier\":\"{deviceId}\",\"branchId\":\"{ticket.BranchId}\"}}");
+
+            _dbContext.SecurityAuditEvents.Add(auditEvent);
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+
+            return new ActivateTerminalResult(
+                TerminalId: terminal.Id,
+                DeviceSecret: rawDeviceSecret,
+                TenantId: tenantId.Value,
+                BranchId: ticket.BranchId,
+                TerminalName: terminal.TerminalName);
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<TerminalContext?> AuthenticateTerminalAsync(
@@ -148,30 +172,56 @@ public sealed class TrustedTerminalService : ITrustedTerminalService
             return null;
         }
 
-        var terminal = await _dbContext.TrustedTerminals
-            .FirstOrDefaultAsync(t => t.Id == terminalId, ct);
-
-        if (terminal == null || !terminal.IsActive)
+        var terminalDto = await _bootstrapGateway.LookupTerminalForAuthAsync(terminalId, ct);
+        if (terminalDto == null || !terminalDto.IsActive)
         {
             return null;
         }
 
         var presentedHash = ComputeSha256(deviceSecret.Trim());
-        if (!FixedTimeEquals(presentedHash, terminal.SecretHash))
+        if (!FixedTimeEquals(presentedHash, terminalDto.SecretHash))
         {
             return null;
         }
 
-        terminal.RecordHeartbeat(DateTimeOffset.UtcNow);
-        await _dbContext.SaveChangesAsync(ct);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && terminalDto.TenantId != Guid.Empty)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(terminalDto.TenantId, cancellationToken: ct);
+        }
 
-        return new TerminalContext(
-            TerminalId: terminal.Id,
-            TenantId: terminal.TenantId.Value,
-            BranchId: terminal.BranchId.Value,
-            TerminalName: terminal.TerminalName,
-            DeviceIdentifier: terminal.DeviceIdentifier,
-            IsActive: terminal.IsActive);
+        try
+        {
+            var terminal = await _dbContext.TrustedTerminals
+                .FirstOrDefaultAsync(t => t.Id == terminalId, ct);
+
+            if (terminal != null)
+            {
+                terminal.RecordHeartbeat(DateTimeOffset.UtcNow);
+                await _dbContext.SaveChangesAsync(ct);
+            }
+
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+
+            return new TerminalContext(
+                TerminalId: terminalDto.TerminalId,
+                TenantId: terminalDto.TenantId,
+                BranchId: terminalDto.BranchId,
+                TerminalName: terminalDto.TerminalName,
+                DeviceIdentifier: terminalDto.DeviceIdentifier,
+                IsActive: terminalDto.IsActive);
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<bool> RevokeTerminalAsync(
@@ -180,42 +230,63 @@ public sealed class TrustedTerminalService : ITrustedTerminalService
         UserId actorUserId,
         CancellationToken ct = default)
     {
-        var terminal = await _dbContext.TrustedTerminals
-            .FirstOrDefaultAsync(t => t.Id == terminalId && t.TenantId == tenantId, ct);
-
-        if (terminal == null)
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx && tenantId.Value != Guid.Empty)
         {
-            return false;
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
         }
 
-        var now = DateTimeOffset.UtcNow;
-        terminal.Revoke(now);
-
-        // Terminal revocation cascade: terminate all active sessions tied to this terminal
-        var terminalPrefix = $"terminal:{terminalId}";
-        var activeSessions = await _dbContext.Sessions
-            .Where(s => s.TenantId == tenantId && !s.IsRevoked && s.UserAgent != null && s.UserAgent.StartsWith(terminalPrefix))
-            .ToListAsync(ct);
-
-        foreach (var session in activeSessions)
+        try
         {
-            session.Revoke("Cascading revocation from trusted terminal deactivation.", now);
+            var terminal = await _dbContext.TrustedTerminals
+                .FirstOrDefaultAsync(t => t.Id == terminalId && t.TenantId == tenantId, ct);
+
+            if (terminal == null)
+            {
+                return false;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            terminal.Revoke(now);
+
+            // Terminal revocation cascade: terminate all active sessions tied to this terminal
+            var terminalPrefix = $"terminal:{terminalId}";
+            var activeSessions = await _dbContext.Sessions
+                .Where(s => s.TenantId == tenantId && !s.IsRevoked && s.UserAgent != null && s.UserAgent.StartsWith(terminalPrefix))
+                .ToListAsync(ct);
+
+            foreach (var session in activeSessions)
+            {
+                session.Revoke("Cascading revocation from trusted terminal deactivation.", now);
+            }
+
+            var auditEvent = SecurityAuditEvent.Create(
+                tenantId: tenantId,
+                eventType: SecurityAuditEventType.TrustedTerminalRevoked,
+                nowUtc: now,
+                userId: actorUserId,
+                branchId: terminal.BranchId,
+                ipAddress: null,
+                userAgent: terminalPrefix,
+                detailsJson: $"{{\"terminalId\":\"{terminalId}\",\"revokedSessionsCount\":{activeSessions.Count}}}");
+
+            _dbContext.SecurityAuditEvents.Add(auditEvent);
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
+
+            return true;
         }
-
-        var auditEvent = SecurityAuditEvent.Create(
-            tenantId: tenantId,
-            eventType: SecurityAuditEventType.TrustedTerminalRevoked,
-            nowUtc: now,
-            userId: actorUserId,
-            branchId: terminal.BranchId,
-            ipAddress: null,
-            userAgent: terminalPrefix,
-            detailsJson: $"{{\"terminalId\":\"{terminalId}\",\"revokedSessionsCount\":{activeSessions.Count}}}");
-
-        _dbContext.SecurityAuditEvents.Add(auditEvent);
-        await _dbContext.SaveChangesAsync(ct);
-
-        return true;
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public Task<TerminalContext?> GetCurrentTerminalAsync(

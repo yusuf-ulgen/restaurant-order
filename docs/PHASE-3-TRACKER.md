@@ -14,7 +14,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
 | **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
 | **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | **COMPLETED** | Staff invitation, role assignment, Admin & Operations Web auth integration |
-| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, RBAC denial-by-default tests, documentation update, PR |
+| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, tenant transaction determinism, RLS isolation, tests |
 
 ---
 
@@ -73,6 +73,8 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Password hasher and peppered PIN hasher security properties verified
 - [x] Terminal progressive delay and brute-force lockout verified
 - [x] Single-flight concurrent token refresh queue verified
-- [x] All test suites passing (629 backend unit + 10 arch + 185 frontend unit + 73 integration = 897 automated tests)
+- [x] Deterministic migration lifecycle and pre-auth bootstrap SECURITY DEFINER gateway
+- [x] Tenant transaction fail-closed boundary and connection pool context isolation verified
+- [x] All test suites passing (629 backend unit + 10 arch + 185 frontend unit + 78 integration = 902 automated tests)
 - [x] Zero files exceeding 600 lines strict ceiling
 - [x] Zero secrets and clean documentation integrity verified
