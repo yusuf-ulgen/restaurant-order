@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Brands;
 using RestaurantOrder.Domain.Common;
@@ -22,7 +23,7 @@ public class TenancyPersistenceIntegrationTests : IClassFixture<TestcontainersFi
         _fixture = fixture;
     }
 
-    private RestaurantOrderDbContext CreateDbContext()
+    private RestaurantOrderDbContext CreateDbContext(ITenantContext? tenantContext = null)
     {
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
             .UseNpgsql(_fixture.DatabaseConnectionString, npgsqlOptions =>
@@ -31,7 +32,7 @@ public class TenancyPersistenceIntegrationTests : IClassFixture<TestcontainersFi
             })
             .Options;
 
-        return new RestaurantOrderDbContext(options);
+        return new RestaurantOrderDbContext(options, tenantContext);
     }
 
     [Fact]
@@ -203,23 +204,61 @@ public class TenancyPersistenceIntegrationTests : IClassFixture<TestcontainersFi
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
-        await using var context = CreateDbContext();
+        var tenantId = TenantId.New();
+        var tenantContext = new RestaurantOrder.Application.Tenancy.TenantContext(tenantId.Value, isAuthenticated: true);
+
+        // 1. Seed tenant and child brand using a seed context
+        await using (var seedContext = CreateDbContext(tenantContext))
+        {
+            await seedContext.Database.MigrateAsync();
+
+            var tenant = Tenant.Create("Tenant Restrict Test", $"tenant-res-{Guid.NewGuid():N}", tenantId);
+            seedContext.Tenants.Add(tenant);
+            await seedContext.SaveChangesAsync();
+
+            var brand = Brand.Create(tenant.Id, "Brand Child", $"brand-res-{Guid.NewGuid():N}");
+            seedContext.Brands.Add(brand);
+            await seedContext.SaveChangesAsync();
+        }
+
+        // 2. In a fresh context where child brand is NOT tracked in memory,
+        // attempting to delete the tenant sends a real DELETE to PostgreSQL.
+        // PostgreSQL foreign key constraint (fk_brands_tenants_tenant_id) restricts the delete at DB level.
+        await using (var deleteContext = CreateDbContext(tenantContext))
+        {
+            var tenantToDelete = await deleteContext.Tenants.FirstAsync(t => t.Id == tenantId);
+            deleteContext.Tenants.Remove(tenantToDelete);
+
+            var ex = await Assert.ThrowsAsync<DbUpdateException>(() => deleteContext.SaveChangesAsync());
+            Assert.IsType<PostgresException>(ex.InnerException);
+            var pgEx = (PostgresException)ex.InnerException!;
+            Assert.Equal("23503", pgEx.SqlState); // foreign_key_violation due to Restrict
+            Assert.Contains("fk_brands_tenants_tenant_id", pgEx.ConstraintName);
+        }
+    }
+
+    [Fact]
+    public async Task EFCore_Tracked_RequiredRelationship_Severing_ThrowsInvalidOperationException()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+
+        var tenantId = TenantId.New();
+        var tenantContext = new RestaurantOrder.Application.Tenancy.TenantContext(tenantId.Value, isAuthenticated: true);
+
+        await using var context = CreateDbContext(tenantContext);
         await context.Database.MigrateAsync();
 
-        var tenant = Tenant.Create("Tenant Restrict Test", $"tenant-res-{Guid.NewGuid():N}");
+        var tenant = Tenant.Create("Tracked Restrict Test", $"tenant-track-{Guid.NewGuid():N}", tenantId);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync();
 
-        var brand = Brand.Create(tenant.Id, "Brand Child", $"brand-res-{Guid.NewGuid():N}");
+        var brand = Brand.Create(tenant.Id, "Tracked Brand Child", $"brand-track-{Guid.NewGuid():N}");
         context.Brands.Add(brand);
         await context.SaveChangesAsync();
 
-        // Attempting to delete tenant while it has child brand records must be restricted
-        context.Tenants.Remove(tenant);
-        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
-        Assert.IsType<PostgresException>(ex.InnerException);
-        var pgEx = (PostgresException)ex.InnerException!;
-        Assert.Equal("23503", pgEx.SqlState); // foreign_key_violation due to Restrict
+        // When child record is tracked in the SAME context, EF Core's client-side relationship
+        // manager detects severed required relationship and throws immediately on Remove before SaveChanges.
+        Assert.Throws<InvalidOperationException>(() => context.Tenants.Remove(tenant));
     }
 
     [Fact]
@@ -227,10 +266,13 @@ public class TenancyPersistenceIntegrationTests : IClassFixture<TestcontainersFi
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
 
-        await using var context = CreateDbContext();
+        var tenantId = TenantId.New();
+        var tenantContext = new RestaurantOrder.Application.Tenancy.TenantContext(tenantId.Value, isAuthenticated: true);
+
+        await using var context = CreateDbContext(tenantContext);
         await context.Database.MigrateAsync();
 
-        var tenant = Tenant.Create("Tenant UTC", $"tenant-utc-{Guid.NewGuid():N}");
+        var tenant = Tenant.Create("Tenant UTC", $"tenant-utc-{Guid.NewGuid():N}", tenantId);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync();
 

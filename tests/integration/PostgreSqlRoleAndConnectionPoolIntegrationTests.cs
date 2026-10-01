@@ -18,14 +18,10 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
         _fixture = fixture;
     }
 
-    private string GetRuntimeConnectionString()
+    private async Task<string> GetRuntimeConnectionStringAsync()
     {
-        var builder = new NpgsqlConnectionStringBuilder(_fixture.DatabaseConnectionString)
-        {
-            Username = "restaurant_app_user",
-            Password = "app_secure_pass_123!"
-        };
-        return builder.ConnectionString;
+        await EnsureMigrationsAppliedAsync();
+        return await _fixture.ProvisionTemporaryRuntimeRoleAsync();
     }
 
     private async Task EnsureMigrationsAppliedAsync()
@@ -66,7 +62,7 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
         }
 
         // Shared connection representing a pooled connection
-        await using var pooledConn = new NpgsqlConnection(GetRuntimeConnectionString());
+        await using var pooledConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
         await pooledConn.OpenAsync();
 
         // Operation 1: Tenant A executes transaction
@@ -116,6 +112,98 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
     }
 
     [Fact]
+    public async Task RLS_TransactionRollback_DoesNotLeakContext_ToSubsequentOperationOnPooledConnection()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var tenantId = Guid.NewGuid();
+        await using (var ownerConn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
+        {
+            await ownerConn.OpenAsync();
+            await using var cmd = ownerConn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
+                VALUES (@tId, 'Tenant Rollback Test', @slug, 'Active', NOW(), gen_random_uuid());";
+            cmd.Parameters.AddWithValue("tId", tenantId);
+            cmd.Parameters.AddWithValue("slug", $"rb-{Guid.NewGuid():N}");
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using var pooledConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
+        await pooledConn.OpenAsync();
+
+        // Transaction rolls back
+        await using (var tx = await pooledConn.BeginTransactionAsync())
+        {
+            await using var setCmd = pooledConn.CreateCommand();
+            setCmd.Transaction = tx;
+            setCmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, true);";
+            setCmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
+            await setCmd.ExecuteNonQueryAsync();
+
+            await tx.RollbackAsync();
+        }
+
+        // Subsequent query on same connection must not have tenant context
+        await using (var checkCmd = pooledConn.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
+            var count = (long)(await checkCmd.ExecuteScalarAsync())!;
+            Assert.Equal(0L, count);
+        }
+    }
+
+    [Fact]
+    public async Task RLS_ExceptionInRequest_DoesNotLeakContext_ToSubsequentOperationOnPooledConnection()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var tenantId = Guid.NewGuid();
+        await using (var ownerConn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
+        {
+            await ownerConn.OpenAsync();
+            await using var cmd = ownerConn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
+                VALUES (@tId, 'Tenant Exception Test', @slug, 'Active', NOW(), gen_random_uuid());";
+            cmd.Parameters.AddWithValue("tId", tenantId);
+            cmd.Parameters.AddWithValue("slug", $"ex-{Guid.NewGuid():N}");
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using var pooledConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
+        await pooledConn.OpenAsync();
+
+        // Simulate an exception occurring during request execution inside transaction
+        try
+        {
+            await using var tx = await pooledConn.BeginTransactionAsync();
+            await using var setCmd = pooledConn.CreateCommand();
+            setCmd.Transaction = tx;
+            setCmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, true);";
+            setCmd.Parameters.AddWithValue("tenantId", tenantId.ToString());
+            await setCmd.ExecuteNonQueryAsync();
+
+            // Simulate unhandled exception before commit
+            throw new InvalidOperationException("Simulated business exception");
+        }
+        catch (InvalidOperationException)
+        {
+            // Expected simulation
+        }
+
+        // Subsequent query on same connection must be clean (fail-closed, 0 rows)
+        await using (var checkCmd = pooledConn.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
+            var count = (long)(await checkCmd.ExecuteScalarAsync())!;
+            Assert.Equal(0L, count);
+        }
+    }
+
+    [Fact]
     public async Task RLS_ConcurrentOperations_DoNotLeakContext()
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
@@ -139,12 +227,14 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
             await cmd.ExecuteNonQueryAsync();
         }
 
+        var runtimeConnStr = await GetRuntimeConnectionStringAsync();
+
         // Run 10 parallel tasks alternating between Tenant A and Tenant B
         var tasks = Enumerable.Range(0, 10).Select(async i =>
         {
             var targetTenant = i % 2 == 0 ? tenantAId : tenantBId;
 
-            await using var conn = new NpgsqlConnection(GetRuntimeConnectionString());
+            await using var conn = new NpgsqlConnection(runtimeConnStr);
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
 
@@ -174,7 +264,7 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
 
-        await using var runtimeConn = new NpgsqlConnection(GetRuntimeConnectionString());
+        await using var runtimeConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
         await runtimeConn.OpenAsync();
 
         // 1. Runtime role cannot disable RLS
@@ -194,5 +284,15 @@ public class PostgreSqlRoleAndConnectionPoolIntegrationTests : IClassFixture<Tes
         createTableCmd.CommandText = "CREATE TABLE tenancy.exploit (id int);";
         var ex3 = await Assert.ThrowsAsync<PostgresException>(() => createTableCmd.ExecuteNonQueryAsync());
         Assert.Equal("42501", ex3.SqlState); // insufficient_privilege
+
+        // 4. Verify runtime role strictly has NOBYPASSRLS and NOSUPERUSER
+        await using var privCmd = runtimeConn.CreateCommand();
+        privCmd.CommandText = "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = CURRENT_USER;";
+        await using var reader = await privCmd.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        var isSuper = reader.GetBoolean(0);
+        var isBypassRls = reader.GetBoolean(1);
+        Assert.False(isSuper);
+        Assert.False(isBypassRls);
     }
 }

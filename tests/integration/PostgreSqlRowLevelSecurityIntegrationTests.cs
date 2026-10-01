@@ -24,14 +24,10 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         _fixture = fixture;
     }
 
-    private string GetRuntimeConnectionString()
+    private async Task<string> GetRuntimeConnectionStringAsync()
     {
-        var builder = new NpgsqlConnectionStringBuilder(_fixture.DatabaseConnectionString)
-        {
-            Username = "restaurant_app_user",
-            Password = "app_secure_pass_123!"
-        };
-        return builder.ConnectionString;
+        await EnsureMigrationsAppliedAsync();
+        return await _fixture.ProvisionTemporaryRuntimeRoleAsync();
     }
 
     private async Task EnsureMigrationsAppliedAsync()
@@ -47,10 +43,11 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         await context.Database.MigrateAsync();
     }
 
-    private RestaurantOrderDbContext CreateRuntimeDbContext(ITenantContext? tenantContext = null)
+    private async Task<RestaurantOrderDbContext> CreateRuntimeDbContextAsync(ITenantContext? tenantContext = null)
     {
+        var connStr = await GetRuntimeConnectionStringAsync();
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
-            .UseNpgsql(GetRuntimeConnectionString())
+            .UseNpgsql(connStr)
             .Options;
 
         return new RestaurantOrderDbContext(options, tenantContext);
@@ -86,7 +83,7 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
 
         // 2. Query as runtime user with Tenant A context
         var contextA = new TenantContext(tenantAId, isAuthenticated: true);
-        await using var dbContextA = CreateRuntimeDbContext(contextA);
+        await using var dbContextA = await CreateRuntimeDbContextAsync(contextA);
         await using var txA = await dbContextA.Database.BeginTransactionAsync();
         await dbContextA.SetTenantSessionAsync(tenantAId);
 
@@ -99,7 +96,8 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         Assert.Equal(tenantAId, brandsForA[0].TenantId.Value);
 
         // 3. Directly querying Tenant B's ID with Tenant A context returns 0 rows
-        var tenantBQueriedByA = await dbContextA.Tenants.FirstOrDefaultAsync(t => t.Id == new TenantId(tenantBId));
+        var tenantBIdVo = new TenantId(tenantBId);
+        var tenantBQueriedByA = await dbContextA.Tenants.FirstOrDefaultAsync(t => t.Id == tenantBIdVo);
         Assert.Null(tenantBQueriedByA);
 
         await txA.RollbackAsync();
@@ -135,7 +133,7 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         }
 
         // 2. Runtime user under Tenant A attempts to UPDATE Tenant B's brand
-        await using var runtimeConn = new NpgsqlConnection(GetRuntimeConnectionString());
+        await using var runtimeConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
         await runtimeConn.OpenAsync();
         await using (var tx = await runtimeConn.BeginTransactionAsync())
         {
@@ -172,11 +170,25 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
 
-        // Query using runtime user without setting app.current_tenant_id
-        await using var runtimeConn = new NpgsqlConnection(GetRuntimeConnectionString());
+        // 0. Seed tenant data using owner connection so the table is not empty
+        var seedTenantId = Guid.NewGuid();
+        await using (var ownerConn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
+        {
+            await ownerConn.OpenAsync();
+            await using var seedCmd = ownerConn.CreateCommand();
+            seedCmd.CommandText = @"
+                INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
+                VALUES (@id, 'Seed Tenant FailClosed', @slug, 'Active', NOW(), gen_random_uuid());";
+            seedCmd.Parameters.AddWithValue("id", seedTenantId);
+            seedCmd.Parameters.AddWithValue("slug", $"seed-fc-{Guid.NewGuid():N}");
+            await seedCmd.ExecuteNonQueryAsync();
+        }
+
+        // Query using non-owner runtime user
+        await using var runtimeConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
         await runtimeConn.OpenAsync();
 
-        // 1. Without tenant context: SELECT returns 0 rows
+        // 1. Without tenant context: SELECT returns 0 rows (fail-closed despite existing records)
         await using (var cmd = runtimeConn.CreateCommand())
         {
             cmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
@@ -189,12 +201,30 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         {
             insertCmd.CommandText = @"
                 INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
-                VALUES (gen_random_uuid(), 'Anonymous', 'anon-slug', 'Active', NOW(), gen_random_uuid());";
+                VALUES (gen_random_uuid(), 'Anonymous', @slug, 'Active', NOW(), gen_random_uuid());";
+            insertCmd.Parameters.AddWithValue("slug", $"anon-{Guid.NewGuid():N}");
             var ex = await Assert.ThrowsAsync<PostgresException>(() => insertCmd.ExecuteNonQueryAsync());
-            Assert.Equal("44000", ex.SqlState); // check_violation (RLS WITH CHECK violation)
+            Assert.Equal("42501", ex.SqlState); // insufficient_privilege (PostgreSQL RLS WITH CHECK violation)
         }
 
-        // 3. With invalid string as tenant context: SELECT returns 0 rows (fail-closed)
+        // 3. With empty string as tenant context: SELECT returns 0 rows (fail-closed)
+        await using (var tx = await runtimeConn.BeginTransactionAsync())
+        {
+            await using var setCmd = runtimeConn.CreateCommand();
+            setCmd.Transaction = tx;
+            setCmd.CommandText = "SELECT set_config('app.current_tenant_id', '', true);";
+            await setCmd.ExecuteNonQueryAsync();
+
+            await using var selectCmd = runtimeConn.CreateCommand();
+            selectCmd.Transaction = tx;
+            selectCmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
+            var count = (long)(await selectCmd.ExecuteScalarAsync())!;
+            Assert.Equal(0L, count);
+
+            await tx.RollbackAsync();
+        }
+
+        // 4. With invalid string as tenant context: SELECT returns 0 rows (fail-closed)
         await using (var tx = await runtimeConn.BeginTransactionAsync())
         {
             await using var setCmd = runtimeConn.CreateCommand();
@@ -209,6 +239,32 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
             Assert.Equal(0L, count);
 
             await tx.RollbackAsync();
+        }
+
+        // 5. With arbitrary nonexistent tenant UUID: SELECT returns 0 rows
+        await using (var tx = await runtimeConn.BeginTransactionAsync())
+        {
+            await using var setCmd = runtimeConn.CreateCommand();
+            setCmd.Transaction = tx;
+            setCmd.CommandText = "SELECT set_config('app.current_tenant_id', @tenantId, true);";
+            setCmd.Parameters.AddWithValue("tenantId", Guid.NewGuid().ToString());
+            await setCmd.ExecuteNonQueryAsync();
+
+            await using var selectCmd = runtimeConn.CreateCommand();
+            selectCmd.Transaction = tx;
+            selectCmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
+            var count = (long)(await selectCmd.ExecuteScalarAsync())!;
+            Assert.Equal(0L, count);
+
+            await tx.RollbackAsync();
+        }
+
+        // 6. Verify that after transaction rollback, tenant setting does not leak
+        await using (var checkCmd = runtimeConn.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM tenancy.tenants;";
+            var count = (long)(await checkCmd.ExecuteScalarAsync())!;
+            Assert.Equal(0L, count);
         }
     }
 
@@ -237,7 +293,7 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         }
 
         var contextA = new TenantContext(tenantAId, isAuthenticated: true);
-        await using var dbContextA = CreateRuntimeDbContext(contextA);
+        await using var dbContextA = await CreateRuntimeDbContextAsync(contextA);
         await using var tx = await dbContextA.Database.BeginTransactionAsync();
         await dbContextA.SetTenantSessionAsync(tenantAId);
 
@@ -273,7 +329,7 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
             await cmd.ExecuteNonQueryAsync();
         }
 
-        await using var runtimeConn = new NpgsqlConnection(GetRuntimeConnectionString());
+        await using var runtimeConn = new NpgsqlConnection(await GetRuntimeConnectionStringAsync());
         await runtimeConn.OpenAsync();
         await using var tx = await runtimeConn.BeginTransactionAsync();
 
@@ -283,16 +339,20 @@ public class PostgreSqlRowLevelSecurityIntegrationTests : IClassFixture<Testcont
         setCmd.Parameters.AddWithValue("tenantId", tenantAId.ToString());
         await setCmd.ExecuteNonQueryAsync();
 
-        // Raw unqualified SELECT * FROM tenancy.tenants
-        await using var rawCmd = runtimeConn.CreateCommand();
-        rawCmd.Transaction = tx;
-        rawCmd.CommandText = "SELECT id, name FROM tenancy.tenants;";
-        await using var reader = await rawCmd.ExecuteReaderAsync();
-
+        // Raw unqualified SELECT * FROM tenancy.tenants scoped inside await using block
+        // to guarantee data reader disposal prior to transaction rollback.
         var foundIds = new List<Guid>();
-        while (await reader.ReadAsync())
+        await using (var rawCmd = runtimeConn.CreateCommand())
         {
-            foundIds.Add(reader.GetGuid(0));
+            rawCmd.Transaction = tx;
+            rawCmd.CommandText = "SELECT id, name FROM tenancy.tenants;";
+            await using (var reader = await rawCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    foundIds.Add(reader.GetGuid(0));
+                }
+            }
         }
 
         Assert.Single(foundIds);
