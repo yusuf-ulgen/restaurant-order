@@ -13,4 +13,10 @@ public sealed class AuthRateLimitException : Exception
     {
         RetryAfterSeconds = retryAfterSeconds;
     }
+
+    public AuthRateLimitException(int retryAfterSeconds, string message)
+        : base(message)
+    {
+        RetryAfterSeconds = retryAfterSeconds;
+    }
 }

@@ -194,6 +194,8 @@ app.MapGet("/api/v1/test/tenant-scope", (ITenantContext context) => Results.Ok(n
 .WithSummary("Test endpoint enforcing tenant presence verification");
 
 RestaurantOrder.Api.Auth.AuthEndpoints.MapAuthEndpoints(app);
+RestaurantOrder.Api.Auth.TerminalEndpoints.MapTerminalEndpoints(app);
+RestaurantOrder.Api.Auth.PinAuthEndpoints.MapPinAuthEndpoints(app);
 
 app.Run();
 

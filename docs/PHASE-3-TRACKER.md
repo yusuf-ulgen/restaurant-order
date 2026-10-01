@@ -12,7 +12,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 3.2** | IAM Persistence, Sessions & Tenant Isolation | **COMPLETED** | EF Core IAM entities, PostgreSQL `iam` schema, RLS policies, audit logs, Hasher contracts |
 | **Phase 3.3** | Password Authentication, JWT & Refresh Session Flow | **COMPLETED** | Login, refresh, logout endpoints, HttpOnly cookies, token rotation, reuse detection |
 | **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
-| **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | Planned / Pending | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
+| **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
 | **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | Planned / Pending | Staff invitation, role assignment, Admin & Operations Web auth integration |
 
 ---
@@ -54,10 +54,10 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] Resource ownership and station assignment validators
 
 ### Phase 3.5: Secure Staff PIN & Trusted Terminal Authentication
-- [ ] Terminal enrollment code generation and activation
-- [ ] 4-digit PIN authentication with server-side pepper and slow hashing
-- [ ] Terminal-scoped brute-force backoff and lockout protection
-- [ ] Terminal revocation cascade
+- [x] Terminal enrollment code generation and activation
+- [x] 4-digit PIN authentication with server-side pepper and slow hashing
+- [x] Terminal-scoped brute-force backoff and lockout protection
+- [x] Terminal revocation cascade
 
 ### Phase 3.6: Staff Identity Management & Frontend Integration
 - [ ] Staff invitation, activation, suspension API

@@ -106,6 +106,12 @@ public static class DependencyInjection
         services.AddSingleton<RestaurantOrder.Application.Auth.IPermissionRegistry, RestaurantOrder.Application.Auth.PermissionRegistry>();
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RestaurantOrder.Infrastructure.Auth.PermissionAuthorizationHandler>();
 
+        // Trusted Terminal & Staff PIN Authentication
+        services.AddSingleton<RestaurantOrder.Application.Auth.ITerminalEnrollmentStore, RestaurantOrder.Infrastructure.Auth.InMemoryTerminalEnrollmentStore>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.ITerminalPinRateLimiter, RestaurantOrder.Infrastructure.Auth.TerminalPinRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
+
         if (environment.IsDevelopment())
         {
             services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();
