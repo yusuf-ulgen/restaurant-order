@@ -91,3 +91,18 @@ test('scanDirectory detects forbidden files and permits .env.example', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('scanFileForSecrets catches hardcoded passwords in CREATE ROLE and permits placeholders', () => {
+  const badSql = "CREATE ROLE app_user WITH LOGIN PASSWORD 'hardcoded_secret_pass_123!' NOSUPERUSER;";
+  const badFindings = scanFileForSecrets('migrations/001.sql', badSql);
+  assert.strictEqual(badFindings.length, 1);
+  assert.strictEqual(badFindings[0].rule, 'HARDCODED_ROLE_PASSWORD');
+
+  const goodPlaceholderSql = "CREATE ROLE app_user WITH LOGIN PASSWORD '${APP_RUNTIME_PASSWORD}' NOSUPERUSER;";
+  const goodFindings = scanFileForSecrets('deploy/bootstrap.sql', goodPlaceholderSql);
+  assert.strictEqual(goodFindings.length, 0);
+
+  const changeMePlaceholderSql = "CREATE ROLE app_user WITH LOGIN PASSWORD 'CHANGE_ME_IN_DEPLOYMENT_SECRET_MANAGER' NOSUPERUSER;";
+  const changeMeFindings = scanFileForSecrets('deploy/bootstrap.sql', changeMePlaceholderSql);
+  assert.strictEqual(changeMeFindings.length, 0);
+});

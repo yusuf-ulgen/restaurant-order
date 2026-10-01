@@ -1,4 +1,4 @@
-﻿START TRANSACTION;
+START TRANSACTION;
 
 DO $EF$
 BEGIN
@@ -62,17 +62,17 @@ BEGIN
 
                     DO $ROLE$
                     BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_user') THEN
-                            CREATE ROLE restaurant_app_user WITH LOGIN PASSWORD 'app_secure_pass_123!' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            CREATE ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
                         ELSE
-                            ALTER ROLE restaurant_app_user WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                            ALTER ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
                         END IF;
                     END $ROLE$;
 
-                    GRANT USAGE ON SCHEMA tenancy TO restaurant_app_user;
-                    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_user;
-                    ALTER DEFAULT PRIVILEGES IN SCHEMA tenancy GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO restaurant_app_user;
-                    REVOKE CREATE ON SCHEMA tenancy FROM restaurant_app_user;
+                    GRANT USAGE ON SCHEMA tenancy TO restaurant_app_runtime;
+                    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_runtime;
+                    ALTER DEFAULT PRIVILEGES IN SCHEMA tenancy GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO restaurant_app_runtime;
+                    REVOKE CREATE ON SCHEMA tenancy FROM restaurant_app_runtime;
                 
     END IF;
 END $EF$;
@@ -85,4 +85,3 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
-

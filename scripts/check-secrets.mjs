@@ -54,6 +54,10 @@ export const SECRET_RULES = [
   {
     name: 'SLACK_TOKEN',
     regex: /\bxox[baprs]-[0-9a-zA-Z]{10,48}\b/
+  },
+  {
+    name: 'HARDCODED_ROLE_PASSWORD',
+    regex: /\bCREATE\s+ROLE\b[^;]*\bPASSWORD\s+'(?!CHANGE_ME|\${|\{|<)[^']+'/i
   }
 ];
 

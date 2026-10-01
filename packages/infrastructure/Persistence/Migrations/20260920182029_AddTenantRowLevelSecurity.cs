@@ -54,21 +54,22 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
             ");
 
-            // 4. Runtime Application Role (Limited privileges, no superuser, no bypassrls, cannot alter schema)
+            // 4. Runtime Application Group Role (NOLOGIN, limited privileges, no superuser, no bypassrls, cannot alter schema)
+            // Real LOGIN application roles are created by infrastructure/secret manager with secure passwords and granted membership in restaurant_app_runtime.
             migrationBuilder.Sql(@"
                 DO $ROLE$
                 BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_user') THEN
-                        CREATE ROLE restaurant_app_user WITH LOGIN PASSWORD 'app_secure_pass_123!' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                        CREATE ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
                     ELSE
-                        ALTER ROLE restaurant_app_user WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+                        ALTER ROLE restaurant_app_runtime WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
                     END IF;
                 END $ROLE$;
 
-                GRANT USAGE ON SCHEMA tenancy TO restaurant_app_user;
-                GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_user;
-                ALTER DEFAULT PRIVILEGES IN SCHEMA tenancy GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO restaurant_app_user;
-                REVOKE CREATE ON SCHEMA tenancy FROM restaurant_app_user;
+                GRANT USAGE ON SCHEMA tenancy TO restaurant_app_runtime;
+                GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_runtime;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA tenancy GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO restaurant_app_runtime;
+                REVOKE CREATE ON SCHEMA tenancy FROM restaurant_app_runtime;
             ");
         }
 
@@ -88,6 +89,11 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                 ALTER TABLE tenancy.tenants DISABLE ROW LEVEL SECURITY;
 
                 DROP FUNCTION IF EXISTS tenancy.get_current_tenant_id();
+
+                -- Revoke privileges and clean up runtime group role
+                REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA tenancy FROM restaurant_app_runtime;
+                REVOKE USAGE ON SCHEMA tenancy FROM restaurant_app_runtime;
+                DROP ROLE IF EXISTS restaurant_app_runtime;
             ");
         }
     }
