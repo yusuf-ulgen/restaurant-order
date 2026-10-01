@@ -14,6 +14,12 @@ public interface IAuthCookieService
 
     void ClearAuthCookies(HttpResponse response, bool isHttps);
 
+    void SetTerminalCookie(HttpResponse response, Guid terminalId, string deviceSecret, bool isHttps);
+
+    void ClearTerminalCookie(HttpResponse response, bool isHttps);
+
+    (Guid TerminalId, string DeviceSecret)? GetTerminalCredentials(HttpRequest request);
+
     string? GetRefreshToken(HttpRequest request);
 
     string? GetAccessToken(HttpRequest request);
@@ -27,6 +33,16 @@ public sealed class AuthCookieService : IAuthCookieService
     public const string RefreshTokenCookieName = "restaurant_refresh_token";
     public const string CsrfTokenCookieName = "restaurant_csrf_token";
     public const string CsrfHeaderName = "X-CSRF-Token";
+    public const string TerminalCredCookieName = "restaurant_terminal_cred";
+
+    private readonly bool _isProductionOrStaging;
+
+    public AuthCookieService(IHostEnvironment? environment = null)
+    {
+        _isProductionOrStaging = environment?.IsProduction() == true || environment?.IsEnvironment("Staging") == true;
+    }
+
+    private bool ResolveSecure(bool isHttps) => isHttps || _isProductionOrStaging;
 
     public void SetAuthCookies(
         HttpResponse response,
@@ -37,12 +53,13 @@ public sealed class AuthCookieService : IAuthCookieService
         bool isHttps)
     {
         var csrfToken = GenerateCsrfToken();
+        var secure = ResolveSecure(isHttps);
 
         // 1. Short-lived Access Token Cookie
         response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Lax,
             Path = "/",
             Expires = accessExpiresAt
@@ -52,7 +69,7 @@ public sealed class AuthCookieService : IAuthCookieService
         response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Strict,
             Path = "/api/v1/auth",
             Expires = refreshExpiresAt
@@ -62,7 +79,7 @@ public sealed class AuthCookieService : IAuthCookieService
         response.Cookies.Append(CsrfTokenCookieName, csrfToken, new CookieOptions
         {
             HttpOnly = false,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Strict,
             Path = "/",
             Expires = refreshExpiresAt
@@ -71,10 +88,12 @@ public sealed class AuthCookieService : IAuthCookieService
 
     public void ClearAuthCookies(HttpResponse response, bool isHttps)
     {
+        var secure = ResolveSecure(isHttps);
+
         response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
         {
             HttpOnly = true,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Lax,
             Path = "/"
         });
@@ -82,7 +101,7 @@ public sealed class AuthCookieService : IAuthCookieService
         response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
         {
             HttpOnly = true,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Strict,
             Path = "/api/v1/auth"
         });
@@ -90,10 +109,68 @@ public sealed class AuthCookieService : IAuthCookieService
         response.Cookies.Delete(CsrfTokenCookieName, new CookieOptions
         {
             HttpOnly = false,
-            Secure = isHttps,
+            Secure = secure,
             SameSite = SameSiteMode.Strict,
             Path = "/"
         });
+    }
+
+    public void SetTerminalCookie(HttpResponse response, Guid terminalId, string deviceSecret, bool isHttps)
+    {
+        var secure = ResolveSecure(isHttps);
+        var payload = $"{terminalId:D}:{deviceSecret}";
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload));
+
+        response.Cookies.Append(TerminalCredCookieName, encoded, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Lax,
+            Path = "/api/v1",
+            Expires = DateTimeOffset.UtcNow.AddYears(1)
+        });
+    }
+
+    public void ClearTerminalCookie(HttpResponse response, bool isHttps)
+    {
+        var secure = ResolveSecure(isHttps);
+        response.Cookies.Delete(TerminalCredCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Lax,
+            Path = "/api/v1"
+        });
+    }
+
+    public (Guid TerminalId, string DeviceSecret)? GetTerminalCredentials(HttpRequest request)
+    {
+        var cookie = request.Cookies[TerminalCredCookieName];
+        if (string.IsNullOrWhiteSpace(cookie))
+        {
+            return null;
+        }
+
+        try
+        {
+            var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cookie));
+            var separatorIdx = decoded.IndexOf(':');
+            if (separatorIdx > 0 &&
+                Guid.TryParse(decoded.AsSpan(0, separatorIdx), out var terminalId))
+            {
+                var deviceSecret = decoded.Substring(separatorIdx + 1);
+                if (!string.IsNullOrWhiteSpace(deviceSecret))
+                {
+                    return (terminalId, deviceSecret);
+                }
+            }
+        }
+        catch
+        {
+            // Ignore malformed terminal cookie
+        }
+
+        return null;
     }
 
     public string? GetRefreshToken(HttpRequest request)

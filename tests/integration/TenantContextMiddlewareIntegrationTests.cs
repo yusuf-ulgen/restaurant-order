@@ -66,8 +66,8 @@ public class TenantContextMiddlewareIntegrationTests
 
         var response = await client.SendAsync(request);
 
-        // Must fail closed because unverified headers are never trusted in Production
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Must fail closed because test-scope endpoint is completely unmapped in Production
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -79,6 +79,18 @@ public class TenantContextMiddlewareIntegrationTests
         var response = await client.PostAsync("/api/v1/dev/seed", null);
 
         // Dev seed endpoint must not exist in production
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TestTenantScope_Endpoint_Is_Not_Mapped_In_Production()
+    {
+        using var factory = CreateCustomFactory(Environments.Production, allowDevHeaderOverride: false);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/test/tenant-scope");
+
+        // Test tenant scope endpoint must not exist in production
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -176,6 +188,8 @@ public class TenantContextMiddlewareIntegrationTests
             builder.UseSetting("DATABASE_URL", "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass");
             builder.UseSetting("REDIS_URL", "localhost:6379");
             builder.UseSetting("JWT_SECRET", "super-secure-production-jwt-secret-key-32-chars-long!");
+            builder.UseSetting("PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!");
+            builder.UseSetting("Cors:AllowedOrigins:0", "https://admin.restaurantorder.app");
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -185,7 +199,9 @@ public class TenantContextMiddlewareIntegrationTests
                     ["DEPLOYMENT_COLOR"] = "blue",
                     ["DATABASE_URL"] = "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass",
                     ["REDIS_URL"] = "localhost:6379",
-                    ["JWT_SECRET"] = "super-secure-production-jwt-secret-key-32-chars-long!"
+                    ["JWT_SECRET"] = "super-secure-production-jwt-secret-key-32-chars-long!",
+                    ["PIN_PEPPER_SECRET"] = "super-secure-production-pin-pepper-key-32-chars-long!",
+                    ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app"
                 });
             });
         });

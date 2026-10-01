@@ -112,30 +112,17 @@ export const AdminContent: React.FC<AdminAppProps> = ({
   );
 };
 
-export interface AdminAppProps {
-  hasMetrics?: boolean;
-  initialError?: boolean;
-  requireAuth?: boolean;
-}
-
 export const App: React.FC<AdminAppProps> = (props) => {
-  if (props.requireAuth) {
-    return (
-      <ErrorBoundary>
-        <AuthProvider>
-          <ProtectedRoute>
-            <AdminContent {...props} />
-          </ProtectedRoute>
-        </AuthProvider>
-      </ErrorBoundary>
-    );
-  }
-
   return (
     <ErrorBoundary>
-      <AdminContent {...props} />
+      <AuthProvider>
+        <ProtectedRoute allowedRoles={['SuperAdmin', 'RestaurantAdmin', 'BranchManager']}>
+          <AdminContent {...props} />
+        </ProtectedRoute>
+      </AuthProvider>
     </ErrorBoundary>
   );
 };
 
 export default App;
+

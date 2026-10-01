@@ -1,80 +1,98 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from './App';
+import { TerminalContextDto, UserPrincipalDto } from '@restaurant-order/contracts';
 
-describe('Operations Web App', () => {
-  describe('Initial Render', () => {
-    it('renders header, branch shift info, and waiter mode badge', () => {
-      render(<App />);
+const mockTerminal: TerminalContextDto = {
+  terminalId: 'term-1',
+  tenantId: 'tenant-1',
+  branchId: 'branch-1',
+  terminalName: 'Garson POS 1',
+  deviceIdentifier: 'dev-1',
+  isActive: true,
+};
 
-      expect(screen.getByText('Garson & Operasyon')).toBeDefined();
-      expect(screen.getByText('Şube: Kadıköy • Aktif Vardiya')).toBeDefined();
-      expect(screen.getByText('Garson Modu')).toBeDefined();
-    });
+const mockStaff: UserPrincipalDto = {
+  userId: 'staff-1',
+  email: 'waiter@restoran.com',
+  role: 'Waiter',
+  tenantId: 'tenant-1',
+  branchId: 'branch-1',
+  securityVersion: 1,
+};
 
-    it('renders table management card with action buttons', () => {
-      render(<App />);
+describe('Operations Web App - 5-Stage Authentication State Machine', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
-      expect(screen.getByText('Masa Yönetimi')).toBeDefined();
-      expect(screen.getByText(/Masa Planı/i)).toBeDefined();
-      expect(screen.getByText('Çağrılar (0)')).toBeDefined();
+  describe('Stage 1: UNENROLLED State', () => {
+    it('renders only TerminalActivationView when device is not enrolled', () => {
+      render(<App initialTerminal={null} initialStaff={null} />);
+
+      // Activation screen elements MUST be present
+      expect(screen.getByRole('heading', { level: 1, name: 'Cihaz Aktivasyonu' })).toBeDefined();
+      expect(screen.getByLabelText(/Aktivasyon Kodu/i)).toBeDefined();
+      expect(screen.getByLabelText(/Terminal Adı/i)).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Terminali Aktifleştir' })).toBeDefined();
+
+      // Operational elements MUST NOT exist in DOM
+      expect(screen.queryByText('Garson & Operasyon')).toBeNull();
+      expect(screen.queryByText('Masa Yönetimi')).toBeNull();
+      expect(screen.queryByText('Çağrılar (0)')).toBeNull();
+      expect(screen.queryByRole('banner')).toBeNull();
     });
   });
 
-  describe('Empty State & Error Boundary', () => {
+  describe('Stage 2: LOCKED State', () => {
+    it('renders only PinPadView when terminal is enrolled but staff is not logged in', () => {
+      render(<App initialTerminal={mockTerminal} initialStaff={null} />);
+
+      // PIN pad elements MUST be present
+      expect(screen.getByText('Terminal Kilitli')).toBeDefined();
+      expect(screen.getByText('Garson POS 1')).toBeDefined();
+      expect(screen.getByText('Personel PIN Girişi')).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Farklı Terminal / Cihazı Sıfırla' })).toBeDefined();
+
+      // Operational elements MUST NOT exist in DOM
+      expect(screen.queryByText('Garson & Operasyon')).toBeNull();
+      expect(screen.queryByText('Masa Yönetimi')).toBeNull();
+      expect(screen.queryByText('Çağrılar (0)')).toBeNull();
+      expect(screen.queryByRole('banner')).toBeNull();
+    });
+  });
+
+  describe('Stage 3: AUTHENTICATED State', () => {
+    it('renders full operations shell and table management when staff is authenticated', () => {
+      render(<App initialTerminal={mockTerminal} initialStaff={mockStaff} />);
+
+      // Operations shell MUST be present
+      expect(screen.getByRole('heading', { level: 1, name: 'Garson & Operasyon' })).toBeDefined();
+      expect(screen.getByText('Waiter')).toBeDefined();
+      expect(screen.getByText('Garson POS 1')).toBeDefined();
+      expect(screen.getByText('Masa Yönetimi')).toBeDefined();
+      expect(screen.getByRole('button', { name: /Masa Planı/i })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Çağrılar (0)' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Kilitle' })).toBeDefined();
+    });
+
     it('renders empty state when there are no active tables', () => {
-      render(<App hasActiveTables={false} />);
+      render(
+        <App
+          initialTerminal={mockTerminal}
+          initialStaff={mockStaff}
+          hasActiveTables={false}
+        />
+      );
 
       expect(screen.getByRole('status')).toBeDefined();
       expect(screen.getByText('Aktif Masa Bulunmuyor')).toBeDefined();
-      expect(screen.queryByText('Masaları Yenile')).toBeNull();
-    });
-
-    it('catches render errors and displays error boundary fallback', () => {
-      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      render(<App initialError={true} />);
-
-      const alert = screen.getByRole('alert');
-      expect(alert).toBeDefined();
-      expect(screen.getByText('Beklenmeyen Bir Hata Oluştu')).toBeDefined();
-
-      spy.mockRestore();
-    });
-  });
-
-  describe('Basic Accessibility', () => {
-    it('has accessible landmark roles', () => {
-      render(<App />);
-
-      expect(screen.getByRole('banner')).toBeDefined();
-      expect(screen.getByRole('main')).toBeDefined();
-    });
-
-    it('has proper heading hierarchy', () => {
-      render(<App />);
-
-      const h1 = screen.getByRole('heading', { level: 1 });
-      expect(h1).toBeDefined();
-      expect(h1.textContent).toBe('Garson & Operasyon');
-
-      const h2 = screen.getByRole('heading', { level: 2 });
-      expect(h2).toBeDefined();
-      expect(h2.textContent).toBe('Masa Yönetimi');
-    });
-
-    it('has accessible buttons', () => {
-      render(<App />);
-
-      const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBeGreaterThanOrEqual(2);
-      const planBtn = screen.getByRole('button', { name: /Masa Planı/i });
-      expect(planBtn.hasAttribute('disabled')).toBe(true);
-      expect(buttons.some((btn) => btn.textContent?.includes('Çağrılar'))).toBe(true);
     });
 
     it('opens and closes active calls Modal when Çağrılar button is clicked', () => {
-      render(<App />);
+      render(<App initialTerminal={mockTerminal} initialStaff={mockStaff} />);
 
       const callsBtn = screen.getByRole('button', { name: 'Çağrılar (0)' });
       fireEvent.click(callsBtn);
@@ -88,6 +106,65 @@ describe('Operations Web App', () => {
       fireEvent.click(closeBtn);
 
       expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  describe('Stage 4: Lock / Shift Timeout Transition', () => {
+    it('locks terminal and returns to PIN view when Kilitle is clicked', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+
+      render(<App initialTerminal={mockTerminal} initialStaff={mockStaff} />);
+
+      expect(screen.getByText('Garson & Operasyon')).toBeDefined();
+
+      const lockBtn = screen.getByRole('button', { name: 'Kilitle' });
+      fireEvent.click(lockBtn);
+
+      await waitFor(() => {
+        // App transitions back to LOCKED state: PIN Pad visible, tables removed
+        expect(screen.getByText('Terminal Kilitli')).toBeDefined();
+        expect(screen.queryByText('Garson & Operasyon')).toBeNull();
+        expect(screen.queryByText('Masa Yönetimi')).toBeNull();
+      });
+    });
+  });
+
+  describe('Stage 5: Terminal Revocation / Reset Transition', () => {
+    it('resets to UNENROLLED state when terminal is deactivated', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+
+      render(<App initialTerminal={mockTerminal} initialStaff={null} />);
+
+      expect(screen.getByText('Terminal Kilitli')).toBeDefined();
+
+      const resetBtn = screen.getByRole('button', { name: 'Farklı Terminal / Cihazı Sıfırla' });
+      fireEvent.click(resetBtn);
+
+      await waitFor(() => {
+        // Transitions to UNENROLLED state: Activation screen visible
+        expect(screen.getByRole('heading', { level: 1, name: 'Cihaz Aktivasyonu' })).toBeDefined();
+        expect(screen.queryByText('Terminal Kilitli')).toBeNull();
+      });
+    });
+  });
+
+  describe('Error Boundary', () => {
+    it('catches render errors and displays error boundary fallback', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(
+        <App
+          initialTerminal={mockTerminal}
+          initialStaff={mockStaff}
+          initialError={true}
+        />
+      );
+
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeDefined();
+      expect(screen.getByText('Beklenmeyen Bir Hata Oluştu')).toBeDefined();
+
+      spy.mockRestore();
     });
   });
 });

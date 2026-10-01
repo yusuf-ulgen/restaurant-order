@@ -18,6 +18,12 @@ public sealed record ActivateTerminalApiRequest(
     string TerminalName,
     string? TenantSlug = null);
 
+public sealed record ActivateTerminalApiResponse(
+    Guid TerminalId,
+    Guid TenantId,
+    Guid BranchId,
+    string TerminalName);
+
 public static class TerminalEndpoints
 {
     public static IEndpointRouteBuilder MapTerminalEndpoints(this IEndpointRouteBuilder app)
@@ -60,7 +66,9 @@ public static class TerminalEndpoints
 
         group.MapPost("/activate", async (
             ActivateTerminalApiRequest request,
+            HttpContext httpContext,
             ITrustedTerminalService terminalService,
+            IAuthCookieService cookieService,
             CancellationToken ct) =>
         {
             try
@@ -71,7 +79,20 @@ public static class TerminalEndpoints
                     TerminalName: request.TerminalName);
 
                 var result = await terminalService.ActivateTerminalAsync(command, ct);
-                return Results.Ok(result);
+
+                cookieService.SetTerminalCookie(
+                    httpContext.Response,
+                    result.TerminalId,
+                    result.DeviceSecret,
+                    httpContext.Request.IsHttps);
+
+                var responseDto = new ActivateTerminalApiResponse(
+                    result.TerminalId,
+                    result.TenantId,
+                    result.BranchId,
+                    result.TerminalName);
+
+                return Results.Ok(responseDto);
             }
             catch (PinAuthFailureException ex)
             {
@@ -113,19 +134,34 @@ public static class TerminalEndpoints
         group.MapGet("/current", async (
             HttpContext httpContext,
             ITrustedTerminalService terminalService,
+            IAuthCookieService cookieService,
             CancellationToken ct) =>
         {
-            var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
-            var deviceSecretHeader = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
+            var creds = cookieService.GetTerminalCredentials(httpContext.Request);
+            Guid terminalId = creds?.TerminalId ?? Guid.Empty;
+            string? deviceSecret = creds?.DeviceSecret;
 
-            if (!Guid.TryParse(terminalIdHeader, out var terminalId) || string.IsNullOrWhiteSpace(deviceSecretHeader))
+            if (terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
+            {
+                var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
+                var deviceSecretHeader = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
+
+                if (Guid.TryParse(terminalIdHeader, out var tid))
+                {
+                    terminalId = tid;
+                }
+                deviceSecret = deviceSecretHeader;
+            }
+
+            if (terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
             {
                 return Results.Unauthorized();
             }
 
-            var context = await terminalService.GetCurrentTerminalAsync(terminalId, deviceSecretHeader, ct);
+            var context = await terminalService.GetCurrentTerminalAsync(terminalId, deviceSecret, ct);
             if (context == null || !context.IsActive)
             {
+                cookieService.ClearTerminalCookie(httpContext.Response, httpContext.Request.IsHttps);
                 return Results.Unauthorized();
             }
 
@@ -133,6 +169,17 @@ public static class TerminalEndpoints
         })
         .WithName("GetCurrentTerminal")
         .WithSummary("Verify and retrieve current trusted terminal metadata");
+
+        group.MapPost("/deactivate", (
+            HttpContext httpContext,
+            IAuthCookieService cookieService) =>
+        {
+            cookieService.ClearTerminalCookie(httpContext.Response, httpContext.Request.IsHttps);
+            cookieService.ClearAuthCookies(httpContext.Response, httpContext.Request.IsHttps);
+            return Results.Ok(new { message = "Terminal deactivated successfully." });
+        })
+        .WithName("DeactivateTerminal")
+        .WithSummary("Clear terminal credentials cookie and staff session");
 
         return app;
     }

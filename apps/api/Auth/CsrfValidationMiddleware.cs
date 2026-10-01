@@ -35,7 +35,15 @@ public sealed class CsrfValidationMiddleware
         }
 
         // Exempt endpoints that do not have an ambient session established
+        // Documented exemptions:
+        // - /api/v1/auth/login: Initial email/password pre-authentication (no ambient cookie yet)
+        // - /api/v1/terminals/activate: Device enrollment pairing (no terminal credentials yet)
+        // - /api/v1/auth/pin/login: Initial terminal staff PIN login (no staff auth cookie yet)
+        // - /health/: Infrastructure probes
+        // - /api/v1/dev/: Local synthetic seed endpoints
         if (path.Equals("/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/v1/terminals/activate", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/v1/auth/pin/login", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/v1/dev/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/health/", StringComparison.OrdinalIgnoreCase))
         {
@@ -43,9 +51,13 @@ public sealed class CsrfValidationMiddleware
             return;
         }
 
-        // Only enforce CSRF if client is authenticating via cookie
-        var hasAuthCookie = context.Request.Cookies.ContainsKey(AuthCookieService.AccessTokenCookieName);
-        if (hasAuthCookie)
+        // Enforce CSRF if client has any ambient authentication/session cookies or supplies a CSRF header
+        var hasAuthCookie = context.Request.Cookies.ContainsKey(AuthCookieService.AccessTokenCookieName) ||
+                            context.Request.Cookies.ContainsKey(AuthCookieService.RefreshTokenCookieName) ||
+                            context.Request.Cookies.ContainsKey(AuthCookieService.CsrfTokenCookieName);
+        var hasCsrfHeader = context.Request.Headers.ContainsKey(AuthCookieService.CsrfHeaderName);
+
+        if (hasAuthCookie || hasCsrfHeader)
         {
             var cookieCsrf = context.Request.Cookies[AuthCookieService.CsrfTokenCookieName];
             var headerCsrf = context.Request.Headers[AuthCookieService.CsrfHeaderName].FirstOrDefault();

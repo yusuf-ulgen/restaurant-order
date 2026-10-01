@@ -69,11 +69,84 @@ public static class ConfigurationValidator
                 missingKeys.Add("DEPLOYMENT_COLOR (must be 'blue' or 'green')");
             }
 
+            // 5. PIN Pepper Secret Validation
+            var pinPepper = configuration["PIN_PEPPER_SECRET"] ?? configuration["APP_PIN_PEPPER"];
+            if (string.IsNullOrWhiteSpace(pinPepper))
+            {
+                missingKeys.Add("PIN_PEPPER_SECRET");
+            }
+            else
+            {
+                ValidatePinPepperSecret(pinPepper);
+            }
+
+            // 6. CORS Allowed Origins Validation
+            var corsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                ?? configuration["CORS_ALLOWED_ORIGINS"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (corsOrigins == null || corsOrigins.Length == 0)
+            {
+                missingKeys.Add("Cors:AllowedOrigins (or CORS_ALLOWED_ORIGINS)");
+            }
+            else
+            {
+                ValidateCorsAllowedOrigins(corsOrigins);
+            }
+
             if (missingKeys.Count > 0)
             {
                 var formattedKeys = string.Join(", ", missingKeys);
                 throw new InvalidOperationException(
                     $"FATAL CONFIGURATION ERROR: Missing required configuration keys for environment '{environment.EnvironmentName}': [{formattedKeys}]. Process terminating fail-fast.");
+            }
+        }
+    }
+
+    private static void ValidatePinPepperSecret(string pepper)
+    {
+        if (pepper.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "FATAL CONFIGURATION ERROR: PIN_PEPPER_SECRET must be at least 32 characters long for cryptographic security in Staging/Production.");
+        }
+
+        foreach (var keyword in InsecureKeywords)
+        {
+            if (pepper.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: PIN_PEPPER_SECRET contains insecure placeholder pattern. A high-entropy secret from a secret manager is required.");
+            }
+        }
+    }
+
+    private static void ValidateCorsAllowedOrigins(string[] origins)
+    {
+        foreach (var origin in origins)
+        {
+            if (string.IsNullOrWhiteSpace(origin))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: Cors:AllowedOrigins contains empty or whitespace entry.");
+            }
+
+            if (origin.Contains('*'))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: Wildcard '*' is strictly prohibited in Cors:AllowedOrigins in Staging/Production.");
+            }
+
+            if (origin.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+                origin.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "FATAL CONFIGURATION ERROR: Localhost origins are prohibited in Cors:AllowedOrigins in Staging/Production.");
+            }
+
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: Cors:AllowedOrigins origin '{origin}' is not a valid absolute http/https URI.");
             }
         }
     }

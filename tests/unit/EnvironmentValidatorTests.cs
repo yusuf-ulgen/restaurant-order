@@ -157,7 +157,9 @@ public class EnvironmentValidatorTests
                 { "DATABASE_URL", "Host=localhost;Port=5432;Database=restaurant_order_prod;Username=app;Password=real_prod_entropy_991823" },
                 { "REDIS_URL", "localhost:6379" },
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
-                { "DEPLOYMENT_COLOR", "blue" }
+                { "DEPLOYMENT_COLOR", "blue" },
+                { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
             })
             .Build();
 
@@ -261,7 +263,9 @@ public class EnvironmentValidatorTests
                 { "ConnectionStrings:Database", "Host=localhost;Database=test" },
                 { "ConnectionStrings:Redis", "localhost:6379" },
                 { "Jwt:Secret", "super-secure-production-key-at-least-32-chars-long!" },
-                { "DEPLOYMENT_COLOR", "green" }
+                { "DEPLOYMENT_COLOR", "green" },
+                { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
             })
             .Build();
 
@@ -281,7 +285,9 @@ public class EnvironmentValidatorTests
                 { "DATABASE_URL", dbUri },
                 { "REDIS_URL", "redis://redis_user:secret_auth_token@localhost:6379" },
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
-                { "DEPLOYMENT_COLOR", "blue" }
+                { "DEPLOYMENT_COLOR", "blue" },
+                { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
             })
             .Build();
 
@@ -299,7 +305,9 @@ public class EnvironmentValidatorTests
                 { "DATABASE_URL", "Host=localhost;Database=test" },
                 { "REDIS_URL", "redis://redis_user:secret_auth_token@localhost:6379" },
                 { "JWT_SECRET", "super-secure-production-key-at-least-32-chars-long!" },
-                { "DEPLOYMENT_COLOR", "blue" }
+                { "DEPLOYMENT_COLOR", "blue" },
+                { "PIN_PEPPER_SECRET", "super-secure-production-pin-pepper-key-32-chars-long!" },
+                { "Cors:AllowedOrigins:0", "https://admin.restaurantorder.app" }
             })
             .Build();
 

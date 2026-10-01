@@ -1,12 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   TerminalContextDto,
   UserPrincipalDto,
   ActivateTerminalResultDto,
+  fetchWithCsrf,
+  clearClientCookies,
 } from '@restaurant-order/contracts';
+
+export type TerminalState = 'UNENROLLED' | 'LOCKED' | 'AUTHENTICATED';
 
 interface TerminalContextValue {
   terminal: TerminalContextDto | null;
+  state: TerminalState;
   isEnrolled: boolean;
   staffUser: UserPrincipalDto | null;
   isLoading: boolean;
@@ -14,52 +19,69 @@ interface TerminalContextValue {
   activateTerminal: (enrollmentCode: string, terminalName: string, deviceIdentifier?: string) => Promise<boolean>;
   loginWithPin: (pin: string, userId?: string, email?: string) => Promise<boolean>;
   logoutStaff: () => Promise<void>;
+  deactivateTerminal: () => Promise<void>;
 }
 
 const TerminalContext = createContext<TerminalContextValue | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  TERMINAL_ID: 'ro_terminal_id',
-  DEVICE_SECRET: 'ro_device_secret',
-};
+const LEGACY_STORAGE_KEYS = [
+  'ro_device_secret',
+  'device_secret',
+  'ro_terminal_secret',
+  'deviceSecret',
+];
+
+function scrubLegacyStorage(): void {
+  try {
+    for (const key of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    // Fail silently if browser storage access is restricted
+  }
+}
 
 export const TerminalProvider: React.FC<{
   children: React.ReactNode;
   initialTerminal?: TerminalContextDto | null;
   initialStaff?: UserPrincipalDto | null;
-}> = ({ children, initialTerminal = null, initialStaff = null }) => {
-  const [terminal, setTerminal] = useState<TerminalContextDto | null>(initialTerminal);
+}> = ({ children, initialTerminal, initialStaff = null }) => {
+  const [terminal, setTerminal] = useState<TerminalContextDto | null>(initialTerminal ?? null);
   const [staffUser, setStaffUser] = useState<UserPrincipalDto | null>(initialStaff);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Determine current lifecycle state
+  const state: TerminalState = !terminal
+    ? 'UNENROLLED'
+    : !staffUser
+      ? 'LOCKED'
+      : 'AUTHENTICATED';
+
   useEffect(() => {
-    if (initialTerminal) return;
+    // Scrub any legacy plain secrets from browser storage on mount
+    scrubLegacyStorage();
 
-    const storedTerminalId = localStorage.getItem(STORAGE_KEYS.TERMINAL_ID);
-    const storedSecret = localStorage.getItem(STORAGE_KEYS.DEVICE_SECRET);
+    if (initialTerminal !== undefined) return;
 
-    if (storedTerminalId && storedSecret) {
-      fetch('/api/v1/terminals/current', {
-        headers: {
-          'X-Terminal-Id': storedTerminalId,
-          'X-Device-Secret': storedSecret,
-        },
+    // Probe backend for active terminal credentials via HttpOnly cookie
+    fetchWithCsrf('/api/v1/terminals/current')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: TerminalContextDto | null) => {
+        if (data && data.isActive) {
+          setTerminal(data);
+        } else {
+          setTerminal(null);
+          setStaffUser(null);
+        }
       })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data: TerminalContextDto | null) => {
-          if (data && data.isActive) {
-            setTerminal(data);
-          } else {
-            localStorage.removeItem(STORAGE_KEYS.TERMINAL_ID);
-            localStorage.removeItem(STORAGE_KEYS.DEVICE_SECRET);
-          }
-        })
-        .catch(() => {});
-    }
+      .catch(() => {
+        setTerminal(null);
+      });
   }, [initialTerminal]);
 
-  const activateTerminal = async (
+  const activateTerminal = useCallback(async (
     enrollmentCode: string,
     terminalName: string,
     deviceIdentifier?: string
@@ -67,9 +89,8 @@ export const TerminalProvider: React.FC<{
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/terminals/activate', {
+      const response = await fetchWithCsrf('/api/v1/terminals/activate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           enrollmentCode,
           terminalName,
@@ -84,8 +105,9 @@ export const TerminalProvider: React.FC<{
       }
 
       const result: ActivateTerminalResultDto = await response.json();
-      localStorage.setItem(STORAGE_KEYS.TERMINAL_ID, result.terminalId);
-      localStorage.setItem(STORAGE_KEYS.DEVICE_SECRET, result.deviceSecret);
+
+      // Ensure zero secrets ever touch localStorage or sessionStorage
+      scrubLegacyStorage();
 
       setTerminal({
         terminalId: result.terminalId,
@@ -103,13 +125,10 @@ export const TerminalProvider: React.FC<{
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const loginWithPin = async (pin: string, userId?: string, email?: string): Promise<boolean> => {
-    const storedTerminalId = terminal?.terminalId || localStorage.getItem(STORAGE_KEYS.TERMINAL_ID);
-    const storedSecret = localStorage.getItem(STORAGE_KEYS.DEVICE_SECRET);
-
-    if (!storedTerminalId || !storedSecret) {
+  const loginWithPin = useCallback(async (pin: string, userId?: string, email?: string): Promise<boolean> => {
+    if (!terminal) {
       setError('Cihaz aktif bir terminal olarak kayıtlı değil.');
       return false;
     }
@@ -117,16 +136,10 @@ export const TerminalProvider: React.FC<{
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/auth/pin/login', {
+      const response = await fetchWithCsrf('/api/v1/auth/pin/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Terminal-Id': storedTerminalId,
-          'X-Device-Secret': storedSecret,
-        },
         body: JSON.stringify({
-          terminalId: storedTerminalId,
-          deviceSecret: storedSecret,
+          terminalId: terminal.terminalId,
           userId,
           email,
           pin,
@@ -134,6 +147,17 @@ export const TerminalProvider: React.FC<{
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Check if terminal itself was revoked
+          const verifyRes = await fetchWithCsrf('/api/v1/terminals/current').catch(() => null);
+          if (verifyRes && !verifyRes.ok) {
+            setTerminal(null);
+            setStaffUser(null);
+            setError('Terminal yetkisi sonlandırılmış. Yeniden aktivasyon gerekli.');
+            return false;
+          }
+        }
+
         const data = await response.json().catch(() => ({}));
         setError(data.detail || 'Geçersiz PIN veya personel yetkisi yok.');
         return false;
@@ -148,24 +172,41 @@ export const TerminalProvider: React.FC<{
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [terminal]);
 
-  const logoutStaff = async (): Promise<void> => {
-    const storedTerminalId = terminal?.terminalId || localStorage.getItem(STORAGE_KEYS.TERMINAL_ID);
+  const logoutStaff = useCallback(async (): Promise<void> => {
     try {
-      await fetch('/api/v1/auth/pin/logout', {
+      await fetchWithCsrf('/api/v1/auth/pin/logout', {
         method: 'POST',
-        headers: storedTerminalId ? { 'X-Terminal-Id': storedTerminalId } : {},
       });
+    } catch {
+      // Ignore network errors on logout
     } finally {
+      clearClientCookies();
       setStaffUser(null);
     }
-  };
+  }, []);
+
+  const deactivateTerminal = useCallback(async (): Promise<void> => {
+    try {
+      await fetchWithCsrf('/api/v1/terminals/deactivate', {
+        method: 'POST',
+      });
+    } catch {
+      // Ignore network errors
+    } finally {
+      clearClientCookies();
+      scrubLegacyStorage();
+      setTerminal(null);
+      setStaffUser(null);
+    }
+  }, []);
 
   return (
     <TerminalContext.Provider
       value={{
         terminal,
+        state,
         isEnrolled: !!terminal,
         staffUser,
         isLoading,
@@ -173,6 +214,7 @@ export const TerminalProvider: React.FC<{
         activateTerminal,
         loginWithPin,
         logoutStaff,
+        deactivateTerminal,
       }}
     >
       {children}

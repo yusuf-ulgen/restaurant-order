@@ -31,13 +31,25 @@ public static class PinAuthEndpoints
             IAuthCookieService cookieService,
             CancellationToken ct) =>
         {
-            var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
-            var deviceSecretHeader = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
+            var creds = cookieService.GetTerminalCredentials(httpContext.Request);
+            var terminalId = creds?.TerminalId ?? request.TerminalId;
+            var deviceSecret = creds?.DeviceSecret ?? request.DeviceSecret;
 
-            var terminalId = request.TerminalId ?? (Guid.TryParse(terminalIdHeader, out var tid) ? tid : Guid.Empty);
-            var deviceSecret = !string.IsNullOrWhiteSpace(request.DeviceSecret) ? request.DeviceSecret : deviceSecretHeader;
+            if (terminalId == null || terminalId == Guid.Empty)
+            {
+                var terminalIdHeader = httpContext.Request.Headers["X-Terminal-Id"].FirstOrDefault();
+                if (Guid.TryParse(terminalIdHeader, out var tid))
+                {
+                    terminalId = tid;
+                }
+            }
 
-            if (terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
+            if (string.IsNullOrWhiteSpace(deviceSecret))
+            {
+                deviceSecret = httpContext.Request.Headers["X-Device-Secret"].FirstOrDefault();
+            }
+
+            if (terminalId == null || terminalId == Guid.Empty || string.IsNullOrWhiteSpace(deviceSecret))
             {
                 return Results.Json(new
                 {
@@ -54,7 +66,7 @@ public static class PinAuthEndpoints
             try
             {
                 var command = new PinLoginCommand(
-                    TerminalId: terminalId,
+                    TerminalId: terminalId.Value,
                     DeviceSecret: deviceSecret,
                     UserId: request.UserId,
                     Email: request.Email,

@@ -8,3 +8,5 @@ export interface HealthStatusResponse {
   version: string;
 }
 export * from './auth';
+export * from './api-client';
+

@@ -31,12 +31,52 @@ builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<ITenantCo
 
 builder.Services.AddSingleton<RestaurantOrder.Api.Auth.IAuthCookieService, RestaurantOrder.Api.Auth.AuthCookieService>();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+
+    var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
+    if (knownProxiesConfig != null)
+    {
+        foreach (var proxy in knownProxiesConfig)
+        {
+            if (System.Net.IPAddress.TryParse(proxy, out var ip))
+            {
+                options.KnownProxies.Add(ip);
+            }
+        }
+    }
+
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("192.168.0.0"), 16));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("127.0.0.1"), 8));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.IPv6Loopback, 128));
+});
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCorsPolicy", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+        var rawOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? builder.Configuration["CORS_ALLOWED_ORIGINS"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        string[] allowedOrigins;
+        if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"))
+        {
+            allowedOrigins = (rawOrigins != null && rawOrigins.Length > 0)
+                ? rawOrigins
+                : ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"];
+        }
+        else
+        {
+            allowedOrigins = rawOrigins ?? [];
+        }
+
         policy.WithOrigins(allowedOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -168,6 +208,8 @@ if (app.Environment.IsDevelopment())
     .WithTags("Development");
 }
 
+app.UseForwardedHeaders();
+
 app.Use(async (context, next) =>
 {
     try
@@ -247,16 +289,19 @@ app.MapGet("/health/ready", async (
 .WithSummary("Readiness probe verifying database and redis accessibility")
 .WithTags("Health");
 
-// Internal testing endpoint requiring authenticated tenant context (used for middleware verification)
-app.MapGet("/api/v1/test/tenant-scope", (ITenantContext context) => Results.Ok(new
+// Internal testing endpoint requiring authenticated tenant context (only available in Development or Testing)
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
-    TenantId = context.TenantId,
-    BranchId = context.BranchId,
-    IsAuthenticated = context.IsAuthenticated
-}))
-.WithMetadata(new RequireTenantAttribute())
-.WithName("TestTenantScope")
-.WithSummary("Test endpoint enforcing tenant presence verification");
+    app.MapGet("/api/v1/test/tenant-scope", (ITenantContext context) => Results.Ok(new
+    {
+        TenantId = context.TenantId,
+        BranchId = context.BranchId,
+        IsAuthenticated = context.IsAuthenticated
+    }))
+    .WithMetadata(new RequireTenantAttribute())
+    .WithName("TestTenantScope")
+    .WithSummary("Test endpoint enforcing tenant presence verification");
+}
 
 RestaurantOrder.Api.Auth.AuthEndpoints.MapAuthEndpoints(app);
 RestaurantOrder.Api.Auth.TerminalEndpoints.MapTerminalEndpoints(app);

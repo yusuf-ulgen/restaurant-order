@@ -166,4 +166,38 @@ public class CsrfValidationMiddlewareTests
 
         Assert.True(nextCalled);
     }
+
+    [Fact]
+    public async Task MutationMethod_WithCsrfHeader_MissingCsrfCookie_Returns403()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/orders";
+        // Header present, but no cookie!
+        context.Request.Headers[AuthCookieService.CsrfHeaderName] = "csrf_token_without_cookie";
+        context.Response.Body = new MemoryStream();
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+        Assert.Equal("application/problem+json", context.Response.ContentType);
+
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var reader = new StreamReader(context.Response.Body);
+        var responseBody = await reader.ReadToEndAsync();
+        Assert.Contains("CSRF token missing or invalid.", responseBody);
+        Assert.DoesNotContain("stack", responseBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exception", responseBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("internal", responseBody, StringComparison.OrdinalIgnoreCase);
+    }
 }
+

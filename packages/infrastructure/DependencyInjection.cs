@@ -64,7 +64,7 @@ public static class DependencyInjection
             section.Bind(options);
 
             options.Environment = environment.EnvironmentName;
-            var envPepper = configuration["APP_PIN_PEPPER"];
+            var envPepper = configuration["PIN_PEPPER_SECRET"] ?? configuration["APP_PIN_PEPPER"];
             if (!string.IsNullOrWhiteSpace(envPepper))
             {
                 options.PepperValue = envPepper;

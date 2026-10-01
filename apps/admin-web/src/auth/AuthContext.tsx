@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserPrincipalDto, SingleFlightRefreshQueue } from '@restaurant-order/contracts';
+import {
+  UserPrincipalDto,
+  SingleFlightRefreshQueue,
+  fetchWithCsrf,
+  clearClientCookies,
+} from '@restaurant-order/contracts';
 
 interface AuthContextValue {
   user: UserPrincipalDto | null;
@@ -23,21 +28,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; initialUser?: U
 
   const restoreSession = useCallback(async () => {
     try {
-      const response = await fetch('/api/v1/auth/me', {
-        headers: { Accept: 'application/json' },
-      });
+      const response = await fetchWithCsrf('/api/v1/auth/me');
       if (response.ok) {
         const data = await response.json();
         setUser(data);
       } else if (response.status === 401) {
         // Try single-flight refresh
         const refreshed = await refreshQueue.executeRefresh(async () => {
-          const refRes = await fetch('/api/v1/auth/refresh', { method: 'POST' });
+          const refRes = await fetchWithCsrf('/api/v1/auth/refresh', { method: 'POST' });
           return refRes.ok;
         });
 
         if (refreshed) {
-          const retryRes = await fetch('/api/v1/auth/me');
+          const retryRes = await fetchWithCsrf('/api/v1/auth/me');
           if (retryRes.ok) {
             setUser(await retryRes.json());
           }
@@ -62,9 +65,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; initialUser?: U
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/auth/login', {
+      const response = await fetchWithCsrf('/api/v1/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, tenantSlug }),
       });
 
@@ -87,9 +89,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; initialUser?: U
 
   const logout = async (): Promise<void> => {
     try {
-      await fetch('/api/v1/auth/logout', { method: 'POST' });
+      await fetchWithCsrf('/api/v1/auth/logout', { method: 'POST' });
     } finally {
       setUser(null);
+      clearClientCookies();
     }
   };
 

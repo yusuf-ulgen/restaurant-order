@@ -48,6 +48,8 @@ The `restaurant-order` platform maintains 6 strictly isolated operational enviro
 | `VITE_API_URL` | Public API endpoint for web clients | All Web Apps | No | `http://localhost:5000` |
 | `IMAGE_DIGEST` | Immutable container image SHA256 digest | Staging, Prod | No | `sha256:...` |
 | `LOG_LEVEL` | Application logging verbosity | Optional | No | `Information` |
+| `PIN_PEPPER_SECRET` | Secret pepper for staff 4-digit PIN hash | Staging, Prod | Yes | `[Secured in Secret Manager]` |
+| `CORS_ALLOWED_ORIGINS` | Explicit allowed origins (no wildcard/local)| Staging, Prod | No | `https://admin.restaurantorder.app,...` |
 | `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
 | `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
 

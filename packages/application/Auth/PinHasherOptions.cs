@@ -28,11 +28,11 @@ public sealed class PinHasherOptions
 
         if (isProductionOrStaging)
         {
-            if (string.IsNullOrWhiteSpace(PepperValue) || PepperValue.Length < 16)
+            if (string.IsNullOrWhiteSpace(PepperValue) || PepperValue.Length < 32)
             {
                 throw new InvalidOperationException(
-                    "CRITICAL SECURITY CONFIGURATION ERROR: PIN pepper secret (PepperValue) must be non-empty " +
-                    "and at least 16 characters in production and staging environments.");
+                    "CRITICAL SECURITY CONFIGURATION ERROR: PIN pepper secret (PIN_PEPPER_SECRET) must be non-empty " +
+                    "and at least 32 characters in production and staging environments.");
             }
         }
     }

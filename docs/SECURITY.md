@@ -81,3 +81,10 @@ Phase 3 implements comprehensive authentication and authorization hardening acro
 - **Distributed Redis Rate Limiting & Fail-Closed Gate:** Login rate limiting (atomic Lua scripts) and terminal PIN progressive delays/lockouts are coordinated across instances via Redis. If Redis becomes unreachable, security policies fail closed: requests are rejected with HTTP 503 (Service Unavailable) rather than bypassing protection.
 - **Immediate Distributed Revocation:** JWT access token validation in `OnTokenValidated` queries `iam.validate_token_session` with short-lived Redis caching. Immediate cache invalidation on `LogoutAll` revokes tokens across all instances simultaneously without waiting for expiration.
 
+### 5.6. Production Hardening & Fail-Closed Transport Security
+- **End-to-End CSRF Architecture:** Double-submit cookie with timing-safe HMAC validation via centralized `fetchWithCsrf` client. Strict validation on mutation methods (`POST`/`PUT`/`PATCH`/`DELETE`). Client cookies cleared upon logout.
+- **Fail-Closed CORS Governance:** In Staging and Production, `Cors:AllowedOrigins` (or `CORS_ALLOWED_ORIGINS`) is mandatory. Wildcard `*` and `localhost` origins trigger fail-fast startup termination.
+- **Reverse Proxy & Forwarded Headers:** Configured `ForwardedHeadersOptions` with trusted private CIDRs (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and configurable proxy IPs ensure accurate `Request.IsHttps` and client IP resolution behind TLS-terminating proxies.
+- **Strict Cookie Security:** `Secure` flag is unconditionally enforced on all authentication and terminal credential cookies in Staging and Production.
+- **Unmapped Test Scaffolding in Production:** Test endpoints such as `/api/v1/test/tenant-scope` and `/api/v1/dev/seed` are strictly unmapped in Staging and Production environments.
+

@@ -28,6 +28,7 @@ describe('Operations Web Terminal & Auth Components', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   describe('PinPad Component', () => {
@@ -77,9 +78,6 @@ describe('Operations Web Terminal & Auth Components', () => {
       const onClose = vi.fn();
       const onSuccess = vi.fn();
 
-      localStorage.setItem('ro_terminal_id', 'term-1');
-      localStorage.setItem('ro_device_secret', 'secret-1');
-
       const MockProvider = ({ children }: { children: React.ReactNode }) => {
         return (
           <TerminalProvider initialTerminal={mockTerminal}>
@@ -114,9 +112,13 @@ describe('Operations Web Terminal & Auth Components', () => {
     });
   });
 
-  describe('TerminalActivationModal Component', () => {
-    it('activates terminal and closes modal', async () => {
+  describe('TerminalActivationModal Component & Storage Security', () => {
+    it('activates terminal without saving deviceSecret to storage and closes modal', async () => {
       const onClose = vi.fn();
+
+      // Seed legacy keys that should be scrubbed
+      localStorage.setItem('ro_device_secret', 'legacy-leak');
+      sessionStorage.setItem('ro_device_secret', 'legacy-leak');
 
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -125,7 +127,6 @@ describe('Operations Web Terminal & Auth Components', () => {
           tenantId: 'tenant-1',
           branchId: 'branch-1',
           terminalName: 'Kasa 1',
-          deviceSecret: 'sec-123',
         }),
       }) as unknown as typeof fetch;
 
@@ -134,6 +135,10 @@ describe('Operations Web Terminal & Auth Components', () => {
           <TerminalActivationModal isOpen={true} onClose={onClose} />
         </TerminalProvider>
       );
+
+      // Verify legacy secrets were scrubbed on mount
+      expect(localStorage.getItem('ro_device_secret')).toBeNull();
+      expect(sessionStorage.getItem('ro_device_secret')).toBeNull();
 
       const codeInput = screen.getByLabelText(/Aktivasyon Kodu/i);
       const nameInput = screen.getByLabelText(/Terminal Adı/i);
@@ -150,10 +155,15 @@ describe('Operations Web Terminal & Auth Components', () => {
         );
         expect(onClose).toHaveBeenCalled();
       });
+
+      // Verify deviceSecret is NEVER stored anywhere
+      expect(localStorage.getItem('ro_device_secret')).toBeNull();
+      expect(localStorage.getItem('device_secret')).toBeNull();
+      expect(sessionStorage.getItem('ro_device_secret')).toBeNull();
     });
   });
 
-  describe('TerminalContext & Hooks', () => {
+  describe('TerminalContext Lifecycle & State Machine', () => {
     it('throws error when useTerminal is outside TerminalProvider', () => {
       const BadComponent = () => {
         useTerminal();
@@ -164,9 +174,10 @@ describe('Operations Web Terminal & Auth Components', () => {
 
     it('rejects loginWithPin when device is not enrolled', async () => {
       const TestComponent = () => {
-        const { loginWithPin, error } = useTerminal();
+        const { loginWithPin, error, state } = useTerminal();
         return (
           <div>
+            <span data-testid="state">{state}</span>
             <button onClick={() => loginWithPin('1234')}>Giriş</button>
             {error && <span role="alert">{error}</span>}
           </div>
@@ -179,6 +190,8 @@ describe('Operations Web Terminal & Auth Components', () => {
         </TerminalProvider>
       );
 
+      expect(screen.getByTestId('state').textContent).toBe('UNENROLLED');
+
       fireEvent.click(screen.getByRole('button', { name: 'Giriş' }));
 
       await waitFor(() => {
@@ -186,13 +199,14 @@ describe('Operations Web Terminal & Auth Components', () => {
       });
     });
 
-    it('supports logoutStaff', async () => {
+    it('supports logoutStaff and transitions between LOCKED and AUTHENTICATED states', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
 
       const TestComponent = () => {
-        const { staffUser, logoutStaff } = useTerminal();
+        const { staffUser, state, logoutStaff } = useTerminal();
         return (
           <div>
+            <span data-testid="state">{state}</span>
             <span>{staffUser ? staffUser.email : 'No staff'}</span>
             <button onClick={logoutStaff}>Vardiya Bitir</button>
           </div>
@@ -205,10 +219,13 @@ describe('Operations Web Terminal & Auth Components', () => {
         </TerminalProvider>
       );
 
+      expect(screen.getByTestId('state').textContent).toBe('AUTHENTICATED');
       expect(screen.getByText('waiter@restoran.com')).toBeDefined();
+
       fireEvent.click(screen.getByRole('button', { name: 'Vardiya Bitir' }));
 
       await waitFor(() => {
+        expect(screen.getByTestId('state').textContent).toBe('LOCKED');
         expect(screen.getByText('No staff')).toBeDefined();
       });
     });
