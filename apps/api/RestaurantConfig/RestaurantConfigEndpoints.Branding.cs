@@ -24,6 +24,7 @@ public sealed record UpdateBrandThemeApiRequest(
     string? FooterText = null,
     string? DefaultShellTitle = null,
     string? DefaultShellSubtitle = null,
+    string? NavigationConfigJson = null,
     Guid? ConcurrencyToken = null);
 
 public sealed record UpdateBranchThemeOverrideApiRequest(
@@ -97,6 +98,7 @@ public static partial class RestaurantConfigEndpoints
                     FooterText: request.FooterText,
                     DefaultShellTitle: request.DefaultShellTitle,
                     DefaultShellSubtitle: request.DefaultShellSubtitle,
+                    NavigationConfigJson: request.NavigationConfigJson,
                     ConcurrencyToken: token);
 
                 var theme = await service.UpdateBrandThemeAsync(tenantId, new BrandId(brandId), command, actor, ct);

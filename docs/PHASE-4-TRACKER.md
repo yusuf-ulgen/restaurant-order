@@ -10,11 +10,12 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 4.1** | Tenant-Scoped Brand & Branch Management | **Completed** | Brand & branch CRUD APIs, state transitions, concurrency tokens, ETags, RBAC | (Pending commit) |
 | **Phase 4.2** | Secure Tenant Branding & Theme Settings | **Completed** | Secure brand appearance, branch theme overrides, inheritance, RLS, CSS token mapping | (Pending commit) |
-| **Phase 4.3** | Operating Hours & Weekly Schedules | **Not Started** | Day-of-week operating hours, shift windows, holiday overrides | - |
-| **Phase 4.4** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
-| **Phase 4.5** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
-| **Phase 4.6** | Branch Dining Areas & Station Definitions | **Not Started** | Physical areas (Terrace, Indoor), prep stations (Kitchen, Bar) | - |
-| **Phase 4.7** | Admin Web Config Integration & Security Closure | **Not Started** | Admin panel configuration UI, audit verification, coverage gate | - |
+| **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | (Pending commit) |
+| **Phase 4.4** | Operating Hours & Weekly Schedules | **Not Started** | Day-of-week operating hours, shift windows, holiday overrides | - |
+| **Phase 4.5** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
+| **Phase 4.6** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
+| **Phase 4.7** | Branch Dining Areas & Station Definitions | **Not Started** | Physical areas (Terrace, Indoor), prep stations (Kitchen, Bar) | - |
+| **Phase 4.8** | Admin Web Config Integration & Security Closure | **Not Started** | Admin panel configuration UI, audit verification, coverage gate | - |
 
 ---
 
@@ -85,31 +86,57 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
   - RBAC permission matrix unit tests updated (`PermissionRegistryMatrixTests.cs`).
   - Comprehensive integration tests (`RestaurantConfigBrandingIntegrationTests.cs`): default theme, brand update, branch override, clearing override, stale concurrency token, unauthorized roles, cross-branch modification prevention, unsafe input rejection.
 
-### Phase 4.3: Operating Hours & Weekly Schedules
+### Phase 4.3: Configuration-Driven Dynamic Admin Shell
+- [x] **Secure In-Code Navigation Registry:**
+  - Static type-safe navigation registry (`NAVIGATION_REGISTRY`) covering 12 core areas: `dashboard`, `brand-settings`, `branch-settings`, `operating-hours`, `dining-areas`, `preparation-stations`, `feature-settings`, `staff`, `menu`, `tables`, `printers`, `reports`.
+  - Real `href`, components, and required RBAC permissions (`requiredPermission`) defined strictly in code.
+  - Database configuration can only override: `isVisible`, `order` (1-100), safe plain-text `labelOverride` (no HTML/script tags), and `disabled` status.
+  - Feature flags / overrides cannot bypass RBAC checks (`hasNavigationAccess`). Unknown navigation IDs rejected safely.
+- [x] **Dynamic Shell Provider (`AdminConfigProvider` & `useAdminConfig`):**
+  - Fetches effective theme and branches after user authentication.
+  - Applies design tokens (`applyTenantTheme`) to document root CSS variables (`--ro-color-*`).
+  - Cleans up tokens and state on tenant change, branch change, and logout (`clearTenantTheme`).
+  - Full loading spinner (`data-testid="admin-loading"`), error banner with retry (`data-testid="admin-error-retry"`), and safe fallback to default shell.
+  - Branch switcher support (`selectedBranchId`, `selectBranch`) with dynamic header integration.
+- [x] **Dynamic Admin Shell Components:**
+  - **Header:** Brand/branch logo, dynamic shell title, branch name, role badge, branch switcher dropdown, mobile menu hamburger.
+  - **Sidebar:** Navigation items driven by resolved and RBAC-filtered configuration, section grouping (`main`, `operations`, `settings`, `system`), active item indicator, desktop collapse toggle, mobile drawer dialog with focus trap.
+  - **Footer:** Dynamic business text, branch info, platform copyright, verified external links, conditional visibility.
+- [x] **Corporate Branding Settings Screen (`BrandingSettingsView`):**
+  - Dedicated configuration screen for `RestaurantAdmin`.
+  - Modular subcomponents under 450 lines limit (`LiveThemePreview`, `NavigationConfigTable`, `ThemeColorFields`, `ThemeBrandIdentityFields`, `ThemeTextHeaderFooterFields`).
+  - Live preview modal (using `BottomSheet`), reset to current config, and revert branch override to brand appearance.
+  - Form validation with friendly errors (e.g. hex colors, secure URLs) and 409 stale concurrency conflict messaging.
+- [x] **Automated Tests:**
+  - 15 comprehensive admin config shell unit & integration tests (`apps/admin-web/src/__tests__/admin-config-shell.test.tsx`): successful config loading, loading state, error & retry, safe default fallback, theme application & cleanup on logout, tenant/branch change, permission filtering, feature flag RBAC enforcement, unknown ID rejection, desktop sidebar collapse, mobile drawer, keyboard accessibility, 320px viewport overflow, save mutation, and 409 conflict handling.
+  - Backend integration tests updated (`RestaurantConfigBrandingIntegrationTests.cs`) covering navigation config JSON persistence, branch inheritance, and unknown ID rejection.
+  - All 37 admin-web tests, 894 backend unit tests, and 7 branding integration tests passing.
+
+### Phase 4.4: Operating Hours & Weekly Schedules
 - [ ] Backend data models and migration for weekly operating hours.
 - [ ] Special holiday and temporary closure schedule overrides.
 - [ ] Active hours evaluation service (`IsOpenAt(DateTimeUtc)`).
 - [ ] Unit and integration tests for schedule calculations and timezone offsets.
 
-### Phase 4.4: Service Charges, Gratuity & Default Tips
+### Phase 4.5: Service Charges, Gratuity & Default Tips
 - [ ] Branch service charge rate configuration entity and persistence.
 - [ ] Minimum party size auto-gratuity threshold settings.
 - [ ] Configurable tip suggestion presets (e.g., 10%, 15%, 20%).
 - [ ] Currency and rounding validation unit tests.
 
-### Phase 4.5: Tax Rates, Tax Categories & Pricing Mode
+### Phase 4.6: Tax Rates, Tax Categories & Pricing Mode
 - [ ] Value-Added Tax (VAT) rate category entities (Standard, Reduced, Zero).
 - [ ] Tax inclusive vs. exclusive pricing model setting per branch.
 - [ ] Line item tax calculation contracts for menu pricing.
 - [ ] Unit and integration tests.
 
-### Phase 4.6: Branch Dining Areas & Station Definitions
+### Phase 4.7: Branch Dining Areas & Station Definitions
 - [ ] Dining area aggregate (Indoor, Terrace, Garden, Bar Area).
 - [ ] Station routing definitions (Kitchen, Bar, Bakery, Service Station).
 - [ ] Relationship mapping to branches and printer stations.
 - [ ] Concurrency and RBAC validation.
 
-### Phase 4.7: Admin Web Config Integration & Security Closure
+### Phase 4.8: Admin Web Config Integration & Security Closure
 - [ ] Admin Web brand management screens and modals.
 - [ ] Admin Web branch settings screens (operating hours, taxes, fees).
 - [ ] Operations Web and Customer Web config consumption.
@@ -117,18 +144,19 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 
 ---
 
-## 3. Verified Command Results (Phase 4.2)
+## 3. Verified Command Results (Phase 4.3)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
 | `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
-| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 872 / 872 passed (100%) |
-| `dotnet test tests/architecture/` | Architecture Guard | **PASS** | 10 / 10 passed (100%) |
-| `pnpm test` | All Tests (C# & TS) | **PASS** | 872 backend, 10 arch, 204 frontend passed |
+| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 894 / 894 passed (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 37 / 37 passed across 3 test files (100%) |
+| `pnpm test:unit:frontend` | All Frontend Suites | **PASS** | 219 / 219 passed across UI, admin, ops, customer |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
-| `pnpm build` | Production Build | **PASS** | Backend DLLs + 3 Vite web apps built cleanly |
-| `pnpm verify:gates` | Quality Gates | **PASS** | File sizes, doc integrity, secrets, blue-green tests |
+| `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |
+| `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | 52/52 docs validated, 0 broken links |
+| `node scripts/check-secrets.mjs` | Security Scanner | **PASS** | 0 secrets or private keys exposed |
 
 ---
 

@@ -101,6 +101,11 @@ public class BrandAppearanceConfiguration : IEntityTypeConfiguration<BrandAppear
             .HasMaxLength(250)
             .IsRequired(false);
 
+        builder.Property(ba => ba.NavigationConfigJson)
+            .HasColumnName("navigation_config_json")
+            .HasMaxLength(4000)
+            .IsRequired(false);
+
         builder.Property(ba => ba.CreatedAtUtc)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")

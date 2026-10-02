@@ -232,4 +232,91 @@ public class RestaurantConfigBrandingIntegrationTests : IClassFixture<Testcontai
         Assert.Equal(HttpStatusCode.BadRequest, updateRes.StatusCode);
         Assert.Equal("application/problem+json", updateRes.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public async Task UpdateBrandTheme_WithValidNavigationConfig_PersistsAndInheritedByBranch()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var tenantId = Guid.NewGuid();
+        await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantId, "Nav Tenant", $"nav-{Guid.NewGuid():N}");
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var adminToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "RestaurantAdmin");
+
+        var brandReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/brands", adminToken);
+        brandReq.Content = JsonContent.Create(new CreateBrandApiRequest("Nav Brand", $"nb-{Guid.NewGuid():N}"));
+        var brandResp = await client.SendAsync(brandReq);
+        var brand = await brandResp.Content.ReadFromJsonAsync<BrandDto>();
+        Assert.NotNull(brand);
+
+        var branchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/branches", adminToken);
+        branchReq.Content = JsonContent.Create(new CreateBranchApiRequest(brand.Id, "Nav Branch", $"nbr-{Guid.NewGuid():N}"));
+        var branchResp = await client.SendAsync(branchReq);
+        var branch = await branchResp.Content.ReadFromJsonAsync<BranchDto>();
+        Assert.NotNull(branch);
+
+        var navJson = """[{"id":"dashboard","isVisible":true,"order":1},{"id":"menu","isVisible":true,"order":2,"labelOverride":"Gurme Menü","section":"main"}]""";
+        var updateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Put, $"/api/v1/restaurant-config/brands/{brand.Id}/theme", adminToken);
+        var updateBody = new UpdateBrandThemeApiRequest(
+            DisplayName: "Nav Brand",
+            PrimaryColor: "#112233",
+            PrimaryHoverColor: "#223344",
+            SecondaryColor: "#556677",
+            AccentColor: "#FF5500",
+            SurfaceColor: "#FAFAFA",
+            BackgroundColor: "#FFFFFF",
+            NavigationConfigJson: navJson,
+            ConcurrencyToken: Guid.NewGuid());
+        updateReq.Content = JsonContent.Create(updateBody);
+        var updateRes = await client.SendAsync(updateReq);
+        Assert.Equal(HttpStatusCode.OK, updateRes.StatusCode);
+
+        // Verify effective theme contains the navigation config
+        var effReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Get, $"/api/v1/restaurant-config/branches/{branch.Id}/theme", adminToken);
+        var effRes = await client.SendAsync(effReq);
+        Assert.Equal(HttpStatusCode.OK, effRes.StatusCode);
+        var effective = await effRes.Content.ReadFromJsonAsync<EffectiveThemeDto>(JsonOptions);
+        Assert.NotNull(effective);
+        Assert.NotNull(effective.NavigationConfigJson);
+        Assert.Contains("Gurme Menü", effective.NavigationConfigJson);
+    }
+
+    [Fact]
+    public async Task UpdateBrandTheme_WithUnknownNavigationId_ReturnsBadRequest()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var tenantId = Guid.NewGuid();
+        await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantId, "Unknown Nav Tenant", $"unav-{Guid.NewGuid():N}");
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var adminToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "RestaurantAdmin");
+
+        var brandReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/brands", adminToken);
+        brandReq.Content = JsonContent.Create(new CreateBrandApiRequest("Unknown Nav Brand", $"unb-{Guid.NewGuid():N}"));
+        var brandResp = await client.SendAsync(brandReq);
+        var brand = await brandResp.Content.ReadFromJsonAsync<BrandDto>();
+        Assert.NotNull(brand);
+
+        var unknownNavJson = """[{"id":"malicious-injected-route","isVisible":true}]""";
+        var updateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Put, $"/api/v1/restaurant-config/brands/{brand.Id}/theme", adminToken);
+        var updateBody = new UpdateBrandThemeApiRequest(
+            DisplayName: "Unknown Nav Brand",
+            PrimaryColor: "#112233",
+            PrimaryHoverColor: "#223344",
+            SecondaryColor: "#556677",
+            AccentColor: "#FF5500",
+            SurfaceColor: "#FAFAFA",
+            BackgroundColor: "#FFFFFF",
+            NavigationConfigJson: unknownNavJson,
+            ConcurrencyToken: Guid.NewGuid());
+        updateReq.Content = JsonContent.Create(updateBody);
+        var updateRes = await client.SendAsync(updateReq);
+
+        Assert.Equal(HttpStatusCode.BadRequest, updateRes.StatusCode);
+        Assert.Equal("application/problem+json", updateRes.Content.Headers.ContentType?.MediaType);
+    }
 }

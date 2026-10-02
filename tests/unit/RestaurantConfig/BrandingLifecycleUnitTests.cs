@@ -181,4 +181,78 @@ public class BrandingLifecycleUnitTests
         Assert.Equal("Kadikoy / Istanbul", branchOverride.FooterBranchInfo);
         Assert.NotEqual(initialToken, branchOverride.ConcurrencyToken);
     }
+
+    [Theory]
+    [InlineData("dashboard")]
+    [InlineData("brand-settings")]
+    [InlineData("branch-settings")]
+    [InlineData("operating-hours")]
+    [InlineData("dining-areas")]
+    [InlineData("preparation-stations")]
+    [InlineData("feature-settings")]
+    [InlineData("staff")]
+    [InlineData("menu")]
+    [InlineData("tables")]
+    [InlineData("printers")]
+    [InlineData("reports")]
+    public void NavigationItemOverride_AllowedRegistryIds_Succeeds(string validId)
+    {
+        var item = new NavigationItemOverride(validId, isVisible: true, order: 2, labelOverride: "Custom Label", section: "main", disabled: false);
+        Assert.Equal(validId, item.Id);
+        Assert.True(item.IsVisible);
+        Assert.Equal(2, item.Order);
+        Assert.Equal("Custom Label", item.LabelOverride);
+        Assert.Equal("main", item.Section);
+        Assert.False(item.Disabled);
+    }
+
+    [Theory]
+    [InlineData("arbitrary-route")]
+    [InlineData("malicious-page")]
+    [InlineData("custom-component")]
+    [InlineData("unknown-id")]
+    [InlineData("")]
+    public void NavigationItemOverride_UnknownOrEmptyId_ThrowsDomainException(string invalidId)
+    {
+        Assert.Throws<DomainException>(() => new NavigationItemOverride(invalidId));
+    }
+
+    [Theory]
+    [InlineData("<script>alert(1)</script>")]
+    [InlineData("<b>Bold Label</b>")]
+    [InlineData("Label > Override")]
+    public void NavigationItemOverride_HtmlInLabel_ThrowsDomainException(string htmlLabel)
+    {
+        Assert.Throws<DomainException>(() => new NavigationItemOverride("dashboard", labelOverride: htmlLabel));
+    }
+
+    [Fact]
+    public void BrandAppearance_SetNavigationConfigJson_ValidJson_ParsesAndStores()
+    {
+        var appearance = BrandAppearance.Create(TenantId.New(), BrandId.New(), "Burger Co");
+        var json = """
+        [
+            { "id": "dashboard", "isVisible": true, "order": 1 },
+            { "id": "menu", "isVisible": true, "order": 2, "labelOverride": "Gurme Menu", "section": "main" }
+        ]
+        """;
+
+        appearance.SetNavigationConfigJson(json);
+        Assert.NotNull(appearance.NavigationConfigJson);
+        Assert.Contains("dashboard", appearance.NavigationConfigJson);
+        Assert.Contains("Gurme Menu", appearance.NavigationConfigJson);
+    }
+
+    [Fact]
+    public void BrandAppearance_SetNavigationConfigJson_UnknownId_ThrowsDomainException()
+    {
+        var appearance = BrandAppearance.Create(TenantId.New(), BrandId.New(), "Burger Co");
+        var invalidJson = """
+        [
+            { "id": "unknown-feature-route", "isVisible": true }
+        ]
+        """;
+
+        Assert.Throws<DomainException>(() => appearance.SetNavigationConfigJson(invalidJson));
+    }
 }

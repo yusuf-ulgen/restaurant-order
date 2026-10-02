@@ -94,4 +94,15 @@ export interface EffectiveTenantTheme {
   footerText?: string | null;
   footerBranchInfo?: string | null;
   hasBranchOverride: boolean;
+  navigationConfigJson?: string | null;
+  navigationOverrides?: NavigationItemOverrideContract[] | null;
+}
+
+export interface NavigationItemOverrideContract {
+  id: string;
+  isVisible?: boolean | null;
+  order?: number | null;
+  labelOverride?: string | null;
+  section?: string | null;
+  disabled?: boolean | null;
 }

@@ -32,6 +32,7 @@ public class BrandAppearance
     public string? FooterText { get; private set; }
     public string? DefaultShellTitle { get; private set; }
     public string? DefaultShellSubtitle { get; private set; }
+    public string? NavigationConfigJson { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
     public Guid ConcurrencyToken { get; private set; }
@@ -94,7 +95,8 @@ public class BrandAppearance
         string? backgroundColor,
         string? footerText,
         string? defaultShellTitle,
-        string? defaultShellSubtitle)
+        string? defaultShellSubtitle,
+        string? navigationConfigJson = null)
     {
         SetDisplayName(displayName);
         LogoUrl = AssetUrl.FromNullable(logoUrl);
@@ -108,9 +110,61 @@ public class BrandAppearance
         FooterText = SanitizeSafeText(footerText, nameof(FooterText), maxLength: 500);
         DefaultShellTitle = SanitizeSafeText(defaultShellTitle, nameof(DefaultShellTitle), maxLength: 100);
         DefaultShellSubtitle = SanitizeSafeText(defaultShellSubtitle, nameof(DefaultShellSubtitle), maxLength: 200);
+        SetNavigationConfigJson(navigationConfigJson);
 
         Touch();
     }
+
+    public void SetNavigationConfigJson(string? navigationConfigJson)
+    {
+        if (string.IsNullOrWhiteSpace(navigationConfigJson))
+        {
+            NavigationConfigJson = null;
+            return;
+        }
+
+        if (navigationConfigJson.Length > 4000)
+        {
+            throw new DomainException("Navigation configuration payload exceeds maximum length of 4000 characters.");
+        }
+
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var items = System.Text.Json.JsonSerializer.Deserialize<List<NavigationItemModel>>(navigationConfigJson, options);
+            if (items == null || items.Count == 0)
+            {
+                NavigationConfigJson = null;
+                return;
+            }
+
+            var validated = items.Select(i => new NavigationItemOverride(
+                i.Id,
+                i.IsVisible,
+                i.Order,
+                i.LabelOverride,
+                i.Section,
+                i.Disabled)).ToList();
+
+            NavigationConfigJson = System.Text.Json.JsonSerializer.Serialize(validated, options);
+        }
+        catch (DomainException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new DomainException($"Invalid navigation configuration JSON: {ex.Message}");
+        }
+    }
+
+    private sealed record NavigationItemModel(
+        string Id,
+        bool? IsVisible,
+        int? Order,
+        string? LabelOverride,
+        string? Section,
+        bool? Disabled);
 
     private void SetDisplayName(string displayName)
     {

@@ -16,6 +16,7 @@ public sealed record BrandThemeDto(
     string? FooterText,
     string? DefaultShellTitle,
     string? DefaultShellSubtitle,
+    string? NavigationConfigJson,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc,
     Guid ConcurrencyToken);
@@ -31,6 +32,14 @@ public sealed record BranchThemeOverrideDto(
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc,
     Guid ConcurrencyToken);
+
+public sealed record NavigationItemOverrideDto(
+    string Id,
+    bool? IsVisible = null,
+    int? Order = null,
+    string? LabelOverride = null,
+    string? Section = null,
+    bool? Disabled = null);
 
 public sealed record EffectiveThemeDto(
     Guid TenantId,
@@ -50,7 +59,8 @@ public sealed record EffectiveThemeDto(
     string? ShellSubtitle,
     string? FooterText,
     string? FooterBranchInfo,
-    bool HasBranchOverride);
+    bool HasBranchOverride,
+    string? NavigationConfigJson = null);
 
 public sealed record UpdateBrandThemeCommand(
     string DisplayName,
@@ -65,6 +75,7 @@ public sealed record UpdateBrandThemeCommand(
     string? FooterText = null,
     string? DefaultShellTitle = null,
     string? DefaultShellSubtitle = null,
+    string? NavigationConfigJson = null,
     Guid? ConcurrencyToken = null);
 
 public sealed record UpdateBranchThemeOverrideCommand(
@@ -73,4 +84,3 @@ public sealed record UpdateBranchThemeOverrideCommand(
     string? HeaderSubtitle = null,
     string? FooterBranchInfo = null,
     Guid? ConcurrencyToken = null);
-

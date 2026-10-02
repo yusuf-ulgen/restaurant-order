@@ -66,7 +66,8 @@ public partial class RestaurantConfigService
                 backgroundColor: command.BackgroundColor,
                 footerText: command.FooterText,
                 defaultShellTitle: command.DefaultShellTitle,
-                defaultShellSubtitle: command.DefaultShellSubtitle);
+                defaultShellSubtitle: command.DefaultShellSubtitle,
+                navigationConfigJson: command.NavigationConfigJson);
 
             _dbContext.BrandAppearances.Add(appearance);
         }
@@ -86,7 +87,8 @@ public partial class RestaurantConfigService
                 backgroundColor: command.BackgroundColor,
                 footerText: command.FooterText,
                 defaultShellTitle: command.DefaultShellTitle,
-                defaultShellSubtitle: command.DefaultShellSubtitle);
+                defaultShellSubtitle: command.DefaultShellSubtitle,
+                navigationConfigJson: command.NavigationConfigJson);
         }
 
         AddAuditEvent(
@@ -248,6 +250,7 @@ public partial class RestaurantConfigService
         FooterText: null,
         DefaultShellTitle: null,
         DefaultShellSubtitle: null,
+        NavigationConfigJson: null,
         CreatedAtUtc: DateTimeOffset.UnixEpoch.UtcDateTime,
         UpdatedAtUtc: null,
         ConcurrencyToken: Guid.Empty);
@@ -268,6 +271,7 @@ public partial class RestaurantConfigService
         FooterText: ba.FooterText,
         DefaultShellTitle: ba.DefaultShellTitle,
         DefaultShellSubtitle: ba.DefaultShellSubtitle,
+        NavigationConfigJson: ba.NavigationConfigJson,
         CreatedAtUtc: ba.CreatedAtUtc,
         UpdatedAtUtc: ba.UpdatedAtUtc,
         ConcurrencyToken: ba.ConcurrencyToken);
@@ -343,6 +347,7 @@ public partial class RestaurantConfigService
             ShellSubtitle: shellSubtitle,
             FooterText: footerText,
             FooterBranchInfo: footerBranchInfo,
-            HasBranchOverride: hasOverride);
+            HasBranchOverride: hasOverride,
+            NavigationConfigJson: appearance?.NavigationConfigJson);
     }
 }
