@@ -34,11 +34,11 @@ public static partial class RestaurantConfigEndpoints
     public static IEndpointRouteBuilder MapRestaurantConfigEndpoints(this IEndpointRouteBuilder app)
     {
         var root = app.MapGroup("/api/v1/restaurant-config")
-            .WithMetadata(new RequireTenantAttribute())
             .WithTags("Restaurant Configuration");
 
         MapBrandEndpoints(root);
         MapBranchEndpoints(root);
+        MapBrandingEndpoints(root);
 
         return app;
     }

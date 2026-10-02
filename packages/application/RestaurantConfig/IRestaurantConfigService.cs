@@ -23,4 +23,11 @@ public interface IRestaurantConfigService
     Task<BranchDto> ActivateBranchAsync(TenantId tenantId, BranchId branchId, BranchStateChangeCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<BranchDto> SuspendBranchAsync(TenantId tenantId, BranchId branchId, BranchStateChangeCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<BranchDto> CloseBranchAsync(TenantId tenantId, BranchId branchId, BranchStateChangeCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
+
+    // Branding and Theme operations
+    Task<BrandThemeDto?> GetBrandThemeAsync(TenantId tenantId, BrandId brandId, CancellationToken ct = default);
+    Task<BrandThemeDto> UpdateBrandThemeAsync(TenantId tenantId, BrandId brandId, UpdateBrandThemeCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<EffectiveThemeDto?> GetEffectiveBranchThemeAsync(TenantId tenantId, BranchId branchId, CancellationToken ct = default);
+    Task<BranchThemeOverrideDto> UpdateBranchThemeOverrideAsync(TenantId tenantId, BranchId branchId, UpdateBranchThemeOverrideCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<EffectiveThemeDto> ClearBranchThemeOverrideAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
 }

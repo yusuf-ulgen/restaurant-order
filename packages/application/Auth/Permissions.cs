@@ -16,6 +16,8 @@ public static class Permissions
     // Brand & Branch Config
     public const string TenantBrandsManage = "tenant.brands.manage";
     public const string TenantBranchesManage = "tenant.branches.manage";
+    public const string TenantBrandingView = "tenant.branding.view";
+    public const string TenantBrandingManage = "tenant.branding.manage";
     public const string BranchPrintersManage = "branch.printers.manage";
     public const string BranchTablesManage = "branch.tables.manage";
 
@@ -65,6 +67,8 @@ public static class Permissions
         PlatformAuditView,
         TenantBrandsManage,
         TenantBranchesManage,
+        TenantBrandingView,
+        TenantBrandingManage,
         BranchPrintersManage,
         BranchTablesManage,
         MenuCatalogManage,

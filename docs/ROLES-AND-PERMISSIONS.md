@@ -33,6 +33,8 @@ Legend:
 | **Brand & Branch Config** | | | | | | | | | |
 | Create / Edit Brands | `tenant.brands.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Create / Edit Branches | `tenant.branches.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| View Corporate Branding | `tenant.branding.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| Manage Branding & Themes | `tenant.branding.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Configure Printers / Network | `branch.printers.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Edit Dining Area & Tables | `branch.tables.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | **Menu & Catalog** | | | | | | | | | |

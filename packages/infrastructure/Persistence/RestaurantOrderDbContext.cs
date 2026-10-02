@@ -21,6 +21,8 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<RestaurantOrder.Domain.Branding.BrandAppearance> BrandAppearances => Set<RestaurantOrder.Domain.Branding.BrandAppearance>();
+    public DbSet<RestaurantOrder.Domain.Branding.BranchThemeOverride> BranchThemeOverrides => Set<RestaurantOrder.Domain.Branding.BranchThemeOverride>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -79,6 +81,8 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<Tenant>().HasQueryFilter(t => HasTenant && t.Id == CurrentTenantId);
         modelBuilder.Entity<Brand>().HasQueryFilter(b => HasTenant && b.TenantId == CurrentTenantId);
         modelBuilder.Entity<Branch>().HasQueryFilter(br => HasTenant && br.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Branding.BrandAppearance>().HasQueryFilter(ba => HasTenant && ba.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Branding.BranchThemeOverride>().HasQueryFilter(bto => HasTenant && bto.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
@@ -148,9 +152,27 @@ public class RestaurantOrderDbContext : DbContext
         if (conn.State == ConnectionState.Open)
         {
             await using var cmd = conn.CreateCommand();
-            cmd.Transaction = Database.CurrentTransaction?.GetDbTransaction();
+            var currentDbTx = Database.CurrentTransaction?.GetDbTransaction();
+            if (currentDbTx != null)
+            {
+                try
+                {
+                    cmd.Transaction = currentDbTx;
+                }
+                catch (Exception)
+                {
+                    // Ignore if transaction was already closed/completed
+                }
+            }
             cmd.CommandText = "SELECT set_config('app.current_tenant_id', '', false);";
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (Exception)
+            {
+                // Disposed or completed connection/transaction is safe to ignore during session cleanup
+            }
         }
     }
 

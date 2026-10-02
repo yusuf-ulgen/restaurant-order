@@ -32,4 +32,7 @@ public static class SecurityAuditEventType
     public const string BranchActivated = "branch_activated";
     public const string BranchSuspended = "branch_suspended";
     public const string BranchClosed = "branch_closed";
+    public const string BrandThemeUpdated = "brand_theme_updated";
+    public const string BranchThemeOverrideUpdated = "branch_theme_override_updated";
+    public const string BranchThemeOverrideCleared = "branch_theme_override_cleared";
 }

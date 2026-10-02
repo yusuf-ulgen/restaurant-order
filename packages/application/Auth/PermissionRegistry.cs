@@ -87,6 +87,8 @@ public sealed class PermissionRegistry : IPermissionRegistry
         // --- RestaurantAdmin ---
         Full(AuthRole.RestaurantAdmin, Permissions.TenantBrandsManage);
         Full(AuthRole.RestaurantAdmin, Permissions.TenantBranchesManage);
+        Full(AuthRole.RestaurantAdmin, Permissions.TenantBrandingView);
+        Full(AuthRole.RestaurantAdmin, Permissions.TenantBrandingManage);
         Full(AuthRole.RestaurantAdmin, Permissions.BranchPrintersManage);
         Full(AuthRole.RestaurantAdmin, Permissions.BranchTablesManage);
         Full(AuthRole.RestaurantAdmin, Permissions.MenuCatalogManage);
@@ -111,6 +113,8 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.RestaurantAdmin, Permissions.ReportsTenantMultiBranch);
 
         // --- BranchManager ---
+        Full(AuthRole.BranchManager, Permissions.TenantBrandingView);
+        Own(AuthRole.BranchManager, Permissions.TenantBrandingManage);
         Full(AuthRole.BranchManager, Permissions.BranchPrintersManage);
         Full(AuthRole.BranchManager, Permissions.BranchTablesManage);
         Full(AuthRole.BranchManager, Permissions.MenuCatalogManage);
@@ -136,6 +140,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.BranchManager, Permissions.ReportsBranchRevenue);
 
         // --- Cashier ---
+        Full(AuthRole.Cashier, Permissions.TenantBrandingView);
         Full(AuthRole.Cashier, Permissions.MenuInventoryQuick86);
         Full(AuthRole.Cashier, Permissions.MenuCatalogView);
         Full(AuthRole.Cashier, Permissions.FloorSessionsManage);
@@ -149,6 +154,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Own(AuthRole.Cashier, Permissions.ReportsBranchRevenue);
 
         // --- Kitchen ---
+        Full(AuthRole.Kitchen, Permissions.TenantBrandingView);
         Full(AuthRole.Kitchen, Permissions.MenuInventoryQuick86);
         Full(AuthRole.Kitchen, Permissions.MenuCatalogView);
         Full(AuthRole.Kitchen, Permissions.KdsKitchenView);
@@ -156,6 +162,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Own(AuthRole.Kitchen, Permissions.KdsTicketRecall);
 
         // --- Bar ---
+        Full(AuthRole.Bar, Permissions.TenantBrandingView);
         Full(AuthRole.Bar, Permissions.MenuInventoryQuick86);
         Full(AuthRole.Bar, Permissions.MenuCatalogView);
         Full(AuthRole.Bar, Permissions.KdsBarView);
@@ -163,6 +170,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Own(AuthRole.Bar, Permissions.KdsTicketRecall);
 
         // --- Waiter ---
+        Full(AuthRole.Waiter, Permissions.TenantBrandingView);
         Full(AuthRole.Waiter, Permissions.MenuCatalogView);
         Full(AuthRole.Waiter, Permissions.FloorSessionsManage);
         Full(AuthRole.Waiter, Permissions.FloorTablesMove);
@@ -174,6 +182,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.Waiter, Permissions.BillingBillSplit);
 
         // --- Customer ---
+        Full(AuthRole.Customer, Permissions.TenantBrandingView);
         Full(AuthRole.Customer, Permissions.MenuCatalogView);
         Own(AuthRole.Customer, Permissions.FloorSessionsManage);
         Full(AuthRole.Customer, Permissions.OrdersQrCreate);

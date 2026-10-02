@@ -71,3 +71,27 @@ export interface TenantThemeOverrides {
   radiusMd?: string;
   fontSans?: string;
 }
+
+/**
+ * Effective tenant theme returned by backend API contract.
+ */
+export interface EffectiveTenantTheme {
+  tenantId: string;
+  brandId: string;
+  branchId: string;
+  brandDisplayName: string;
+  branchDisplayName: string;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  primaryColor: string;
+  primaryHoverColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  surfaceColor: string;
+  backgroundColor: string;
+  shellTitle?: string | null;
+  shellSubtitle?: string | null;
+  footerText?: string | null;
+  footerBranchInfo?: string | null;
+  hasBranchOverride: boolean;
+}
