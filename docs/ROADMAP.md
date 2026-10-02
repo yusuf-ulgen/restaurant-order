@@ -30,10 +30,17 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASE 3: AUTHENTICATION & RBAC [NEXT]                                        |
+|  PHASE 3: AUTHENTICATION & RBAC [COMPLETED]                                   |
 |  - Identity & Access Management (IAM) module with 8 supported roles           |
 |  - JWT tokens, secure cookies, refresh flows, and fast 4-digit PIN auth       |
 |  - Role-Based Access Control (RBAC) authorization middleware                  |
++---------------------------------------+---------------------------------------+
+                                        |
+                                        v
++-------------------------------------------------------------------------------+
+|  PHASE 4: RESTAURANT CONFIGURATION [IN PROGRESS]                              |
+|  - Brand & branch configuration, operating hours, service charges, tax rates  |
+|  - Dining areas & station definitions with strict tenant-scoped RBAC          |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -79,8 +86,8 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Fast 4-digit PIN authentication for waiter and operations mobile terminals.
 - [x] Role-Based Access Control (RBAC) authorization middleware and permission matrix.
 
-### Phase 4: Restaurant Configuration (Status: Sıradaki / Next)
-- [ ] Brand and branch configuration data models.
+### Phase 4: Restaurant Configuration (Status: Devam Ediyor / In Progress)
+- [/] Brand and branch configuration data models and tenant-scoped management APIs.
 - [ ] Operating hours, service charge settings, and tax rate configuration.
 - [ ] Branch dining areas (Indoor, Terrace, Garden) and station definitions.
 

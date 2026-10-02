@@ -333,6 +333,7 @@ RestaurantOrder.Api.Auth.AuthEndpoints.MapAuthEndpoints(app);
 RestaurantOrder.Api.Auth.TerminalEndpoints.MapTerminalEndpoints(app);
 RestaurantOrder.Api.Auth.PinAuthEndpoints.MapPinAuthEndpoints(app);
 RestaurantOrder.Api.Auth.StaffEndpoints.MapStaffEndpoints(app);
+RestaurantOrder.Api.RestaurantConfig.RestaurantConfigEndpoints.MapRestaurantConfigEndpoints(app);
 
 app.Run();
 

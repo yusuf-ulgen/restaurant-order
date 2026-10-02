@@ -118,6 +118,9 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
 
+        // Restaurant Configuration Services
+        services.AddScoped<RestaurantOrder.Application.RestaurantConfig.IRestaurantConfigService, RestaurantOrder.Infrastructure.RestaurantConfig.RestaurantConfigService>();
+
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
         services.AddHttpClient();

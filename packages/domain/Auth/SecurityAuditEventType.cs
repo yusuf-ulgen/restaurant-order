@@ -21,4 +21,15 @@ public static class SecurityAuditEventType
     public const string PinLocked = "pin_locked";
     public const string TrustedTerminalEnrolled = "trusted_terminal_enrolled";
     public const string TrustedTerminalRevoked = "trusted_terminal_revoked";
+
+    // Restaurant Configuration
+    public const string BrandCreated = "brand_created";
+    public const string BrandUpdated = "brand_updated";
+    public const string BrandActivated = "brand_activated";
+    public const string BrandDeactivated = "brand_deactivated";
+    public const string BranchCreated = "branch_created";
+    public const string BranchUpdated = "branch_updated";
+    public const string BranchActivated = "branch_activated";
+    public const string BranchSuspended = "branch_suspended";
+    public const string BranchClosed = "branch_closed";
 }
