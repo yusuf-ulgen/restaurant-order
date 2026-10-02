@@ -9,6 +9,8 @@ import {
   ContentSection,
   NavSectionConfig,
 } from '@restaurant-order/ui';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
@@ -113,9 +115,14 @@ export const AdminContent: React.FC<AdminAppProps> = ({
 export const App: React.FC<AdminAppProps> = (props) => {
   return (
     <ErrorBoundary>
-      <AdminContent {...props} />
+      <AuthProvider>
+        <ProtectedRoute allowedRoles={['SuperAdmin', 'RestaurantAdmin', 'BranchManager']}>
+          <AdminContent {...props} />
+        </ProtectedRoute>
+      </AuthProvider>
     </ErrorBoundary>
   );
 };
 
 export default App;
+

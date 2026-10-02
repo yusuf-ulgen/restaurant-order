@@ -208,4 +208,100 @@ public class ApiTenancyUnitTests
         Assert.Equal("application/problem+json", httpContext.Response.ContentType);
         Assert.Same(TenantContext.Empty, accessor.TenantContext);
     }
+
+    [Fact]
+    public async Task DefaultTenantContextResolver_ReturnsEmpty_WhenUserNotAuthenticated()
+    {
+        var httpContext = new DefaultHttpContext();
+        var mockAccessor = new Mock<IHttpContextAccessor>();
+        mockAccessor.Setup(a => a.HttpContext).Returns(httpContext);
+
+        var resolver = new DefaultTenantContextResolver(mockAccessor.Object);
+        var result = await resolver.ResolveAsync();
+
+        Assert.Same(TenantContext.Empty, result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-guid")]
+    public async Task DefaultTenantContextResolver_ReturnsEmpty_WhenTenantClaimInvalidOrMissing(string? tenantClaimValue)
+    {
+        var claims = new List<Claim>();
+        if (tenantClaimValue != null)
+        {
+            claims.Add(new Claim(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId, tenantClaimValue));
+        }
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var httpContext = new DefaultHttpContext { User = principal };
+        var mockAccessor = new Mock<IHttpContextAccessor>();
+        mockAccessor.Setup(a => a.HttpContext).Returns(httpContext);
+
+        var resolver = new DefaultTenantContextResolver(mockAccessor.Object);
+        var result = await resolver.ResolveAsync();
+
+        Assert.Same(TenantContext.Empty, result);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("invalid-branch-guid", null)]
+    public async Task DefaultTenantContextResolver_ResolvesTenant_WhenBranchMissingOrInvalid(string? branchClaimValue, Guid? expectedBranchId)
+    {
+        var tenantId = Guid.NewGuid();
+        var claims = new List<Claim>
+        {
+            new(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId, tenantId.ToString())
+        };
+        if (branchClaimValue != null)
+        {
+            claims.Add(new Claim(RestaurantOrder.Application.Auth.JwtClaimNames.BranchId, branchClaimValue));
+        }
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var httpContext = new DefaultHttpContext { User = principal };
+        var mockAccessor = new Mock<IHttpContextAccessor>();
+        mockAccessor.Setup(a => a.HttpContext).Returns(httpContext);
+
+        var resolver = new DefaultTenantContextResolver(mockAccessor.Object);
+        var result = await resolver.ResolveAsync();
+
+        Assert.True(result.HasTenant);
+        Assert.True(result.IsAuthenticated);
+        Assert.Equal(tenantId, result.TenantId);
+        Assert.Equal(expectedBranchId, result.BranchId);
+    }
+
+    [Fact]
+    public async Task DefaultTenantContextResolver_ResolvesTenantAndBranch_WhenBothValid()
+    {
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var claims = new List<Claim>
+        {
+            new(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId, tenantId.ToString()),
+            new(RestaurantOrder.Application.Auth.JwtClaimNames.BranchId, branchId.ToString())
+        };
+
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var httpContext = new DefaultHttpContext { User = principal };
+        var mockAccessor = new Mock<IHttpContextAccessor>();
+        mockAccessor.Setup(a => a.HttpContext).Returns(httpContext);
+
+        var resolver = new DefaultTenantContextResolver(mockAccessor.Object);
+        var result = await resolver.ResolveAsync();
+
+        Assert.True(result.HasTenant);
+        Assert.True(result.IsAuthenticated);
+        Assert.Equal(tenantId, result.TenantId);
+        Assert.Equal(branchId, result.BranchId);
+    }
 }
+

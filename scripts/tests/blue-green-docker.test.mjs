@@ -19,6 +19,16 @@ function checkDockerRunning() {
   }
 }
 
+function toDockerVolumePath(p) {
+  if (process.platform === 'win32') {
+    const match = p.match(/^([a-zA-Z]):\\(.*)/);
+    if (match) {
+      return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, '/')}`;
+    }
+  }
+  return p;
+}
+
 async function fetchWithRetry(url, expectedText, maxAttempts = 15, delayMs = 500) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -116,7 +126,7 @@ test('disposable docker blue-green: end-to-end blue -> green -> blue HTTP routin
     execSync(
       `docker run -d --name ${blueContainer} --network ${networkName} ` +
       `--network-alias restaurant-order-api-blue ` +
-      `-v "${path.join(blueDir, 'default.conf')}:/etc/nginx/conf.d/default.conf:ro" ` +
+      `-v "${toDockerVolumePath(path.join(blueDir, 'default.conf'))}:/etc/nginx/conf.d/default.conf:ro" ` +
       `${NGINX_IMAGE}`,
       { stdio: 'ignore' }
     );
@@ -125,7 +135,7 @@ test('disposable docker blue-green: end-to-end blue -> green -> blue HTTP routin
     execSync(
       `docker run -d --name ${greenContainer} --network ${networkName} ` +
       `--network-alias restaurant-order-api-green ` +
-      `-v "${path.join(greenDir, 'default.conf')}:/etc/nginx/conf.d/default.conf:ro" ` +
+      `-v "${toDockerVolumePath(path.join(greenDir, 'default.conf'))}:/etc/nginx/conf.d/default.conf:ro" ` +
       `${NGINX_IMAGE}`,
       { stdio: 'ignore' }
     );
@@ -134,7 +144,7 @@ test('disposable docker blue-green: end-to-end blue -> green -> blue HTTP routin
     execSync(
       `docker run -d --name ${ingressContainer} --network ${networkName} ` +
       `-p 0:80 ` +
-      `-v "${ingressConfD}:/etc/nginx/conf.d" ` +
+      `-v "${toDockerVolumePath(ingressConfD)}:/etc/nginx/conf.d" ` +
       `${NGINX_IMAGE}`,
       { stdio: 'ignore' }
     );

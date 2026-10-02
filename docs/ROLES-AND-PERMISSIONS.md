@@ -24,47 +24,47 @@ Legend:
 - `O`: Own / Assigned Scope Only (e.g., own tables, own station)
 - `✗`: Strictly Prohibited
 
-| Permission / Resource | Super Admin | Restoran Admini | Şube Müdürü | Operasyon / Kasa | Mutfak | Bar | Garson | Müşteri |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Platform Management** |
-| Create / Suspend Tenant | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Configure Platform Fees | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View System Audit Logs | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Brand & Branch Config** |
-| Create / Edit Brands | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Create / Edit Branches | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Configure Printers / Network | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Edit Dining Area & Tables | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Menu & Catalog** |
-| Create / Edit Categories & Items | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Set Item Prices & Variants | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Quick 86 (Mark Out-of-Stock) | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✗` | `✗` |
-| View Menu & Availability | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
-| **Floor & Table Operations** |
-| Open / Close Table Session | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `O` |
-| Merge / Move Tables | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| View Floor Status | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| **Order & Ticket Lifecycle** |
-| Place Order via QR | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` |
-| Place Order for Table (Staff) | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Cancel Order Item (Pre-Prep) | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Void Order Item (In-Prep/Ready)| `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **KDS Preparation** |
-| View Kitchen Food Queue | `✗` | `✓` | `✓` | `✗` | `✓` | `✗` | `✗` | `✗` |
-| View Bar Drink Queue | `✗` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` | `✗` |
-| Update Ticket State (Prep/Ready)| `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
-| Recall Completed Ticket | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
-| **Billing & Payments** |
-| Request Bill from Table | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` | `✓` |
-| Collect Cash Payment | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` |
-| Process External POS Card Pay | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `O` | `✗` |
-| Split Bill by Amount or Item | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Apply Order Discount | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Authorize Refund | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Staff & Analytics** |
-| Manage Staff & Assign Roles | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View Daily Branch Revenue | `✗` | `✓` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` |
-| View Multi-Branch Reports | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Permission / Resource | Machine-Readable Capability | Super Admin | Restoran Admini | Şube Müdürü | Operasyon / Kasa | Mutfak | Bar | Garson | Müşteri |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Platform Management** | | | | | | | | | |
+| Create / Suspend Tenant | `platform.tenants.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Configure Platform Fees | `platform.fees.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| View System Audit Logs | `platform.audit.view` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Brand & Branch Config** | | | | | | | | | |
+| Create / Edit Brands | `tenant.brands.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Create / Edit Branches | `tenant.branches.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Configure Printers / Network | `branch.printers.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Edit Dining Area & Tables | `branch.tables.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Menu & Catalog** | | | | | | | | | |
+| Create / Edit Categories & Items | `menu.catalog.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Set Item Prices & Variants | `menu.pricing.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Quick 86 (Mark Out-of-Stock) | `menu.inventory.quick86` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✗` | `✗` |
+| View Menu & Availability | `menu.catalog.view` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| **Floor & Table Operations** | | | | | | | | | |
+| Open / Close Table Session | `floor.sessions.manage` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `O` |
+| Merge / Move Tables | `floor.tables.move` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| View Floor Status | `floor.status.view` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| **Order & Ticket Lifecycle** | | | | | | | | | |
+| Place Order via QR | `orders.qr.create` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` |
+| Place Order for Table (Staff) | `orders.staff.create` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Cancel Order Item (Pre-Prep) | `orders.items.cancel_pre_prep` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Void Order Item (In-Prep/Ready)| `orders.items.void_in_prep` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **KDS Preparation** | | | | | | | | | |
+| View Kitchen Food Queue | `kds.kitchen.view` | `✗` | `✓` | `✓` | `✗` | `✓` | `✗` | `✗` | `✗` |
+| View Bar Drink Queue | `kds.bar.view` | `✗` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` | `✗` |
+| Update Ticket State (Prep/Ready)| `kds.ticket.update` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
+| Recall Completed Ticket | `kds.ticket.recall` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
+| **Billing & Payments** | | | | | | | | | |
+| Request Bill from Table | `billing.bill.request` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` | `✓` |
+| Collect Cash Payment | `billing.payment.cash` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` |
+| Process External POS Card Pay | `billing.payment.pos_card` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `O` | `✗` |
+| Split Bill by Amount or Item | `billing.bill.split` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Apply Order Discount | `billing.discount.apply` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Authorize Refund | `billing.refund.authorize` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Staff & Analytics** | | | | | | | | | |
+| Manage Staff & Assign Roles | `branch.staff.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| View Daily Branch Revenue | `reports.branch.revenue` | `✗` | `✓` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` |
+| View Multi-Branch Reports | `reports.tenant.multi_branch` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
 
 ---
 
@@ -74,3 +74,6 @@ Legend:
 2. **Strict Multi-Tenant Boundary:** A user with `Restoran Admini` in Tenant A can never query or manipulate data belonging to Tenant B under any circumstance.
 3. **Session Scoping for Customers:** A customer session token is cryptographically bound to a single `table_session_id`. It cannot view or place orders on another table.
 4. **Manager Override for Critical Actions:** Voids on items already in preparation, bill discounts, and payment refunds require supervisor PIN verification.
+5. **Central Registry Alignment:** All capability identifiers in code (`RestaurantOrder.Application.Auth.Permissions`) must match the machine-readable strings defined in Section 2 above with zero deviation.
+6. **User Membership Lifecycle & Tenant Isolation (`UserMembershipStatus`):** Staff status (`Active`, `Suspended`, `Disabled`) is scoped strictly per tenant membership. Suspending a user in Tenant A leaves any memberships in Tenant B unaffected. Transitioning to `Suspended` or `Disabled` instantly revokes all active sessions for that user across all instances. `Şube Müdürü` (Branch Manager) can only manage staff within their assigned branch; cross-branch actions return `403 Forbidden`.
+7. **Atomic Single-Statement Token Consumption:** Staff invitation and password reset tokens are consumed via atomic database functions (`UPDATE ... WHERE is_consumed = FALSE RETURNING ...`) guaranteeing exactly one concurrent redemption. Raw tokens are never returned in API payloads and are delivered strictly out-of-band.

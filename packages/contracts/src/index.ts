@@ -7,3 +7,6 @@ export interface HealthStatusResponse {
   service: string;
   version: string;
 }
+export * from './auth';
+export * from './api-client';
+

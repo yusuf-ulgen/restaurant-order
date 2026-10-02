@@ -55,6 +55,109 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantDatabaseSession, TenantDatabaseSession>();
 
+        // IAM Security & Hashing Services
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPasswordHasher, RestaurantOrder.Infrastructure.Auth.AspNetCorePasswordHasher>();
+
+        services.Configure<RestaurantOrder.Application.Auth.PinHasherOptions>(options =>
+        {
+            var section = configuration.GetSection(RestaurantOrder.Application.Auth.PinHasherOptions.DefaultSectionName);
+            section.Bind(options);
+
+            options.Environment = environment.EnvironmentName;
+            var envPepper = configuration["PIN_PEPPER_SECRET"];
+            if (!string.IsNullOrWhiteSpace(envPepper))
+            {
+                options.PepperValue = envPepper;
+            }
+        });
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPinHasher, RestaurantOrder.Infrastructure.Auth.PepperedPinHasher>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IIamUserLookupGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamUserLookupGateway>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IIamBootstrapGateway, RestaurantOrder.Infrastructure.Auth.PostgreSqlIamBootstrapGateway>();
+
+        // JWT & Authentication Services
+        services.Configure<RestaurantOrder.Application.Auth.JwtSettings>(options =>
+        {
+            var section = configuration.GetSection(RestaurantOrder.Application.Auth.JwtSettings.SectionName);
+            section.Bind(options);
+
+            var envSecret = configuration["JWT_SECRET"];
+            if (!string.IsNullOrWhiteSpace(envSecret))
+            {
+                options.Secret = envSecret;
+            }
+            else if (string.IsNullOrWhiteSpace(options.Secret) && environment.IsDevelopment())
+            {
+                options.Secret = "dev-only-insecure-jwt-secret-min-32-chars-long!";
+            }
+        });
+
+        services.Configure<RestaurantOrder.Application.Auth.AuthSettings>(configuration.GetSection(RestaurantOrder.Application.Auth.AuthSettings.SectionName));
+
+        // Distributed Redis Infrastructure
+        services.AddSingleton<RestaurantOrder.Infrastructure.Redis.IRedisDatabaseProvider, RestaurantOrder.Infrastructure.Redis.StackExchangeRedisDatabaseProvider>();
+
+        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.JwtTokenService>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IJwtTokenGenerator>(sp => sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.JwtTokenService>());
+        services.AddSingleton<RestaurantOrder.Application.Auth.IRefreshTokenService, RestaurantOrder.Infrastructure.Auth.RefreshTokenService>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.PostgreSqlPlatformSessionStore>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisLoginRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITokenRevocationValidator, RestaurantOrder.Infrastructure.Auth.DistributedTokenRevocationValidator>();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
+
+        // Central Authorization & Capability Registry
+        services.AddSingleton<RestaurantOrder.Application.Auth.IJwtClaimPrincipalParser, RestaurantOrder.Application.Auth.JwtClaimPrincipalParser>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IResourceOwnershipRequirement, RestaurantOrder.Application.Auth.DefaultResourceOwnershipRequirement>();
+        services.AddSingleton<RestaurantOrder.Application.Auth.IPermissionRegistry, RestaurantOrder.Application.Auth.PermissionRegistry>();
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, RestaurantOrder.Infrastructure.Auth.PermissionAuthorizationHandler>();
+
+        // Trusted Terminal & Staff PIN Authentication
+        services.AddScoped<RestaurantOrder.Application.Auth.ITerminalEnrollmentStore, RestaurantOrder.Infrastructure.Auth.RedisTerminalEnrollmentStore>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITerminalPinRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisTerminalPinRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
+
+        // Identity Notifications & Outbox Infrastructure
+        services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
+        services.AddHttpClient();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationTransport, RestaurantOrder.Infrastructure.Auth.WebhookIdentityNotificationTransport>();
+        services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationOutboxDispatcher, RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxDispatcher>();
+
+        var rawNotificationProvider = configuration["NOTIFICATION_PROVIDER"] ?? configuration["Notification:Provider"];
+        var isProdOrStaging = environment.IsProduction() || environment.IsEnvironment("Staging");
+
+        if (isProdOrStaging)
+        {
+            if (string.Equals(rawNotificationProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("FATAL CONFIGURATION ERROR: TestSink notification provider is strictly prohibited in Staging/Production.");
+            }
+
+            if (!string.Equals(rawNotificationProvider, "TransactionalOutbox", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: Unsupported Notification:Provider '{rawNotificationProvider}' in '{environment.EnvironmentName}'. Must be 'TransactionalOutbox'.");
+            }
+
+            services.AddScoped<RestaurantOrder.Application.Auth.IIdentityNotificationSender, RestaurantOrder.Infrastructure.Auth.TransactionalOutboxIdentityNotificationSender>();
+            services.AddHostedService<RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxBackgroundService>();
+        }
+        else
+        {
+            if (string.Equals(rawNotificationProvider, "TransactionalOutbox", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddScoped<RestaurantOrder.Application.Auth.IIdentityNotificationSender, RestaurantOrder.Infrastructure.Auth.TransactionalOutboxIdentityNotificationSender>();
+                services.AddHostedService<RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxBackgroundService>();
+            }
+            else
+            {
+                services.AddSingleton<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>();
+                services.AddSingleton<RestaurantOrder.Application.Auth.IIdentityNotificationSender>(sp =>
+                    sp.GetRequiredService<RestaurantOrder.Infrastructure.Auth.TestSinkIdentityNotificationSender>());
+            }
+        }
+
         if (environment.IsDevelopment())
         {
             services.AddScoped<RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder, RestaurantOrder.Infrastructure.Persistence.Seed.DevDataSeeder>();

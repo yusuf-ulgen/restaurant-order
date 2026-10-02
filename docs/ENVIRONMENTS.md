@@ -48,6 +48,16 @@ The `restaurant-order` platform maintains 6 strictly isolated operational enviro
 | `VITE_API_URL` | Public API endpoint for web clients | All Web Apps | No | `http://localhost:5000` |
 | `IMAGE_DIGEST` | Immutable container image SHA256 digest | Staging, Prod | No | `sha256:...` |
 | `LOG_LEVEL` | Application logging verbosity | Optional | No | `Information` |
+| `PIN_PEPPER_SECRET` | Secret pepper for staff 4-digit PIN hash | Staging, Prod | Yes | `[Secured in Secret Manager]` |
+| `CORS_ALLOWED_ORIGINS` | Explicit allowed origins (no wildcard/local)| Staging, Prod | No | `https://admin.restaurantorder.app,...` |
+| `NOTIFICATION_PROVIDER` | Notification backend (`TransactionalOutbox`) | Staging, Prod | No | `TransactionalOutbox` |
+| `NOTIFICATION_ENCRYPTION_KEY` | 256-bit AES-GCM key for outbox payload encryption | Staging, Prod | Yes | `[Secured in Secret Manager]` |
+| `WEBHOOK_NOTIFICATION_URL` | Outbound HTTPS endpoint for notification delivery | Staging, Prod | No | `https://notifications.internal/webhook` |
+| `WEBHOOK_NOTIFICATION_SECRET` | HMAC-SHA256 signature secret (min 32 chars) | Staging, Prod | Yes | `[Secured in Secret Manager]` |
+| `FORWARDED_HEADERS_ENABLED` | Enable reverse proxy forwarded headers | Optional | No | `false` / `true` |
+| `FORWARDED_HEADERS_KNOWN_PROXIES` | Trusted reverse proxy IPs (comma-separated)| Staging, Prod (if enabled) | No | `192.0.2.1` |
+| `FORWARDED_HEADERS_KNOWN_NETWORKS` | Trusted CIDR networks (comma-separated)| Staging, Prod (if enabled) | No | `198.51.100.0/24` |
+| `FORWARDED_HEADERS_FORWARD_LIMIT` | Max forwarded proxy limit | Optional | No | `2` |
 | `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
 | `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
 

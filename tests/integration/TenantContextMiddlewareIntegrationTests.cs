@@ -16,6 +16,9 @@ namespace RestaurantOrder.IntegrationTests;
 /// </summary>
 public class TenantContextMiddlewareIntegrationTests
 {
+    private static string TestHexKey() => Convert.ToHexString(new byte[32]);
+    private static string TestSecret(string name) => $"test_{name}_{new string('x', 32)}";
+
     [Fact]
     public async Task Missing_TenantContext_On_Protected_Endpoint_Returns_ProblemDetails_With_CorrelationId()
     {
@@ -66,8 +69,8 @@ public class TenantContextMiddlewareIntegrationTests
 
         var response = await client.SendAsync(request);
 
-        // Must fail closed because unverified headers are never trusted in Production
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Must fail closed because test-scope endpoint is completely unmapped in Production
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -79,6 +82,18 @@ public class TenantContextMiddlewareIntegrationTests
         var response = await client.PostAsync("/api/v1/dev/seed", null);
 
         // Dev seed endpoint must not exist in production
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TestTenantScope_Endpoint_Is_Not_Mapped_In_Production()
+    {
+        using var factory = CreateCustomFactory(Environments.Production, allowDevHeaderOverride: false);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/test/tenant-scope");
+
+        // Test tenant scope endpoint must not exist in production
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -175,7 +190,13 @@ public class TenantContextMiddlewareIntegrationTests
             builder.UseSetting("DEPLOYMENT_COLOR", "blue");
             builder.UseSetting("DATABASE_URL", "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass");
             builder.UseSetting("REDIS_URL", "localhost:6379");
-            builder.UseSetting("JWT_SECRET", "super-secure-production-jwt-secret-key-32-chars-long!");
+            builder.UseSetting("JWT_SECRET", TestSecret("jwt"));
+            builder.UseSetting("PIN_PEPPER_SECRET", TestSecret("pin_pepper"));
+            builder.UseSetting("Cors:AllowedOrigins:0", "https://admin.restaurantorder.app");
+            builder.UseSetting("NOTIFICATION_PROVIDER", "TransactionalOutbox");
+            builder.UseSetting("NOTIFICATION_ENCRYPTION_KEY", TestHexKey());
+            builder.UseSetting("WEBHOOK_NOTIFICATION_URL", "https://notifications.internal/webhook");
+            builder.UseSetting("WEBHOOK_NOTIFICATION_SECRET", TestSecret("webhook"));
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -185,7 +206,13 @@ public class TenantContextMiddlewareIntegrationTests
                     ["DEPLOYMENT_COLOR"] = "blue",
                     ["DATABASE_URL"] = "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass",
                     ["REDIS_URL"] = "localhost:6379",
-                    ["JWT_SECRET"] = "super-secure-production-jwt-secret-key-32-chars-long!"
+                    ["JWT_SECRET"] = TestSecret("jwt"),
+                    ["PIN_PEPPER_SECRET"] = TestSecret("pin_pepper"),
+                    ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app",
+                    ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox",
+                    ["NOTIFICATION_ENCRYPTION_KEY"] = TestHexKey(),
+                    ["WEBHOOK_NOTIFICATION_URL"] = "https://notifications.internal/webhook",
+                    ["WEBHOOK_NOTIFICATION_SECRET"] = TestSecret("webhook")
                 });
             });
         });

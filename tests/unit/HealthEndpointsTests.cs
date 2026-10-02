@@ -13,7 +13,7 @@ namespace RestaurantOrder.UnitTests;
 
 public class HealthEndpointsTests
 {
-    private class TestApiFactory : WebApplicationFactory<Program>
+    private class TestApiFactory : WebApplicationFactory<RestaurantOrder.Api.Program>
     {
         private readonly Action<IServiceCollection>? _configureServices;
         private readonly IDictionary<string, string?>? _configurationOverrides;

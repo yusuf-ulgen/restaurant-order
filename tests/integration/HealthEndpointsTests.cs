@@ -14,11 +14,11 @@ using RestaurantOrder.Api.Health;
 
 namespace RestaurantOrder.IntegrationTests;
 
-public class HealthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public class HealthEndpointsTests : IClassFixture<WebApplicationFactory<RestaurantOrder.Api.Program>>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly WebApplicationFactory<RestaurantOrder.Api.Program> _factory;
 
-    public HealthEndpointsTests(WebApplicationFactory<Program> factory)
+    public HealthEndpointsTests(WebApplicationFactory<RestaurantOrder.Api.Program> factory)
     {
         _factory = factory;
     }

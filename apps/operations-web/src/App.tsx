@@ -8,31 +8,51 @@ import {
   AppShell,
   Modal,
 } from '@restaurant-order/ui';
+import { TerminalContextDto, UserPrincipalDto } from '@restaurant-order/contracts';
+import { TerminalProvider, useTerminal } from './auth/TerminalContext';
+import { TerminalActivationView } from './auth/TerminalActivationView';
+import { PinPadView } from './auth/PinPadView';
 
 export interface OperationsAppProps {
   hasActiveTables?: boolean;
   initialError?: boolean;
+  initialTerminal?: TerminalContextDto | null;
+  initialStaff?: UserPrincipalDto | null;
 }
 
-export const OperationsContent: React.FC<OperationsAppProps> = ({
+export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
   hasActiveTables = true,
-  initialError = false,
 }) => {
   const [isCallsModalOpen, setIsCallsModalOpen] = useState(false);
+  const { terminal, staffUser, logoutStaff } = useTerminal();
+
   const handleOpenCallsModal = () => setIsCallsModalOpen(true);
   const handleCloseCallsModal = () => setIsCallsModalOpen(false);
-
-  if (initialError) {
-    throw new Error('Operasyon verileri yüklenemedi.');
-  }
 
   return (
     <AppShell
       variant="operations"
       header={{
         title: <h1 className="title">Garson & Operasyon</h1>,
-        subtitle: <p className="subtitle">Şube: Kadıköy • Aktif Vardiya</p>,
-        actions: <Badge variant="primary">Garson Modu</Badge>,
+        subtitle: (
+          <p className="subtitle">
+            Şube: {terminal?.terminalName ? `${terminal.terminalName} • Aktif Vardiya` : 'Kadıköy • Aktif Vardiya'}
+          </p>
+        ),
+        actions: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Badge variant="primary">{staffUser?.role || 'Garson'}</Badge>
+            {terminal && <Badge variant="neutral">{terminal.terminalName}</Badge>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={logoutStaff}
+              title="Vardiya oturumunu kilitle ve PIN ekranına dön"
+            >
+              Kilitle
+            </Button>
+          </div>
+        ),
       }}
       mobileNav={{
         items: [
@@ -111,10 +131,40 @@ export const OperationsContent: React.FC<OperationsAppProps> = ({
   );
 };
 
-export const App: React.FC<OperationsAppProps> = (props) => {
+export const AppContent: React.FC<OperationsAppProps> = ({
+  hasActiveTables = true,
+  initialError = false,
+}) => {
+  const { terminal, isEnrolled, staffUser } = useTerminal();
+
+  if (initialError) {
+    throw new Error('Operasyon verileri yüklenemedi.');
+  }
+
+  // State 1: UNENROLLED -> Only TerminalActivationView in DOM
+  if (!terminal || !isEnrolled) {
+    return <TerminalActivationView />;
+  }
+
+  // State 2: LOCKED -> Only PinPadView in DOM
+  if (!staffUser) {
+    return <PinPadView terminal={terminal} />;
+  }
+
+  // State 3: AUTHENTICATED -> OperationsContent with AppShell
+  return <OperationsContent hasActiveTables={hasActiveTables} />;
+};
+
+export const App: React.FC<OperationsAppProps> = ({
+  initialTerminal,
+  initialStaff,
+  ...props
+}) => {
   return (
     <ErrorBoundary>
-      <OperationsContent {...props} />
+      <TerminalProvider initialTerminal={initialTerminal} initialStaff={initialStaff}>
+        <AppContent {...props} />
+      </TerminalProvider>
     </ErrorBoundary>
   );
 };
