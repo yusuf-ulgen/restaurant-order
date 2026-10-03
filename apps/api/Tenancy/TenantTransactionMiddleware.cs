@@ -70,6 +70,7 @@ public class TenantTransactionMiddleware
             }
             finally
             {
+                await tx.DisposeAsync();
                 await dbContext.ClearTenantSessionAsync(context.RequestAborted);
             }
         }

@@ -105,3 +105,17 @@ export function applyTenantTheme(
     target.style.setProperty(key, value);
   }
 }
+
+/**
+ * Maps an EffectiveTenantTheme from the API into TenantThemeOverrides for CSS custom properties.
+ */
+export function mapEffectiveThemeToOverrides(theme: import('./types').EffectiveTenantTheme): TenantThemeOverrides {
+  return {
+    primary: theme.primaryColor,
+    primaryHover: theme.primaryHoverColor,
+    secondary: theme.secondaryColor,
+    accent: theme.accentColor,
+    surface: theme.surfaceColor,
+    bg: theme.backgroundColor,
+  };
+}

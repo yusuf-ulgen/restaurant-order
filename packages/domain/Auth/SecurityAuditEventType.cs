@@ -21,4 +21,33 @@ public static class SecurityAuditEventType
     public const string PinLocked = "pin_locked";
     public const string TrustedTerminalEnrolled = "trusted_terminal_enrolled";
     public const string TrustedTerminalRevoked = "trusted_terminal_revoked";
+
+    // Restaurant Configuration
+    public const string BrandCreated = "brand_created";
+    public const string BrandUpdated = "brand_updated";
+    public const string BrandActivated = "brand_activated";
+    public const string BrandDeactivated = "brand_deactivated";
+    public const string BranchCreated = "branch_created";
+    public const string BranchUpdated = "branch_updated";
+    public const string BranchActivated = "branch_activated";
+    public const string BranchSuspended = "branch_suspended";
+    public const string BranchClosed = "branch_closed";
+    public const string BrandThemeUpdated = "brand_theme_updated";
+    public const string BranchThemeOverrideUpdated = "branch_theme_override_updated";
+    public const string BranchThemeOverrideCleared = "branch_theme_override_cleared";
+    public const string BranchSettingsUpdated = "branch_settings_updated";
+    public const string BranchOperatingHoursUpdated = "branch_operating_hours_updated";
+    public const string DiningAreaCreated = "dining_area_created";
+    public const string DiningAreaUpdated = "dining_area_updated";
+    public const string DiningAreaActivated = "dining_area_activated";
+    public const string DiningAreaDeactivated = "dining_area_deactivated";
+    public const string DiningAreasReordered = "dining_areas_reordered";
+    public const string PreparationStationCreated = "preparation_station_created";
+    public const string PreparationStationUpdated = "preparation_station_updated";
+    public const string PreparationStationActivated = "preparation_station_activated";
+    public const string PreparationStationDeactivated = "preparation_station_deactivated";
+    public const string PreparationStationsReordered = "preparation_stations_reordered";
+    public const string TenantFeatureFlagsUpdated = "tenant_feature_flags_updated";
+    public const string BranchFeatureFlagsUpdated = "branch_feature_flags_updated";
+    public const string BranchFeatureFlagsCleared = "branch_feature_flags_cleared";
 }

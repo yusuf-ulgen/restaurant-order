@@ -50,6 +50,12 @@
 | `ADM-06` | **Staff & Roles Directory** | Restoran Admini, Müdür | Invite staff, assign roles, set/reset 4-digit PINs. | User list, assigned roles, active status, branch assignment. |
 | `ADM-07` | **Printers & Routing** | Restoran Admini, Müdür | Add ESC/POS network printers, map categories to stations. | Printer IP/port, station mapping (Bar, Kitchen, Cashier), test print. |
 | `ADM-08` | **Financial & Z-Reports** | Restoran Admini, Müdür | Export daily sales, end-of-day Z-report, tax summaries. | Daily turnover, payment breakdown (Cash, Card), discount totals. |
+| `ADM-09` | **Brand & Branch Theme** | Restoran Admini, Müdür | Customize colors, logo, border radius, check WCAG contrast. | Palette inputs, contrast badge, token preview, reset button. |
+| `ADM-10` | **Navigation Config** | Restoran Admini | Enable/disable admin navigation items, customize labels. | Route checklist, display labels, ordering controls. |
+| `ADM-11` | **Branch Settings & Hours**| Restoran Admini, Müdür | Configure currency, timezone, basis-point tax/service rates, weekly hours. | Rates inputs, tax inclusion switch, operating hours schedule. |
+| `ADM-12` | **Dining Areas Manager** | Restoran Admini, Müdür | Add/edit dining areas (Indoor, Terrace, Garden), toggle active status. | Area code, area type badge, sort order, active toggle. |
+| `ADM-13` | **Preparation Stations** | Restoran Admini, Müdür | Add/edit stations (Kitchen, Bar, Other), toggle active status. | Station code, display name, station type badge, active toggle. |
+| `ADM-14` | **Branch Feature Flags** | Restoran Admini, Müdür | Toggle operational feature flags with RBAC precedence. | Flag key, enabled toggle, descriptions, audit state. |
 
 ---
 

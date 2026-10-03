@@ -33,6 +33,10 @@ Legend:
 | **Brand & Branch Config** | | | | | | | | | |
 | Create / Edit Brands | `tenant.brands.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Create / Edit Branches | `tenant.branches.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| View Corporate Branding | `tenant.branding.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| Manage Branding & Themes | `tenant.branding.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| View Branch Configuration | `branch.configuration.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| Manage Branch Configuration | `branch.configuration.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Configure Printers / Network | `branch.printers.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Edit Dining Area & Tables | `branch.tables.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | **Menu & Catalog** | | | | | | | | | |
@@ -77,3 +81,5 @@ Legend:
 5. **Central Registry Alignment:** All capability identifiers in code (`RestaurantOrder.Application.Auth.Permissions`) must match the machine-readable strings defined in Section 2 above with zero deviation.
 6. **User Membership Lifecycle & Tenant Isolation (`UserMembershipStatus`):** Staff status (`Active`, `Suspended`, `Disabled`) is scoped strictly per tenant membership. Suspending a user in Tenant A leaves any memberships in Tenant B unaffected. Transitioning to `Suspended` or `Disabled` instantly revokes all active sessions for that user across all instances. `Şube Müdürü` (Branch Manager) can only manage staff within their assigned branch; cross-branch actions return `403 Forbidden`.
 7. **Atomic Single-Statement Token Consumption:** Staff invitation and password reset tokens are consumed via atomic database functions (`UPDATE ... WHERE is_consumed = FALSE RETURNING ...`) guaranteeing exactly one concurrent redemption. Raw tokens are never returned in API payloads and are delivered strictly out-of-band.
+8. **Feature Flags are Not Authorization:** Feature flags toggle operational functionality (e.g., `order_acceptance`, `service_charge`) but never confer or bypass RBAC permissions. A user lacking `branch.configuration.manage` cannot update branch configuration or toggles, regardless of flag values.
+9. **Branch Scoping Invariant:** A Branch Manager (`Şube Müdürü`) possesses management permissions strictly scoped to their assigned branch (`O`). Any attempt to read or mutate another branch's configuration, dining areas, stations, or operating hours fails with `403 Forbidden`.

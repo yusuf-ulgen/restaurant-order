@@ -9,9 +9,9 @@ public class PermissionRegistryMatrixTests
     private readonly IPermissionRegistry _registry = new PermissionRegistry();
 
     [Fact]
-    public void Permissions_All_ContainsExactlyThirtyOnePermissions()
+    public void Permissions_All_ContainsExactlyThirtyFivePermissions()
     {
-        Assert.Equal(31, Permissions.All.Count);
+        Assert.Equal(35, Permissions.All.Count);
     }
 
     [Theory]
@@ -30,13 +30,13 @@ public class PermissionRegistryMatrixTests
 
     [Theory]
     [InlineData(AuthRole.SuperAdmin, 4)]
-    [InlineData(AuthRole.RestaurantAdmin, 24)]
-    [InlineData(AuthRole.BranchManager, 23)]
-    [InlineData(AuthRole.Cashier, 11)]
-    [InlineData(AuthRole.Kitchen, 5)]
-    [InlineData(AuthRole.Bar, 5)]
-    [InlineData(AuthRole.Waiter, 9)]
-    [InlineData(AuthRole.Customer, 4)]
+    [InlineData(AuthRole.RestaurantAdmin, 28)]
+    [InlineData(AuthRole.BranchManager, 27)]
+    [InlineData(AuthRole.Cashier, 13)]
+    [InlineData(AuthRole.Kitchen, 7)]
+    [InlineData(AuthRole.Bar, 7)]
+    [InlineData(AuthRole.Waiter, 11)]
+    [InlineData(AuthRole.Customer, 6)]
     public void PermissionRegistry_GetPermissionsForRole_ReturnsExactCount(AuthRole role, int expectedCount)
     {
         var permissions = _registry.GetPermissionsForRole(role);
@@ -113,6 +113,8 @@ public class PermissionRegistryMatrixTests
                 Permissions.OrdersQrCreate or
                 Permissions.BillingBillRequest or
                 Permissions.ReportsTenantMultiBranch => PermissionGrantType.Denied,
+                Permissions.TenantBrandingManage or
+                Permissions.BranchConfigurationManage => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Full
             },
 
@@ -127,7 +129,9 @@ public class PermissionRegistryMatrixTests
                 Permissions.OrdersItemsCancelPrePrep or
                 Permissions.BillingPaymentCash or
                 Permissions.BillingPaymentPosCard or
-                Permissions.BillingBillSplit => PermissionGrantType.Full,
+                Permissions.BillingBillSplit or
+                Permissions.TenantBrandingView or
+                Permissions.BranchConfigurationView => PermissionGrantType.Full,
                 Permissions.ReportsBranchRevenue => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Denied
             },
@@ -136,7 +140,9 @@ public class PermissionRegistryMatrixTests
             {
                 Permissions.MenuInventoryQuick86 or
                 Permissions.MenuCatalogView or
-                Permissions.KdsKitchenView => PermissionGrantType.Full,
+                Permissions.KdsKitchenView or
+                Permissions.TenantBrandingView or
+                Permissions.BranchConfigurationView => PermissionGrantType.Full,
                 Permissions.KdsTicketUpdate or
                 Permissions.KdsTicketRecall => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Denied
@@ -146,7 +152,9 @@ public class PermissionRegistryMatrixTests
             {
                 Permissions.MenuInventoryQuick86 or
                 Permissions.MenuCatalogView or
-                Permissions.KdsBarView => PermissionGrantType.Full,
+                Permissions.KdsBarView or
+                Permissions.TenantBrandingView or
+                Permissions.BranchConfigurationView => PermissionGrantType.Full,
                 Permissions.KdsTicketUpdate or
                 Permissions.KdsTicketRecall => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Denied
@@ -161,7 +169,9 @@ public class PermissionRegistryMatrixTests
                 Permissions.OrdersStaffCreate or
                 Permissions.OrdersItemsCancelPrePrep or
                 Permissions.BillingBillRequest or
-                Permissions.BillingBillSplit => PermissionGrantType.Full,
+                Permissions.BillingBillSplit or
+                Permissions.TenantBrandingView or
+                Permissions.BranchConfigurationView => PermissionGrantType.Full,
                 Permissions.BillingPaymentPosCard => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Denied
             },
@@ -170,7 +180,9 @@ public class PermissionRegistryMatrixTests
             {
                 Permissions.MenuCatalogView or
                 Permissions.OrdersQrCreate or
-                Permissions.BillingBillRequest => PermissionGrantType.Full,
+                Permissions.BillingBillRequest or
+                Permissions.TenantBrandingView or
+                Permissions.BranchConfigurationView => PermissionGrantType.Full,
                 Permissions.FloorSessionsManage => PermissionGrantType.OwnOrAssigned,
                 _ => PermissionGrantType.Denied
             },

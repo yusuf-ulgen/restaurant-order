@@ -30,10 +30,24 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASE 3: AUTHENTICATION & RBAC [NEXT]                                        |
+|  PHASE 3: AUTHENTICATION & RBAC [COMPLETED]                                   |
 |  - Identity & Access Management (IAM) module with 8 supported roles           |
 |  - JWT tokens, secure cookies, refresh flows, and fast 4-digit PIN auth       |
 |  - Role-Based Access Control (RBAC) authorization middleware                  |
++---------------------------------------+---------------------------------------+
+                                        |
+                                        v
++-------------------------------------------------------------------------------+
+|  PHASE 4: RESTAURANT CONFIGURATION [COMPLETED]                                |
+|  - Brand & branch configuration, operating hours, service charges, tax rates  |
+|  - Dining areas, station definitions & feature flags with strict tenant RBAC  |
++---------------------------------------+---------------------------------------+
+                                        |
+                                        v
++-------------------------------------------------------------------------------+
+|  PHASE 5: MENU & CATALOG [NEXT]                                               |
+|  - Menu categories, items, and variant pricing models                         |
+|  - Modifier groups (required single-select, optional multi-select, free/paid) |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -79,12 +93,15 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Fast 4-digit PIN authentication for waiter and operations mobile terminals.
 - [x] Role-Based Access Control (RBAC) authorization middleware and permission matrix.
 
-### Phase 4: Restaurant Configuration (Status: Sıradaki / Next)
-- [ ] Brand and branch configuration data models.
-- [ ] Operating hours, service charge settings, and tax rate configuration.
-- [ ] Branch dining areas (Indoor, Terrace, Garden) and station definitions.
+### Phase 4: Restaurant Configuration (Status: Tamamlandı / Completed)
+- [x] Brand appearance and branch theme overrides with CSS sanitization and contract validation (Phase 4.1 & 4.2).
+- [x] Admin navigation items and brand navigation configuration API/UI (Phase 4.3).
+- [x] Branch financial settings (timezone, currency, locales, tax rates, service charges) and operating hours with basis-point accuracy (Phase 4.4).
+- [x] Dining areas (Indoor, Terrace, Garden, BarArea, Other) and preparation stations (Kitchen, Bar, Other) with non-destructive status lifecycle (Phase 4.5).
+- [x] Branch feature flags toggle engine with strict RBAC precedence (Phase 4.5).
+- [x] Tenant and branch isolation, RLS policies, composite foreign keys, and fail-closed security (Phase 4.6).
 
-### Phase 5: Menu & Catalog (Status: Planlandı / Planned)
+### Phase 5: Menu & Catalog (Status: Sıradaki / Next)
 - [ ] Menu categories, items, and variant pricing models.
 - [ ] Modifier groups (required single-select, optional multi-select, free/paid).
 - [ ] Dietary, allergen, and spicy badges.
