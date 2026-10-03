@@ -37,4 +37,17 @@ public static class SecurityAuditEventType
     public const string BranchThemeOverrideCleared = "branch_theme_override_cleared";
     public const string BranchSettingsUpdated = "branch_settings_updated";
     public const string BranchOperatingHoursUpdated = "branch_operating_hours_updated";
+    public const string DiningAreaCreated = "dining_area_created";
+    public const string DiningAreaUpdated = "dining_area_updated";
+    public const string DiningAreaActivated = "dining_area_activated";
+    public const string DiningAreaDeactivated = "dining_area_deactivated";
+    public const string DiningAreasReordered = "dining_areas_reordered";
+    public const string PreparationStationCreated = "preparation_station_created";
+    public const string PreparationStationUpdated = "preparation_station_updated";
+    public const string PreparationStationActivated = "preparation_station_activated";
+    public const string PreparationStationDeactivated = "preparation_station_deactivated";
+    public const string PreparationStationsReordered = "preparation_stations_reordered";
+    public const string TenantFeatureFlagsUpdated = "tenant_feature_flags_updated";
+    public const string BranchFeatureFlagsUpdated = "branch_feature_flags_updated";
+    public const string BranchFeatureFlagsCleared = "branch_feature_flags_cleared";
 }

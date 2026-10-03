@@ -20,3 +20,10 @@ public class ResourceNotFoundException : Exception
     {
     }
 }
+
+public class DuplicateCodeException : Exception
+{
+    public DuplicateCodeException(string message) : base(message)
+    {
+    }
+}

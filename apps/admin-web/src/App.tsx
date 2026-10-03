@@ -20,6 +20,9 @@ import {
 } from './navigation/navigationRegistry';
 import { BrandingSettingsView } from './settings/BrandingSettingsView';
 import { BranchSettingsView } from './settings/BranchSettingsView';
+import { DiningAreasView } from './settings/DiningAreasView';
+import { PreparationStationsView } from './settings/PreparationStationsView';
+import { FeatureFlagsView } from './settings/FeatureFlagsView';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
@@ -230,6 +233,18 @@ export const AdminContent: React.FC<AdminAppProps> = ({
         <BranchSettingsView
           initialTab="hours"
           onSaved={() => {}}
+          onCancel={() => setCurrentView('dashboard')}
+        />
+      ) : currentView === 'dining-areas' ? (
+        <DiningAreasView
+          onCancel={() => setCurrentView('dashboard')}
+        />
+      ) : currentView === 'preparation-stations' ? (
+        <PreparationStationsView
+          onCancel={() => setCurrentView('dashboard')}
+        />
+      ) : currentView === 'feature-settings' ? (
+        <FeatureFlagsView
           onCancel={() => setCurrentView('dashboard')}
         />
       ) : currentView === 'dashboard' ? (

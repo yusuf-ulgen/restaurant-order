@@ -57,6 +57,10 @@
     {
       "path": "packages/infrastructure/Persistence/Migrations/20261002140000_AddBranchSettingsAndOperatingHours.Designer.cs",
       "reason": "Machine-generated EF Core migration designer metadata for branch financial settings and operating hours tables (Phase 4.4)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261003140048_AddDiningAreasStationsAndFeatureFlags.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining areas, preparation stations, and feature flag tables (Phase 4.5)."
     }
   ]
 }

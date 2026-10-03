@@ -54,6 +54,40 @@ public partial class RestaurantConfigService : IRestaurantConfigService
         _dbContext.SecurityAuditEvents.Add(auditEvent);
     }
 
+    private void EnsureTenantAccess(TenantId tenantId, AuthenticatedPrincipal actor)
+    {
+        if (actor.Scope.TenantId != tenantId.Value)
+        {
+            throw new InvalidAuthorizationScopeException("Actor is not authorized for this tenant.");
+        }
+    }
+
+    private void EnsureBranchAccess(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor)
+    {
+        EnsureTenantAccess(tenantId, actor);
+
+        if (actor.Role == AuthRole.BranchManager)
+        {
+            if (!actor.Scope.BranchId.HasValue || actor.Scope.BranchId.Value != branchId.Value)
+            {
+                throw new InvalidAuthorizationScopeException("BranchManager is only authorized to access their assigned branch.");
+            }
+        }
+    }
+
+    private async Task<Branch> GetBranchWithAccessCheckAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct)
+    {
+        EnsureBranchAccess(tenantId, branchId, actor);
+
+        return await _dbContext.Branches
+            .FirstOrDefaultAsync(b => b.TenantId == tenantId && b.Id == branchId, ct)
+            ?? throw new ResourceNotFoundException($"Branch '{branchId.Value}' was not found.");
+    }
+
     private static void VerifyConcurrencyToken(Guid expectedToken, Guid? providedToken)
     {
         if (providedToken.HasValue && providedToken.Value != Guid.Empty && providedToken.Value != expectedToken)

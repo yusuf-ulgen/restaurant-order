@@ -25,6 +25,10 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Branding.BranchThemeOverride> BranchThemeOverrides => Set<RestaurantOrder.Domain.Branding.BranchThemeOverride>();
     public DbSet<BranchSettings> BranchSettings => Set<BranchSettings>();
     public DbSet<BranchOperatingHours> BranchOperatingHours => Set<BranchOperatingHours>();
+    public DbSet<DiningArea> DiningAreas => Set<DiningArea>();
+    public DbSet<PreparationStation> PreparationStations => Set<PreparationStation>();
+    public DbSet<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags> TenantFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>();
+    public DbSet<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags> BranchFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -87,6 +91,10 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Branding.BranchThemeOverride>().HasQueryFilter(bto => HasTenant && bto.TenantId == CurrentTenantId);
         modelBuilder.Entity<BranchSettings>().HasQueryFilter(bs => HasTenant && bs.TenantId == CurrentTenantId);
         modelBuilder.Entity<BranchOperatingHours>().HasQueryFilter(boh => HasTenant && boh.TenantId == CurrentTenantId);
+        modelBuilder.Entity<DiningArea>().HasQueryFilter(da => HasTenant && da.TenantId == CurrentTenantId);
+        modelBuilder.Entity<PreparationStation>().HasQueryFilter(ps => HasTenant && ps.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>().HasQueryFilter(tf => HasTenant && tf.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>().HasQueryFilter(bf => HasTenant && bf.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

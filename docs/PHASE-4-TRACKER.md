@@ -12,9 +12,9 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 4.2** | Secure Tenant Branding & Theme Settings | **Completed** | Secure brand appearance, branch theme overrides, inheritance, RLS, CSS token mapping | 95e0ee2 |
 | **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | 2f5f24c |
 | **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | 379e9d1 |
-| **Phase 4.5** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
-| **Phase 4.6** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
-| **Phase 4.7** | Branch Dining Areas & Station Definitions | **Not Started** | Physical areas (Terrace, Indoor), prep stations (Kitchen, Bar) | - |
+| **Phase 4.5** | Branch Dining Areas, Preparation Stations & Feature Controls | **Completed** | Tenant-safe Dining Areas, Preparation Stations, Type-Safe Feature Flag Catalog & Admin UI | b90220a |
+| **Phase 4.6** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
+| **Phase 4.7** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
 | **Phase 4.8** | Admin Web Config Integration & Security Closure | **Not Started** | Admin panel configuration UI, audit verification, coverage gate | - |
 
 ---
@@ -147,40 +147,55 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
   - 13 backend integration tests in `RestaurantConfigBranchSettingsIntegrationTests.cs` and `RestaurantConfigOperatingHoursIntegrationTests.cs`.
   - All 928 backend unit tests, 48 admin-web tests, and 230 frontend unit tests passing.
 
-### Phase 4.5: Service Charges, Gratuity & Default Tips
-- [ ] Branch service charge rate configuration entity and persistence.
-- [ ] Minimum party size auto-gratuity threshold settings.
-- [ ] Configurable tip suggestion presets (e.g., 10%, 15%, 20%).
-- [ ] Currency and rounding validation unit tests.
-
-### Phase 4.6: Tax Rates, Tax Categories & Pricing Mode
-- [ ] Value-Added Tax (VAT) rate category entities (Standard, Reduced, Zero).
-- [ ] Tax inclusive vs. exclusive pricing model setting per branch.
-- [ ] Line item tax calculation contracts for menu pricing.
-- [ ] Unit and integration tests.
-
-### Phase 4.7: Branch Dining Areas & Station Definitions
-- [ ] Dining area aggregate (Indoor, Terrace, Garden, Bar Area).
-- [ ] Station routing definitions (Kitchen, Bar, Bakery, Service Station).
-- [ ] Relationship mapping to branches and printer stations.
-- [ ] Concurrency and RBAC validation.
-
-### Phase 4.8: Admin Web Config Integration & Security Closure
-- [ ] Admin Web brand management screens and modals.
-- [ ] Admin Web branch settings screens (operating hours, taxes, fees).
-- [ ] Operations Web and Customer Web config consumption.
-- [ ] Security audit remediation, coverage closure (>= 80%), and final sign-off.
+### Phase 4.5: Branch Dining Areas, Preparation Stations & Feature Controls
+- [x] **Branch Dining Area Domain Model:**
+  - `DiningArea` aggregate root and strongly-typed `DiningAreaId`.
+  - Fields: Id, TenantId, BranchId, Name, Code/slug, AreaType (`Indoor`, `Terrace`, `Garden`, `BarArea`, `Other`), SortOrder, IsActive, CreatedAtUtc, UpdatedAtUtc, ConcurrencyToken.
+  - Soft lifecycle (`Activate()`, `Deactivate()`) with idempotency; no hard delete.
+  - No tables or table layouts in this phase (strictly Phase 6 scope).
+- [x] **Branch Preparation Station Domain Model:**
+  - `PreparationStation` aggregate root and strongly-typed `PreparationStationId`.
+  - Fields: Id, TenantId, BranchId, Code (unique within branch, lowercase normalized), DisplayName, StationType (`Kitchen`, `Bar`, `Other`), SortOrder, IsActive, ConcurrencyToken.
+  - Soft lifecycle (`Activate()`, `Deactivate()`) with idempotency.
+  - No printer IP, ESC/POS or routing in this phase (Phase 11-12 scope).
+- [x] **Type-Safe Feature Flag System:**
+  - Supported catalog keys: `CustomerQrOrdering`, `CustomerServiceRequests`, `Tips`, `SplitBilling`, `OnlinePayments`, `KitchenDisplay`, `BarDisplay`, `Reservations`, `KioskMode`.
+  - Strict domain validation rejects unknown or arbitrary string keys.
+  - Safe defaults: unimplemented features (financial, KDS, reservations, kiosk) default to disabled.
+  - Hierarchical resolution: Tenant defaults + Branch overrides -> Effective calculated configuration.
+  - Clear architectural boundaries: feature flags cannot bypass RBAC, tenant isolation, or expose hidden endpoints.
+- [x] **Persistence, Schema & Multi-Tenancy:**
+  - PostgreSQL tables: `dining_areas`, `preparation_stations`, `tenant_feature_flags`, `branch_feature_flags` with composite foreign keys to `branches(tenant_id, id)`.
+  - PostgreSQL RLS enabled and forced (`FORCE ROW LEVEL SECURITY`) with runtime isolation policies and least-privilege grants to `restaurant_app_runtime`.
+  - Additive, reversible migration: `20261003140048_AddDiningAreasStationsAndFeatureFlags`.
+- [x] **REST API Endpoints:**
+  - Dining Areas: List, Create, Update, Reorder, Activate, Deactivate (`/api/v1/restaurant-config/branches/{branchId}/dining-areas`).
+  - Preparation Stations: List, Create, Update, Reorder, Activate, Deactivate, and Kitchen/Bar runtime read model (`/stations/runtime`).
+  - Feature Flags: Tenant defaults (`GET/PUT /tenant/features`), Branch overrides (`GET/PUT/DELETE /branches/{branchId}/features/override`), Effective (`GET /branches/{branchId}/features/effective`).
+  - Append-only security audit log recording for all mutations.
+- [x] **Admin Web UI Screens:**
+  - `DiningAreasView.tsx` with list, add, edit, reorder, activate/deactivate, and mobile `BottomSheet`.
+  - `PreparationStationsView.tsx` with list, add, edit, reorder, activate/deactivate, and mobile `BottomSheet`.
+  - `FeatureFlagsView.tsx` with Effective Flags, Branch Overrides, and Tenant Defaults tabs with mobile `BottomSheet`.
+  - Navigation registry updated (`dining-areas`, `preparation-stations`, `feature-settings` enabled for RestaurantAdmin & BranchManager).
+- [x] **Automated Tests:**
+  - Domain unit tests (`DiningAreasAndStationsUnitTests.cs`).
+  - RBAC permission matrix unit tests updated (`RestaurantConfigRbacMatrixUnitTests.cs`).
+  - Integration tests (`RestaurantConfigDiningAreasAndStationsIntegrationTests.cs`).
+  - Frontend unit tests (`dining-areas-and-stations.test.tsx` with 7 tests).
+  - All 973 backend unit tests, 10 architecture tests, and 55 admin-web vitest tests passing.
 
 ---
 
-## 3. Verified Command Results (Phase 4.4)
+## 3. Verified Command Results (Phase 4.5)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
 | `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
-| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 928 / 928 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 48 / 48 passed across 4 test files (100%) |
-| `pnpm test:unit:frontend` | All Frontend Suites | **PASS** | 230 / 230 passed across UI, admin, ops, customer |
+| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 973 / 973 passed (100%) |
+| `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 55 / 55 passed across 5 test files (100%) |
+| `pnpm test` | All Test Suites | **PASS** | Backend + 4 frontend suites (100% green) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |

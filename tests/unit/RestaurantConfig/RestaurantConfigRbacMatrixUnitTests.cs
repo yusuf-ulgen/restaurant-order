@@ -116,4 +116,62 @@ public class RestaurantConfigRbacMatrixUnitTests
         Assert.False(_registry.IsPermitted(principal, "   "));
         Assert.False(_registry.IsPermitted(principal, null!));
     }
+
+    [Theory]
+    [InlineData(AuthRole.SuperAdmin, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.RestaurantAdmin, PermissionGrantType.Full)]
+    [InlineData(AuthRole.BranchManager, PermissionGrantType.OwnOrAssigned)]
+    [InlineData(AuthRole.Cashier, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.Kitchen, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.Bar, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.Waiter, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.Customer, PermissionGrantType.Denied)]
+    public void BranchConfigurationManage_PermissionMatrix_Checks(
+        AuthRole role,
+        PermissionGrantType expectedGrant)
+    {
+        var grant = _registry.GetGrantType(role, Permissions.BranchConfigurationManage);
+        Assert.Equal(expectedGrant, grant);
+    }
+
+    [Theory]
+    [InlineData(AuthRole.SuperAdmin, PermissionGrantType.Denied)]
+    [InlineData(AuthRole.RestaurantAdmin, PermissionGrantType.Full)]
+    [InlineData(AuthRole.BranchManager, PermissionGrantType.Full)]
+    [InlineData(AuthRole.Cashier, PermissionGrantType.Full)]
+    [InlineData(AuthRole.Kitchen, PermissionGrantType.Full)]
+    [InlineData(AuthRole.Bar, PermissionGrantType.Full)]
+    [InlineData(AuthRole.Waiter, PermissionGrantType.Full)]
+    [InlineData(AuthRole.Customer, PermissionGrantType.Full)]
+    public void BranchConfigurationView_PermissionMatrix_AllowsStaffRoles(
+        AuthRole role,
+        PermissionGrantType expectedGrant)
+    {
+        var grant = _registry.GetGrantType(role, Permissions.BranchConfigurationView);
+        Assert.Equal(expectedGrant, grant);
+    }
+
+    [Fact]
+    public void FeatureFlag_DoesNotBypassAuthorization_DeniedRoleCannotManage()
+    {
+        // Even if a feature flag is theoretically on, RBAC strictly denies Cashier, Waiter, or Customer
+        var tenantId = TenantId.New();
+        var branchId = BranchId.New();
+        var customerPrincipal = AuthenticatedPrincipal.CreateCustomer(
+            tableSessionId: Guid.NewGuid(),
+            tenantId: tenantId,
+            branchId: branchId);
+
+        Assert.False(_registry.IsPermitted(customerPrincipal, Permissions.BranchConfigurationManage));
+
+        var waiterPrincipal = AuthenticatedPrincipal.CreateStaff(
+            userId: Guid.NewGuid(),
+            role: AuthRole.Waiter,
+            scope: AuthorizationScope.ForBranch(tenantId, branchId),
+            sessionId: Guid.NewGuid(),
+            authMethod: AuthenticationMethod.Password,
+            securityVersion: 1);
+
+        Assert.False(_registry.IsPermitted(waiterPrincipal, Permissions.BranchConfigurationManage));
+    }
 }

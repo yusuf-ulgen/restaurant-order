@@ -248,22 +248,6 @@ public partial class RestaurantConfigService
         return MapBranchOperatingHours(branchId.Value, weeklySchedule, hours.ConcurrencyToken, hours.UpdatedAtUtc);
     }
 
-    private void EnsureBranchAccess(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor)
-    {
-        if (actor.Scope.TenantId != tenantId.Value)
-        {
-            throw new InvalidAuthorizationScopeException("Actor is not authorized for this tenant.");
-        }
-
-        if (actor.Role == AuthRole.BranchManager)
-        {
-            if (!actor.Scope.BranchId.HasValue || actor.Scope.BranchId.Value != branchId.Value)
-            {
-                throw new InvalidAuthorizationScopeException("BranchManager is only authorized to access their assigned branch.");
-            }
-        }
-    }
-
     private static BranchSettingsDto MapBranchSettings(BranchSettings settings) =>
         new(
             Id: settings.Id.Value,
