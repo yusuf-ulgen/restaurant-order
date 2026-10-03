@@ -39,6 +39,7 @@ public static partial class RestaurantConfigEndpoints
         MapBrandEndpoints(root);
         MapBranchEndpoints(root);
         MapBrandingEndpoints(root);
+        MapBranchSettingsEndpoints(root);
 
         return app;
     }

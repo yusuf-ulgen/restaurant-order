@@ -23,6 +23,8 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<RestaurantOrder.Domain.Branding.BrandAppearance> BrandAppearances => Set<RestaurantOrder.Domain.Branding.BrandAppearance>();
     public DbSet<RestaurantOrder.Domain.Branding.BranchThemeOverride> BranchThemeOverrides => Set<RestaurantOrder.Domain.Branding.BranchThemeOverride>();
+    public DbSet<BranchSettings> BranchSettings => Set<BranchSettings>();
+    public DbSet<BranchOperatingHours> BranchOperatingHours => Set<BranchOperatingHours>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -83,6 +85,8 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<Branch>().HasQueryFilter(br => HasTenant && br.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Branding.BrandAppearance>().HasQueryFilter(ba => HasTenant && ba.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Branding.BranchThemeOverride>().HasQueryFilter(bto => HasTenant && bto.TenantId == CurrentTenantId);
+        modelBuilder.Entity<BranchSettings>().HasQueryFilter(bs => HasTenant && bs.TenantId == CurrentTenantId);
+        modelBuilder.Entity<BranchOperatingHours>().HasQueryFilter(boh => HasTenant && boh.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

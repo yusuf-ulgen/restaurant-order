@@ -25,8 +25,24 @@ public sealed class DefaultResourceOwnershipRequirement : IResourceOwnershipRequ
             AuthRole.Cashier => EvaluateCashierOwnership(principal, permission, context),
             AuthRole.Kitchen => EvaluateKitchenOwnership(principal, permission, context),
             AuthRole.Bar => EvaluateBarOwnership(principal, permission, context),
+            AuthRole.BranchManager => EvaluateBranchManagerOwnership(principal, permission, context),
             _ => false
         };
+    }
+
+    private static bool EvaluateBranchManagerOwnership(
+        AuthenticatedPrincipal principal,
+        string permission,
+        ResourceOwnershipContext context)
+    {
+        if (permission is Permissions.BranchConfigurationManage or Permissions.TenantBrandingManage)
+        {
+            return context.BranchId.HasValue
+                && principal.Scope.BranchId.HasValue
+                && context.BranchId.Value == principal.Scope.BranchId.Value;
+        }
+
+        return false;
     }
 
     private static bool EvaluateCustomerOwnership(

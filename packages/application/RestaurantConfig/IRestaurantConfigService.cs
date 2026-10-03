@@ -30,4 +30,10 @@ public interface IRestaurantConfigService
     Task<EffectiveThemeDto?> GetEffectiveBranchThemeAsync(TenantId tenantId, BranchId branchId, CancellationToken ct = default);
     Task<BranchThemeOverrideDto> UpdateBranchThemeOverrideAsync(TenantId tenantId, BranchId branchId, UpdateBranchThemeOverrideCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<EffectiveThemeDto> ClearBranchThemeOverrideAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+
+    // Branch Settings & Operating Hours operations (Phase 4.4)
+    Task<EffectiveBranchSettingsDto> GetEffectiveBranchSettingsAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<BranchSettingsDto> UpdateBranchSettingsAsync(TenantId tenantId, BranchId branchId, UpdateBranchSettingsCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<BranchOperatingHoursDto> GetBranchOperatingHoursAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<BranchOperatingHoursDto> UpdateBranchOperatingHoursAsync(TenantId tenantId, BranchId branchId, UpdateBranchOperatingHoursCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
 }

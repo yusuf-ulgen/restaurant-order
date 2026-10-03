@@ -8,10 +8,10 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 
 | Sub-Phase | Title | Status | Primary Output | Commit SHA |
 | :--- | :--- | :--- | :--- | :--- |
-| **Phase 4.1** | Tenant-Scoped Brand & Branch Management | **Completed** | Brand & branch CRUD APIs, state transitions, concurrency tokens, ETags, RBAC | (Pending commit) |
-| **Phase 4.2** | Secure Tenant Branding & Theme Settings | **Completed** | Secure brand appearance, branch theme overrides, inheritance, RLS, CSS token mapping | (Pending commit) |
-| **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | (Pending commit) |
-| **Phase 4.4** | Operating Hours & Weekly Schedules | **Not Started** | Day-of-week operating hours, shift windows, holiday overrides | - |
+| **Phase 4.1** | Tenant-Scoped Brand & Branch Management | **Completed** | Brand & branch CRUD APIs, state transitions, concurrency tokens, ETags, RBAC | 95e0ee2 |
+| **Phase 4.2** | Secure Tenant Branding & Theme Settings | **Completed** | Secure brand appearance, branch theme overrides, inheritance, RLS, CSS token mapping | 95e0ee2 |
+| **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | 2f5f24c |
+| **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | 379e9d1 |
 | **Phase 4.5** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
 | **Phase 4.6** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
 | **Phase 4.7** | Branch Dining Areas & Station Definitions | **Not Started** | Physical areas (Terrace, Indoor), prep stations (Kitchen, Bar) | - |
@@ -112,11 +112,40 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
   - Backend integration tests updated (`RestaurantConfigBrandingIntegrationTests.cs`) covering navigation config JSON persistence, branch inheritance, and unknown ID rejection.
   - All 37 admin-web tests, 894 backend unit tests, and 7 branding integration tests passing.
 
-### Phase 4.4: Operating Hours & Weekly Schedules
-- [ ] Backend data models and migration for weekly operating hours.
-- [ ] Special holiday and temporary closure schedule overrides.
-- [ ] Active hours evaluation service (`IsOpenAt(DateTimeUtc)`).
-- [ ] Unit and integration tests for schedule calculations and timezone offsets.
+### Phase 4.4: Branch Operating Hours & Financial Configuration
+- [x] **Branch Financial & Operational Settings Domain Model:**
+  - `BranchSettings` aggregate root and `BranchSettingsId` strongly-typed identifier.
+  - `BasisPointsRate` value object: integer basis points (0-10,000 bps for tax, 0-5,000 bps for service charge; zero floating point precision issues).
+  - `SupportedLocales` value object: BCP-47 validation, uniqueness, default locale inclusion invariant.
+  - Full operational fields: Timezone, Currency, Default locale, Supported locales, Tax inclusion toggle, Default tax rate, Service charge toggle & rate, Order taking toggle, Display name, Contact phone, email, address, and concurrency token.
+- [x] **Weekly Operating Hours & Schedule Domain Model:**
+  - `BranchOperatingHours` aggregate root and `BranchOperatingHoursId`.
+  - `TimeSlot` value object: Wall-clock `TimeOnly` pairs, overnight interval detection (`CloseTime < OpenTime`), touching boundary support (`[08:00-14:00)` and `[14:00-22:00)`), intra-day and cross-day overnight spillover overlap detection.
+  - `OperatingDaySchedule` & `WeeklySchedule`: Exactly 7 days, closed days invariant (must contain zero slots), wall-clock preserved in branch timezone without permanent UTC destruction.
+- [x] **Database Schema, RLS & Tenant Isolation:**
+  - PostgreSQL tables: `branch_settings` and `branch_operating_hours` with composite foreign keys to `branches(tenant_id, id)`.
+  - PostgreSQL Row-Level Security (RLS) enabled and forced (`FORCE ROW LEVEL SECURITY`) with runtime isolation policies and least-privilege grants to `restaurant_app_runtime`.
+  - EF Core Global Query Filter on `RestaurantOrderDbContext` enforcing `t.TenantId == CurrentTenantId`.
+  - Additive, reversible migration: `20261002140000_AddBranchSettingsAndOperatingHours`.
+- [x] **RBAC & Authorization Matrix:**
+  - Canonical permissions: `branch.configuration.view` and `branch.configuration.manage`.
+  - Matrix: RestaurantAdmin can manage all branches within their tenant; BranchManager can manage only their assigned branch; other roles (Cashier, Kitchen, Bar, Waiter, Customer) have read-only access to normalized read models; SuperAdmin denied.
+- [x] **REST API Endpoints:**
+  - `GET /api/v1/restaurant-config/branches/{branchId}/settings`: Get effective settings with ETag.
+  - `PUT /api/v1/restaurant-config/branches/{branchId}/settings`: Update settings with concurrency validation and CSRF enforcement.
+  - `GET /api/v1/restaurant-config/branches/{branchId}/operating-hours`: Get operating hours with ETag.
+  - `PUT /api/v1/restaurant-config/branches/{branchId}/operating-hours`: Update weekly schedule with concurrency validation and CSRF enforcement.
+  - Append-only security audit log recording: `BranchSettingsUpdated`, `BranchOperatingHoursUpdated`.
+- [x] **Admin Web UI Components:**
+  - `BranchSettingsView` tabbed configuration container for `branch-settings` and `operating-hours` navigation routes.
+  - `BranchFinancialSettingsForm` and `BranchOperatingHoursForm` decomposed under 450 lines limit.
+  - Unsaved changes badge, 409 concurrency conflict alert with reload button, mobile BottomSheet summary.
+- [x] **Automated Tests:**
+  - 18 domain unit tests (`BranchSettingsAndOperatingHoursUnitTests.cs`).
+  - 290 permission matrix unit tests updated.
+  - 11 frontend unit tests in `admin-web` (`branch-settings.test.tsx`).
+  - 13 backend integration tests in `RestaurantConfigBranchSettingsIntegrationTests.cs` and `RestaurantConfigOperatingHoursIntegrationTests.cs`.
+  - All 928 backend unit tests, 48 admin-web tests, and 230 frontend unit tests passing.
 
 ### Phase 4.5: Service Charges, Gratuity & Default Tips
 - [ ] Branch service charge rate configuration entity and persistence.
@@ -144,14 +173,14 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 
 ---
 
-## 3. Verified Command Results (Phase 4.3)
+## 3. Verified Command Results (Phase 4.4)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
 | `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
-| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 894 / 894 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 37 / 37 passed across 3 test files (100%) |
-| `pnpm test:unit:frontend` | All Frontend Suites | **PASS** | 219 / 219 passed across UI, admin, ops, customer |
+| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 928 / 928 passed (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 48 / 48 passed across 4 test files (100%) |
+| `pnpm test:unit:frontend` | All Frontend Suites | **PASS** | 230 / 230 passed across UI, admin, ops, customer |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |

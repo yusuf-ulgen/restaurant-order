@@ -35,4 +35,6 @@ public static class SecurityAuditEventType
     public const string BrandThemeUpdated = "brand_theme_updated";
     public const string BranchThemeOverrideUpdated = "branch_theme_override_updated";
     public const string BranchThemeOverrideCleared = "branch_theme_override_cleared";
+    public const string BranchSettingsUpdated = "branch_settings_updated";
+    public const string BranchOperatingHoursUpdated = "branch_operating_hours_updated";
 }

@@ -19,6 +19,7 @@ import {
   NAVIGATION_REGISTRY,
 } from './navigation/navigationRegistry';
 import { BrandingSettingsView } from './settings/BrandingSettingsView';
+import { BranchSettingsView } from './settings/BranchSettingsView';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
@@ -217,6 +218,18 @@ export const AdminContent: React.FC<AdminAppProps> = ({
       ) : currentView === 'brand-settings' ? (
         <BrandingSettingsView
           onSaved={() => setCurrentView('dashboard')}
+          onCancel={() => setCurrentView('dashboard')}
+        />
+      ) : currentView === 'branch-settings' ? (
+        <BranchSettingsView
+          initialTab="financial"
+          onSaved={() => {}}
+          onCancel={() => setCurrentView('dashboard')}
+        />
+      ) : currentView === 'operating-hours' ? (
+        <BranchSettingsView
+          initialTab="hours"
+          onSaved={() => {}}
           onCancel={() => setCurrentView('dashboard')}
         />
       ) : currentView === 'dashboard' ? (
