@@ -79,7 +79,21 @@ Design tokens are declared centrally in `packages/ui/src/tokens/` and exported v
 
 ---
 
-## 5. Governance & Future Scope
+## 5. Dynamic Branding & Restaurant Configuration (Phase 4 Completed)
 
-1. **Static vs. Dynamic:** In Phase 1, all sidebar, header, and navigation definitions are statically typed configurations (`types.ts`). Storing and persisting these configurations in a database will be delivered in Phase 4 (Restaurant Configuration).
-2. **Role Authorization:** Sidebar item visibility is currently structural and does not constitute a security boundary. Role-based access control (RBAC) enforcement will be integrated in Phase 3.
+1. **Dynamic Theme Customization & Safe Token Injection:**
+   - Brand appearance and branch theme overrides inject validated tokens (`--ro-color-primary`, `--ro-radius-md`, etc.) directly into DOM `:root` or container styles.
+   - Strict CSS sanitization regex rules prohibit arbitrary CSS, URLs, `@import`, expressions, or HTML tags.
+   - When switching tenants or branches, previous tenant custom properties are reliably purged to prevent cross-tenant visual bleed.
+2. **Dynamic Admin Navigation Registry:**
+   - Brand managers configure enabled navigation items and labels via `NavigationConfigView`.
+   - The shell navigation validator rejects unregistered routes, arbitrary URLs, and scripts to prevent navigation hijacking.
+3. **Admin Configuration Views (`apps/admin-web`):**
+   - **`ThemeSettingsView`:** Brand appearance and branch theme customization with instant accessible contrast verification.
+   - **`NavigationConfigView`:** Reorderable, toggleable navigation items with safe route binding.
+   - **`BranchSettingsView`:** Financial settings, basis-point tax/service charge rates, currency, locales, and weekly operating hours schedule.
+   - **`DiningAreasView`:** Dining area zone management (Indoor, Terrace, Garden, BarArea, Other) with active/passive state toggles.
+   - **`PreparationStationsView`:** Preparation station management (Kitchen, Bar, Other) with branch-scoped unique code enforcement.
+   - **`FeatureFlagsView`:** Branch feature flags dashboard with granular toggle controls and RBAC precedence enforcement.
+4. **Fail-Safe Shell Defaults:**
+   - If a tenant configuration API call fails or times out, the application shell immediately falls back to safe default tokens and base navigation without breaking UI rendering.

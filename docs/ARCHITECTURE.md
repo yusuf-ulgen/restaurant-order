@@ -53,12 +53,13 @@
 ### 2.1. Bounded Context Modularity
 The system is partitioned into autonomous domain modules. Cross-module communication occurs via explicit service interfaces or domain events:
 1. **Identity & Access Management (IAM):** User auth, role assignment, branch context resolution.
-2. **Catalog & Menu:** Menu hierarchies, variant pricing, modifier rules, 86/stockout management.
-3. **Table & Floor Management:** Areas, tables, QR session tracking, table merges and transfers.
-4. **Order & Ticket Management:** Order lifecycle, ticket splitting, KDS state transitions.
-5. **Billing & Payments:** Bill generation, split payments, tips, platform commission ledger.
-6. **Hardware & Printing:** ESC/POS formatting, network socket dispatch, printer spooler and retry queue.
-7. **Multi-Tenant Administration:** Tenant onboarding, subscriptions, platform configuration.
+2. **Restaurant Configuration:** Brand appearance, navigation layout, branch theme overrides, branch financial/tax/service charge settings, operating hours schedules, dining areas, preparation stations, and branch feature flags.
+3. **Catalog & Menu:** Menu hierarchies, variant pricing, modifier rules, 86/stockout management.
+4. **Table & Floor Management:** Areas, tables, QR session tracking, table merges and transfers.
+5. **Order & Ticket Management:** Order lifecycle, ticket splitting, KDS state transitions.
+6. **Billing & Payments:** Bill generation, split payments, tips, platform commission ledger.
+7. **Hardware & Printing:** ESC/POS formatting, network socket dispatch, printer spooler and retry queue.
+8. **Multi-Tenant Administration:** Tenant onboarding, subscriptions, platform configuration.
 
 ### 2.2. Realtime Event Synchronization
 - The system requires sub-second order propagation from customer/waiter devices to KDS screens.

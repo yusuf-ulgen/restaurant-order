@@ -76,10 +76,14 @@ For every incoming request, the tenant context is resolved and propagated across
 ## 4. Leakage Prevention Guardrails
 
 1. **Mandatory Foreign Keys & Composite Constraints:**
-   - Child entities maintain an indexed `tenant_id` and `brand_id`.
+   - Child entities maintain an indexed `tenant_id` and `brand_id` / `branch_id`.
    - `branches` enforces a composite foreign key `(tenant_id, brand_id)` referencing `brands(tenant_id, id)` with `DeleteBehavior.Restrict` to physically prevent cross-tenant brand assignment.
+   - `brand_appearances` enforces `(tenant_id, brand_id)` referencing `brands(tenant_id, id)`.
+   - `branch_theme_overrides`, `branch_settings`, `branch_operating_hours`, `dining_areas`, `preparation_stations`, and `branch_feature_flags` all enforce `(tenant_id, branch_id)` composite foreign keys referencing `branches(tenant_id, id)` with `DeleteBehavior.Restrict` / `Cascade`.
+   - `dining_areas` enforces branch-scoped unique code: `(tenant_id, branch_id, code)`.
+   - `preparation_stations` enforces branch-scoped unique code: `(tenant_id, branch_id, code)`.
 2. **Database-Level Row-Level Security (RLS):**
-   - RLS is enabled and forced (`FORCE ROW LEVEL SECURITY`) on `tenancy.tenants`, `tenancy.brands`, and `tenancy.branches`.
+   - RLS is enabled and forced (`FORCE ROW LEVEL SECURITY`) across all tenancy and configuration tables: `tenancy.tenants`, `tenancy.brands`, `tenancy.branches`, `tenancy.brand_appearances`, `tenancy.branch_theme_overrides`, `tenancy.branch_settings`, `tenancy.branch_operating_hours`, `tenancy.dining_areas`, `tenancy.preparation_stations`, and `tenancy.branch_feature_flags`.
    - Access is evaluated via `tenancy.get_current_tenant_id()`. If the session setting is missing, empty, or invalid, it returns `NULL`, causing queries to fail-closed (0 rows returned; inserts/updates rejected).
 3. **Dedicated Database Roles:**
    - **Schema Owner / Migrator:** Owns schema DDL, manages migrations, and defines RLS policies.

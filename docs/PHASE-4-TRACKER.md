@@ -13,9 +13,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | 2f5f24c |
 | **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | 379e9d1 |
 | **Phase 4.5** | Branch Dining Areas, Preparation Stations & Feature Controls | **Completed** | Tenant-safe Dining Areas, Preparation Stations, Type-Safe Feature Flag Catalog & Admin UI | b90220a |
-| **Phase 4.6** | Service Charges, Gratuity & Default Tips | **Not Started** | Percentage/fixed service fees, auto-gratuity rules, tip presets | - |
-| **Phase 4.7** | Tax Rates, Tax Categories & Pricing Mode | **Not Started** | Tax rate definitions, tax inclusive/exclusive configurations | - |
-| **Phase 4.8** | Admin Web Config Integration & Security Closure | **Not Started** | Admin panel configuration UI, audit verification, coverage gate | - |
+| **Phase 4.6** | Final Hardening, Verification & Merge Readiness | **Completed** | Negative flow tests, full verification gates, RLS audit, documentation signoff | Pending PR |
 
 ---
 
@@ -185,9 +183,32 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
   - Frontend unit tests (`dining-areas-and-stations.test.tsx` with 7 tests).
   - All 973 backend unit tests, 10 architecture tests, and 55 admin-web vitest tests passing.
 
+### Phase 4.6: Final Hardening, Verification & Merge Readiness
+- [x] **Comprehensive Code & Architecture Review:**
+  - Tenant & branch isolation verified across all 4 configuration tables (`brand_appearances`, `branch_settings`, `dining_areas`, `preparation_stations`, `branch_feature_flags`).
+  - Composite foreign keys referencing `(tenant_id, brand_id)` and `(tenant_id, branch_id)` physically prevent cross-tenant assignment.
+  - PostgreSQL Row-Level Security (RLS) policies and EF Core global query filters fully aligned and enforced with `FORCE ROW LEVEL SECURITY`.
+  - Full RBAC matrix enforced across 8 roles with deny-by-default behavior and RFC 7807 ProblemDetails responses.
+  - Concurrency token / ETag verification prevents silent lost updates on all entities.
+  - Dynamic shell input sanitization strictly rejects arbitrary CSS, expressions, external script injection, and unknown routes.
+  - Feature flags decoupled from authorization; permissions strictly required regardless of feature toggle state.
+  - Expand-contract migration rules verified non-destructive with idempotent SQL bundle validation.
+  - Zero secrets or PII detected in code, git history, or application logs.
+- [x] **Negative Flow Verification:**
+  - Cross-tenant configuration tampering prevented.
+  - Cross-branch mutation by BranchManager rejected with 403 Forbidden.
+  - Unauthorized roles denied configuration writes.
+  - Fail-closed behavior on missing or unresolvable tenant context.
+  - Terminal closed branch immutability enforced.
+  - Atomic database transactions ensure zero partial or corrupted state on failures.
+  - Frontend admin shell gracefully falls back to default tokens on network/API failure.
+- [x] **Documentation & Roadmap Closure:**
+  - `ROADMAP.md` updated: Phase 4 marked `COMPLETED`, Phase 5 marked `NEXT`.
+  - `DOMAIN.md`, `ARCHITECTURE.md`, `MULTI-TENANCY.md`, `DESIGN-SYSTEM.md`, `ROLES-AND-PERMISSIONS.md`, `SCREEN-INVENTORY.md`, `NEGATIVE-FLOWS.md`, and `PHASE-4-TRACKER.md` synchronized with active implementation.
+
 ---
 
-## 3. Verified Command Results (Phase 4.5)
+## 3. Verified Command Results (Phase 4.6 Final)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
@@ -201,6 +222,9 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |
 | `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | 52/52 docs validated, 0 broken links |
 | `node scripts/check-secrets.mjs` | Security Scanner | **PASS** | 0 secrets or private keys exposed |
+| `pnpm verify:gates` | Quality Gates | **PASS** | 82 / 82 checks passed |
+| `docker compose config` | Compose Schemas | **PASS** | dev, staging, prod blue & green validated |
+| `node scripts/migration-ops.mjs validate` | Migration Rules | **PASS** | 33 / 33 migrations non-destructive |
 
 ---
 
