@@ -25,8 +25,12 @@ public sealed record UpdateDiningAreaCommand(
     string AreaType,
     Guid? ConcurrencyToken = null);
 
+public sealed record ReorderItemCommand(
+    Guid Id,
+    Guid? ConcurrencyToken = null);
+
 public sealed record ReorderDiningAreasCommand(
-    IReadOnlyList<Guid> OrderedAreaIds);
+    IReadOnlyList<ReorderItemCommand> Items);
 
 // Preparation Station DTOs
 public sealed record PreparationStationDto(
@@ -54,7 +58,7 @@ public sealed record UpdatePreparationStationCommand(
     Guid? ConcurrencyToken = null);
 
 public sealed record ReorderPreparationStationsCommand(
-    IReadOnlyList<Guid> OrderedStationIds);
+    IReadOnlyList<ReorderItemCommand> Items);
 
 public sealed record StationRuntimeDto(
     Guid Id,

@@ -5,6 +5,7 @@ using RestaurantOrder.Api.Tenancy;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
+using RestaurantOrder.Domain.Common;
 
 namespace RestaurantOrder.Api.RestaurantConfig;
 
@@ -40,7 +41,8 @@ public static partial class RestaurantConfigEndpoints
         MapBranchEndpoints(root);
         MapBrandingEndpoints(root);
         MapBranchSettingsEndpoints(root);
-        MapDiningAreasAndStationsEndpoints(root);
+        MapDiningAreasEndpoints(root);
+        MapPreparationStationsEndpoints(root);
         MapFeatureFlagsEndpoints(root);
 
         return app;
@@ -89,4 +91,17 @@ public static partial class RestaurantConfigEndpoints
             ? Results.Created($"/api/v1/restaurant-config/branches/{branch.Id}", branch)
             : Results.Ok(branch);
     }
+
+    internal static IResult HandleException(Exception ex) => ex switch
+    {
+        ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404"),
+        DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409"),
+        DuplicateSlugException dse => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dse.Message, type: "https://httpstatuses.com/409"),
+        ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409"),
+        ConcurrencyPreconditionException cpe => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: cpe.Message, type: "https://httpstatuses.com/412"),
+        InvalidAuthorizationScopeException iase => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: iase.Message, type: "https://httpstatuses.com/403"),
+        DomainException de => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: de.Message, type: "https://httpstatuses.com/400"),
+        ArgumentException ae => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ae.Message, type: "https://httpstatuses.com/400"),
+        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: ex.Message, type: "https://httpstatuses.com/500")
+    };
 }

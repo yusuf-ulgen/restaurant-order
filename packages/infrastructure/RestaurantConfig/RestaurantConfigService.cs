@@ -90,7 +90,12 @@ public partial class RestaurantConfigService : IRestaurantConfigService
 
     private static void VerifyConcurrencyToken(Guid expectedToken, Guid? providedToken)
     {
-        if (providedToken.HasValue && providedToken.Value != Guid.Empty && providedToken.Value != expectedToken)
+        if (!providedToken.HasValue || providedToken.Value == Guid.Empty)
+        {
+            throw new ConcurrencyPreconditionException("Concurrency token is required.");
+        }
+
+        if (providedToken.Value != expectedToken)
         {
             throw new ConcurrencyConflictException(
                 $"Stale concurrency token. Provided '{providedToken.Value}', but current token is '{expectedToken}'.");

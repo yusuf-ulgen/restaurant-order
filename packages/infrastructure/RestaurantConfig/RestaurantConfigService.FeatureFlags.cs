@@ -21,6 +21,9 @@ public partial class RestaurantConfigService
     {
         EnsureTenantAccess(tenantId, actor);
 
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+            ?? throw new ResourceNotFoundException($"Tenant '{tenantId.Value}' was not found.");
+
         var tenantFlags = await _dbContext.TenantFeatureFlags
             .FirstOrDefaultAsync(tf => tf.TenantId == tenantId, ct);
 
@@ -34,7 +37,7 @@ public partial class RestaurantConfigService
         return new TenantFeatureFlagsDto(
             tenantId.Value,
             items,
-            tenantFlags?.ConcurrencyToken ?? Guid.Empty,
+            tenantFlags?.ConcurrencyToken ?? tenant.ConcurrencyToken,
             tenantFlags?.UpdatedAtUtc);
     }
 
@@ -50,11 +53,15 @@ public partial class RestaurantConfigService
             throw new InvalidAuthorizationScopeException("Only RestaurantAdmin can modify tenant-wide feature flag defaults.");
         }
 
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+            ?? throw new ResourceNotFoundException($"Tenant '{tenantId.Value}' was not found.");
+
         var tenantFlags = await _dbContext.TenantFeatureFlags
             .FirstOrDefaultAsync(tf => tf.TenantId == tenantId, ct);
 
         if (tenantFlags == null)
         {
+            VerifyConcurrencyToken(tenant.ConcurrencyToken, command.ConcurrencyToken);
             tenantFlags = TenantFeatureFlags.Create(tenantId, command.Flags.ToDictionary(k => k.Key, v => v.Value));
             _dbContext.TenantFeatureFlags.Add(tenantFlags);
         }
@@ -77,7 +84,7 @@ public partial class RestaurantConfigService
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
-        EnsureBranchAccess(tenantId, branchId, actor);
+        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
         var branchFlags = await _dbContext.BranchFeatureFlags
             .FirstOrDefaultAsync(bf => bf.TenantId == tenantId && bf.BranchId == branchId, ct);
@@ -93,7 +100,7 @@ public partial class RestaurantConfigService
             tenantId.Value,
             branchId.Value,
             items,
-            branchFlags?.ConcurrencyToken ?? Guid.Empty,
+            branchFlags?.ConcurrencyToken ?? branch.ConcurrencyToken,
             branchFlags?.UpdatedAtUtc);
     }
 
@@ -112,6 +119,7 @@ public partial class RestaurantConfigService
 
         if (branchFlags == null)
         {
+            VerifyConcurrencyToken(branch.ConcurrencyToken, command.ConcurrencyToken);
             branchFlags = BranchFeatureFlags.Create(tenantId, branchId, command.Flags.ToDictionary(k => k.Key, v => v.Value));
             _dbContext.BranchFeatureFlags.Add(branchFlags);
         }
@@ -131,6 +139,7 @@ public partial class RestaurantConfigService
     public async Task<EffectiveFeatureFlagsDto> ClearBranchFeatureFlagsOverrideAsync(
         TenantId tenantId,
         BranchId branchId,
+        Guid concurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
@@ -142,9 +151,14 @@ public partial class RestaurantConfigService
 
         if (branchFlags != null)
         {
+            VerifyConcurrencyToken(branchFlags.ConcurrencyToken, concurrencyToken);
             _dbContext.BranchFeatureFlags.Remove(branchFlags);
             AddAuditEvent(tenantId, SecurityAuditEventType.BranchFeatureFlagsCleared, actor, branchId, new { });
             await _dbContext.SaveChangesAsync(ct);
+        }
+        else
+        {
+            VerifyConcurrencyToken(branch.ConcurrencyToken, concurrencyToken);
         }
 
         return await GetEffectiveFeatureFlagsAsync(tenantId, branchId, actor, ct);

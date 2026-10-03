@@ -92,8 +92,17 @@ export interface UpdateDiningAreaRequest {
   concurrencyToken?: string | null;
 }
 
+export interface DiningAreaStateRequest {
+  concurrencyToken?: string | null;
+}
+
+export interface ReorderItemRequest {
+  id: string;
+  concurrencyToken?: string | null;
+}
+
 export interface ReorderDiningAreasRequest {
-  orderedAreaIds: string[];
+  items: ReorderItemRequest[];
 }
 
 export type PreparationStationType = 'Kitchen' | 'Bar' | 'Other';
@@ -133,8 +142,16 @@ export interface UpdatePreparationStationRequest {
   concurrencyToken?: string | null;
 }
 
+export interface PreparationStationStateRequest {
+  concurrencyToken?: string | null;
+}
+
 export interface ReorderPreparationStationsRequest {
-  orderedStationIds: string[];
+  items: ReorderItemRequest[];
+}
+
+export interface ClearBranchFeatureOverrideRequest {
+  concurrencyToken?: string | null;
 }
 
 export type FeatureFlagKey =

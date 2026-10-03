@@ -12,6 +12,9 @@ public sealed record UpdateFeatureFlagsApiRequest(
     Dictionary<string, bool> Flags,
     Guid? ConcurrencyToken = null);
 
+public sealed record ClearBranchFeatureOverrideApiRequest(
+    Guid? ConcurrencyToken = null);
+
 public static partial class RestaurantConfigEndpoints
 {
     private static void MapFeatureFlagsEndpoints(RouteGroupBuilder root)
@@ -20,7 +23,7 @@ public static partial class RestaurantConfigEndpoints
         // Tenant Feature Flag Defaults
         // ==========================================
 
-        var tenantFeaturesGroup = root.MapGroup("/features/tenant");
+        var tenantFeaturesGroup = root.MapGroup("/tenant/features");
 
         tenantFeaturesGroup.MapGet("/", async (
             ITenantContext tenantContext,
@@ -154,17 +157,34 @@ public static partial class RestaurantConfigEndpoints
 
         branchFeaturesGroup.MapDelete("/override", async (
             Guid branchId,
+            HttpContext httpContext,
             ITenantContext tenantContext,
             IRestaurantConfigService service,
-            HttpContext httpContext,
             IJwtClaimPrincipalParser parser,
             CancellationToken ct) =>
         {
+            Guid? bodyToken = null;
+            if (httpContext.Request.HasJsonContentType())
+            {
+                try
+                {
+                    var req = await httpContext.Request.ReadFromJsonAsync<ClearBranchFeatureOverrideApiRequest>(cancellationToken: ct);
+                    bodyToken = req?.ConcurrencyToken;
+                }
+                catch { }
+            }
+
+            var token = ExtractConcurrencyToken(bodyToken, httpContext.Request);
+            if (token == null)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: "Concurrency token or If-Match header is required.", type: "https://httpstatuses.com/412");
+            }
+
             try
             {
                 var actor = GetActor(httpContext, parser);
                 var tenantId = new TenantId(tenantContext.TenantId!.Value);
-                var result = await service.ClearBranchFeatureFlagsOverrideAsync(tenantId, new BranchId(branchId), actor, ct);
+                var result = await service.ClearBranchFeatureFlagsOverrideAsync(tenantId, new BranchId(branchId), token.Value, actor, ct);
                 return Results.Ok(result);
             }
             catch (Exception ex)

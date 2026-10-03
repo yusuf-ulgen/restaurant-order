@@ -175,6 +175,9 @@ export const DiningAreasView: React.FC<DiningAreasViewProps> = ({ onCancel }) =>
         `/api/v1/restaurant-config/branches/${selectedBranchId}/dining-areas/${area.id}/${action}`,
         {
           method: 'POST',
+          headers: {
+            'If-Match': `"${area.concurrencyToken}"`,
+          },
           body: JSON.stringify({ concurrencyToken: area.concurrencyToken }),
         }
       );
@@ -206,7 +209,10 @@ export const DiningAreasView: React.FC<DiningAreasViewProps> = ({ onCancel }) =>
         `/api/v1/restaurant-config/branches/${selectedBranchId}/dining-areas/reorder`,
         {
           method: 'POST',
-          body: JSON.stringify({ orderedAreaIds: reordered.map((a) => a.id) }),
+          body: JSON.stringify({
+            items: reordered.map((a) => ({ id: a.id, concurrencyToken: a.concurrencyToken })),
+            orderedAreaIds: reordered.map((a) => a.id),
+          }),
         }
       );
       if (!res.ok) {

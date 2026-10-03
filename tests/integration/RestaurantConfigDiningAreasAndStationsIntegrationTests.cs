@@ -240,12 +240,21 @@ public class RestaurantConfigDiningAreasAndStationsIntegrationTests : IClassFixt
         Assert.True(eff2.EvaluatedFlags["Tips"]);
 
         // 4. Set branch override for Tips = false
+        var branchGetReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/restaurant-config/branches/{branchId}/features/override", adminToken);
+        var branchGetResp = await client.SendAsync(branchGetReq);
+        var branchCurrent = await branchGetResp.Content.ReadFromJsonAsync<BranchFeatureFlagsDto>(JsonOptions);
+        Assert.NotNull(branchCurrent);
+
         var branchUpdateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Put, $"/api/v1/restaurant-config/branches/{branchId}/features/override", adminToken);
         branchUpdateReq.Content = JsonContent.Create(new UpdateFeatureFlagsApiRequest(
-            new Dictionary<string, bool> { ["Tips"] = false }));
+            new Dictionary<string, bool> { ["Tips"] = false },
+            branchCurrent.ConcurrencyToken));
         var branchUpdateResp = await client.SendAsync(branchUpdateReq);
         Assert.Equal(HttpStatusCode.OK, branchUpdateResp.StatusCode);
+        var branchUpdated = await branchUpdateResp.Content.ReadFromJsonAsync<BranchFeatureFlagsDto>(JsonOptions);
+        Assert.NotNull(branchUpdated);
 
         // 5. Effective should now be false due to branch override
         var effReq3 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
@@ -258,6 +267,7 @@ public class RestaurantConfigDiningAreasAndStationsIntegrationTests : IClassFixt
         // 6. Clear branch override
         var clearReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Delete, $"/api/v1/restaurant-config/branches/{branchId}/features/override", adminToken);
+        clearReq.Headers.TryAddWithoutValidation("If-Match", $"\"{branchUpdated.ConcurrencyToken}\"");
         var clearResp = await client.SendAsync(clearReq);
         Assert.Equal(HttpStatusCode.OK, clearResp.StatusCode);
 

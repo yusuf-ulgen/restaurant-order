@@ -173,6 +173,9 @@ export const PreparationStationsView: React.FC<PreparationStationsViewProps> = (
         `/api/v1/restaurant-config/branches/${selectedBranchId}/stations/${station.id}/${action}`,
         {
           method: 'POST',
+          headers: {
+            'If-Match': `"${station.concurrencyToken}"`,
+          },
           body: JSON.stringify({ concurrencyToken: station.concurrencyToken }),
         }
       );
@@ -204,7 +207,10 @@ export const PreparationStationsView: React.FC<PreparationStationsViewProps> = (
         `/api/v1/restaurant-config/branches/${selectedBranchId}/stations/reorder`,
         {
           method: 'POST',
-          body: JSON.stringify({ orderedStationIds: reordered.map((s) => s.id) }),
+          body: JSON.stringify({
+            items: reordered.map((s) => ({ id: s.id, concurrencyToken: s.concurrencyToken })),
+            orderedStationIds: reordered.map((s) => s.id),
+          }),
         }
       );
       if (!res.ok) {

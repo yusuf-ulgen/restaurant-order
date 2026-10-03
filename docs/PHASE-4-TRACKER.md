@@ -8,12 +8,12 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 
 | Sub-Phase | Title | Status | Primary Output | Commit SHA |
 | :--- | :--- | :--- | :--- | :--- |
-| **Phase 4.1** | Tenant-Scoped Brand & Branch Management | **Completed** | Brand & branch CRUD APIs, state transitions, concurrency tokens, ETags, RBAC | 95e0ee2 |
+| **Phase 4.1** | Tenant-Scoped Brand & Branch Management | **Completed** | Brand & branch CRUD APIs, state transitions, concurrency tokens, ETags, RBAC | 5547926 |
 | **Phase 4.2** | Secure Tenant Branding & Theme Settings | **Completed** | Secure brand appearance, branch theme overrides, inheritance, RLS, CSS token mapping | 95e0ee2 |
 | **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | 2f5f24c |
-| **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | 379e9d1 |
-| **Phase 4.5** | Branch Dining Areas, Preparation Stations & Feature Controls | **Completed** | Tenant-safe Dining Areas, Preparation Stations, Type-Safe Feature Flag Catalog & Admin UI | b90220a |
-| **Phase 4.6** | Final Hardening, Verification & Merge Readiness | **Completed** | Negative flow tests, full verification gates, RLS audit, documentation signoff | Pending PR |
+| **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | ad99ec3 |
+| **Phase 4.5** | Branch Dining Areas, Preparation Stations & Feature Controls | **Completed** | Tenant-safe Dining Areas, Preparation Stations, Type-Safe Feature Flag Catalog & Admin UI | 7a1e45f |
+| **Phase 4.6** | Final Hardening, Verification & Merge Readiness | **Completed** | Concurrency lifecycle hardening, migration bundle, negative flow tests, CI closure | 88b3e03 + Final Fix |
 
 ---
 
@@ -169,30 +169,30 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 - [x] **REST API Endpoints:**
   - Dining Areas: List, Create, Update, Reorder, Activate, Deactivate (`/api/v1/restaurant-config/branches/{branchId}/dining-areas`).
   - Preparation Stations: List, Create, Update, Reorder, Activate, Deactivate, and Kitchen/Bar runtime read model (`/stations/runtime`).
-  - Feature Flags: Tenant defaults (`GET/PUT /tenant/features`), Branch overrides (`GET/PUT/DELETE /branches/{branchId}/features/override`), Effective (`GET /branches/{branchId}/features/effective`).
+  - Feature Flags: Tenant defaults (`GET/PUT /api/v1/restaurant-config/tenant/features`), Branch overrides (`GET/PUT/DELETE /api/v1/restaurant-config/branches/{branchId}/features/override`), Effective (`GET /api/v1/restaurant-config/branches/{branchId}/features/effective`).
   - Append-only security audit log recording for all mutations.
 - [x] **Admin Web UI Screens:**
-  - `DiningAreasView.tsx` with list, add, edit, reorder, activate/deactivate, and mobile `BottomSheet`.
-  - `PreparationStationsView.tsx` with list, add, edit, reorder, activate/deactivate, and mobile `BottomSheet`.
-  - `FeatureFlagsView.tsx` with Effective Flags, Branch Overrides, and Tenant Defaults tabs with mobile `BottomSheet`.
+  - `DiningAreasView.tsx` with list, add, edit, reorder with version/token verification, activate/deactivate, and mobile `BottomSheet`.
+  - `PreparationStationsView.tsx` with list, add, edit, reorder with version/token verification, activate/deactivate, and mobile `BottomSheet`.
+  - `FeatureFlagsView.tsx` with Effective Flags, Branch Overrides, and Tenant Defaults (RestaurantAdmin-only) tabs with mobile `BottomSheet`.
   - Navigation registry updated (`dining-areas`, `preparation-stations`, `feature-settings` enabled for RestaurantAdmin & BranchManager).
 - [x] **Automated Tests:**
   - Domain unit tests (`DiningAreasAndStationsUnitTests.cs`).
   - RBAC permission matrix unit tests updated (`RestaurantConfigRbacMatrixUnitTests.cs`).
-  - Integration tests (`RestaurantConfigDiningAreasAndStationsIntegrationTests.cs`).
-  - Frontend unit tests (`dining-areas-and-stations.test.tsx` with 7 tests).
-  - All 973 backend unit tests, 10 architecture tests, and 55 admin-web vitest tests passing.
+  - Integration tests (`RestaurantConfigDiningAreasAndStationsIntegrationTests.cs` and `RestaurantConfigConcurrencyIntegrationTests.cs`).
+  - Frontend unit tests (`dining-areas-and-stations.test.tsx` with 10 tests).
+  - All 973 backend unit tests, 10 architecture tests, and 58 admin-web vitest tests (240 total frontend tests) passing.
 
 ### Phase 4.6: Final Hardening, Verification & Merge Readiness
 - [x] **Comprehensive Code & Architecture Review:**
-  - Tenant & branch isolation verified across all 4 configuration tables (`brand_appearances`, `branch_settings`, `dining_areas`, `preparation_stations`, `branch_feature_flags`).
+  - Tenant & branch isolation verified across all configuration tables (`brand_appearances`, `branch_settings`, `dining_areas`, `preparation_stations`, `branch_feature_flags`).
   - Composite foreign keys referencing `(tenant_id, brand_id)` and `(tenant_id, branch_id)` physically prevent cross-tenant assignment.
   - PostgreSQL Row-Level Security (RLS) policies and EF Core global query filters fully aligned and enforced with `FORCE ROW LEVEL SECURITY`.
   - Full RBAC matrix enforced across 8 roles with deny-by-default behavior and RFC 7807 ProblemDetails responses.
-  - Concurrency token / ETag verification prevents silent lost updates on all entities.
+  - Concurrency token / ETag verification prevents silent lost updates on all entities (initial create validates parent token; subsequent updates validate aggregate token; missing token yields 412, stale yields 409).
   - Dynamic shell input sanitization strictly rejects arbitrary CSS, expressions, external script injection, and unknown routes.
   - Feature flags decoupled from authorization; permissions strictly required regardless of feature toggle state.
-  - Expand-contract migration rules verified non-destructive with idempotent SQL bundle validation.
+  - Expand-contract migration rules verified non-destructive with idempotent SQL bundle validation (`deploy/migrations/latest_bundle.sql`).
   - Zero secrets or PII detected in code, git history, or application logs.
 - [x] **Negative Flow Verification:**
   - Cross-tenant configuration tampering prevented.
@@ -215,26 +215,26 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
 | `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 973 / 973 passed (100%) |
 | `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 55 / 55 passed across 5 test files (100%) |
-| `pnpm test` | All Test Suites | **PASS** | Backend + 4 frontend suites (100% green) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 58 / 58 passed across 5 test files (100%) |
+| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 240 / 240 tests passed across packages/ui and 3 web apps (100%) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |
 | `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | 52/52 docs validated, 0 broken links |
 | `node scripts/check-secrets.mjs` | Security Scanner | **PASS** | 0 secrets or private keys exposed |
 | `pnpm verify:gates` | Quality Gates | **PASS** | 82 / 82 checks passed |
-| `docker compose config` | Compose Schemas | **PASS** | dev, staging, prod blue & green validated |
-| `node scripts/migration-ops.mjs validate` | Migration Rules | **PASS** | 33 / 33 migrations non-destructive |
+| `node scripts/migration-ops.mjs validate` | Migration Rules | **PASS** | 34 / 34 migrations non-destructive |
+| `node scripts/migration-ops.mjs script` | Migration Bundle | **PASS** | `deploy/migrations/latest_bundle.sql` generated |
 
 ---
 
 ## 4. Known Risks & Mitigations
 
-1. **Risk:** BranchManager attempting to modify branch settings in multi-branch organizations.  
+1. **Risk:** BranchManager attempting to modify branch settings in multi-branch organizations.
    **Mitigation:** `tenant.branches.manage` is granted strictly to `RestaurantAdmin`. BranchManager is denied this capability and endpoints reject unauthorized callers with RFC 7807 `403 Forbidden`.
-2. **Risk:** Accidental modification of permanently closed branches.  
+2. **Risk:** Accidental modification of permanently closed branches.
    **Mitigation:** Domain invariant in `Branch.EnsureNotClosed()` enforces immutability on terminal `Closed` status, verified by unit and integration tests.
-3. **Risk:** Stale updates overwriting concurrent administrative edits.  
+3. **Risk:** Stale updates overwriting concurrent administrative edits.
    **Mitigation:** Optimistic concurrency tokens checked on every mutation. Missing token yields `412 Precondition Failed`; mismatched token yields `409 Conflict`.
 4. **Risk:** Malicious or malformed CSS/HTML injection via branding fields.
    **Mitigation:** Controlled design tokens only (hex colors strictly validated via `ColorHex`; URLs strictly validated via `AssetUrl`; text stripped of HTML tags via domain value objects). No arbitrary CSS or HTML/JS accepted or rendered.

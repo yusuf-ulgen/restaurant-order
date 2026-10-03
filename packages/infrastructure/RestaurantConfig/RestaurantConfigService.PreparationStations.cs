@@ -11,170 +11,6 @@ namespace RestaurantOrder.Infrastructure.RestaurantConfig;
 public partial class RestaurantConfigService
 {
     // ==========================================
-    // Dining Areas Operations
-    // ==========================================
-
-    public async Task<IReadOnlyList<DiningAreaDto>> ListDiningAreasAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        EnsureBranchAccess(tenantId, branchId, actor);
-
-        var areas = await _dbContext.DiningAreas
-            .Where(da => da.TenantId == tenantId && da.BranchId == branchId)
-            .OrderBy(da => da.SortOrder)
-            .ThenBy(da => da.Name)
-            .ToListAsync(ct);
-
-        return areas.Select(MapDiningArea).ToList();
-    }
-
-    public async Task<DiningAreaDto> CreateDiningAreaAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        CreateDiningAreaCommand command,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
-        branch.EnsureNotClosed();
-
-        var normalizedCode = command.Code?.Trim().ToLowerInvariant() ?? string.Empty;
-        var codeExists = await _dbContext.DiningAreas
-            .AnyAsync(da => da.TenantId == tenantId && da.BranchId == branchId && da.Code == normalizedCode, ct);
-
-        if (codeExists)
-        {
-            throw new DuplicateCodeException($"A dining area with code '{normalizedCode}' already exists in this branch.");
-        }
-
-        if (!Enum.TryParse<DiningAreaType>(command.AreaType, true, out var areaType))
-        {
-            throw new DomainException($"Invalid dining area type '{command.AreaType}'.");
-        }
-
-        var area = DiningArea.Create(
-            tenantId,
-            branchId,
-            command.Name,
-            command.Code ?? string.Empty,
-            areaType,
-            command.SortOrder);
-
-        _dbContext.DiningAreas.Add(area);
-        AddAuditEvent(tenantId, SecurityAuditEventType.DiningAreaCreated, actor, branchId,
-            new { AreaId = area.Id.Value, area.Name, area.Code, AreaType = areaType.ToString() });
-
-        await _dbContext.SaveChangesAsync(ct);
-        return MapDiningArea(area);
-    }
-
-    public async Task<DiningAreaDto> UpdateDiningAreaAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        DiningAreaId areaId,
-        UpdateDiningAreaCommand command,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
-        branch.EnsureNotClosed();
-
-        var area = await _dbContext.DiningAreas
-            .FirstOrDefaultAsync(da => da.TenantId == tenantId && da.BranchId == branchId && da.Id == areaId, ct)
-            ?? throw new ResourceNotFoundException($"Dining area '{areaId.Value}' was not found.");
-
-        VerifyConcurrencyToken(area.ConcurrencyToken, command.ConcurrencyToken);
-
-        if (!Enum.TryParse<DiningAreaType>(command.AreaType, true, out var areaType))
-        {
-            throw new DomainException($"Invalid dining area type '{command.AreaType}'.");
-        }
-
-        area.Update(command.Name, areaType);
-        AddAuditEvent(tenantId, SecurityAuditEventType.DiningAreaUpdated, actor, branchId,
-            new { AreaId = area.Id.Value, area.Name, AreaType = areaType.ToString() });
-
-        await _dbContext.SaveChangesAsync(ct);
-        return MapDiningArea(area);
-    }
-
-    public async Task<IReadOnlyList<DiningAreaDto>> ReorderDiningAreasAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        ReorderDiningAreasCommand command,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
-        branch.EnsureNotClosed();
-
-        var areas = await _dbContext.DiningAreas
-            .Where(da => da.TenantId == tenantId && da.BranchId == branchId)
-            .ToListAsync(ct);
-
-        for (var i = 0; i < command.OrderedAreaIds.Count; i++)
-        {
-            var areaId = command.OrderedAreaIds[i];
-            var area = areas.FirstOrDefault(a => a.Id.Value == areaId);
-            if (area != null)
-            {
-                area.SetSortOrder(i);
-            }
-        }
-
-        AddAuditEvent(tenantId, SecurityAuditEventType.DiningAreasReordered, actor, branchId,
-            new { OrderedCount = command.OrderedAreaIds.Count });
-
-        await _dbContext.SaveChangesAsync(ct);
-        return areas.OrderBy(a => a.SortOrder).Select(MapDiningArea).ToList();
-    }
-
-    public async Task<DiningAreaDto> ActivateDiningAreaAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        DiningAreaId areaId,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
-        branch.EnsureNotClosed();
-
-        var area = await _dbContext.DiningAreas
-            .FirstOrDefaultAsync(da => da.TenantId == tenantId && da.BranchId == branchId && da.Id == areaId, ct)
-            ?? throw new ResourceNotFoundException($"Dining area '{areaId.Value}' was not found.");
-
-        area.Activate();
-        AddAuditEvent(tenantId, SecurityAuditEventType.DiningAreaActivated, actor, branchId, new { AreaId = area.Id.Value });
-
-        await _dbContext.SaveChangesAsync(ct);
-        return MapDiningArea(area);
-    }
-
-    public async Task<DiningAreaDto> DeactivateDiningAreaAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        DiningAreaId areaId,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
-        branch.EnsureNotClosed();
-
-        var area = await _dbContext.DiningAreas
-            .FirstOrDefaultAsync(da => da.TenantId == tenantId && da.BranchId == branchId && da.Id == areaId, ct)
-            ?? throw new ResourceNotFoundException($"Dining area '{areaId.Value}' was not found.");
-
-        area.Deactivate();
-        AddAuditEvent(tenantId, SecurityAuditEventType.DiningAreaDeactivated, actor, branchId, new { AreaId = area.Id.Value });
-
-        await _dbContext.SaveChangesAsync(ct);
-        return MapDiningArea(area);
-    }
-
-    // ==========================================
     // Preparation Stations Operations
     // ==========================================
 
@@ -317,18 +153,36 @@ public partial class RestaurantConfigService
             .Where(ps => ps.TenantId == tenantId && ps.BranchId == branchId)
             .ToListAsync(ct);
 
-        for (var i = 0; i < command.OrderedStationIds.Count; i++)
+        if (command.Items == null || command.Items.Count != stations.Count)
         {
-            var stationId = command.OrderedStationIds[i];
-            var station = stations.FirstOrDefault(s => s.Id.Value == stationId);
-            if (station != null)
+            throw new DomainException($"Reorder list must contain all {stations.Count} preparation stations for this branch.");
+        }
+
+        var stationMap = stations.ToDictionary(s => s.Id.Value);
+        var seenIds = new HashSet<Guid>();
+        foreach (var item in command.Items)
+        {
+            if (!seenIds.Add(item.Id))
             {
-                station.SetSortOrder(i);
+                throw new DomainException($"Duplicate preparation station ID '{item.Id}' in reorder list.");
             }
+
+            if (!stationMap.TryGetValue(item.Id, out var station))
+            {
+                throw new DomainException($"Preparation station '{item.Id}' does not belong to this branch.");
+            }
+
+            VerifyConcurrencyToken(station.ConcurrencyToken, item.ConcurrencyToken);
+        }
+
+        for (var i = 0; i < command.Items.Count; i++)
+        {
+            var station = stationMap[command.Items[i].Id];
+            station.SetSortOrder(i);
         }
 
         AddAuditEvent(tenantId, SecurityAuditEventType.PreparationStationsReordered, actor, branchId,
-            new { OrderedCount = command.OrderedStationIds.Count });
+            new { OrderedCount = command.Items.Count });
 
         await _dbContext.SaveChangesAsync(ct);
         return stations.OrderBy(s => s.SortOrder).Select(MapPreparationStation).ToList();
@@ -338,6 +192,7 @@ public partial class RestaurantConfigService
         TenantId tenantId,
         BranchId branchId,
         PreparationStationId stationId,
+        Guid concurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
@@ -347,6 +202,8 @@ public partial class RestaurantConfigService
         var station = await _dbContext.PreparationStations
             .FirstOrDefaultAsync(ps => ps.TenantId == tenantId && ps.BranchId == branchId && ps.Id == stationId, ct)
             ?? throw new ResourceNotFoundException($"Preparation station '{stationId.Value}' was not found.");
+
+        VerifyConcurrencyToken(station.ConcurrencyToken, concurrencyToken);
 
         station.Activate();
         AddAuditEvent(tenantId, SecurityAuditEventType.PreparationStationActivated, actor, branchId, new { StationId = station.Id.Value });
@@ -359,6 +216,7 @@ public partial class RestaurantConfigService
         TenantId tenantId,
         BranchId branchId,
         PreparationStationId stationId,
+        Guid concurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
@@ -369,25 +227,14 @@ public partial class RestaurantConfigService
             .FirstOrDefaultAsync(ps => ps.TenantId == tenantId && ps.BranchId == branchId && ps.Id == stationId, ct)
             ?? throw new ResourceNotFoundException($"Preparation station '{stationId.Value}' was not found.");
 
+        VerifyConcurrencyToken(station.ConcurrencyToken, concurrencyToken);
+
         station.Deactivate();
         AddAuditEvent(tenantId, SecurityAuditEventType.PreparationStationDeactivated, actor, branchId, new { StationId = station.Id.Value });
 
         await _dbContext.SaveChangesAsync(ct);
         return MapPreparationStation(station);
     }
-
-    private static DiningAreaDto MapDiningArea(DiningArea da) => new(
-        da.Id.Value,
-        da.TenantId.Value,
-        da.BranchId.Value,
-        da.Name,
-        da.Code,
-        da.AreaType.ToString(),
-        da.SortOrder,
-        da.IsActive,
-        da.ConcurrencyToken,
-        da.CreatedAtUtc,
-        da.UpdatedAtUtc);
 
     private static PreparationStationDto MapPreparationStation(PreparationStation ps) => new(
         ps.Id.Value,

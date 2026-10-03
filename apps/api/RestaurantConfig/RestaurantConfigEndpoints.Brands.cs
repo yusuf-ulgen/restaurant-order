@@ -66,17 +66,9 @@ public static partial class RestaurantConfigEndpoints
                 var brand = await service.CreateBrandAsync(tenantId, command, actor, ct);
                 return BrandResult(httpContext, brand, StatusCodes.Status201Created);
             }
-            catch (InvalidAuthorizationScopeException ex)
+            catch (Exception ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
-            }
-            catch (DuplicateSlugException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: ex.Message, type: "https://httpstatuses.com/409");
-            }
-            catch (DomainException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
+                return HandleException(ex);
             }
         })
         .RequireAuthorization()
@@ -107,21 +99,9 @@ public static partial class RestaurantConfigEndpoints
                 var brand = await service.UpdateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);
             }
-            catch (ResourceNotFoundException ex)
+            catch (Exception ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message, type: "https://httpstatuses.com/404");
-            }
-            catch (ConcurrencyConflictException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: ex.Message, type: "https://httpstatuses.com/409");
-            }
-            catch (InvalidAuthorizationScopeException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
-            }
-            catch (DomainException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
+                return HandleException(ex);
             }
         })
         .RequireAuthorization()
@@ -152,21 +132,9 @@ public static partial class RestaurantConfigEndpoints
                 var brand = await service.ActivateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);
             }
-            catch (ResourceNotFoundException ex)
+            catch (Exception ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message, type: "https://httpstatuses.com/404");
-            }
-            catch (ConcurrencyConflictException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: ex.Message, type: "https://httpstatuses.com/409");
-            }
-            catch (InvalidAuthorizationScopeException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
-            }
-            catch (DomainException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
+                return HandleException(ex);
             }
         })
         .RequireAuthorization()
@@ -197,21 +165,9 @@ public static partial class RestaurantConfigEndpoints
                 var brand = await service.DeactivateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);
             }
-            catch (ResourceNotFoundException ex)
+            catch (Exception ex)
             {
-                return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: ex.Message, type: "https://httpstatuses.com/404");
-            }
-            catch (ConcurrencyConflictException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: ex.Message, type: "https://httpstatuses.com/409");
-            }
-            catch (InvalidAuthorizationScopeException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: ex.Message, type: "https://httpstatuses.com/403");
-            }
-            catch (DomainException ex)
-            {
-                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ex.Message, type: "https://httpstatuses.com/400");
+                return HandleException(ex);
             }
         })
         .RequireAuthorization()

@@ -116,9 +116,9 @@ const mockTenantFlags: TenantFeatureFlagsContract = {
   updatedAtUtc: '2026-10-02T10:00:00Z',
 };
 
-function renderWithProviders(ui: React.ReactElement) {
+function renderWithProviders(ui: React.ReactElement, user: UserPrincipalDto = mockAdminUser) {
   return render(
-    <AuthProvider initialUser={mockAdminUser}>
+    <AuthProvider initialUser={user}>
       <AdminConfigProvider
         initialBranchId="branch-1"
         initialBranches={[{ id: 'branch-1', name: 'Kadıköy Şubesi', slug: 'kadikoy', brandId: 'brand-1', isActive: true, status: 'Active' }]}
@@ -302,6 +302,43 @@ describe('Dining Areas, Stations & Feature Flags Views (Phase 4.5)', () => {
       fireEvent.click(screen.getByTestId('tab-tenant-defaults'));
       expect(screen.getByTestId('tenant-flag-Tips')).toBeDefined();
       expect(screen.getByTestId('save-tenant-flags')).toBeDefined();
+    });
+
+    it('shows Tenant Defaults tab for RestaurantAdmin', async () => {
+      renderWithProviders(<FeatureFlagsView />);
+      await waitFor(() => {
+        expect(screen.getByTestId('tab-tenant-defaults')).toBeDefined();
+      });
+    });
+
+    it('hides Tenant Defaults tab and prevents tenant bypass for SuperAdmin', async () => {
+      const superAdminUser: UserPrincipalDto = {
+        userId: 'user-super-1',
+        email: 'super@platform.com',
+        role: 'SuperAdmin',
+        securityVersion: 1,
+      };
+      renderWithProviders(<FeatureFlagsView />, superAdminUser);
+      await waitFor(() => {
+        expect(screen.getByText('QR Menü & Sipariş')).toBeDefined();
+      });
+      expect(screen.queryByTestId('tab-tenant-defaults')).toBeNull();
+    });
+
+    it('hides Tenant Defaults tab for BranchManager', async () => {
+      const branchManagerUser: UserPrincipalDto = {
+        userId: 'user-manager-1',
+        email: 'manager@branch.com',
+        role: 'BranchManager',
+        tenantId: 'tenant-test-1',
+        branchId: 'branch-1',
+        securityVersion: 1,
+      };
+      renderWithProviders(<FeatureFlagsView />, branchManagerUser);
+      await waitFor(() => {
+        expect(screen.getByText('QR Menü & Sipariş')).toBeDefined();
+      });
+      expect(screen.queryByTestId('tab-tenant-defaults')).toBeNull();
     });
   });
 });

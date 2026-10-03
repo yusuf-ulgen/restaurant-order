@@ -7,6 +7,13 @@ public class ConcurrencyConflictException : Exception
     }
 }
 
+public class ConcurrencyPreconditionException : Exception
+{
+    public ConcurrencyPreconditionException(string message) : base(message)
+    {
+    }
+}
+
 public class DuplicateSlugException : Exception
 {
     public DuplicateSlugException(string message) : base(message)

@@ -42,7 +42,7 @@ export const FeatureFlagsView: React.FC<FeatureFlagsViewProps> = ({ onCancel }) 
     // default
   }
 
-  const isTenantAdmin = userRole === 'SuperAdmin' || userRole === 'RestaurantAdmin';
+  const isTenantAdmin = userRole === 'RestaurantAdmin';
 
   const [activeTab, setActiveTab] = useState<'effective' | 'tenant' | 'branch'>('effective');
   const [effectiveData, setEffectiveData] = useState<EffectiveFeatureFlagsContract | null>(null);
@@ -122,6 +122,9 @@ export const FeatureFlagsView: React.FC<FeatureFlagsViewProps> = ({ onCancel }) 
       };
       const res = await fetchWithCsrf('/api/v1/restaurant-config/tenant/features', {
         method: 'PUT',
+        headers: {
+          'If-Match': `"${tenantData.concurrencyToken}"`,
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -151,6 +154,7 @@ export const FeatureFlagsView: React.FC<FeatureFlagsViewProps> = ({ onCancel }) 
       };
       const res = await fetchWithCsrf(`/api/v1/restaurant-config/branches/${selectedBranchId}/features/override`, {
         method: 'PUT',
+        headers: branchData?.concurrencyToken ? { 'If-Match': `"${branchData.concurrencyToken}"` } : undefined,
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -177,8 +181,11 @@ export const FeatureFlagsView: React.FC<FeatureFlagsViewProps> = ({ onCancel }) 
     setSuccessMessage(null);
 
     try {
+      const token = branchData?.concurrencyToken;
       const res = await fetchWithCsrf(`/api/v1/restaurant-config/branches/${selectedBranchId}/features/override`, {
         method: 'DELETE',
+        headers: token ? { 'If-Match': `"${token}"` } : undefined,
+        body: JSON.stringify({ concurrencyToken: token }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);

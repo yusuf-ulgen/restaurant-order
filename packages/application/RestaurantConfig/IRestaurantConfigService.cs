@@ -42,8 +42,8 @@ public interface IRestaurantConfigService
     Task<DiningAreaDto> CreateDiningAreaAsync(TenantId tenantId, BranchId branchId, CreateDiningAreaCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<DiningAreaDto> UpdateDiningAreaAsync(TenantId tenantId, BranchId branchId, DiningAreaId areaId, UpdateDiningAreaCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<IReadOnlyList<DiningAreaDto>> ReorderDiningAreasAsync(TenantId tenantId, BranchId branchId, ReorderDiningAreasCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
-    Task<DiningAreaDto> ActivateDiningAreaAsync(TenantId tenantId, BranchId branchId, DiningAreaId areaId, AuthenticatedPrincipal actor, CancellationToken ct = default);
-    Task<DiningAreaDto> DeactivateDiningAreaAsync(TenantId tenantId, BranchId branchId, DiningAreaId areaId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<DiningAreaDto> ActivateDiningAreaAsync(TenantId tenantId, BranchId branchId, DiningAreaId areaId, Guid concurrencyToken, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<DiningAreaDto> DeactivateDiningAreaAsync(TenantId tenantId, BranchId branchId, DiningAreaId areaId, Guid concurrencyToken, AuthenticatedPrincipal actor, CancellationToken ct = default);
 
     // Preparation Station operations (Phase 4.5)
     Task<IReadOnlyList<PreparationStationDto>> ListPreparationStationsAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
@@ -51,14 +51,14 @@ public interface IRestaurantConfigService
     Task<PreparationStationDto> CreatePreparationStationAsync(TenantId tenantId, BranchId branchId, CreatePreparationStationCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<PreparationStationDto> UpdatePreparationStationAsync(TenantId tenantId, BranchId branchId, PreparationStationId stationId, UpdatePreparationStationCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<IReadOnlyList<PreparationStationDto>> ReorderPreparationStationsAsync(TenantId tenantId, BranchId branchId, ReorderPreparationStationsCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
-    Task<PreparationStationDto> ActivatePreparationStationAsync(TenantId tenantId, BranchId branchId, PreparationStationId stationId, AuthenticatedPrincipal actor, CancellationToken ct = default);
-    Task<PreparationStationDto> DeactivatePreparationStationAsync(TenantId tenantId, BranchId branchId, PreparationStationId stationId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<PreparationStationDto> ActivatePreparationStationAsync(TenantId tenantId, BranchId branchId, PreparationStationId stationId, Guid concurrencyToken, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<PreparationStationDto> DeactivatePreparationStationAsync(TenantId tenantId, BranchId branchId, PreparationStationId stationId, Guid concurrencyToken, AuthenticatedPrincipal actor, CancellationToken ct = default);
 
     // Feature Flags operations (Phase 4.5)
     Task<TenantFeatureFlagsDto> GetTenantFeatureFlagsAsync(TenantId tenantId, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<TenantFeatureFlagsDto> UpdateTenantFeatureFlagsAsync(TenantId tenantId, UpdateFeatureFlagsCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<BranchFeatureFlagsDto> GetBranchFeatureFlagsOverrideAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<BranchFeatureFlagsDto> UpdateBranchFeatureFlagsOverrideAsync(TenantId tenantId, BranchId branchId, UpdateFeatureFlagsCommand command, AuthenticatedPrincipal actor, CancellationToken ct = default);
-    Task<EffectiveFeatureFlagsDto> ClearBranchFeatureFlagsOverrideAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
+    Task<EffectiveFeatureFlagsDto> ClearBranchFeatureFlagsOverrideAsync(TenantId tenantId, BranchId branchId, Guid concurrencyToken, AuthenticatedPrincipal actor, CancellationToken ct = default);
     Task<EffectiveFeatureFlagsDto> GetEffectiveFeatureFlagsAsync(TenantId tenantId, BranchId branchId, AuthenticatedPrincipal actor, CancellationToken ct = default);
 }
