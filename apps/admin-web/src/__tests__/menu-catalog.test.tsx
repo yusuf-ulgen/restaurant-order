@@ -256,4 +256,38 @@ describe('menu catalog management', () => {
     expect(calls.some((url) => url.includes('/branches/branch-2/menus'))).toBe(true);
     expect(screen.queryByText('Köfte')).toBeNull();
   });
+
+  it('triggers category and item reordering via MenuCatalogView', async () => {
+    const cat2: CategoryContract = { ...category, id: 'cat-2', name: 'Tatlılar', slug: 'tatlilar', sortOrder: 1 };
+    const item2: MenuItemContract = { ...item, id: 'item-2', name: 'Baklava', slug: 'baklava', sortOrder: 1 };
+    const reorderCalls: { url: string; body: unknown }[] = [];
+
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (url.endsWith('/menus') && method === 'GET') return json([menu]);
+      if (url.endsWith('/categories') && method === 'GET') return json([category, cat2]);
+      if (url.endsWith('/items') && method === 'GET') return json([item, item2]);
+      if (url.endsWith('/availability')) return json([]);
+      if (url.endsWith('/modifier-groups')) return json([]);
+      if (url.includes('/reorder') && method === 'POST') {
+        reorderCalls.push({ url, body: JSON.parse(init?.body as string) });
+        return json(url.includes('/categories/') ? [cat2, category] : [item2, item]);
+      }
+      return json({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderCatalog();
+    expect(await screen.findByText('Köfte')).toBeTruthy();
+    expect(await screen.findByText('Baklava')).toBeTruthy();
+
+    const downButtons = screen.getAllByRole('button', { name: 'Aşağı taşı' });
+    expect(downButtons.length).toBeGreaterThan(1);
+    fireEvent.click(downButtons[0]!);
+    fireEvent.click(downButtons[downButtons.length - 2]!);
+
+    await waitFor(() => {
+      expect(reorderCalls.length).toBeGreaterThan(0);
+    });
+  });
 });

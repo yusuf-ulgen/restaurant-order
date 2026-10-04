@@ -6,7 +6,7 @@ import { MenuItemList } from '../catalog/MenuItemList';
 import { VariantEditor } from '../catalog/VariantEditor';
 import { ModifierGroupEditor } from '../catalog/ModifierGroupEditor';
 import { CatalogPreviewSheet } from '../catalog/CatalogPreviewSheet';
-import { formatCurrency } from '../catalog/currencyUtils';
+import { formatCurrency, toMinorUnits, toMajorUnits } from '../catalog/currencyUtils';
 import { catalogApi } from '../catalog/catalogApi';
 
 describe('catalog reordering and currency formatting UI', () => {
@@ -27,14 +27,26 @@ describe('catalog reordering and currency formatting UI', () => {
   const var1: VariantContract = { id: 'v1', name: 'Küçük', code: 'SML', absolutePriceMinorUnits: 6000, sortOrder: 0, isDefault: true, isActive: true, concurrencyToken: 'vt1' };
   const var2: VariantContract = { id: 'v2', name: 'Büyük', code: 'BIG', absolutePriceMinorUnits: 9000, sortOrder: 1, isDefault: false, isActive: true, concurrencyToken: 'vt2' };
 
-  it('formats currency correctly for TRY, EUR, GBP', () => {
+  it('formats currency correctly for TRY, EUR, GBP and fallback handling', () => {
     const tryFormatted = formatCurrency(12550, 'TRY');
     const eurFormatted = formatCurrency(12550, 'EUR');
     const gbpFormatted = formatCurrency(12550, 'GBP');
+    const defaultFormatted = formatCurrency(12550);
+    const fallbackFormatted = formatCurrency(12550, 'UNKNOWN_INVALID_CURRENCY');
 
     expect(tryFormatted).toContain('125,50');
     expect(eurFormatted).toContain('125,50');
     expect(gbpFormatted).toContain('125,50');
+    expect(defaultFormatted).toContain('125,50');
+    expect(fallbackFormatted).toContain('125.50');
+  });
+
+  it('converts correctly between major and minor units with edge cases', () => {
+    expect(toMinorUnits(12.55)).toBe(1255);
+    expect(toMinorUnits('12.55')).toBe(1255);
+    expect(toMinorUnits('invalid')).toBe(0);
+    expect(toMajorUnits(1255)).toBe('12.55');
+    expect(toMajorUnits(0)).toBe('0.00');
   });
 
   it('supports accessible up/down reordering for categories', async () => {
