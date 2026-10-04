@@ -13,6 +13,7 @@ public class ItemVariantConfiguration : IEntityTypeConfiguration<ItemVariant>
         builder.ToTable("item_variants", "tenancy");
 
         builder.HasKey(v => v.Id);
+        builder.HasAlternateKey(v => new { v.TenantId, v.BranchId, v.MenuItemId, v.Id });
 
         builder.Property(v => v.Id)
             .HasColumnName("id")
@@ -95,12 +96,12 @@ public class ItemVariantConfiguration : IEntityTypeConfiguration<ItemVariant>
         builder.HasIndex(v => new { v.TenantId, v.MenuItemId, v.SortOrder })
             .HasDatabaseName("ix_item_variants_tenant_id_menu_item_id_sort_order");
 
-        // Composite FK to menu_items
+        // Composite FK to menu_items (tenant_id, branch_id, id)
         builder.HasOne<MenuItem>()
             .WithMany(m => m.Variants)
-            .HasPrincipalKey(m => new { m.TenantId, m.MenuId, m.Id })
-            .HasForeignKey(v => new { v.TenantId, v.MenuId, v.MenuItemId })
-            .HasConstraintName("fk_item_variants_menu_items_tenant_id_menu_id_item_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(v => new { v.TenantId, v.BranchId, v.MenuItemId })
+            .HasConstraintName("fk_item_variants_menu_items_tenant_branch_item")
             .OnDelete(DeleteBehavior.Cascade);
 
         // Composite FK to branches
@@ -111,12 +112,12 @@ public class ItemVariantConfiguration : IEntityTypeConfiguration<ItemVariant>
             .HasConstraintName("fk_item_variants_branches_tenant_id_branch_id")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Composite FK to menus
+        // Composite FK to menus (tenant_id, branch_id, id)
         builder.HasOne<Menu>()
             .WithMany()
-            .HasPrincipalKey(m => new { m.TenantId, m.Id })
-            .HasForeignKey(v => new { v.TenantId, v.MenuId })
-            .HasConstraintName("fk_item_variants_menus_tenant_id_menu_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(v => new { v.TenantId, v.BranchId, v.MenuId })
+            .HasConstraintName("fk_item_variants_menus_tenant_branch_menu")
             .OnDelete(DeleteBehavior.Cascade);
 
         // FK to tenant

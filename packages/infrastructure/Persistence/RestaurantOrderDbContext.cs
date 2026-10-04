@@ -37,6 +37,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Catalog.ModifierOption> ModifierOptions => Set<RestaurantOrder.Domain.Catalog.ModifierOption>();
     public DbSet<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment> MenuItemModifierGroupAssignments => Set<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>();
     public DbSet<RestaurantOrder.Domain.Catalog.BranchItemAvailability> BranchItemAvailabilities => Set<RestaurantOrder.Domain.Catalog.BranchItemAvailability>();
+    public DbSet<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage> CatalogAvailabilityOutbox => Set<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -122,6 +123,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<InvitationToken>().HasQueryFilter(it => HasTenant && it.TenantId == CurrentTenantId);
         modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(pr => HasTenant && pr.TenantId == CurrentTenantId);
         modelBuilder.Entity<IdentityNotificationOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
     }
 
     /// <summary>

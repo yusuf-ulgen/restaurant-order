@@ -96,10 +96,35 @@ export const MenuCatalogView: React.FC = () => {
   };
 
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
+  const currency = selectedBranch?.currency || 'TRY';
   const selectedCategoryItems = items.filter((item) => !selectedCategoryId || item.categoryId === selectedCategoryId);
   const openCreateItem = () => { setEditingItem(null); setItemSheet(true); };
   const openEditItem = (item: MenuItemContract) => { setEditingItem(item); setItemSheet(true); };
   const openCreateCategory = () => { setEditingCategory(null); setCategorySheet(true); };
+
+  const handleReorderCategories = async (reordered: CategoryContract[]) => {
+    if (!selectedBranchId || !selectedMenu) return;
+    const itemsPayload = reordered.map((c, index) => ({
+      id: c.id,
+      sortOrder: index,
+      concurrencyToken: c.concurrencyToken,
+    }));
+    await mutate(async () => {
+      await catalogApi.reorderCategories(selectedBranchId, selectedMenu.id, itemsPayload);
+    }, 'Kategori sıralaması güncellendi.');
+  };
+
+  const handleReorderItems = async (reordered: MenuItemContract[]) => {
+    if (!selectedBranchId || !selectedMenu || !selectedCategoryId) return;
+    const itemsPayload = reordered.map((i, index) => ({
+      id: i.id,
+      sortOrder: index,
+      concurrencyToken: i.concurrencyToken,
+    }));
+    await mutate(async () => {
+      await catalogApi.reorderItems(selectedBranchId, selectedMenu.id, selectedCategoryId, itemsPayload);
+    }, 'Ürün sıralaması güncellendi.');
+  };
 
   const saveItem = async (draft: ItemDraft, item?: MenuItemContract) => {
     const core = {
@@ -151,13 +176,15 @@ export const MenuCatalogView: React.FC = () => {
           <section className="catalog-panel">
             <CategoryList categories={categories} selectedCategoryId={selectedCategoryId} canManage={permissions.canManage && !isMutating}
               onSelect={(id) => { selectedCategoryRef.current = id; setSelectedCategoryId(id); }} onEdit={(category) => { setEditingCategory(category); setCategorySheet(true); }} onCreate={openCreateCategory}
-              onToggle={async (category) => { await mutate(() => catalogApi.setCategoryState(selectedBranchId, selectedMenu.id, category, !category.isActive), 'Kategori durumu güncellendi.'); }} />
+              onToggle={async (category) => { await mutate(() => catalogApi.setCategoryState(selectedBranchId, selectedMenu.id, category, !category.isActive), 'Kategori durumu güncellendi.'); }}
+              onReorder={handleReorderCategories} />
           </section>
           <section className="catalog-panel">
-            <MenuItemList items={selectedCategoryItems} availability={availability} canManage={permissions.canManage && !isMutating}
+            <MenuItemList items={selectedCategoryItems} availability={availability} currency={currency} canManage={permissions.canManage && !isMutating}
               canPrice={permissions.canManagePricing} canQuick86={permissions.canQuick86} onEdit={openEditItem} onCreate={openCreateItem}
               onToggleStatus={async (item) => { await mutate(() => catalogApi.setItemState(selectedBranchId, selectedMenu.id, item, !item.isActive), 'Ürün durumu güncellendi.'); }}
-              onAvailabilityChanged={async () => { await loadCatalog(selectedMenu.id); setSuccess('Ürün stok durumu güncellendi.'); }} onError={recordError} />
+              onAvailabilityChanged={async () => { await loadCatalog(selectedMenu.id); setSuccess('Ürün stok durumu güncellendi.'); }}
+              onReorder={handleReorderItems} onError={recordError} />
           </section>
         </div>
       </>}
@@ -166,9 +193,9 @@ export const MenuCatalogView: React.FC = () => {
     <CategoryEditorSheet isOpen={categorySheet} category={editingCategory} categories={categories} onClose={() => setCategorySheet(false)}
       onSave={async (data, category) => { await mutate(() => catalogApi.saveCategory(selectedBranchId, selectedMenuId, data, category), 'Kategori kaydedildi.'); }} />
     <MenuItemEditorSheet isOpen={itemSheet} branchId={selectedBranchId} menuId={selectedMenuId} item={editingItem ? items.find((entry) => entry.id === editingItem.id) ?? editingItem : null}
-      categories={categories} allItems={items} groups={groups} canManage={permissions.canManage} canPrice={permissions.canManagePricing}
+      categories={categories} allItems={items} groups={groups} currency={currency} canManage={permissions.canManage} canPrice={permissions.canManagePricing}
       onClose={() => setItemSheet(false)} onSave={saveItem} onNestedSaved={() => loadCatalog(selectedMenuId)} onError={recordError} />
-    <CatalogPreviewSheet isOpen={previewOpen} menu={selectedMenu} categories={categories} items={items} onClose={() => setPreviewOpen(false)} />
+    <CatalogPreviewSheet isOpen={previewOpen} menu={selectedMenu} categories={categories} items={items} currency={currency} onClose={() => setPreviewOpen(false)} />
     <ConfirmationDialog isOpen={!!pendingMenu} title={pendingMenu?.action === 'archive' ? 'Menüyü arşivle' : 'Menüyü yayınla'}
       message={pendingMenu?.action === 'archive' ? 'Arşivlenen menüde yeni düzenleme yapılamaz.' : 'Menü aktif katalogda kullanıma açılacak.'}
       confirmLabel={pendingMenu?.action === 'archive' ? 'Arşivle' : 'Yayınla'} isLoading={isMutating}

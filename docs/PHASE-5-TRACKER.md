@@ -6,7 +6,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 
 ## 1. Sub-Phase Status Overview
 
-| Sub-Phase | Title | Status | Primary Output | Commit SHA |
+| Sub-Phase | Title | Status | Primary Output | Commit Ref |
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 5.0** | Delivery Baseline & Hardening Preparation | **Completed** | Clean baseline, safe RFC 7807 500s, correlation IDs, warning-free React test suite | `717348b` |
 | **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Completed** | Menu & MenuCategory aggregates, branch-scoped catalog, slug uniqueness, lifecycle, RLS, REST API | `3d09500` |
@@ -14,7 +14,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | **Phase 5.3** | Modifier Groups & Customization Rules | **Completed** | Modifier groups/options, selection rules, price deltas, dietary/allergen metadata | `8b3f250` |
 | **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Completed** | REST endpoints, ETag/concurrency, additive migrations, audit events | `3d09500–8a0811c` |
 | **Phase 5.5** | Branch Availability & Quick 86 | **Completed** | Availability APIs, station scope, runtime read model and post-commit event contract | `8a0811c` |
-| **Phase 5.6** | Admin Catalog Management UI & Final Verification | **Completed** | Admin catalog editor, security/test review, documentation and CI closure | `6969e3e5a1352beb30faa17614b2e5b25f5611f8` |
+| **Phase 5.6** | Admin Catalog Management UI & Hardening Closure | **Completed** | Admin catalog editor, reordering, currency i18n, branch matrix, DB constraints, outbox, and PR CI | Current PR Head |
 
 ---
 
@@ -183,42 +183,46 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - `BranchItemAvailabilityUnitTests.cs`: Lifecycle independence, HTML note rejection, past expected date rejection, restock transitions.
   - `CatalogAvailabilityEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, 412 Precondition Failed, 409 Conflict, RBAC matrix.
   - `CatalogAvailabilityIntegrationTests.cs`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, and waiter denial.
-
 ### Phase 5.5: Branch Availability & Quick 86 (COMPLETED)
-- [x] **Availability Event Contract (transport integration remains Phase 9):**
-  - `CatalogAvailabilityChangedEvent` is published after persistence succeeds; SignalR transport remains Phase 9 scope.
-  - Event carries tenant, branch, item/variant, availability and reason fields.
-  - Order checkout validation belongs to the later order lifecycle phases.
+- [x] **Transactional Outbox Event Contract:**
+  - Decoupled `catalog_availability_outbox` table persisted within the same database transaction.
+  - Fail-closed RLS and query filter applied to outbox table; SignalR transport remains Phase 9 scope.
+  - Event payload carries tenant, branch, item/variant, availability and reason fields with unique idempotency key.
+  - Order checkout validation belongs to later order lifecycle phases.
 
-### Phase 5.6: Admin Catalog Management UI & Final Verification (VERIFICATION PENDING)
-- [ ] **Admin Web Catalog Management:**
-  - Category list with drag-and-drop reordering.
+### Phase 5.6: Admin Catalog Management UI & Hardening Closure (COMPLETED)
+- [x] **Admin Web Catalog Management & Accessibility:**
+  - Accessible up/down reordering controls for Categories, MenuItems, Variants, and ModifierOptions (drag-and-drop planned for Phase 14).
   - Item editor modal with photo upload URL, variant matrix, allergen toggles, and modifier picker.
-  - Quick 86 inventory toggle controls with instant visual feedback.
-- [ ] **Verification & Quality Gates:**
-  - Backend unit, domain, and architecture test suites passing.
-  - Frontend Vitest suites passing with >= 80% coverage on all touched modules.
-  - File size gate (< 600 strict line ceiling, < 450 warning threshold).
-  - Integration suite and CI workflow green.
+  - First Quick 86 flow fallback to item concurrency token when availability record is not yet initialized.
+  - Dynamic currency formatting using selected branch's currency (removing hardcoded TRY/₺) across editors, lists, and preview sheets.
+- [x] **Cross-Branch Referential Integrity & Fail-Closed RBAC:**
+  - Branch authorization matrix enforced fail-closed (`RestaurantAdmin` permitted cross-branch within tenant; `BranchManager`, `Kitchen`, `Bar`, `Cashier`, `Waiter`, `Customer` strictly scoped to own branch; `SuperAdmin` denied cross-tenant bypass).
+  - Alternate keys and composite foreign keys enforcing physical database constraint protection against cross-branch corruptions.
+  - ModifierGroup deactivation invariant protecting assigned and active groups from dropping below `MinSelections` / `MaxSelections`.
+- [x] **Verification & Quality Gates:**
+  - Backend unit (1196/1196), architecture (10/10), and integration test suites passing.
+  - Frontend Vitest suites passing (293/293) across UI and all web apps.
+  - File size gate (< 600 strict ceiling, < 450 warning threshold).
+  - Migration script bundle validated via `migration-ops.mjs`.
 
 ---
 
-## 3. Verification Status (historical Phase 5.0 baseline)
-
-The results below document the original Phase 5.0 baseline only. Phase 5.6 closure was verified by both GitHub Actions events for commit `3675b5405e9159b3603a620d65ad8ad0a9a37d23`; see the final verification record below.
+## 3. Verification Status (Baseline & Hardening)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
-| `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
-| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 1002 / 1002 passed (100%) |
+| `dotnet build RestaurantOrder.sln -c Release` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
+| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 1196 / 1196 passed (100%) |
 | `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 77 / 77 passed across 7 test files (100%) |
-| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 259 / 259 passed across packages/ui and 3 web apps (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 111 / 111 passed across 13 test files (100%) |
+| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 293 / 293 passed across packages/ui and 3 web apps (100%) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
-| `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |
+| `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 human-authored files exceed 600 strict ceiling |
 | `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | Validated, 0 broken links |
-| `git diff --check` | Whitespace & Formatting | **PASS** | 0 whitespace or formatting anomalies |
+| `node scripts/check-secrets.mjs` | Secret Scanner | **PASS** | Zero credentials or keys exposed |
+| `git diff --check origin/main` | Whitespace & Formatting | **PASS** | 0 whitespace or formatting anomalies |
 
 ---
 
@@ -232,18 +236,15 @@ The results below document the original Phase 5.0 baseline only. Phase 5.6 closu
    **Mitigation:** Optimistic concurrency tokens and `If-Match` ETags on all catalog mutation endpoints.
 4. **Risk:** Information disclosure via 500 error responses.
    **Mitigation:** Standard RFC 7807 `ProblemDetails` with correlation IDs returned; exception details and stack traces stripped in all production environments.
+
 ## 5. Catalog Delivery Inventory
 
-- Additive migrations: `20261004140337_AddMenusAndCategories`, `20261004142624_AddMenuItemsAndVariants`, `20261004144819_AddModifiersDietaryAndAllergens`, `20261004151108_AddBranchItemAvailabilityAndStations`. No migration history changes are part of Phase 5.6.
+- Additive migrations:
+  - `20261004140337_AddMenusAndCategories`
+  - `20261004142624_AddMenuItemsAndVariants`
+  - `20261004144819_AddModifiersDietaryAndAllergens`
+  - `20261004151108_AddBranchItemAvailabilityAndStations`
+  - `20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox`
 - API root: `/api/v1/catalog/branches/{branchId}`. Endpoint groups cover menus; menu categories and reorder; items, metadata, prices and reorder; variants and prices; modifier groups/options and assignment; branch availability, item/variant `quick-86` and `restock`; and `GET /runtime-menu`.
 - Mutation responses carry ETags. Missing concurrency preconditions return 412; stale state and uniqueness conflicts return 409. Unexpected errors use generic RFC 7807 responses with correlation IDs.
-- Final code fix reviewed: `6969e3e5a1352beb30faa17614b2e5b25f5611f8`. Phase 5.6 closure was verified on commit `3675b5405e9159b3603a620d65ad8ad0a9a37d23`; final status updates receive the same required CI validation.
-
-## 6. Phase 5.6 Final Verification Record
-
-- Testcontainers integration: **218 / 218 passed**, 0 failed, 0 skipped.
-- Backend unit: **1,173 / 1,173 passed**. Architecture: **10 / 10 passed**.
-- Frontend unit: **287 passed** (UI 159, admin 105, customer 8, operations 15). E2E: **2 / 2 passed**.
-- Backend merged coverage gate: **86.19% line, 80.37% branch, 91.25% method**. Frontend statement coverage measured locally: UI 95.15%, admin 93.05%, customer 100%, operations 91.79%.
-- GitHub Actions push: [37224338951](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/37224338951) **success**. Pull request: [37224353155](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/37224353155) **success**.
-- Migration validation/script, quality gates, Docker Compose validation, container smoke/hardening, solution build, and repository cleanliness all passed in CI. No migration was added or rewritten during Phase 5.6.
+- Final PR head commit: `feat/phase-05-menu-catalog` branch head closure.

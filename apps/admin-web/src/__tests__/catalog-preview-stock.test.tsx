@@ -44,5 +44,3 @@ describe('catalog preview and stock state', () => {
     expect(new Headers(calls.find((call) => call.url.endsWith('/restock'))?.init?.headers).get('If-Match')).toBe('"availability-token"');
   });
 });
-
-

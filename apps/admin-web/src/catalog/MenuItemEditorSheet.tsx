@@ -14,7 +14,7 @@ export interface ItemDraft {
 
 interface Props {
   isOpen: boolean; branchId: string; menuId: string; item: MenuItemContract | null; categories: CategoryContract[];
-  allItems: MenuItemContract[]; groups: ModifierGroupContract[]; canManage: boolean; canPrice: boolean;
+  allItems: MenuItemContract[]; groups: ModifierGroupContract[]; currency?: string; canManage: boolean; canPrice: boolean;
   onClose: () => void; onSave: (draft: ItemDraft, item?: MenuItemContract) => Promise<void>;
   onNestedSaved: () => Promise<void>; onError: (error: unknown) => void;
 }
@@ -26,7 +26,7 @@ const makeDraft = (item: MenuItemContract | null, categoryId: string, sortOrder:
   spicyLevel: item?.spicyLevel ?? 0, dietaryTags: [...(item?.dietaryTags ?? [])], allergenTags: [...(item?.allergenTags ?? [])],
 });
 
-export const MenuItemEditorSheet: React.FC<Props> = ({ isOpen, branchId, menuId, item, categories, allItems, groups, canManage, canPrice, onClose, onSave, onNestedSaved, onError }) => {
+export const MenuItemEditorSheet: React.FC<Props> = ({ isOpen, branchId, menuId, item, categories, allItems, groups, currency = 'TRY', canManage, canPrice, onClose, onSave, onNestedSaved, onError }) => {
   const initial = useMemo(() => makeDraft(item, categories.find((entry) => entry.isActive)?.id ?? '', allItems.length), [item, categories, allItems.length]);
   const [draft, setDraft] = useState(initial);
   const [error, setError] = useState('');
@@ -61,7 +61,7 @@ export const MenuItemEditorSheet: React.FC<Props> = ({ isOpen, branchId, menuId,
         <label className="catalog-field">Kategori<select value={draft.categoryId} onChange={(event) => change('categoryId', event.target.value)} required disabled={!writeable}>
           <option value="">Kategori seçin</option>{categories.filter((entry) => entry.isActive).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
         </select></label>
-        <label className="catalog-field">Temel fiyat (₺)<input type="number" min="0" step="0.01" value={(draft.basePriceMinorUnits / 100).toFixed(2)} disabled={!canPrice || !writeable}
+        <label className="catalog-field">{`Temel fiyat (${currency})`}<input type="number" min="0" step="0.01" value={(draft.basePriceMinorUnits / 100).toFixed(2)} disabled={!canPrice || !writeable}
           onChange={(event) => change('basePriceMinorUnits', Math.round(Number(event.target.value) * 100))} aria-describedby={!canPrice ? 'item-price-lock' : undefined} /></label>
         {!canPrice && <small id="item-price-lock">Fiyat alanı salt okunur; fiyat yönetimi izni gerekir.</small>}
         <label className="catalog-field">Kısa açıklama<input value={draft.shortDescription} onChange={(event) => change('shortDescription', event.target.value)} maxLength={240} disabled={!writeable} /></label>
@@ -77,8 +77,8 @@ export const MenuItemEditorSheet: React.FC<Props> = ({ isOpen, branchId, menuId,
         <div className="catalog-actions"><Button type="submit" loading={busy} disabled={!writeable}>Kaydet</Button><Button type="button" variant="outline" onClick={requestClose}>Kapat</Button></div>
       </form>
       {item && !dirty && <div className="catalog-list">
-        <VariantEditor branchId={branchId} menuId={menuId} item={item} canManage={canManage} canPrice={canPrice} onSaved={onNestedSaved} onError={onError} />
-        <ModifierGroupEditor branchId={branchId} menuId={menuId} item={item} groups={groups} canManage={canManage} canPrice={canPrice} onSaved={onNestedSaved} onError={onError} />
+        <VariantEditor branchId={branchId} menuId={menuId} item={item} currency={currency} canManage={canManage} canPrice={canPrice} onSaved={onNestedSaved} onError={onError} />
+        <ModifierGroupEditor branchId={branchId} menuId={menuId} item={item} groups={groups} currency={currency} canManage={canManage} canPrice={canPrice} onSaved={onNestedSaved} onError={onError} />
       </div>}
     </CatalogSheet>
     <ConfirmationDialog isOpen={confirmClose} title="Değişiklikleri sil?" message="Kaydedilmemiş ürün değişiklikleri kaybolacak."

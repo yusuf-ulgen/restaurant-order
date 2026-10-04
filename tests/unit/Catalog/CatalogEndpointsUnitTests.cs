@@ -168,4 +168,3 @@ public class CatalogEndpointsUnitTests
         return problem;
     }
 }
-

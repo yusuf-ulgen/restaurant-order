@@ -84,6 +84,25 @@ public partial class CatalogService
                 command.ExpectedAvailableAtUtc
             });
 
+        var eventData = new CatalogAvailabilityChangedEvent(
+            TenantId: tenantId.Value,
+            BranchId: branchId.Value,
+            MenuItemId: itemId.Value,
+            ItemVariantId: variantId.Value,
+            IsAvailable: false,
+            ReasonCode: reasonCode.ToString(),
+            Note: record.Note,
+            ExpectedAvailableAtUtc: record.ExpectedAvailableAtUtc,
+            OccurredAtUtc: record.ChangedAtUtc);
+
+        EnqueueAvailabilityOutboxMessage(
+            tenantId,
+            branchId,
+            variantId.Value.ToString(),
+            "CatalogVariantQuick86",
+            eventData,
+            $"variant-86-{tenantId.Value}-{branchId.Value}-{variantId.Value}-{record.ConcurrencyToken:D}");
+
         try
         {
             await _dbContext.SaveChangesAsync(ct);
@@ -97,18 +116,7 @@ public partial class CatalogService
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
 
-        await _eventPublisher.PublishAvailabilityChangedAsync(
-            new CatalogAvailabilityChangedEvent(
-                TenantId: tenantId.Value,
-                BranchId: branchId.Value,
-                MenuItemId: itemId.Value,
-                ItemVariantId: variantId.Value,
-                IsAvailable: false,
-                ReasonCode: reasonCode.ToString(),
-                Note: record.Note,
-                ExpectedAvailableAtUtc: record.ExpectedAvailableAtUtc,
-                OccurredAtUtc: record.ChangedAtUtc),
-            ct);
+        await _eventPublisher.PublishAvailabilityChangedAsync(eventData, ct);
 
         return MapAvailability(record);
     }
@@ -133,7 +141,7 @@ public partial class CatalogService
 
         var variant = await _dbContext.ItemVariants
             .FirstOrDefaultAsync(v => v.TenantId == tenantId && v.BranchId == branchId && v.MenuId == menuId && v.MenuItemId == itemId && v.Id == variantId, ct)
-            ?? throw new ResourceNotFoundException($"Variant '{variantId.Value}' was not found.");
+            ?? throw new ResourceNotFoundException($"ItemVariant '{variantId.Value}' was not found.");
 
         if (!variant.IsActive)
         {
@@ -180,6 +188,25 @@ public partial class CatalogService
                 command.Note
             });
 
+        var restockEventData = new CatalogAvailabilityChangedEvent(
+            TenantId: tenantId.Value,
+            BranchId: branchId.Value,
+            MenuItemId: itemId.Value,
+            ItemVariantId: variantId.Value,
+            IsAvailable: true,
+            ReasonCode: AvailabilityReasonCode.Restocked.ToString(),
+            Note: record.Note,
+            ExpectedAvailableAtUtc: null,
+            OccurredAtUtc: record.ChangedAtUtc);
+
+        EnqueueAvailabilityOutboxMessage(
+            tenantId,
+            branchId,
+            variantId.Value.ToString(),
+            "CatalogVariantRestocked",
+            restockEventData,
+            $"variant-restock-{tenantId.Value}-{branchId.Value}-{variantId.Value}-{record.ConcurrencyToken:D}");
+
         try
         {
             await _dbContext.SaveChangesAsync(ct);
@@ -193,18 +220,7 @@ public partial class CatalogService
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
 
-        await _eventPublisher.PublishAvailabilityChangedAsync(
-            new CatalogAvailabilityChangedEvent(
-                TenantId: tenantId.Value,
-                BranchId: branchId.Value,
-                MenuItemId: itemId.Value,
-                ItemVariantId: variantId.Value,
-                IsAvailable: true,
-                ReasonCode: AvailabilityReasonCode.Restocked.ToString(),
-                Note: record.Note,
-                ExpectedAvailableAtUtc: null,
-                OccurredAtUtc: record.ChangedAtUtc),
-            ct);
+        await _eventPublisher.PublishAvailabilityChangedAsync(restockEventData, ct);
 
         return MapAvailability(record);
     }

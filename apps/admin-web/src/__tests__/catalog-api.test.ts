@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CategoryContract, VariantContract, MenuContract, MenuItemContract, ModifierGroupContract, ModifierOptionContract } from '@restaurant-order/contracts';
 import { catalogApi } from '../catalog/catalogApi';
 
@@ -54,15 +54,60 @@ describe('catalog API request contracts', () => {
     const itemUpdate = calls.find((call) => call.url.endsWith('/items/item-api'))!;
     expect(itemUpdate.init?.method).toBe('PUT');
     expect(new Headers(itemUpdate.init?.headers).get('If-Match')).toBe('"item-token"');
-    expect(calls.some((call) => call.url.endsWith('/quick-86') && call.init?.method === 'POST')).toBe(true);
-    expect(calls.some((call) => call.url.endsWith('/restock') && call.init?.method === 'POST')).toBe(true);
+
+    const firstQuick86 = calls.find((call) => call.url.endsWith('/quick-86'))!;
+    expect(firstQuick86.init?.method).toBe('POST');
+    expect(JSON.parse(String(firstQuick86.init?.body))).toMatchObject({
+      concurrencyToken: 'item-token',
+      reasonCode: 'Manual',
+    });
+    expect(new Headers(firstQuick86.init?.headers).get('If-Match')).toBe('"item-token"');
+
+    const firstRestock = calls.find((call) => call.url.endsWith('/restock'))!;
+    expect(firstRestock.init?.method).toBe('POST');
+    expect(JSON.parse(String(firstRestock.init?.body))).toMatchObject({
+      concurrencyToken: 'item-token',
+      note: 'Stok yenilendi',
+    });
+    expect(new Headers(firstRestock.init?.headers).get('If-Match')).toBe('"item-token"');
+
+    // Test with existing availability token
+    const existingAvail = { id: 'avail-1', concurrencyToken: 'avail-token' } as unknown as import('@restaurant-order/contracts').AvailabilityContract;
+    await catalogApi.setAvailability(branch, menu.id, item, existingAvail, false);
+    const existingQuick86 = calls[calls.length - 1]!;
+    expect(JSON.parse(String(existingQuick86.init?.body))).toMatchObject({ concurrencyToken: 'avail-token' });
+    expect(new Headers(existingQuick86.init?.headers).get('If-Match')).toBe('"avail-token"');
+
+    // Test reorder endpoints
+    await catalogApi.reorderCategories(branch, menu.id, [{ id: 'cat-1', sortOrder: 0, concurrencyToken: 'ct-1' }]);
+    const catReorder = calls[calls.length - 1]!;
+    expect(catReorder.url).toBe('/api/v1/catalog/branches/branch-api/menus/menu-api/categories/reorder');
+    expect(JSON.parse(String(catReorder.init?.body))).toEqual({
+      items: [{ id: 'cat-1', sortOrder: 0, concurrencyToken: 'ct-1' }],
+    });
+
+    await catalogApi.reorderItems(branch, menu.id, 'cat-1', [{ id: 'item-1', sortOrder: 0, concurrencyToken: 'it-1' }]);
+    const itemReorder = calls[calls.length - 1]!;
+    expect(itemReorder.url).toBe('/api/v1/catalog/branches/branch-api/menus/menu-api/categories/cat-1/items/reorder');
+
+    await catalogApi.reorderVariants(branch, menu.id, item.id, [{ id: 'var-1', sortOrder: 0, concurrencyToken: 'vt-1' }]);
+    const varReorder = calls[calls.length - 1]!;
+    expect(varReorder.url).toBe('/api/v1/catalog/branches/branch-api/menus/menu-api/items/item-api/variants/reorder');
+
+    await catalogApi.reorderModifierOptions(branch, group.id, [{ id: 'opt-1', sortOrder: 0, concurrencyToken: 'ot-1' }]);
+    const optReorder = calls[calls.length - 1]!;
+    expect(optReorder.url).toBe('/api/v1/catalog/branches/branch-api/modifier-groups/group-api/options/reorder');
   });
 
   it('handles empty success responses and hides server details in API errors', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(ok(204)).mockResolvedValueOnce(new Response('{', { status: 409 }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(ok(204))
+      .mockResolvedValueOnce(new Response('{"title":"Conflict"}', { status: 409 }))
+      .mockResolvedValueOnce(new Response('{"title":"Precondition Failed"}', { status: 412 }));
     vi.stubGlobal('fetch', fetchMock);
+
     await expect(catalogApi.removeModifierGroup(branch, menu.id, item, group.id)).resolves.toBeUndefined();
     await expect(catalogApi.listMenus(branch)).rejects.toMatchObject({ status: 409 });
+    await expect(catalogApi.setAvailability(branch, menu.id, item, undefined, false)).rejects.toMatchObject({ status: 412 });
   });
 });
-

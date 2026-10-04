@@ -14,6 +14,7 @@ public class MenuCategoryConfiguration : IEntityTypeConfiguration<MenuCategory>
 
         builder.HasKey(mc => mc.Id);
         builder.HasAlternateKey(mc => new { mc.TenantId, mc.MenuId, mc.Id });
+        builder.HasAlternateKey(mc => new { mc.TenantId, mc.BranchId, mc.MenuId, mc.Id });
 
         builder.Property(mc => mc.Id)
             .HasColumnName("id")
@@ -81,12 +82,12 @@ public class MenuCategoryConfiguration : IEntityTypeConfiguration<MenuCategory>
         builder.HasIndex(mc => new { mc.TenantId, mc.MenuId, mc.SortOrder })
             .HasDatabaseName("ix_menu_categories_tenant_id_menu_id_sort_order");
 
-        // Composite foreign key to menus(tenant_id, id)
+        // Composite foreign key to menus(tenant_id, branch_id, id)
         builder.HasOne<Menu>()
             .WithMany()
-            .HasPrincipalKey(m => new { m.TenantId, m.Id })
-            .HasForeignKey(mc => new { mc.TenantId, mc.MenuId })
-            .HasConstraintName("fk_menu_categories_menus_tenant_id_menu_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(mc => new { mc.TenantId, mc.BranchId, mc.MenuId })
+            .HasConstraintName("fk_menu_categories_menus_tenant_branch_menu")
             .OnDelete(DeleteBehavior.Cascade);
 
         // Composite foreign key to branches(tenant_id, id)

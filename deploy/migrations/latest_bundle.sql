@@ -125,7 +125,7 @@ BEGIN
                         RETURN NULL;
                     END;
                     $$ LANGUAGE plpgsql;
-                
+
     END IF;
 END $EF$;
 
@@ -141,7 +141,7 @@ BEGIN
 
                     ALTER TABLE tenancy.branches ENABLE ROW LEVEL SECURITY;
                     ALTER TABLE tenancy.branches FORCE ROW LEVEL SECURITY;
-                
+
     END IF;
 END $EF$;
 
@@ -166,7 +166,7 @@ BEGIN
                         FOR ALL
                         USING (tenant_id = tenancy.get_current_tenant_id())
                         WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
-                
+
     END IF;
 END $EF$;
 
@@ -185,7 +185,7 @@ BEGIN
                     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenancy TO restaurant_app_runtime;
                     ALTER DEFAULT PRIVILEGES IN SCHEMA tenancy GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO restaurant_app_runtime;
                     REVOKE CREATE ON SCHEMA tenancy FROM restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -608,7 +608,7 @@ BEGIN
                             RAISE EXCEPTION 'Required group role "restaurant_app_runtime" does not exist. Ensure database bootstrap script (deploy/bootstrap/001_create_runtime_login_role.sql) has been executed by a privileged administrator prior to applying schema migrations.';
                         END IF;
                     END $CHECK$;
-                
+
     END IF;
 END $EF$;
 
@@ -639,7 +639,7 @@ BEGIN
 
                     ALTER TABLE iam.password_reset_tokens ENABLE ROW LEVEL SECURITY;
                     ALTER TABLE iam.password_reset_tokens FORCE ROW LEVEL SECURITY;
-                
+
     END IF;
 END $EF$;
 
@@ -694,7 +694,7 @@ BEGIN
                         FOR ALL
                         USING (tenant_id = tenancy.get_current_tenant_id())
                         WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
-                
+
     END IF;
 END $EF$;
 
@@ -712,7 +712,7 @@ BEGIN
                     CREATE TRIGGER trg_prevent_audit_tampering
                         BEFORE UPDATE OR DELETE ON iam.security_audit_events
                         FOR EACH ROW EXECUTE FUNCTION iam.prevent_audit_tampering();
-                
+
     END IF;
 END $EF$;
 
@@ -735,7 +735,7 @@ BEGIN
                     AS $$
                     BEGIN
                         RETURN QUERY
-                        SELECT 
+                        SELECT
                             u.id,
                             u.normalized_email::text,
                             u.password_hash::text,
@@ -747,7 +747,7 @@ BEGIN
                         LIMIT 1;
                     END;
                     $$;
-                
+
     END IF;
 END $EF$;
 
@@ -766,7 +766,7 @@ BEGIN
                     GRANT EXECUTE ON FUNCTION iam.lookup_user_for_login(text) TO restaurant_app_runtime;
 
                     -- On tenant-owned IAM tables: DML access governed strictly by RLS
-                    GRANT SELECT, INSERT, UPDATE, DELETE ON 
+                    GRANT SELECT, INSERT, UPDATE, DELETE ON
                         iam.memberships,
                         iam.sessions,
                         iam.refresh_tokens,
@@ -779,7 +779,7 @@ BEGIN
                     -- On security audit events: append-only (SELECT, INSERT allowed; UPDATE and DELETE strictly forbidden)
                     GRANT SELECT, INSERT ON iam.security_audit_events TO restaurant_app_runtime;
                     REVOKE UPDATE, DELETE ON iam.security_audit_events FROM restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -820,7 +820,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_tenant_by_slug(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_tenant_by_slug(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -845,8 +845,8 @@ BEGIN
                         RETURN QUERY
                         SELECT m.id, m.tenant_id, m.user_id, m.role::text, m.branch_id, m.is_active
                         FROM iam.memberships m
-                        WHERE m.tenant_id = p_tenant_id 
-                          AND m.user_id = p_user_id 
+                        WHERE m.tenant_id = p_tenant_id
+                          AND m.user_id = p_user_id
                           AND m.is_active = true
                         LIMIT 1;
                     END;
@@ -854,7 +854,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_membership_for_login(uuid, uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_membership_for_login(uuid, uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -885,7 +885,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_invitation_token(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_invitation_token(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -916,7 +916,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_password_reset_token(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_password_reset_token(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -949,7 +949,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_terminal_for_auth(uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_terminal_for_auth(uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -979,7 +979,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_first_active_membership_by_user(uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_first_active_membership_by_user(uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1011,7 +1011,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_user_by_id(uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_user_by_id(uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1039,7 +1039,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_session_tenant(uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_session_tenant(uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1049,7 +1049,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_user_for_login(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_user_for_login(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1088,7 +1088,7 @@ BEGIN
 
                     CREATE INDEX IF NOT EXISTS ix_platform_sessions_user_id ON iam.platform_sessions(user_id);
                     CREATE INDEX IF NOT EXISTS ix_platform_sessions_expires_at_utc ON iam.platform_sessions(expires_at_utc);
-                
+
     END IF;
 END $EF$;
 
@@ -1113,7 +1113,7 @@ BEGIN
 
                     CREATE INDEX IF NOT EXISTS ix_platform_refresh_tokens_session_id ON iam.platform_refresh_tokens(session_id);
                     CREATE INDEX IF NOT EXISTS ix_platform_refresh_tokens_family_id ON iam.platform_refresh_tokens(token_family_id);
-                
+
     END IF;
 END $EF$;
 
@@ -1125,7 +1125,7 @@ BEGIN
                     GRANT SELECT, INSERT, UPDATE, DELETE ON iam.platform_refresh_tokens TO restaurant_app_runtime;
                     GRANT REFERENCES ON iam.users TO restaurant_app_runtime;
                     GRANT SELECT (failed_login_attempts, lockout_end_utc) ON iam.users TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1156,7 +1156,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_tenant_by_slug(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_tenant_by_slug(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1195,7 +1195,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.lookup_refresh_token_for_rotation(text) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_refresh_token_for_rotation(text) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1279,7 +1279,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.validate_token_session(uuid, uuid, integer) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.validate_token_session(uuid, uuid, integer) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1300,7 +1300,7 @@ BEGIN
 
                     REVOKE SELECT, INSERT, UPDATE, DELETE ON iam.platform_sessions FROM restaurant_app_runtime;
                     REVOKE SELECT, INSERT, UPDATE, DELETE ON iam.platform_refresh_tokens FROM restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1343,7 +1343,7 @@ BEGIN
                     END; $$;
                     REVOKE ALL ON FUNCTION iam.validate_token_session(uuid, uuid, integer) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.validate_token_session(uuid, uuid, integer) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1368,7 +1368,7 @@ BEGIN
                     END; $$;
                     REVOKE ALL ON FUNCTION iam.record_failed_login_attempt(uuid, integer, integer, timestamptz) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.record_failed_login_attempt(uuid, integer, integer, timestamptz) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1496,7 +1496,7 @@ BEGIN
                     END; $$;
                     REVOKE ALL ON FUNCTION iam.is_platform_session_active(uuid, timestamptz) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.is_platform_session_active(uuid, timestamptz) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1514,7 +1514,7 @@ BEGIN
                     END; $$;
                     REVOKE ALL ON FUNCTION iam.lookup_session_tenant_for_user(uuid, uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_session_tenant_for_user(uuid, uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1539,7 +1539,7 @@ BEGIN
                     END; $$;
                     REVOKE ALL ON FUNCTION iam.revoke_tenant_session_for_user(uuid, uuid, uuid, text, timestamptz) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.revoke_tenant_session_for_user(uuid, uuid, uuid, text, timestamptz) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1568,7 +1568,7 @@ BEGIN
                     UPDATE iam.memberships
                     SET status = CASE WHEN is_active = true THEN 1 ELSE 3 END
                     WHERE status = 0 OR status IS NULL;
-                
+
     END IF;
 END $EF$;
 
@@ -1592,15 +1592,15 @@ BEGIN
                         RETURN QUERY
                         SELECT m.id, m.tenant_id, m.branch_id, m.role::text, m.status
                         FROM iam.memberships m
-                        WHERE m.user_id = p_user_id 
-                          AND m.status = 1 
+                        WHERE m.user_id = p_user_id
+                          AND m.status = 1
                           AND m.is_active = true;
                     END;
                     $$;
 
                     REVOKE ALL ON FUNCTION iam.lookup_active_memberships_by_user(uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.lookup_active_memberships_by_user(uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1632,7 +1632,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.consume_invitation_token(text, timestamp with time zone) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.consume_invitation_token(text, timestamp with time zone) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1664,7 +1664,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.consume_password_reset_token(text, timestamp with time zone) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.consume_password_reset_token(text, timestamp with time zone) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1748,7 +1748,7 @@ BEGIN
                         WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
 
                     GRANT SELECT, INSERT, UPDATE, DELETE ON iam.identity_notifications_outbox TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1803,7 +1803,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.claim_pending_identity_notifications(integer, timestamp with time zone, integer, uuid) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.claim_pending_identity_notifications(integer, timestamp with time zone, integer, uuid) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1876,7 +1876,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.fail_identity_notification(uuid, uuid, text, timestamp with time zone, boolean, timestamp with time zone) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.fail_identity_notification(uuid, uuid, text, timestamp with time zone, boolean, timestamp with time zone) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -1923,7 +1923,7 @@ BEGIN
 
                     REVOKE ALL ON FUNCTION iam.revoke_membership_sessions(uuid, uuid, uuid, timestamp with time zone) FROM PUBLIC;
                     GRANT EXECUTE ON FUNCTION iam.revoke_membership_sessions(uuid, uuid, uuid, timestamp with time zone) TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -2003,7 +2003,7 @@ BEGIN
                         RETURN v_rows > 0;
                     END;
                     $$;
-                
+
     END IF;
 END $EF$;
 
@@ -2106,7 +2106,7 @@ BEGIN
 
                     GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.brand_appearances TO restaurant_app_runtime;
                     GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.branch_theme_overrides TO restaurant_app_runtime;
-                
+
     END IF;
 END $EF$;
 
@@ -2230,7 +2230,7 @@ BEGIN
                             GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.branch_operating_hours TO restaurant_app_runtime;
                         END IF;
                     END $$;
-                
+
     END IF;
 END $EF$;
 
@@ -2398,7 +2398,7 @@ BEGIN
                             GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.branch_feature_flags TO restaurant_app_runtime;
                         END IF;
                     END $$;
-                
+
     END IF;
 END $EF$;
 
@@ -2524,7 +2524,7 @@ BEGIN
                             GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.menu_categories TO restaurant_app_runtime;
                         END IF;
                     END $$;
-                
+
     END IF;
 END $EF$;
 
@@ -2702,7 +2702,7 @@ BEGIN
                             GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.item_variants TO restaurant_app_runtime;
                         END IF;
                     END $$;
-                
+
     END IF;
 END $EF$;
 
@@ -2891,7 +2891,7 @@ BEGIN
                             GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.menu_item_modifier_group_assignments TO restaurant_app_runtime;
                         END IF;
                     END $$;
-                
+
     END IF;
 END $EF$;
 
@@ -3010,3 +3010,445 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM tenancy.menu_items mi
+                            JOIN tenancy.menus m ON mi.tenant_id = m.tenant_id AND mi.menu_id = m.id
+                            WHERE mi.branch_id <> m.branch_id
+                        ) THEN
+                            RAISE EXCEPTION 'Pre-migration check failed: Found MenuItem with different branch_id than its Menu.';
+                        END IF;
+
+                        IF EXISTS (
+                            SELECT 1 FROM tenancy.menu_categories mc
+                            JOIN tenancy.menus m ON mc.tenant_id = m.tenant_id AND mc.menu_id = m.id
+                            WHERE mc.branch_id <> m.branch_id
+                        ) THEN
+                            RAISE EXCEPTION 'Pre-migration check failed: Found MenuCategory with different branch_id than its Menu.';
+                        END IF;
+
+                        IF EXISTS (
+                            SELECT 1 FROM tenancy.item_variants iv
+                            JOIN tenancy.menu_items mi ON iv.tenant_id = mi.tenant_id AND iv.menu_item_id = mi.id
+                            WHERE iv.branch_id <> mi.branch_id
+                        ) THEN
+                            RAISE EXCEPTION 'Pre-migration check failed: Found ItemVariant with different branch_id than its MenuItem.';
+                        END IF;
+                    END $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.branch_item_availabilities DROP CONSTRAINT fk_branch_item_availabilities_item_variants_variant_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.branch_item_availabilities DROP CONSTRAINT fk_branch_item_availabilities_menu_items_item_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.item_variants DROP CONSTRAINT fk_item_variants_menu_items_menu_item_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.item_variants DROP CONSTRAINT fk_item_variants_menus_tenant_id_menu_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_categories DROP CONSTRAINT fk_menu_categories_menus_tenant_id_menu_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_item_modifier_group_assignments DROP CONSTRAINT fk_item_modifier_assignments_menu_items_item_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_item_modifier_group_assignments DROP CONSTRAINT fk_item_modifier_assignments_modifier_groups_group_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items DROP CONSTRAINT fk_menu_items_categories_tenant_id_menu_id_category_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items DROP CONSTRAINT fk_menu_items_menus_tenant_id_menu_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items DROP CONSTRAINT fk_menu_items_preparation_stations_station_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.modifier_options DROP CONSTRAINT fk_modifier_options_modifier_groups_group_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_modifier_options_modifier_group_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menus DROP CONSTRAINT "AK_menus_tenant_id_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_items_preparation_station_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_items_tenant_id_branch_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_items_tenant_id_menu_id_category_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_item_modifier_group_assignments_menu_item_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_item_modifier_group_assignments_modifier_group_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_menu_categories_tenant_id_branch_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_item_variants_menu_item_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_item_variants_tenant_id_branch_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_item_variants_tenant_id_menu_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_branch_item_availabilities_item_variant_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    DROP INDEX tenancy."IX_branch_item_availabilities_menu_item_id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.preparation_stations ADD CONSTRAINT "AK_preparation_stations_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menus ADD CONSTRAINT "AK_menus_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT "AK_menu_items_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT "AK_menu_items_tenant_id_branch_id_menu_id_id" UNIQUE (tenant_id, branch_id, menu_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_categories ADD CONSTRAINT "AK_menu_categories_tenant_id_branch_id_menu_id_id" UNIQUE (tenant_id, branch_id, menu_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.item_variants ADD CONSTRAINT "AK_item_variants_tenant_id_branch_id_menu_item_id_id" UNIQUE (tenant_id, branch_id, menu_item_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE TABLE tenancy.catalog_availability_outbox (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        aggregate_id character varying(100) NOT NULL,
+        event_type character varying(100) NOT NULL,
+        payload jsonb NOT NULL,
+        schema_version integer NOT NULL,
+        status integer NOT NULL,
+        idempotency_key character varying(200) NOT NULL,
+        attempt_count integer NOT NULL,
+        max_attempts integer NOT NULL,
+        next_attempt_utc timestamp with time zone,
+        last_error character varying(500),
+        occurred_at timestamp with time zone NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        dispatched_at timestamp with time zone,
+        CONSTRAINT "PK_catalog_availability_outbox" PRIMARY KEY (id),
+        CONSTRAINT fk_catalog_availability_outbox_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_catalog_availability_outbox_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_modifier_options_tenant_id_branch_id_modifier_group_id" ON tenancy.modifier_options (tenant_id, branch_id, modifier_group_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_menu_items_tenant_id_branch_id_menu_id_category_id" ON tenancy.menu_items (tenant_id, branch_id, menu_id, category_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_menu_items_tenant_id_branch_id_preparation_station_id" ON tenancy.menu_items (tenant_id, branch_id, preparation_station_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_menu_item_modifier_group_assignments_tenant_id_branch_id_me~" ON tenancy.menu_item_modifier_group_assignments (tenant_id, branch_id, menu_item_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_menu_item_modifier_group_assignments_tenant_id_branch_id_mo~" ON tenancy.menu_item_modifier_group_assignments (tenant_id, branch_id, modifier_group_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX "IX_item_variants_tenant_id_branch_id_menu_id" ON tenancy.item_variants (tenant_id, branch_id, menu_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX ix_catalog_availability_outbox_status_next_attempt ON tenancy.catalog_availability_outbox (status, next_attempt_utc);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE INDEX ix_catalog_availability_outbox_tenant_id_branch_id ON tenancy.catalog_availability_outbox (tenant_id, branch_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    CREATE UNIQUE INDEX ix_catalog_availability_outbox_tenant_id_idempotency_key ON tenancy.catalog_availability_outbox (tenant_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.branch_item_availabilities ADD CONSTRAINT fk_branch_item_availabilities_menu_items_tenant_branch_item FOREIGN KEY (tenant_id, branch_id, menu_item_id) REFERENCES tenancy.menu_items (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.branch_item_availabilities ADD CONSTRAINT fk_branch_item_availabilities_variants_tenant_branch_variant FOREIGN KEY (tenant_id, branch_id, menu_item_id, item_variant_id) REFERENCES tenancy.item_variants (tenant_id, branch_id, menu_item_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.item_variants ADD CONSTRAINT fk_item_variants_menu_items_tenant_branch_item FOREIGN KEY (tenant_id, branch_id, menu_item_id) REFERENCES tenancy.menu_items (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.item_variants ADD CONSTRAINT fk_item_variants_menus_tenant_branch_menu FOREIGN KEY (tenant_id, branch_id, menu_id) REFERENCES tenancy.menus (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_categories ADD CONSTRAINT fk_menu_categories_menus_tenant_branch_menu FOREIGN KEY (tenant_id, branch_id, menu_id) REFERENCES tenancy.menus (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_item_modifier_group_assignments ADD CONSTRAINT fk_item_modifier_assignments_groups_tenant_branch_group FOREIGN KEY (tenant_id, branch_id, modifier_group_id) REFERENCES tenancy.modifier_groups (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_item_modifier_group_assignments ADD CONSTRAINT fk_item_modifier_assignments_menu_items_tenant_branch_item FOREIGN KEY (tenant_id, branch_id, menu_item_id) REFERENCES tenancy.menu_items (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT fk_menu_items_categories_tenant_branch_menu_cat FOREIGN KEY (tenant_id, branch_id, menu_id, category_id) REFERENCES tenancy.menu_categories (tenant_id, branch_id, menu_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT fk_menu_items_menus_tenant_branch_menu FOREIGN KEY (tenant_id, branch_id, menu_id) REFERENCES tenancy.menus (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT fk_menu_items_prep_stations_tenant_branch_station FOREIGN KEY (tenant_id, branch_id, preparation_station_id) REFERENCES tenancy.preparation_stations (tenant_id, branch_id, id) ON DELETE SET NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    ALTER TABLE tenancy.modifier_options ADD CONSTRAINT fk_modifier_options_modifier_groups_tenant_branch_group FOREIGN KEY (tenant_id, branch_id, modifier_group_id) REFERENCES tenancy.modifier_groups (tenant_id, branch_id, id) ON DELETE CASCADE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+
+                    ALTER TABLE tenancy.catalog_availability_outbox ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.catalog_availability_outbox FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS catalog_availability_outbox_isolation_policy ON tenancy.catalog_availability_outbox;
+                    CREATE POLICY catalog_availability_outbox_isolation_policy ON tenancy.catalog_availability_outbox
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.catalog_availability_outbox TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;

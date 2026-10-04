@@ -68,7 +68,7 @@ public class ModifierGroup
         };
     }
 
-    public void UpdateDetails(string name, int minSelections, int maxSelections, int sortOrder)
+    public void UpdateDetails(string name, int minSelections, int maxSelections, int sortOrder, bool isAssigned = false)
     {
         if (sortOrder < 0)
         {
@@ -79,10 +79,33 @@ public class ModifierGroup
         ValidateSelectionBounds(minSelections, maxSelections);
 
         var activeOptionsCount = _options.Count(o => o.IsActive);
-        if (activeOptionsCount > 0 && maxSelections > activeOptionsCount)
+        if (isAssigned)
         {
-            throw new DomainException(
-                $"MaxSelections ({maxSelections}) cannot exceed total active options ({activeOptionsCount}) for group '{validatedName}'.");
+            if (activeOptionsCount < maxSelections)
+            {
+                throw new DomainException(
+                    $"MaxSelections ({maxSelections}) cannot exceed total active options ({activeOptionsCount}) for assigned group '{validatedName}'.");
+            }
+
+            if (activeOptionsCount < minSelections)
+            {
+                throw new DomainException(
+                    $"MinSelections ({minSelections}) cannot exceed total active options ({activeOptionsCount}) for assigned group '{validatedName}'.");
+            }
+        }
+        else if (activeOptionsCount > 0)
+        {
+            if (maxSelections > activeOptionsCount)
+            {
+                throw new DomainException(
+                    $"MaxSelections ({maxSelections}) cannot exceed total active options ({activeOptionsCount}) for group '{validatedName}'.");
+            }
+
+            if (minSelections > activeOptionsCount)
+            {
+                throw new DomainException(
+                    $"MinSelections ({minSelections}) cannot exceed total active options ({activeOptionsCount}) for group '{validatedName}'.");
+            }
         }
 
         var activeDefaultCount = _options.Count(o => o.IsActive && o.IsDefault);
@@ -208,7 +231,7 @@ public class ModifierGroup
         Touch();
     }
 
-    public void DeactivateOption(ModifierOptionId optionId)
+    public void DeactivateOption(ModifierOptionId optionId, bool isAssigned = false)
     {
         var option = GetOption(optionId);
         if (!option.IsActive)
@@ -216,10 +239,23 @@ public class ModifierGroup
             return;
         }
 
-        if (IsActive)
+        var remainingActive = _options.Count(o => o.IsActive && o.Id != optionId);
+
+        if (isAssigned && remainingActive == 0)
         {
-            var remainingActive = _options.Count(o => o.IsActive && o.Id != optionId);
-            if (remainingActive < MaxSelections && remainingActive > 0)
+            throw new DomainException(
+                $"Cannot deactivate the last active option for assigned modifier group '{Name}'.");
+        }
+
+        if (IsActive || isAssigned)
+        {
+            if (remainingActive < MinSelections)
+            {
+                throw new DomainException(
+                    $"Deactivating option would leave fewer active options ({remainingActive}) than MinSelections ({MinSelections}).");
+            }
+
+            if (remainingActive < MaxSelections)
             {
                 throw new DomainException(
                     $"Deactivating option would leave fewer active options ({remainingActive}) than MaxSelections ({MaxSelections}).");

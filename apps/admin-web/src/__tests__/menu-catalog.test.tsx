@@ -92,7 +92,7 @@ describe('menu catalog management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ürün ekle' }));
     fireEvent.change(screen.getByLabelText('Ürün adı'), { target: { value: 'Mercimek' } });
     fireEvent.change(screen.getByLabelText('Slug'), { target: { value: 'mercimek' } });
-    fireEvent.change(screen.getByLabelText('Temel fiyat (₺)'), { target: { value: '89.50' } });
+    fireEvent.change(screen.getByLabelText(/Temel fiyat \(/), { target: { value: '89.50' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await screen.findByText('Ürün kataloğa kaydedildi.');
     const create = requests.find((entry) => entry.url.endsWith('/items') && entry.init?.method === 'POST');
@@ -120,7 +120,7 @@ describe('menu catalog management', () => {
       <MenuItemEditorSheet isOpen branchId={ids.branch} menuId={ids.menu} item={item} categories={[category]} allItems={[item]} groups={[]}
         canManage canPrice={false} onClose={vi.fn()} onSave={vi.fn()} onNestedSaved={vi.fn()} onError={vi.fn()} />
     </AdminConfigProvider></AuthProvider>);
-    expect((screen.getByLabelText('Temel fiyat (₺)') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/Temel fiyat \(/) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Ürün adı') as HTMLInputElement).disabled).toBe(false);
   });
 
@@ -144,7 +144,7 @@ describe('menu catalog management', () => {
     fireEvent.click(within(screen.getByRole('region', { name: 'Ürünler' })).getByRole('button', { name: 'Düzenle' }));
     fireEvent.change(screen.getByLabelText('Varyant adı'), { target: { value: 'Büyük' } });
     fireEvent.change(screen.getByLabelText('Kod'), { target: { value: 'BIG' } });
-    fireEvent.change(screen.getByLabelText('Fiyat (₺)'), { target: { value: '175.25' } });
+    fireEvent.change(screen.getByLabelText(/Fiyat \(/), { target: { value: '175.25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Varyantı kaydet' }));
     await waitFor(() => expect(requests.some((entry) => entry.url.endsWith('/variants') && entry.init?.method === 'POST')).toBe(true));
     const variantRequest = requests.find((entry) => entry.url.endsWith('/variants') && entry.init?.method === 'POST');

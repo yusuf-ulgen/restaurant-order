@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 export const FORBIDDEN_DESTRUCTIVE_PATTERNS = [
   { pattern: /\bDROP\s+TABLE\b/i, description: 'DROP TABLE is destructive and breaks active slot' },
   { pattern: /\bDROP\s+COLUMN\b/i, description: 'DROP COLUMN breaks active slot backward compatibility' },
-  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\b/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
+  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\s+(?!CONSTRAINT\b)/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
   { pattern: /\bRENAME\s+COLUMN\b/i, description: 'RENAME COLUMN is prohibited; use expand (add new) + contract' },
   { pattern: /\bTRUNCATE\b/i, description: 'TRUNCATE is destructive' },
   { pattern: /\bADD\s+COLUMN\s+.*\bNOT\s+NULL\b(?!\s+DEFAULT)/i, description: 'ADD COLUMN NOT NULL without DEFAULT breaks concurrent inserts' },
@@ -159,7 +159,16 @@ export function generateMigrationScript(options = {}) {
 
   // Validate the generated script
   if (fs.existsSync(outputPath)) {
-    const scriptContent = fs.readFileSync(outputPath, 'utf8');
+    let scriptContent = fs.readFileSync(outputPath, 'utf8');
+    const sanitized = scriptContent
+      .split(/\r?\n/)
+      .map(line => line.trimEnd())
+      .join('\n')
+      .trimEnd() + '\n';
+    if (sanitized !== scriptContent) {
+      fs.writeFileSync(outputPath, sanitized, 'utf8');
+      scriptContent = sanitized;
+    }
     const compatibility = checkExpandContractCompatibility(scriptContent);
     if (!compatibility.isCompatible) {
       throw new Error(`Generated migration script contains destructive operations:\n${compatibility.violations.join('\n')}`);

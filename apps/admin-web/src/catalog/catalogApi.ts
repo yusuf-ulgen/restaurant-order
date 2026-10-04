@@ -86,9 +86,18 @@ export const catalogApi = {
   setAvailability: (branchId: string, menuId: string, item: MenuItemContract, availability: AvailabilityContract | undefined, available: boolean) => {
     const action = available ? 'restock' : 'quick-86';
     const endpoint = `${itemPath(branchId, menuId, item.id)}/${action}`;
+    const token = availability?.concurrencyToken || item.concurrencyToken;
     const body = available
-      ? { note: 'Stok yenilendi', concurrencyToken: availability?.concurrencyToken }
-      : { reasonCode: 'Manual', note: 'Geçici olarak stokta yok', concurrencyToken: availability?.concurrencyToken };
-    return request<AvailabilityContract>(endpoint, 'POST', body, availability?.concurrencyToken);
+      ? { note: 'Stok yenilendi', concurrencyToken: token }
+      : { reasonCode: 'Manual', note: 'Geçici olarak stokta yok', concurrencyToken: token };
+    return request<AvailabilityContract>(endpoint, 'POST', body, token);
   },
+  reorderCategories: (branchId: string, menuId: string, items: { id: string; sortOrder: number; concurrencyToken: string }[]) =>
+    request<CategoryContract[]>(`${menuPath(branchId, menuId)}/categories/reorder`, 'POST', { items }),
+  reorderItems: (branchId: string, menuId: string, categoryId: string, items: { id: string; sortOrder: number; concurrencyToken: string }[]) =>
+    request<MenuItemContract[]>(`${menuPath(branchId, menuId)}/categories/${categoryId}/items/reorder`, 'POST', { items }),
+  reorderVariants: (branchId: string, menuId: string, itemId: string, items: { id: string; sortOrder: number; concurrencyToken: string }[]) =>
+    request<VariantContract[]>(`${itemPath(branchId, menuId, itemId)}/variants/reorder`, 'POST', { items }),
+  reorderModifierOptions: (branchId: string, groupId: string, items: { id: string; sortOrder: number; concurrencyToken: string }[]) =>
+    request<ModifierOptionContract[]>(`${base(branchId)}/modifier-groups/${groupId}/options/reorder`, 'POST', { items }),
 };

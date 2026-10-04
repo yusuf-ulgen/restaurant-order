@@ -90,6 +90,25 @@ public partial class CatalogService
                 command.ExpectedAvailableAtUtc
             });
 
+        var eventData = new CatalogAvailabilityChangedEvent(
+            TenantId: tenantId.Value,
+            BranchId: branchId.Value,
+            MenuItemId: itemId.Value,
+            ItemVariantId: null,
+            IsAvailable: false,
+            ReasonCode: reasonCode.ToString(),
+            Note: record.Note,
+            ExpectedAvailableAtUtc: record.ExpectedAvailableAtUtc,
+            OccurredAtUtc: record.ChangedAtUtc);
+
+        EnqueueAvailabilityOutboxMessage(
+            tenantId,
+            branchId,
+            itemId.Value.ToString(),
+            "CatalogItemQuick86",
+            eventData,
+            $"item-86-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{record.ConcurrencyToken:D}");
+
         try
         {
             await _dbContext.SaveChangesAsync(ct);
@@ -103,18 +122,7 @@ public partial class CatalogService
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
 
-        await _eventPublisher.PublishAvailabilityChangedAsync(
-            new CatalogAvailabilityChangedEvent(
-                TenantId: tenantId.Value,
-                BranchId: branchId.Value,
-                MenuItemId: itemId.Value,
-                ItemVariantId: null,
-                IsAvailable: false,
-                ReasonCode: reasonCode.ToString(),
-                Note: record.Note,
-                ExpectedAvailableAtUtc: record.ExpectedAvailableAtUtc,
-                OccurredAtUtc: record.ChangedAtUtc),
-            ct);
+        await _eventPublisher.PublishAvailabilityChangedAsync(eventData, ct);
 
         return MapAvailability(record);
     }
@@ -174,6 +182,25 @@ public partial class CatalogService
                 command.Note
             });
 
+        var restockEventData = new CatalogAvailabilityChangedEvent(
+            TenantId: tenantId.Value,
+            BranchId: branchId.Value,
+            MenuItemId: itemId.Value,
+            ItemVariantId: null,
+            IsAvailable: true,
+            ReasonCode: AvailabilityReasonCode.Restocked.ToString(),
+            Note: record.Note,
+            ExpectedAvailableAtUtc: null,
+            OccurredAtUtc: record.ChangedAtUtc);
+
+        EnqueueAvailabilityOutboxMessage(
+            tenantId,
+            branchId,
+            itemId.Value.ToString(),
+            "CatalogItemRestocked",
+            restockEventData,
+            $"item-restock-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{record.ConcurrencyToken:D}");
+
         try
         {
             await _dbContext.SaveChangesAsync(ct);
@@ -187,20 +214,32 @@ public partial class CatalogService
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
 
-        await _eventPublisher.PublishAvailabilityChangedAsync(
-            new CatalogAvailabilityChangedEvent(
-                TenantId: tenantId.Value,
-                BranchId: branchId.Value,
-                MenuItemId: itemId.Value,
-                ItemVariantId: null,
-                IsAvailable: true,
-                ReasonCode: AvailabilityReasonCode.Restocked.ToString(),
-                Note: record.Note,
-                ExpectedAvailableAtUtc: null,
-                OccurredAtUtc: record.ChangedAtUtc),
-            ct);
+        await _eventPublisher.PublishAvailabilityChangedAsync(restockEventData, ct);
 
         return MapAvailability(record);
+    }
+
+    private void EnqueueAvailabilityOutboxMessage(
+        TenantId tenantId,
+        BranchId branchId,
+        string aggregateId,
+        string eventType,
+        CatalogAvailabilityChangedEvent eventData,
+        string idempotencyKey)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(eventData);
+        var nowUtc = DateTimeOffset.UtcNow;
+        var outboxMessage = CatalogAvailabilityOutboxMessage.Create(
+            tenantId: tenantId,
+            branchId: branchId,
+            aggregateId: aggregateId,
+            eventType: eventType,
+            payload: payload,
+            idempotencyKey: idempotencyKey,
+            occurredAtUtc: eventData.OccurredAtUtc,
+            createdAtUtc: nowUtc);
+
+        _dbContext.CatalogAvailabilityOutbox.Add(outboxMessage);
     }
 
     private void EnsureQuick86Permission(AuthenticatedPrincipal actor)

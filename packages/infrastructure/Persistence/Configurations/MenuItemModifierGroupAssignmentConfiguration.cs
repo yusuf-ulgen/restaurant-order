@@ -53,14 +53,16 @@ public class MenuItemModifierGroupAssignmentConfiguration : IEntityTypeConfigura
 
         builder.HasOne(a => a.MenuItem)
             .WithMany(m => m.ModifierGroupAssignments)
-            .HasForeignKey(a => a.MenuItemId)
-            .HasConstraintName("fk_item_modifier_assignments_menu_items_item_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(a => new { a.TenantId, a.BranchId, a.MenuItemId })
+            .HasConstraintName("fk_item_modifier_assignments_menu_items_tenant_branch_item")
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(a => a.ModifierGroup)
             .WithMany()
-            .HasForeignKey(a => a.ModifierGroupId)
-            .HasConstraintName("fk_item_modifier_assignments_modifier_groups_group_id")
+            .HasPrincipalKey(mg => new { mg.TenantId, mg.BranchId, mg.Id })
+            .HasForeignKey(a => new { a.TenantId, a.BranchId, a.ModifierGroupId })
+            .HasConstraintName("fk_item_modifier_assignments_groups_tenant_branch_group")
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne<Tenant>()

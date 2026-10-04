@@ -214,9 +214,10 @@ public partial class CatalogService : ICatalogService
             {
                 throw new InvalidAuthorizationScopeException("SuperAdmin is not authorized to bypass tenant scope.");
             }
+            return;
         }
 
-        if (actor.Scope.TenantId.HasValue && actor.Scope.TenantId.Value != tenantId)
+        if (!actor.Scope.TenantId.HasValue || actor.Scope.TenantId.Value != tenantId)
         {
             throw new InvalidAuthorizationScopeException("Actor is not authorized for this tenant.");
         }
@@ -226,12 +227,18 @@ public partial class CatalogService : ICatalogService
     {
         EnsureTenantAccess(tenantId, actor);
 
-        if (actor.Role == AuthRole.BranchManager)
+        // RestaurantAdmin is scoped to the tenant and can access all branches within their tenant.
+        if (actor.Role == AuthRole.RestaurantAdmin)
         {
-            if (!actor.Scope.BranchId.HasValue || actor.Scope.BranchId.Value != branchId.Value)
-            {
-                throw new InvalidAuthorizationScopeException("BranchManager is only authorized to access their assigned branch.");
-            }
+            return;
+        }
+
+        // All other roles (BranchManager, Cashier, Kitchen, Bar, Waiter, Customer, SuperAdmin, etc.)
+        // must have an explicit matching BranchId in their scope. Fail-closed on missing or mismatched branch.
+        if (!actor.Scope.BranchId.HasValue || actor.Scope.BranchId.Value != branchId.Value)
+        {
+            throw new InvalidAuthorizationScopeException(
+                $"{actor.Role} is not authorized to access branch '{branchId.Value}'.");
         }
     }
 

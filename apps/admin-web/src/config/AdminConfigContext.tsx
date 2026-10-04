@@ -15,6 +15,7 @@ export interface BranchOption {
   slug: string;
   isActive: boolean;
   status: string;
+  currency?: string;
 }
 
 export interface AdminConfigContextValue {

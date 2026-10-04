@@ -81,8 +81,9 @@ public class ModifierOptionConfiguration : IEntityTypeConfiguration<ModifierOpti
 
         builder.HasOne<ModifierGroup>()
             .WithMany(mg => mg.Options)
-            .HasForeignKey(o => o.ModifierGroupId)
-            .HasConstraintName("fk_modifier_options_modifier_groups_group_id")
+            .HasPrincipalKey(mg => new { mg.TenantId, mg.BranchId, mg.Id })
+            .HasForeignKey(o => new { o.TenantId, o.BranchId, o.ModifierGroupId })
+            .HasConstraintName("fk_modifier_options_modifier_groups_tenant_branch_group")
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne<Tenant>()

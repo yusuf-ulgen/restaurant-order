@@ -94,18 +94,20 @@ public class BranchItemAvailabilityConfiguration : IEntityTypeConfiguration<Bran
             .HasConstraintName("fk_branch_item_availabilities_branches_tenant_id_branch_id")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // FK to menu_items
+        // Composite FK to menu_items (tenant_id, branch_id, id)
         builder.HasOne<MenuItem>()
             .WithMany()
-            .HasForeignKey(a => a.MenuItemId)
-            .HasConstraintName("fk_branch_item_availabilities_menu_items_item_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(a => new { a.TenantId, a.BranchId, a.MenuItemId })
+            .HasConstraintName("fk_branch_item_availabilities_menu_items_tenant_branch_item")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // FK to item_variants
+        // Composite FK to item_variants (tenant_id, branch_id, menu_item_id, id)
         builder.HasOne<ItemVariant>()
             .WithMany()
-            .HasForeignKey(a => a.ItemVariantId)
-            .HasConstraintName("fk_branch_item_availabilities_item_variants_variant_id")
+            .HasPrincipalKey(v => new { v.TenantId, v.BranchId, v.MenuItemId, v.Id })
+            .HasForeignKey(a => new { a.TenantId, a.BranchId, a.MenuItemId, a.ItemVariantId })
+            .HasConstraintName("fk_branch_item_availabilities_variants_tenant_branch_variant")
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
     }

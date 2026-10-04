@@ -147,4 +147,3 @@ describe('catalog editors', () => {
     expect(JSON.parse(String(update?.init?.body))).not.toHaveProperty('priceDeltaMinorUnits');
   });
 });
-

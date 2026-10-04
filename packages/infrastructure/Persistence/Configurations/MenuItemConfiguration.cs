@@ -14,6 +14,8 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
 
         builder.HasKey(m => m.Id);
         builder.HasAlternateKey(m => new { m.TenantId, m.MenuId, m.Id });
+        builder.HasAlternateKey(m => new { m.TenantId, m.BranchId, m.MenuId, m.Id });
+        builder.HasAlternateKey(m => new { m.TenantId, m.BranchId, m.Id });
 
         builder.Property(m => m.Id)
             .HasColumnName("id")
@@ -148,20 +150,20 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
         builder.HasIndex(m => new { m.TenantId, m.CategoryId, m.SortOrder })
             .HasDatabaseName("ix_menu_items_tenant_id_category_id_sort_order");
 
-        // Composite FK to menus
+        // Composite FK to menus (tenant_id, branch_id, id)
         builder.HasOne<Menu>()
             .WithMany()
-            .HasPrincipalKey(m => new { m.TenantId, m.Id })
-            .HasForeignKey(m => new { m.TenantId, m.MenuId })
-            .HasConstraintName("fk_menu_items_menus_tenant_id_menu_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(m => new { m.TenantId, m.BranchId, m.MenuId })
+            .HasConstraintName("fk_menu_items_menus_tenant_branch_menu")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Composite FK to menu_categories
+        // Composite FK to menu_categories (tenant_id, branch_id, menu_id, id)
         builder.HasOne<MenuCategory>()
             .WithMany()
-            .HasPrincipalKey(mc => new { mc.TenantId, mc.MenuId, mc.Id })
-            .HasForeignKey(m => new { m.TenantId, m.MenuId, m.CategoryId })
-            .HasConstraintName("fk_menu_items_categories_tenant_id_menu_id_category_id")
+            .HasPrincipalKey(mc => new { mc.TenantId, mc.BranchId, mc.MenuId, mc.Id })
+            .HasForeignKey(m => new { m.TenantId, m.BranchId, m.MenuId, m.CategoryId })
+            .HasConstraintName("fk_menu_items_categories_tenant_branch_menu_cat")
             .OnDelete(DeleteBehavior.Cascade);
 
         // Composite FK to branches
@@ -179,26 +181,29 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .HasConstraintName("fk_menu_items_tenants_tenant_id")
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Optional FK to preparation_stations
+        // Composite FK to preparation_stations (tenant_id, branch_id, id)
         builder.HasOne<PreparationStation>()
             .WithMany()
-            .HasForeignKey(m => m.PreparationStationId)
-            .HasConstraintName("fk_menu_items_preparation_stations_station_id")
+            .HasPrincipalKey(ps => new { ps.TenantId, ps.BranchId, ps.Id })
+            .HasForeignKey(m => new { m.TenantId, m.BranchId, m.PreparationStationId })
+            .HasConstraintName("fk_menu_items_prep_stations_tenant_branch_station")
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
         // 1-to-many relationship with ItemVariant
         builder.HasMany(m => m.Variants)
             .WithOne()
-            .HasForeignKey(v => v.MenuItemId)
-            .HasConstraintName("fk_item_variants_menu_items_menu_item_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(v => new { v.TenantId, v.BranchId, v.MenuItemId })
+            .HasConstraintName("fk_item_variants_menu_items_tenant_branch_item")
             .OnDelete(DeleteBehavior.Cascade);
 
         // 1-to-many relationship with MenuItemModifierGroupAssignment
         builder.HasMany(m => m.ModifierGroupAssignments)
             .WithOne(a => a.MenuItem)
-            .HasForeignKey(a => a.MenuItemId)
-            .HasConstraintName("fk_item_modifier_assignments_menu_items_item_id")
+            .HasPrincipalKey(m => new { m.TenantId, m.BranchId, m.Id })
+            .HasForeignKey(a => new { a.TenantId, a.BranchId, a.MenuItemId })
+            .HasConstraintName("fk_item_modifier_assignments_menu_items_tenant_branch_item")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
