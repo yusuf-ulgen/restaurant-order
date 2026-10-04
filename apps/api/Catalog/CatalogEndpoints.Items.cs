@@ -20,7 +20,8 @@ public sealed record CreateMenuItemApiRequest(
     string? ShortDescription = null,
     string? FullDescription = null,
     string? ImageUrl = null,
-    int SortOrder = 0);
+    int SortOrder = 0,
+    Guid? PreparationStationId = null);
 
 public sealed record UpdateMenuItemApiRequest(
     Guid CategoryId,
@@ -179,7 +180,8 @@ public static partial class CatalogEndpoints
                 ShortDescription: request.ShortDescription,
                 FullDescription: request.FullDescription,
                 ImageUrl: request.ImageUrl,
-                SortOrder: request.SortOrder);
+                SortOrder: request.SortOrder,
+                PreparationStationId: request.PreparationStationId);
 
             var created = await catalogService.CreateItemAsync(
                 tenantId,
