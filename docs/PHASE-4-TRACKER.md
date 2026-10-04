@@ -13,7 +13,7 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 | **Phase 4.3** | Configuration-Driven Dynamic Admin Shell | **Completed** | Dynamic Header, Sidebar, Footer, Navigation Registry, Branding Settings Screen, Theme Provider | 2f5f24c |
 | **Phase 4.4** | Branch Operating Hours & Financial Configuration | **Completed** | Branch financial settings, weekly operating hours, basis points rates, RLS, RBAC | ad99ec3 |
 | **Phase 4.5** | Branch Dining Areas, Preparation Stations & Feature Controls | **Completed** | Tenant-safe Dining Areas, Preparation Stations, Type-Safe Feature Flag Catalog & Admin UI | 7a1e45f |
-| **Phase 4.6** | Final Hardening, Verification & Merge Readiness | **Completed** | Concurrency lifecycle hardening, migration bundle, negative flow tests, CI closure | 88b3e03 + Final Fix |
+| **Phase 4.6** | Final Hardening, Verification & Merge Readiness | **Verification pending** | Concurrency lifecycle hardening, migration bundle, negative flow tests; latest CI coverage gate is failing pending added endpoint coverage | 16e3321 + pending fix |
 
 ---
 
@@ -208,7 +208,13 @@ This document tracks implementation progress across all 6 sub-phases of **Phase 
 
 ---
 
-## 3. Verified Command Results (Phase 4.6 Final)
+## 3. Verification Status (Phase 4.6 Pending)
+
+Final verification is pending. On 2026-10-04, the push and pull-request Actions runs for `16e3321db13fa54bb997bf6375dd3d1114d7f6ed` both failed in backend coverage enforcement: branch coverage was 78.24%, below the required 80%. The integration step itself passed 201/201 tests in CI. Endpoint handler unit tests have been added locally; the final CI result must be recorded after they are pushed.
+
+The command results below document earlier Phase 4 verification and are not a claim that the current head has passed final verification.
+
+## 3. Earlier Verified Command Results (Phase 4.6)
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |

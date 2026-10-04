@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App, AdminContent, type AdminAppProps } from './App';
+import { AuthProvider } from './auth/AuthContext';
+import { AdminConfigProvider, createDefaultFallbackTheme } from './config/AdminConfigContext';
 import { UserPrincipalDto } from '@restaurant-order/contracts';
 
 const mockAdminUser: UserPrincipalDto = {
@@ -18,6 +20,15 @@ const mockUnauthorizedUser: UserPrincipalDto = {
   tenantId: 'tenant-1',
   securityVersion: 1,
 };
+
+const renderAdminContent = (user: UserPrincipalDto | null, props: AdminAppProps = {}) =>
+  render(
+    <AuthProvider initialUser={user}>
+      <AdminConfigProvider initialTheme={createDefaultFallbackTheme()}>
+        <AdminContent {...props} />
+      </AdminConfigProvider>
+    </AuthProvider>
+  );
 
 describe('Admin Web App - Authentication & Access Control', () => {
   beforeEach(() => {
@@ -239,6 +250,48 @@ describe('Admin Web App - Authentication & Access Control', () => {
       fireEvent.click(closeBtn);
 
       expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('renders supported initial views and the dashboard empty state', () => {
+      const cases: Array<[NonNullable<AdminAppProps['initialView']>, RegExp]> = [
+        ['brand-settings', /Tema Ayarlar/],
+        ['dining-areas', /Masa Alan/],
+        ['preparation-stations', /Haz.rl.k/],
+        ['feature-settings', /Özellik Yönetimi/],
+        ['menu', /Bu mod/],
+      ];
+
+      for (const [initialView, expectedText] of cases) {
+        const rendered = renderAdminContent(null, { initialView });
+        expect(screen.getByText(expectedText)).toBeDefined();
+        rendered.unmount();
+      }
+
+      renderAdminContent(null, { initialView: 'dashboard', hasMetrics: false });
+      expect(screen.getByText(/Raporlan/)).toBeDefined();
+    });
+
+    it('formats roles in the header badge', () => {
+      const renderWithRole = (role: string) => {
+        const user: UserPrincipalDto = {
+          userId: '1', email: 'test@example.test', role, tenantId: 'tenant-test', securityVersion: 1,
+        };
+        return renderAdminContent(user);
+      };
+
+      const roles: Array<[string, RegExp]> = [
+        ['SuperAdmin', /^Super Admin$/],
+        ['BranchManager', /M.d.r./],
+        ['Cashier', /Kasa \/ Operasyon/],
+        ['Waiter', /^Garson$/],
+        ['UnknownRole', /^UnknownRole$/],
+      ];
+
+      for (const [role, expectedText] of roles) {
+        const rendered = renderWithRole(role);
+        expect(screen.getByText(expectedText)).toBeDefined();
+        rendered.unmount();
+      }
     });
   });
 });
