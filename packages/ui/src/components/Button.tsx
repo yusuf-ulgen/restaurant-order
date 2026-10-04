@@ -30,7 +30,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     fontWeight: 'var(--ro-font-weight-semibold)',
     fontFamily: 'var(--ro-font-sans)',
     borderRadius: 'var(--ro-radius-md)',
-    border: '1px solid transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
     cursor: isInactive ? 'not-allowed' : 'pointer',
     opacity: isInactive ? 0.6 : 1,
     transition: 'all var(--ro-transition-fast)',
@@ -62,10 +64,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     primary: {
       backgroundColor: 'var(--ro-color-primary)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
     secondary: {
       backgroundColor: 'var(--ro-color-secondary)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
     outline: {
       backgroundColor: 'transparent',
@@ -80,6 +84,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     danger: {
       backgroundColor: 'var(--ro-color-danger)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
   };
 

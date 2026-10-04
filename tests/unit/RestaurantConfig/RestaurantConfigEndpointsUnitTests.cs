@@ -42,7 +42,25 @@ public class RestaurantConfigEndpointsUnitTests
         AssertProblem(argEx, StatusCodes.Status400BadRequest);
 
         var genericEx = RestaurantConfigEndpoints.HandleException(new InvalidOperationException("Generic failure"));
-        AssertProblem(genericEx, StatusCodes.Status500InternalServerError);
+        var genericProblem = AssertProblem(genericEx, StatusCodes.Status500InternalServerError);
+        Assert.Equal("An unexpected error occurred while processing your request.", genericProblem.ProblemDetails.Detail);
+        Assert.NotNull(genericProblem.ProblemDetails.Extensions["correlationId"]);
+    }
+
+    [Fact]
+    public void HandleException_WithHttpContext_PreservesCorrelationIdHeaderAndMasksSensitiveDetail()
+    {
+        var httpContext = new DefaultHttpContext();
+        var correlationId = Guid.NewGuid().ToString("D");
+        httpContext.Request.Headers["X-Correlation-Id"] = correlationId;
+
+        var result = RestaurantConfigEndpoints.HandleException(new InvalidOperationException("Database password was leaked"), httpContext);
+        var problem = AssertProblem(result, StatusCodes.Status500InternalServerError);
+
+        Assert.Equal("An unexpected error occurred while processing your request.", problem.ProblemDetails.Detail);
+        Assert.DoesNotContain("Database password", problem.ProblemDetails.Detail);
+        Assert.Equal(correlationId, problem.ProblemDetails.Extensions["correlationId"]?.ToString());
+        Assert.Equal(correlationId, httpContext.Response.Headers["X-Correlation-Id"].ToString());
     }
 
     [Fact]
@@ -174,9 +192,10 @@ public class RestaurantConfigEndpointsUnitTests
             securityVersion: 1);
     }
 
-    private static void AssertProblem(IResult result, int expectedStatusCode)
+    private static ProblemHttpResult AssertProblem(IResult result, int expectedStatusCode)
     {
         var problemHttpResult = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(expectedStatusCode, problemHttpResult.StatusCode);
+        return problemHttpResult;
     }
 }

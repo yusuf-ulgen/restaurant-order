@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../AuthContext';
 import { LoginForm } from '../LoginForm';
 import { ProtectedRoute } from '../ProtectedRoute';
@@ -19,8 +19,13 @@ describe('Admin Web Auth Components', () => {
   });
 
   describe('ProtectedRoute', () => {
-    it('renders spinner when loading', () => {
-      // AuthProvider without initialUser starts with isLoading=true
+    it('renders spinner when loading', async () => {
+      let resolveFetch!: (value: unknown) => void;
+      const fetchPromise = new Promise<unknown>((resolve) => {
+        resolveFetch = resolve;
+      });
+      globalThis.fetch = vi.fn().mockImplementation(() => fetchPromise);
+
       render(
         <AuthProvider>
           <ProtectedRoute>
@@ -30,6 +35,14 @@ describe('Admin Web Auth Components', () => {
       );
 
       expect(screen.queryByText('Protected Content')).toBeNull();
+
+      await act(async () => {
+        resolveFetch!({
+          ok: false,
+          status: 401,
+          json: async () => ({}),
+        });
+      });
     });
 
     it('renders login form when not authenticated', async () => {

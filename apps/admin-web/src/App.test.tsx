@@ -271,12 +271,12 @@ describe('Admin Web App - Authentication & Access Control', () => {
       ];
 
       for (const [initialView, expectedText] of cases) {
-        const rendered = renderAdminContent(null, { initialView });
-        expect(screen.getByText(expectedText)).toBeDefined();
+        const rendered = renderAdminContent(mockAdminUser, { initialView });
+        expect(screen.getAllByText(expectedText)[0]).toBeDefined();
         rendered.unmount();
       }
 
-      renderAdminContent(null, { initialView: 'dashboard', hasMetrics: false });
+      renderAdminContent(mockAdminUser, { initialView: 'dashboard', hasMetrics: false });
       expect(screen.getByText(/Raporlan/)).toBeDefined();
     });
 
@@ -289,7 +289,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
       ];
 
       for (const [initialView, closeButton] of closableViews) {
-        const rendered = renderAdminContent(null, { initialView });
+        const rendered = renderAdminContent(mockAdminUser, { initialView });
         fireEvent.click(screen.getByRole('button', { name: closeButton }));
         expect(screen.getByText(/Metrik/)).toBeDefined();
         rendered.unmount();

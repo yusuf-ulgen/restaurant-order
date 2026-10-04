@@ -42,7 +42,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     minHeight: dimension,
     padding,
     borderRadius: 'var(--ro-radius-md)',
-    border: '1px solid transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
     cursor: isInactive ? 'not-allowed' : 'pointer',
     opacity: isInactive ? 0.6 : 1,
     transition: 'all var(--ro-transition-fast)',
@@ -54,10 +56,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     primary: {
       backgroundColor: 'var(--ro-color-primary)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
     secondary: {
       backgroundColor: 'var(--ro-color-secondary)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
     outline: {
       backgroundColor: 'transparent',
@@ -72,6 +76,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     danger: {
       backgroundColor: 'var(--ro-color-danger)',
       color: 'var(--ro-color-white)',
+      borderColor: 'transparent',
     },
   };
 

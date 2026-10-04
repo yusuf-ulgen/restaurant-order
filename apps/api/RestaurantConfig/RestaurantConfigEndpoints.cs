@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Api.Tenancy;
 using RestaurantOrder.Application.Auth;
@@ -109,20 +111,72 @@ public static partial class RestaurantConfigEndpoints
         throw new InvalidAuthorizationScopeException("Tenant context is required but missing or unauthenticated.");
     }
 
-    internal static IResult HandleException(Exception ex)
+    internal static string ResolveCorrelationId(HttpContext? context)
     {
-        Console.Error.WriteLine($"[CRITICAL RESTAURANT CONFIG ERROR] {ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}");
+        if (context != null)
+        {
+            var header = context.Response?.Headers["X-Correlation-Id"].ToString();
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                return header;
+            }
+
+            header = context.Request?.Headers["X-Correlation-Id"].ToString();
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                context.Response?.Headers.TryAdd("X-Correlation-Id", header);
+                return header;
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.TraceIdentifier))
+            {
+                context.Response?.Headers.TryAdd("X-Correlation-Id", context.TraceIdentifier);
+                return context.TraceIdentifier;
+            }
+        }
+
+        return Guid.NewGuid().ToString("D");
+    }
+
+    internal static IResult HandleException(Exception ex, HttpContext? context = null)
+    {
+        var correlationId = ResolveCorrelationId(context);
+        var logger = context?.RequestServices?.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.RestaurantConfig");
+
+        if (ex is ResourceNotFoundException or DuplicateCodeException or DuplicateSlugException
+            or ConcurrencyConflictException or ConcurrencyPreconditionException or InvalidAuthorizationScopeException
+            or DomainException or ArgumentException)
+        {
+            logger?.LogInformation(
+                "Handled domain error {ExceptionType}: {Message}. CorrelationId: {CorrelationId}",
+                ex.GetType().Name,
+                ex.Message,
+                correlationId);
+        }
+        else
+        {
+            logger?.LogError(
+                ex,
+                "Unhandled error in restaurant configuration endpoints. CorrelationId: {CorrelationId}",
+                correlationId);
+        }
+
+        var extensions = new Dictionary<string, object?>
+        {
+            ["correlationId"] = correlationId
+        };
+
         return ex switch
         {
-            ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404"),
-            DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409"),
-            DuplicateSlugException dse => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dse.Message, type: "https://httpstatuses.com/409"),
-            ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409"),
-            ConcurrencyPreconditionException cpe => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: cpe.Message, type: "https://httpstatuses.com/412"),
-            InvalidAuthorizationScopeException iase => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: iase.Message, type: "https://httpstatuses.com/403"),
-            DomainException de => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: de.Message, type: "https://httpstatuses.com/400"),
-            ArgumentException ae => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ae.Message, type: "https://httpstatuses.com/400"),
-            _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: ex.Message, type: "https://httpstatuses.com/500")
+            ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404", extensions: extensions),
+            DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409", extensions: extensions),
+            DuplicateSlugException dse => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dse.Message, type: "https://httpstatuses.com/409", extensions: extensions),
+            ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409", extensions: extensions),
+            ConcurrencyPreconditionException cpe => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: cpe.Message, type: "https://httpstatuses.com/412", extensions: extensions),
+            InvalidAuthorizationScopeException iase => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: iase.Message, type: "https://httpstatuses.com/403", extensions: extensions),
+            DomainException de => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: de.Message, type: "https://httpstatuses.com/400", extensions: extensions),
+            ArgumentException ae => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ae.Message, type: "https://httpstatuses.com/400", extensions: extensions),
+            _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: "An unexpected error occurred while processing your request.", type: "https://httpstatuses.com/500", extensions: extensions)
         };
     }
 }
