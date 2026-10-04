@@ -184,7 +184,7 @@ public class CatalogModifierIntegrationTests : IClassFixture<TestcontainersFixtu
         var crossReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Get, $"/api/v1/catalog/branches/{branchId}/modifier-groups/{group.Id}", otherAdminToken);
         var crossResp = await client.SendAsync(crossReq);
-        Assert.Equal(HttpStatusCode.Forbidden, crossResp.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, crossResp.StatusCode);
     }
 
     private async Task SeedBranchAsync(Guid tenantId, Guid branchId, string name, string slug)

@@ -155,7 +155,7 @@ public class CatalogItemIntegrationTests : IClassFixture<TestcontainersFixture>
             CategoryId: category.Id,
             Name: "Steak Burger Deluxe"));
         var noEtagResp = await client.SendAsync(noEtagReq);
-        Assert.Equal(HttpStatusCode.PreconditionRequired, noEtagResp.StatusCode);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, noEtagResp.StatusCode);
 
         // 8. Stale ETag on item update returns 409 Conflict
         var staleEtagReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(

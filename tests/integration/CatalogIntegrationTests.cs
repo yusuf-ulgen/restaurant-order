@@ -280,7 +280,7 @@ public partial class CatalogIntegrationTests : IClassFixture<TestcontainersFixtu
         await conn.OpenAsync();
 
         // Switch to Tenant B's session context
-        await using (var cmd = new NpgsqlCommand("SELECT set_config('tenancy.current_tenant_id', @tenantId, false)", conn))
+        await using (var cmd = new NpgsqlCommand("SELECT set_config('app.current_tenant_id', @tenantId, false)", conn))
         {
             cmd.Parameters.AddWithValue("tenantId", tenantB.ToString());
             await cmd.ExecuteNonQueryAsync();

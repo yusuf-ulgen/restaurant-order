@@ -105,10 +105,17 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
         Assert.True(rItem.IsAvailable);
         Assert.All(rItem.Variants, v => Assert.True(v.IsAvailable));
 
-        // 3. Quick 86 item
+        var currentItemReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/catalog/branches/{branchId}/menus/{menu.Id}/items/{item.Id}", adminToken);
+        var currentItemResp = await client.SendAsync(currentItemReq);
+        Assert.Equal(HttpStatusCode.OK, currentItemResp.StatusCode);
+        var currentItem = await currentItemResp.Content.ReadFromJsonAsync<MenuItemDto>();
+        Assert.NotNull(currentItem);
+
+        // 3. Quick 86 item with the current token after variant creation.
         var q86Req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/catalog/branches/{branchId}/menus/{menu.Id}/items/{item.Id}/quick-86", adminToken);
-        q86Req.Content = JsonContent.Create(new Quick86ItemCommand("SoldOut", "Buns run out", null, item.ConcurrencyToken));
+        q86Req.Content = JsonContent.Create(new Quick86ItemCommand("SoldOut", "Buns run out", null, currentItem.ConcurrencyToken));
         var q86Resp = await client.SendAsync(q86Req);
         Assert.Equal(HttpStatusCode.OK, q86Resp.StatusCode);
         Assert.NotNull(q86Resp.Headers.ETag);
@@ -346,13 +353,14 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
         await conn.OpenAsync();
 
         var sql = @"
-            INSERT INTO tenancy.preparation_stations (id, tenant_id, branch_id, display_name, station_type, is_active, sort_order, created_at, concurrency_token)
-            VALUES (@id, @tenantId, @branchId, @displayName, @stationType, true, 1, NOW(), @token)
+            INSERT INTO tenancy.preparation_stations (id, tenant_id, branch_id, code, display_name, station_type, is_active, sort_order, created_at, concurrency_token)
+            VALUES (@id, @tenantId, @branchId, @code, @displayName, @stationType, true, 1, NOW(), @token)
             ON CONFLICT (id) DO NOTHING;";
         await using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("id", stationId);
         cmd.Parameters.AddWithValue("tenantId", tenantId);
         cmd.Parameters.AddWithValue("branchId", branchId);
+        cmd.Parameters.AddWithValue("code", $"station-{stationId:N}");
         cmd.Parameters.AddWithValue("displayName", displayName);
         cmd.Parameters.AddWithValue("stationType", (int)stationType);
         cmd.Parameters.AddWithValue("token", Guid.NewGuid());
