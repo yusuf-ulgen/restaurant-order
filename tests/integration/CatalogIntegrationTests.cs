@@ -276,7 +276,7 @@ public partial class CatalogIntegrationTests : IClassFixture<TestcontainersFixtu
         Assert.Equal(HttpStatusCode.NotFound, crossResp.StatusCode);
 
         // Direct PostgreSQL RLS validation
-        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
+        await using var conn = new NpgsqlConnection(await _fixture.ProvisionTemporaryRuntimeRoleAsync());
         await conn.OpenAsync();
 
         // Switch to Tenant B's session context

@@ -239,9 +239,9 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var adminToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "RestaurantAdmin");
-        var kitchenToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), branchId, tenantId, role: "Kitchen");
-        var barToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), branchId, tenantId, role: "Bar");
-        var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), branchId, tenantId, role: "Waiter");
+        var kitchenToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Kitchen");
+        var barToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Bar");
+        var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
 
         var menuReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/catalog/branches/{branchId}/menus", adminToken);
