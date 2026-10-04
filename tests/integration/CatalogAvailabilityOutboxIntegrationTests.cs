@@ -121,7 +121,7 @@ public class CatalogAvailabilityOutboxIntegrationTests : IClassFixture<Testconta
         {
             var targetId = item.Id.ToString();
             var outboxMessages = await db.CatalogAvailabilityOutbox
-                .Where(m => m.AggregateId == targetId && m.EventType == "Quick86")
+                .Where(m => m.AggregateId == targetId && m.EventType == "CatalogItemQuick86")
                 .ToListAsync();
 
             Assert.Single(outboxMessages);
@@ -151,7 +151,7 @@ public class CatalogAvailabilityOutboxIntegrationTests : IClassFixture<Testconta
         {
             var targetId = item.Id.ToString();
             var outboxMessages = await db.CatalogAvailabilityOutbox
-                .Where(m => m.AggregateId == targetId && m.EventType == "Restocked")
+                .Where(m => m.AggregateId == targetId && m.EventType == "CatalogItemRestocked")
                 .ToListAsync();
 
             Assert.Single(outboxMessages);
