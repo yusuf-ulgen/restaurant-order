@@ -10,7 +10,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 5.0** | Delivery Baseline & Hardening Preparation | **Completed** | Clean baseline, safe RFC 7807 500s, correlation IDs, warning-free React test suite | `717348b` |
 | **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Completed** | Menu & MenuCategory aggregates, branch-scoped catalog, slug uniqueness, lifecycle, RLS, REST API | `d040db8` |
-| **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Pending** | MenuItem aggregate, ItemVariant pricing, dietary/allergen badges, station routing | - |
+| **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Completed** | MenuItem aggregate, ItemVariant pricing, PriceAmount VO, strict integer minor units, REST APIs, RLS | `[Current]` |
 | **Phase 5.3** | Modifier Groups & Customization Rules | **Pending** | ModifierGroup & ModifierItem models, min/max selection rules, price deltas | - |
 | **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Pending** | Canonical REST endpoints, ETag/concurrency token guards, EF Core migrations, audit logs | - |
 | **Phase 5.5** | Real-Time Availability & Instant 86 Stockout Engine | **Pending** | Fast 86 toggle API, branch availability overrides, real-time event publishing | - |
@@ -73,17 +73,40 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - End-to-end integration tests in `CatalogIntegrationTests.cs` and `CatalogIntegrationTests.Categories.cs`.
   - 1051 unit tests, 10 architecture tests, 11 integration tests all verified passing.
 
-
 ### Phase 5.2: Menu Items, Portions & Variant Pricing Models
-- [ ] **MenuItem Aggregate Root:**
-  - Name, description, image asset URL validation (`AssetUrl`), preparation station ID.
-  - Dietary flags: Vegetarian, Vegan, Gluten-Free, Halal, Kosher, Dairy-Free.
-  - Allergen indicators: Peanuts, Tree Nuts, Shellfish, Dairy, Eggs, Gluten, Soy, Fish, etc.
-  - Spice level indicator (0 to 3 flames).
-- [ ] **ItemVariant Entity & Monetary Pricing:**
-  - Portions/sizes (e.g., "Regular", "Large", "200g", "300g").
-  - Base price represented as integer minor currency units (cents/kuruş) to eliminate floating-point drift.
-  - Tax and service charge applicability based on branch financial settings.
+- [x] **Domain Models & Pricing:**
+  - `MenuItem` aggregate root with strongly-typed `MenuItemId`.
+  - Fields: `TenantId`, `BranchId`, `MenuId`, `CategoryId`, `Name`, `Slug`, `ShortDescription`, `FullDescription`, `ImageUrl`, `BasePriceMinorUnits`, `SortOrder`, `IsActive`, `ConcurrencyToken`.
+  - `ItemVariant` entity with strongly-typed `ItemVariantId`.
+  - Fields: `MenuItemId`, `Name`, `Code`, `AbsolutePriceMinorUnits`, `SortOrder`, `IsDefault`, `IsActive`, `ConcurrencyToken`.
+  - `PriceAmount` immutable value object enforcing non-negative prices, ceiling cap (`1,000,000,000` minor units), integer arithmetic (`+`, `-`, `*`), and invariant string formatting without locale dependencies.
+  - Strict integer minor units throughout (no `float`, `double`, or `decimal`).
+  - Invariant rules: at most one active default variant per item; variantless items sell at base price; variant prices are explicit and absolute (no delta drift).
+- [x] **Security, URL Validation & Data Integrity:**
+  - `ImageUrl` only accepts secure relative paths (`/path`) or HTTPS (`https://`), completely rejecting javascript, data, vbscript, and protocol-relative schemes.
+  - HTML tag rejection on names, slugs, and descriptions.
+  - Soft-delete only (`Activate`/`Deactivate`).
+  - Concurrency tokens required on all mutations (`If-Match` header or request body).
+  - Audit logging via `SecurityAuditEvent` recording `OldPriceMinorUnits` and `NewPriceMinorUnits` without PII.
+- [x] **Persistence & Row-Level Security:**
+  - EF Core configurations (`MenuItemConfiguration`, `ItemVariantConfiguration`) with composite foreign keys.
+  - PostgreSQL Row Level Security enabled and forced (`FORCE ROW LEVEL SECURITY`).
+  - Tenant isolation policies (`menu_items_isolation_policy`, `item_variants_isolation_policy`).
+  - Unique index with filter `(tenant_id, menu_item_id) WHERE is_default = true AND is_active = true` ensuring database-level single active default variant.
+  - Additive EF Core migration `20261004142624_AddMenuItemsAndVariants`.
+  - Migration designer registered in allowlist, idempotent SQL bundle updated and validated via `migration-ops.mjs`.
+- [x] **REST API & Granular RBAC:**
+  - Endpoints under `/api/v1/catalog/branches/{branchId}/menus/{menuId}/items` and `.../variants`.
+  - Separation of `menu.catalog.manage` vs `menu.pricing.manage`: any price mutation strictly requires `menu.pricing.manage`.
+  - Item endpoints: create, update, update price, activate, deactivate, reorder.
+  - Variant endpoints: create, update, update price, activate, deactivate, reorder.
+  - ETag headers emitted and verified on all item and variant mutations.
+- [x] **Verification & Test Coverage:**
+  - `PriceAmountUnitTests.cs`: Boundary, overflow, negative, arithmetic, and formatting tests.
+  - `MenuItemAndVariantUnitTests.cs`: Variant default invariant, code formatting, URL security, HTML tag sanitization, lifecycle.
+  - `CatalogItemEndpointsUnitTests.cs`: ETag headers and RBAC matrix verification.
+  - `CatalogItemIntegrationTests.cs`: Full lifecycle, pricing permission enforcement, cross-branch blocks, ETag conflict/precondition checks.
+  - 1099 unit tests, 10 architecture tests, all integration tests verified passing.
 
 ### Phase 5.3: Modifier Groups & Customization Rules
 - [ ] **ModifierGroup Model:**

@@ -13,6 +13,7 @@ public class MenuCategoryConfiguration : IEntityTypeConfiguration<MenuCategory>
         builder.ToTable("menu_categories", "tenancy");
 
         builder.HasKey(mc => mc.Id);
+        builder.HasAlternateKey(mc => new { mc.TenantId, mc.MenuId, mc.Id });
 
         builder.Property(mc => mc.Id)
             .HasColumnName("id")

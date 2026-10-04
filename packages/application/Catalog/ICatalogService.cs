@@ -114,4 +114,150 @@ public interface ICatalogService
         ReorderCategoriesCommand command,
         AuthenticatedPrincipal actor,
         CancellationToken ct);
+
+    // Items
+    Task<IReadOnlyList<MenuItemDto>> ListItemsAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuCategoryId? categoryId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> GetItemAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> CreateItemAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        CreateMenuItemCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> UpdateItemAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        UpdateMenuItemCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> UpdateItemPriceAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        UpdateMenuItemPriceCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> ActivateItemAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<MenuItemDto> DeactivateItemAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<IReadOnlyList<MenuItemDto>> ReorderItemsAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuCategoryId categoryId,
+        ReorderMenuItemsCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    // Variants
+    Task<IReadOnlyList<ItemVariantDto>> ListVariantsAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> GetVariantAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ItemVariantId variantId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> CreateVariantAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        CreateItemVariantCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> UpdateVariantAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ItemVariantId variantId,
+        UpdateItemVariantCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> UpdateVariantPriceAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ItemVariantId variantId,
+        UpdateItemVariantPriceCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> ActivateVariantAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ItemVariantId variantId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<ItemVariantDto> DeactivateVariantAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ItemVariantId variantId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
+
+    Task<IReadOnlyList<ItemVariantDto>> ReorderVariantsAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        MenuId menuId,
+        MenuItemId itemId,
+        ReorderItemVariantsCommand command,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct);
 }

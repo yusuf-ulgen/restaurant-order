@@ -18,13 +18,16 @@ public partial class CatalogService : ICatalogService
 {
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly ILogger<CatalogService> _logger;
+    private readonly IPermissionRegistry _permissionRegistry;
 
     public CatalogService(
         RestaurantOrderDbContext dbContext,
-        ILogger<CatalogService> logger)
+        ILogger<CatalogService> logger,
+        IPermissionRegistry? permissionRegistry = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
     }
 
     public async Task<IReadOnlyList<MenuDto>> ListMenusAsync(
@@ -228,6 +231,22 @@ public partial class CatalogService : ICatalogService
         }
     }
 
+    private void EnsureCatalogManagePermission(AuthenticatedPrincipal actor)
+    {
+        if (!_permissionRegistry.HasFullGrant(actor.Role, Permissions.MenuCatalogManage))
+        {
+            throw new InvalidAuthorizationScopeException("Actor is not authorized to manage catalog.");
+        }
+    }
+
+    private void EnsurePricingPermission(AuthenticatedPrincipal actor)
+    {
+        if (!_permissionRegistry.HasFullGrant(actor.Role, Permissions.MenuPricingManage))
+        {
+            throw new InvalidAuthorizationScopeException("Actor is not authorized to manage pricing.");
+        }
+    }
+
     private async Task<Branch> GetBranchWithAccessCheckAsync(
         TenantId tenantId,
         BranchId branchId,
@@ -303,4 +322,20 @@ public partial class CatalogService : ICatalogService
         CreatedAtUtc: menu.CreatedAtUtc,
         UpdatedAtUtc: menu.UpdatedAtUtc,
         ConcurrencyToken: menu.ConcurrencyToken);
+
+    private static ItemVariantDto MapItemVariant(ItemVariant variant) => new(
+        Id: variant.Id.Value,
+        TenantId: variant.TenantId.Value,
+        BranchId: variant.BranchId.Value,
+        MenuId: variant.MenuId.Value,
+        MenuItemId: variant.MenuItemId.Value,
+        Name: variant.Name,
+        Code: variant.Code,
+        AbsolutePriceMinorUnits: variant.AbsolutePriceMinorUnits.MinorUnits,
+        SortOrder: variant.SortOrder,
+        IsDefault: variant.IsDefault,
+        IsActive: variant.IsActive,
+        CreatedAtUtc: variant.CreatedAtUtc,
+        UpdatedAtUtc: variant.UpdatedAtUtc,
+        ConcurrencyToken: variant.ConcurrencyToken);
 }

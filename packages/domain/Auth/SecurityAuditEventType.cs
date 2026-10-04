@@ -61,4 +61,16 @@ public static class SecurityAuditEventType
     public const string MenuCategoryActivated = "menu_category_activated";
     public const string MenuCategoryDeactivated = "menu_category_deactivated";
     public const string MenuCategoriesReordered = "menu_categories_reordered";
+    public const string MenuItemCreated = "menu_item_created";
+    public const string MenuItemUpdated = "menu_item_updated";
+    public const string MenuItemPriceUpdated = "menu_item_price_updated";
+    public const string MenuItemActivated = "menu_item_activated";
+    public const string MenuItemDeactivated = "menu_item_deactivated";
+    public const string MenuItemsReordered = "menu_items_reordered";
+    public const string ItemVariantCreated = "item_variant_created";
+    public const string ItemVariantUpdated = "item_variant_updated";
+    public const string ItemVariantPriceUpdated = "item_variant_price_updated";
+    public const string ItemVariantActivated = "item_variant_activated";
+    public const string ItemVariantDeactivated = "item_variant_deactivated";
+    public const string ItemVariantsReordered = "item_variants_reordered";
 }
