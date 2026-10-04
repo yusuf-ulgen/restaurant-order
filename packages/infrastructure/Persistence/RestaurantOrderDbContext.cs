@@ -33,6 +33,9 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Catalog.MenuCategory> MenuCategories => Set<RestaurantOrder.Domain.Catalog.MenuCategory>();
     public DbSet<RestaurantOrder.Domain.Catalog.MenuItem> MenuItems => Set<RestaurantOrder.Domain.Catalog.MenuItem>();
     public DbSet<RestaurantOrder.Domain.Catalog.ItemVariant> ItemVariants => Set<RestaurantOrder.Domain.Catalog.ItemVariant>();
+    public DbSet<RestaurantOrder.Domain.Catalog.ModifierGroup> ModifierGroups => Set<RestaurantOrder.Domain.Catalog.ModifierGroup>();
+    public DbSet<RestaurantOrder.Domain.Catalog.ModifierOption> ModifierOptions => Set<RestaurantOrder.Domain.Catalog.ModifierOption>();
+    public DbSet<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment> MenuItemModifierGroupAssignments => Set<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -103,6 +106,9 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuCategory>().HasQueryFilter(c => HasTenant && c.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuItem>().HasQueryFilter(i => HasTenant && i.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ItemVariant>().HasQueryFilter(v => HasTenant && v.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierGroup>().HasQueryFilter(mg => HasTenant && mg.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierOption>().HasQueryFilter(mo => HasTenant && mo.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

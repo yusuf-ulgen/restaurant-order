@@ -78,6 +78,48 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .HasColumnName("is_active")
             .IsRequired();
 
+        builder.Property(m => m.SpicyLevel)
+            .HasColumnName("spicy_level")
+            .HasConversion(s => s.Value, value => new SpicyLevel(value))
+            .HasDefaultValue(SpicyLevel.None)
+            .IsRequired();
+
+        var dietaryComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<IReadOnlySet<DietaryTag>>(
+            (c1, c2) => (c1 == null && c2 == null) || (c1 != null && c2 != null && c1.SetEquals(c2)),
+            c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+            c => new HashSet<DietaryTag>(c));
+
+        builder.Property(m => m.DietaryTags)
+            .HasField("_dietaryTags")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .HasColumnName("dietary_tags")
+            .HasConversion(
+                tags => System.Text.Json.JsonSerializer.Serialize(tags.Select(t => t.ToString()).ToList(), (System.Text.Json.JsonSerializerOptions?)null),
+                json => string.IsNullOrWhiteSpace(json)
+                    ? new HashSet<DietaryTag>()
+                    : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json, (System.Text.Json.JsonSerializerOptions?)null)!
+                        .Select(s => Enum.Parse<DietaryTag>(s, true))
+                        .ToHashSet())
+            .Metadata.SetValueComparer(dietaryComparer);
+
+        var allergenComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<IReadOnlySet<AllergenTag>>(
+            (c1, c2) => (c1 == null && c2 == null) || (c1 != null && c2 != null && c1.SetEquals(c2)),
+            c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+            c => new HashSet<AllergenTag>(c));
+
+        builder.Property(m => m.AllergenTags)
+            .HasField("_allergenTags")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .HasColumnName("allergen_tags")
+            .HasConversion(
+                tags => System.Text.Json.JsonSerializer.Serialize(tags.Select(t => t.ToString()).ToList(), (System.Text.Json.JsonSerializerOptions?)null),
+                json => string.IsNullOrWhiteSpace(json)
+                    ? new HashSet<AllergenTag>()
+                    : System.Text.Json.JsonSerializer.Deserialize<List<string>>(json, (System.Text.Json.JsonSerializerOptions?)null)!
+                        .Select(s => Enum.Parse<AllergenTag>(s, true))
+                        .ToHashSet())
+            .Metadata.SetValueComparer(allergenComparer);
+
         builder.Property(m => m.CreatedAtUtc)
             .HasColumnName("created_at")
             .HasColumnType("timestamp with time zone")
@@ -137,6 +179,13 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .WithOne()
             .HasForeignKey(v => v.MenuItemId)
             .HasConstraintName("fk_item_variants_menu_items_menu_item_id")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // 1-to-many relationship with MenuItemModifierGroupAssignment
+        builder.HasMany(m => m.ModifierGroupAssignments)
+            .WithOne(a => a.MenuItem)
+            .HasForeignKey(a => a.MenuItemId)
+            .HasConstraintName("fk_item_modifier_assignments_menu_items_item_id")
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -108,14 +108,44 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - `CatalogItemIntegrationTests.cs`: Full lifecycle, pricing permission enforcement, cross-branch blocks, ETag conflict/precondition checks.
   - 1099 unit tests, 10 architecture tests, all integration tests verified passing.
 
-### Phase 5.3: Modifier Groups & Customization Rules
-- [ ] **ModifierGroup Model:**
-  - Name (e.g., "Meat Doneness", "Side Choice", "Extra Toppings").
-  - Selection rules: `min_selections` (e.g., 1 for mandatory) and `max_selections` (e.g., 3).
-  - Multi-select vs single-select invariant enforcement.
-- [ ] **ModifierItem Model:**
-  - Option name and price delta (zero for included, positive integer for paid additions).
-  - Availability status and station routing notes.
+### Phase 5.3: Modifier Groups, Options, Dietary & Allergen Metadata
+- [x] **Modifier Models & Selection Invariants:**
+  - `ModifierGroup` aggregate root with strongly-typed `ModifierGroupId`.
+  - `ModifierOption` entity with strongly-typed `ModifierOptionId`.
+  - `MenuItemModifierGroupAssignment` link entity with customizable display `SortOrder`.
+  - Strict selection bounds: `0 <= minSelections <= maxSelections`.
+  - Required single-select (`min=1, max=1`), optional single-select (`min=0, max=1`), optional multi-select (`min=0, max>1`), required multi-select (`min>0, max>1`).
+  - Active options bound check (`maxSelections <= activeOptionsCount` when group is active/assigned).
+  - Default option bounds check (`activeDefaultOptions <= maxSelections`).
+  - Case-insensitive duplicate option name prevention within the same modifier group.
+  - Non-negative integer minor unit price deltas via `PriceAmount` (`PriceAmount.Zero` for free option, negative price deltas rejected).
+  - Soft-delete only (`Activate`/`Deactivate` instead of hard deletion).
+- [x] **Closed Dietary & Allergen Catalog & Contradiction Policy:**
+  - Type-safe 14 EU Food Allergens (`AllergenTag` enum: Gluten, Crustaceans, Eggs, Fish, Peanuts, Soy, Milk, TreeNuts, Celery, Mustard, Sesame, Sulphites, Lupin, Molluscs).
+  - Dietary Tags (`DietaryTag` enum: Vegetarian, Vegan, GlutenFree, Halal, Kosher, DairyFree).
+  - Closed `SpicyLevel` value object enforcing `0..3` bounds (`None`, `Mild`, `Medium`, `Hot`).
+  - Domain contradiction validation via `DietaryAndAllergenValidator`:
+    - `GlutenFree` with `Gluten` -> Rejected.
+    - `DairyFree` with `Milk` -> Rejected.
+    - `Vegan` with `Milk`, `Eggs`, `Fish`, `Crustaceans`, or `Molluscs` -> Rejected.
+    - `Vegetarian` with `Fish`, `Crustaceans`, or `Molluscs` -> Rejected.
+  - Catalog-external values rejected with RFC 7807 domain error.
+- [x] **Tenant & Branch Isolation:**
+  - Modifier groups reusable across multiple items in the same tenant and branch.
+  - Cross-tenant and cross-branch modifier group assignments strictly blocked at domain and database constraint levels.
+  - PostgreSQL Row-Level Security enabled and forced on all three tables (`modifier_groups`, `modifier_options`, `menu_item_modifier_group_assignments`).
+- [x] **REST APIs & Granular RBAC:**
+  - Modifier group CRUD, activation, and deactivation under `/api/v1/catalog/branches/{branchId}/modifier-groups`.
+  - Modifier option CRUD, activation, deactivation, and reordering under `.../{groupId}/options`.
+  - Item modifier group assignment, removal, and reordering under `/api/v1/catalog/branches/{branchId}/menus/{menuId}/items/{itemId}/modifier-groups`.
+  - Item metadata update under `.../items/{itemId}/metadata`.
+  - Permission checks: `menu.catalog.manage` for catalog structure; `menu.pricing.manage` for price delta mutations.
+  - ETag headers emitted and concurrency tokens verified across all mutations.
+- [x] **Verification & Test Coverage:**
+  - `ModifierAndMetadataUnitTests.cs`: Boundary combinations, option invariants, default option limits, tag contradictions, spicy bounds, cross-tenant blocks.
+  - `ModifierEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, RBAC matrix, problem details.
+  - `CatalogModifierIntegrationTests.cs`: End-to-end lifecycle, pricing permission enforcement, cross-tenant isolation, metadata consistency.
+  - 1141 unit tests, 10 architecture tests, integration test suite verified passing.
 
 ### Phase 5.4: Menu Catalog REST APIs & EF Core Persistence
 - [ ] **Persistence & Multi-Tenancy:**

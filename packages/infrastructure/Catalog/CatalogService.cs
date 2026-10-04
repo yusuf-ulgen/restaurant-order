@@ -309,33 +309,4 @@ public partial class CatalogService : ICatalogService
 
         _dbContext.SecurityAuditEvents.Add(auditEvent);
     }
-
-    private static MenuDto MapMenu(Menu menu) => new(
-        Id: menu.Id.Value,
-        TenantId: menu.TenantId.Value,
-        BranchId: menu.BranchId.Value,
-        Name: menu.Name,
-        Slug: menu.Slug,
-        Description: menu.Description,
-        Status: menu.Status.ToString(),
-        SortOrder: menu.SortOrder,
-        CreatedAtUtc: menu.CreatedAtUtc,
-        UpdatedAtUtc: menu.UpdatedAtUtc,
-        ConcurrencyToken: menu.ConcurrencyToken);
-
-    private static ItemVariantDto MapItemVariant(ItemVariant variant) => new(
-        Id: variant.Id.Value,
-        TenantId: variant.TenantId.Value,
-        BranchId: variant.BranchId.Value,
-        MenuId: variant.MenuId.Value,
-        MenuItemId: variant.MenuItemId.Value,
-        Name: variant.Name,
-        Code: variant.Code,
-        AbsolutePriceMinorUnits: variant.AbsolutePriceMinorUnits.MinorUnits,
-        SortOrder: variant.SortOrder,
-        IsDefault: variant.IsDefault,
-        IsActive: variant.IsActive,
-        CreatedAtUtc: variant.CreatedAtUtc,
-        UpdatedAtUtc: variant.UpdatedAtUtc,
-        ConcurrencyToken: variant.ConcurrencyToken);
 }

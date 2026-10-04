@@ -2715,3 +2715,192 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    ALTER TABLE tenancy.menu_items ADD allergen_tags text NOT NULL DEFAULT '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    ALTER TABLE tenancy.menu_items ADD dietary_tags text NOT NULL DEFAULT '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    ALTER TABLE tenancy.menu_items ADD spicy_level integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE TABLE tenancy.modifier_groups (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        min_selections integer NOT NULL,
+        max_selections integer NOT NULL,
+        sort_order integer NOT NULL,
+        is_active boolean NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        updated_at timestamp with time zone,
+        concurrency_token uuid NOT NULL,
+        CONSTRAINT "PK_modifier_groups" PRIMARY KEY (id),
+        CONSTRAINT "AK_modifier_groups_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id),
+        CONSTRAINT fk_modifier_groups_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_modifier_groups_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE TABLE tenancy.menu_item_modifier_group_assignments (
+        tenant_id uuid NOT NULL,
+        menu_item_id uuid NOT NULL,
+        modifier_group_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        menu_id uuid NOT NULL,
+        sort_order integer NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_menu_item_modifier_group_assignments" PRIMARY KEY (tenant_id, menu_item_id, modifier_group_id),
+        CONSTRAINT fk_item_modifier_assignments_menu_items_item_id FOREIGN KEY (menu_item_id) REFERENCES tenancy.menu_items (id) ON DELETE CASCADE,
+        CONSTRAINT fk_item_modifier_assignments_modifier_groups_group_id FOREIGN KEY (modifier_group_id) REFERENCES tenancy.modifier_groups (id) ON DELETE CASCADE,
+        CONSTRAINT fk_item_modifier_assignments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE TABLE tenancy.modifier_options (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        modifier_group_id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        price_delta_minor_units bigint NOT NULL,
+        sort_order integer NOT NULL,
+        is_default boolean NOT NULL,
+        is_active boolean NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        updated_at timestamp with time zone,
+        concurrency_token uuid NOT NULL,
+        CONSTRAINT "PK_modifier_options" PRIMARY KEY (id),
+        CONSTRAINT fk_modifier_options_modifier_groups_group_id FOREIGN KEY (modifier_group_id) REFERENCES tenancy.modifier_groups (id) ON DELETE CASCADE,
+        CONSTRAINT fk_modifier_options_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX "IX_menu_item_modifier_group_assignments_menu_item_id" ON tenancy.menu_item_modifier_group_assignments (menu_item_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX "IX_menu_item_modifier_group_assignments_modifier_group_id" ON tenancy.menu_item_modifier_group_assignments (modifier_group_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX ix_item_modifier_assignments_tenant_item_sort_order ON tenancy.menu_item_modifier_group_assignments (tenant_id, menu_item_id, sort_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX ix_modifier_groups_tenant_id_branch_id_sort_order ON tenancy.modifier_groups (tenant_id, branch_id, sort_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX "IX_modifier_options_modifier_group_id" ON tenancy.modifier_options (modifier_group_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE UNIQUE INDEX ix_modifier_options_tenant_id_group_id_name ON tenancy.modifier_options (tenant_id, modifier_group_id, name);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    CREATE INDEX ix_modifier_options_tenant_id_group_id_sort_order ON tenancy.modifier_options (tenant_id, modifier_group_id, sort_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+
+                    ALTER TABLE tenancy.modifier_groups ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.modifier_groups FORCE ROW LEVEL SECURITY;
+
+                    ALTER TABLE tenancy.modifier_options ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.modifier_options FORCE ROW LEVEL SECURITY;
+
+                    ALTER TABLE tenancy.menu_item_modifier_group_assignments ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.menu_item_modifier_group_assignments FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS modifier_groups_isolation_policy ON tenancy.modifier_groups;
+                    CREATE POLICY modifier_groups_isolation_policy ON tenancy.modifier_groups
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DROP POLICY IF EXISTS modifier_options_isolation_policy ON tenancy.modifier_options;
+                    CREATE POLICY modifier_options_isolation_policy ON tenancy.modifier_options
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DROP POLICY IF EXISTS menu_item_modifier_group_assignments_isolation_policy ON tenancy.menu_item_modifier_group_assignments;
+                    CREATE POLICY menu_item_modifier_group_assignments_isolation_policy ON tenancy.menu_item_modifier_group_assignments
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.modifier_groups TO restaurant_app_runtime;
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.modifier_options TO restaurant_app_runtime;
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.menu_item_modifier_group_assignments TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+                
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004144819_AddModifiersDietaryAndAllergens') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261004144819_AddModifiersDietaryAndAllergens', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+

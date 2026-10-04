@@ -73,4 +73,18 @@ public static class SecurityAuditEventType
     public const string ItemVariantActivated = "item_variant_activated";
     public const string ItemVariantDeactivated = "item_variant_deactivated";
     public const string ItemVariantsReordered = "item_variants_reordered";
+    public const string MenuItemMetadataUpdated = "menu_item_metadata_updated";
+    public const string MenuItemModifierGroupAssigned = "menu_item_modifier_group_assigned";
+    public const string MenuItemModifierGroupRemoved = "menu_item_modifier_group_removed";
+    public const string MenuItemModifierGroupsReordered = "menu_item_modifier_groups_reordered";
+    public const string ModifierGroupCreated = "modifier_group_created";
+    public const string ModifierGroupUpdated = "modifier_group_updated";
+    public const string ModifierGroupActivated = "modifier_group_activated";
+    public const string ModifierGroupDeactivated = "modifier_group_deactivated";
+    public const string ModifierOptionCreated = "modifier_option_created";
+    public const string ModifierOptionUpdated = "modifier_option_updated";
+    public const string ModifierOptionPriceUpdated = "modifier_option_price_updated";
+    public const string ModifierOptionActivated = "modifier_option_activated";
+    public const string ModifierOptionDeactivated = "modifier_option_deactivated";
+    public const string ModifierOptionsReordered = "modifier_options_reordered";
 }

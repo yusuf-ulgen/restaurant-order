@@ -15,6 +15,9 @@ public class MenuItem
     private static readonly Regex HtmlTagRegex = new(@"<[^>]*>", RegexOptions.Compiled);
 
     private readonly List<ItemVariant> _variants = new();
+    private readonly List<MenuItemModifierGroupAssignment> _modifierGroupAssignments = new();
+    private HashSet<DietaryTag> _dietaryTags = new();
+    private HashSet<AllergenTag> _allergenTags = new();
 
     public MenuItemId Id { get; private set; }
     public TenantId TenantId { get; private set; }
@@ -29,11 +32,15 @@ public class MenuItem
     public PriceAmount BasePriceMinorUnits { get; private set; }
     public int SortOrder { get; private set; }
     public bool IsActive { get; private set; }
+    public SpicyLevel SpicyLevel { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
     public Guid ConcurrencyToken { get; private set; }
 
     public IReadOnlyList<ItemVariant> Variants => _variants.AsReadOnly();
+    public IReadOnlyList<MenuItemModifierGroupAssignment> ModifierGroupAssignments => _modifierGroupAssignments.AsReadOnly();
+    public IReadOnlySet<DietaryTag> DietaryTags => _dietaryTags;
+    public IReadOnlySet<AllergenTag> AllergenTags => _allergenTags;
 
     // Parameterless constructor for EF Core persistence materialization
     private MenuItem()
@@ -215,6 +222,95 @@ public class MenuItem
             throw new DomainException("A menu item can have at most one active default variant.");
         }
     }
+
+    public void UpdateMetadata(
+        IEnumerable<DietaryTag> dietaryTags,
+        IEnumerable<AllergenTag> allergenTags,
+        SpicyLevel spicyLevel)
+    {
+        var distinctDietary = new HashSet<DietaryTag>(dietaryTags);
+        var distinctAllergens = new HashSet<AllergenTag>(allergenTags);
+
+        ValidateDietaryAndAllergenConsistency(distinctDietary, distinctAllergens);
+
+        _dietaryTags.Clear();
+        foreach (var tag in distinctDietary)
+        {
+            _dietaryTags.Add(tag);
+        }
+
+        _allergenTags.Clear();
+        foreach (var allergen in distinctAllergens)
+        {
+            _allergenTags.Add(allergen);
+        }
+
+        SpicyLevel = spicyLevel;
+        Touch();
+    }
+
+    public void AssignModifierGroup(ModifierGroup group, int sortOrder = 0)
+    {
+        if (group.TenantId != TenantId)
+        {
+            throw new DomainException($"Cannot assign modifier group from tenant '{group.TenantId.Value}' to menu item of tenant '{TenantId.Value}'.");
+        }
+
+        if (group.BranchId != BranchId)
+        {
+            throw new DomainException($"Cannot assign modifier group from branch '{group.BranchId.Value}' to menu item of branch '{BranchId.Value}'.");
+        }
+
+        group.ValidateForAssignment();
+        AssignModifierGroup(group.Id, sortOrder);
+    }
+
+    public void AssignModifierGroup(ModifierGroupId modifierGroupId, int sortOrder = 0)
+    {
+        if (_modifierGroupAssignments.Any(a => a.ModifierGroupId == modifierGroupId))
+        {
+            throw new DomainException($"ModifierGroup '{modifierGroupId.Value}' is already assigned to this menu item.");
+        }
+
+        var assignment = MenuItemModifierGroupAssignment.Create(
+            TenantId,
+            BranchId,
+            MenuId,
+            Id,
+            modifierGroupId,
+            sortOrder);
+
+        _modifierGroupAssignments.Add(assignment);
+        Touch();
+    }
+
+    public void RemoveModifierGroup(ModifierGroupId modifierGroupId)
+    {
+        var existing = _modifierGroupAssignments.FirstOrDefault(a => a.ModifierGroupId == modifierGroupId);
+        if (existing is null)
+        {
+            throw new DomainException($"ModifierGroup '{modifierGroupId.Value}' is not assigned to this menu item.");
+        }
+
+        _modifierGroupAssignments.Remove(existing);
+        Touch();
+    }
+
+    public void ReorderModifierGroups(IReadOnlyList<(ModifierGroupId GroupId, int SortOrder)> orderings)
+    {
+        var map = _modifierGroupAssignments.ToDictionary(a => a.ModifierGroupId);
+        foreach (var (groupId, sortOrder) in orderings)
+        {
+            if (map.TryGetValue(groupId, out var assignment))
+            {
+                assignment.UpdateSortOrder(sortOrder);
+            }
+        }
+        Touch();
+    }
+
+    public static void ValidateDietaryAndAllergenConsistency(ISet<DietaryTag> dietaryTags, ISet<AllergenTag> allergenTags) =>
+        DietaryAndAllergenValidator.ValidateConsistency(dietaryTags, allergenTags);
 
     public void Touch()
     {

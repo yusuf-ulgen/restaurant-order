@@ -31,6 +31,9 @@ public class CatalogItemEndpointsUnitTests
             BasePriceMinorUnits: 15000,
             SortOrder: 0,
             IsActive: true,
+            SpicyLevel: 0,
+            DietaryTags: Array.Empty<string>(),
+            AllergenTags: Array.Empty<string>(),
             CreatedAtUtc: DateTime.UtcNow,
             UpdatedAtUtc: null,
             ConcurrencyToken: token);

@@ -71,6 +71,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for menu items and item variants tables (Phase 5.2)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004144819_AddModifiersDietaryAndAllergens.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for modifier groups, modifier options, assignments, dietary and allergens (Phase 5.3)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

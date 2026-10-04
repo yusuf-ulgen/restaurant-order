@@ -24,6 +24,9 @@ public partial class CatalogService
 
         var query = _dbContext.MenuItems
             .Include(i => i.Variants)
+            .Include(i => i.ModifierGroupAssignments)
+                .ThenInclude(a => a.ModifierGroup)
+                .ThenInclude(mg => mg.Options)
             .Where(i => i.TenantId == tenantId && i.BranchId == branchId && i.MenuId == menuId);
 
         if (categoryId.HasValue)
@@ -51,6 +54,9 @@ public partial class CatalogService
 
         var item = await _dbContext.MenuItems
             .Include(i => i.Variants)
+            .Include(i => i.ModifierGroupAssignments)
+                .ThenInclude(a => a.ModifierGroup)
+                .ThenInclude(mg => mg.Options)
             .FirstOrDefaultAsync(i =>
                 i.TenantId == tenantId &&
                 i.BranchId == branchId &&
@@ -112,6 +118,16 @@ public partial class CatalogService
             fullDescription: command.FullDescription,
             imageUrl: command.ImageUrl,
             sortOrder: command.SortOrder);
+
+        if (command.SpicyLevel != 0 ||
+            (command.DietaryTags != null && command.DietaryTags.Count > 0) ||
+            (command.AllergenTags != null && command.AllergenTags.Count > 0))
+        {
+            var spicy = new SpicyLevel(command.SpicyLevel);
+            var dietary = ParseDietaryTags(command.DietaryTags);
+            var allergens = ParseAllergenTags(command.AllergenTags);
+            item.UpdateMetadata(dietary, allergens, spicy);
+        }
 
         _dbContext.MenuItems.Add(item);
         AddAuditEvent(tenantId, SecurityAuditEventType.MenuItemCreated, actor, branchId, new
@@ -418,23 +434,4 @@ public partial class CatalogService
         await _dbContext.SaveChangesAsync(ct);
         return items.OrderBy(i => i.SortOrder).ThenBy(i => i.Name).Select(MapMenuItem).ToList();
     }
-
-    private static MenuItemDto MapMenuItem(MenuItem item) => new(
-        Id: item.Id.Value,
-        TenantId: item.TenantId.Value,
-        BranchId: item.BranchId.Value,
-        MenuId: item.MenuId.Value,
-        CategoryId: item.CategoryId.Value,
-        Name: item.Name,
-        Slug: item.Slug,
-        ShortDescription: item.ShortDescription,
-        FullDescription: item.FullDescription,
-        ImageUrl: item.ImageUrl,
-        BasePriceMinorUnits: item.BasePriceMinorUnits.MinorUnits,
-        SortOrder: item.SortOrder,
-        IsActive: item.IsActive,
-        CreatedAtUtc: item.CreatedAtUtc,
-        UpdatedAtUtc: item.UpdatedAtUtc,
-        ConcurrencyToken: item.ConcurrencyToken,
-        Variants: item.Variants?.Select(MapItemVariant).ToList());
 }

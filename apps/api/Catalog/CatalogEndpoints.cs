@@ -25,6 +25,8 @@ public static partial class CatalogEndpoints
         MapCategoryEndpoints(branchGroup);
         MapItemEndpoints(branchGroup);
         MapVariantEndpoints(branchGroup);
+        MapModifierEndpoints(branchGroup);
+        MapItemModifierEndpoints(branchGroup);
 
         return app;
     }
@@ -87,6 +89,22 @@ public static partial class CatalogEndpoints
         return statusCode == StatusCodes.Status201Created
             ? Results.Created($"/api/v1/catalog/branches/{variant.BranchId}/menus/{variant.MenuId}/items/{variant.MenuItemId}/variants/{variant.Id}", variant)
             : Results.Ok(variant);
+    }
+
+    internal static IResult ModifierGroupResult(HttpContext context, ModifierGroupDto group, int statusCode = StatusCodes.Status200OK)
+    {
+        context.Response.Headers.ETag = $"\"{group.ConcurrencyToken:D}\"";
+        return statusCode == StatusCodes.Status201Created
+            ? Results.Created($"/api/v1/catalog/branches/{group.BranchId}/modifier-groups/{group.Id}", group)
+            : Results.Ok(group);
+    }
+
+    internal static IResult ModifierOptionResult(HttpContext context, ModifierOptionDto option, int statusCode = StatusCodes.Status200OK)
+    {
+        context.Response.Headers.ETag = $"\"{option.ConcurrencyToken:D}\"";
+        return statusCode == StatusCodes.Status201Created
+            ? Results.Created($"/api/v1/catalog/branches/{option.BranchId}/modifier-groups/{option.ModifierGroupId}/options/{option.Id}", option)
+            : Results.Ok(option);
     }
 
     internal static TenantId ResolveTenantId(ITenantContext tenantContext, AuthenticatedPrincipal actor)
