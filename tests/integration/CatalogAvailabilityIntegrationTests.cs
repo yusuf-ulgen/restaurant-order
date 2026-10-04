@@ -253,6 +253,17 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
         catReq.Content = JsonContent.Create(new CreateMenuCategoryCommand("Mixed Items", $"mi-{Guid.NewGuid():N}"));
         var cat = await (await client.SendAsync(catReq)).Content.ReadFromJsonAsync<MenuCategoryDto>();
 
+        var invalidStationReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/catalog/branches/{branchId}/menus/{menu!.Id}/items", adminToken);
+        invalidStationReq.Content = JsonContent.Create(new CreateMenuItemCommand(
+            CategoryId: cat!.Id,
+            Name: "Invalid station item",
+            Slug: $"invalid-station-{Guid.NewGuid():N}",
+            BasePriceMinorUnits: 1000,
+            PreparationStationId: Guid.NewGuid()));
+        var invalidStationResp = await client.SendAsync(invalidStationReq);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidStationResp.StatusCode);
+
         // Food item assigned to Kitchen station
         var foodReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/catalog/branches/{branchId}/menus/{menu.Id}/items", adminToken);
