@@ -41,12 +41,14 @@ public class RestaurantConfigDiningAreasAndStationsIntegrationTests : IClassFixt
         var brandReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/brands", adminToken);
         brandReq.Content = JsonContent.Create(new CreateBrandApiRequest("Test Brand", $"tb-{Guid.NewGuid():N}"));
         var brandResp = await client.SendAsync(brandReq);
+        Assert.True(brandResp.IsSuccessStatusCode, $"POST /brands failed ({(int)brandResp.StatusCode}): {await brandResp.Content.ReadAsStringAsync()}");
         var brand = await brandResp.Content.ReadFromJsonAsync<BrandDto>();
         Assert.NotNull(brand);
 
         var branchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/branches", adminToken);
         branchReq.Content = JsonContent.Create(new CreateBranchApiRequest(brand.Id, "Test Branch", $"tbr-{Guid.NewGuid():N}", "Europe/Istanbul", "TRY"));
         var branchResp = await client.SendAsync(branchReq);
+        Assert.True(branchResp.IsSuccessStatusCode, $"POST /branches failed ({(int)branchResp.StatusCode}): {await branchResp.Content.ReadAsStringAsync()}");
         var branch = await branchResp.Content.ReadFromJsonAsync<BranchDto>();
         Assert.NotNull(branch);
 

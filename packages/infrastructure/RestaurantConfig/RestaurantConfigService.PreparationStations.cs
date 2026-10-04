@@ -20,7 +20,7 @@ public partial class RestaurantConfigService
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
-        EnsureBranchAccess(tenantId, branchId, actor);
+        await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
         var stations = await _dbContext.PreparationStations
             .Where(ps => ps.TenantId == tenantId && ps.BranchId == branchId)

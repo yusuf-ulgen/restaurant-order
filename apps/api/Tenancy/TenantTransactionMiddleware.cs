@@ -37,13 +37,29 @@ public class TenantTransactionMiddleware
             return;
         }
 
-        if (tenantContext.HasTenant && tenantContext.IsAuthenticated && tenantContext.TenantId.HasValue)
+        var tenantId = tenantContext.TenantId;
+        if (!tenantId.HasValue && context.User?.Identity?.IsAuthenticated == true)
         {
-            var tenantId = tenantContext.TenantId.Value;
-            _logger.LogDebug("[TENANT TX] Starting tenant transaction for tenant '{TenantId}' on '{Path}'.",
-                tenantId, context.Request.Path);
+            var tenantClaim = context.User.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId)?.Value
+                ?? context.User.FindFirst("tenant_id")?.Value
+                ?? context.User.FindFirst("tenantid")?.Value;
+            if (Guid.TryParse(tenantClaim, out var claimTid))
+            {
+                tenantId = claimTid;
+                if (!tenantContext.HasTenant)
+                {
+                    accessor.TenantContext = new TenantContext(claimTid, isAuthenticated: true);
+                }
+            }
+        }
 
-            await using var tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: context.RequestAborted);
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty && (tenantContext.IsAuthenticated || context.User?.Identity?.IsAuthenticated == true))
+        {
+            var activeTenantId = tenantId.Value;
+            _logger.LogDebug("[TENANT TX] Starting tenant transaction for tenant '{TenantId}' on '{Path}'.",
+                activeTenantId, context.Request.Path);
+
+            await using var tx = await dbContext.BeginTenantTransactionAsync(activeTenantId, cancellationToken: context.RequestAborted);
 
             try
             {

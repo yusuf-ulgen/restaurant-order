@@ -130,7 +130,11 @@ public class BrandAppearance
 
         try
         {
-            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
             var items = System.Text.Json.JsonSerializer.Deserialize<List<NavigationItemModel>>(navigationConfigJson, options);
             if (items == null || items.Count == 0)
             {

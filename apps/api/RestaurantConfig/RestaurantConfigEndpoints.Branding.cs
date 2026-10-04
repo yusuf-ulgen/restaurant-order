@@ -46,9 +46,11 @@ public static partial class RestaurantConfigEndpoints
             ITenantContext tenantContext,
             IRestaurantConfigService service,
             HttpContext httpContext,
+            IJwtClaimPrincipalParser parser,
             CancellationToken ct) =>
         {
-            var tenantId = new TenantId(tenantContext.TenantId!.Value);
+            var actor = GetActor(httpContext, parser);
+            var tenantId = ResolveTenantId(tenantContext, actor);
             var theme = await service.GetBrandThemeAsync(tenantId, new BrandId(brandId), ct);
             if (theme == null)
             {
@@ -84,7 +86,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateBrandThemeCommand(
                     DisplayName: request.DisplayName,
                     LogoUrl: request.LogoUrl,
@@ -135,9 +137,11 @@ public static partial class RestaurantConfigEndpoints
             ITenantContext tenantContext,
             IRestaurantConfigService service,
             HttpContext httpContext,
+            IJwtClaimPrincipalParser parser,
             CancellationToken ct) =>
         {
-            var tenantId = new TenantId(tenantContext.TenantId!.Value);
+            var actor = GetActor(httpContext, parser);
+            var tenantId = ResolveTenantId(tenantContext, actor);
             var theme = await service.GetEffectiveBranchThemeAsync(tenantId, new BranchId(branchId), ct);
             if (theme == null)
             {
@@ -169,7 +173,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
 
                 // BranchManager can only manage their own branch
                 if (actor.Role == AuthRole.BranchManager && actor.BranchId != new BranchId(branchId))
@@ -221,7 +225,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
 
                 // BranchManager can only manage their own branch
                 if (actor.Role == AuthRole.BranchManager && actor.BranchId != new BranchId(branchId))

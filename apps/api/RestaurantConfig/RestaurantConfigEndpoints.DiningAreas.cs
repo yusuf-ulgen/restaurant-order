@@ -47,7 +47,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var areas = await service.ListDiningAreasAsync(tenantId, new BranchId(branchId), actor, ct);
                 return Results.Ok(areas);
             }
@@ -72,7 +72,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new CreateDiningAreaCommand(request.Name, request.Code, request.AreaType, request.SortOrder);
                 var created = await service.CreateDiningAreaAsync(tenantId, new BranchId(branchId), command, actor, ct);
 
@@ -107,7 +107,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateDiningAreaCommand(request.Name, request.AreaType, token);
                 var updated = await service.UpdateDiningAreaAsync(tenantId, new BranchId(branchId), new DiningAreaId(areaId), command, actor, ct);
 
@@ -151,7 +151,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new ReorderDiningAreasCommand(items.Select(x => new ReorderItemCommand(x.Id, x.ConcurrencyToken)).ToList());
                 var result = await service.ReorderDiningAreasAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return Results.Ok(result);
@@ -184,7 +184,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.ActivateDiningAreaAsync(tenantId, new BranchId(branchId), new DiningAreaId(areaId), token.Value, actor, ct);
                 httpContext.Response.Headers.ETag = $"\"{result.ConcurrencyToken:D}\"";
                 return Results.Ok(result);
@@ -217,7 +217,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.DeactivateDiningAreaAsync(tenantId, new BranchId(branchId), new DiningAreaId(areaId), token.Value, actor, ct);
                 httpContext.Response.Headers.ETag = $"\"{result.ConcurrencyToken:D}\"";
                 return Results.Ok(result);

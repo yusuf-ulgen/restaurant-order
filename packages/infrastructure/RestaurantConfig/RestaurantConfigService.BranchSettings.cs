@@ -57,7 +57,7 @@ public partial class RestaurantConfigService
             DefaultLocale: SupportedLocales.DefaultLocale,
             SupportedLocales: new[] { SupportedLocales.DefaultLocale },
             PricesIncludeTax: true,
-            DefaultTaxRateBps: 0,
+            DefaultTaxRateBps: BasisPointsRate.DefaultTaxRateBps,
             IsServiceChargeEnabled: false,
             ServiceChargeRateBps: 0,
             IsOrderTakingEnabled: true,

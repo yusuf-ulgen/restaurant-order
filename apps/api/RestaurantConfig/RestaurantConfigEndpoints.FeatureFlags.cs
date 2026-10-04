@@ -4,6 +4,8 @@ using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Branches;
+using RestaurantOrder.Domain.Common;
+using RestaurantOrder.Domain.FeatureFlags;
 using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Api.RestaurantConfig;
@@ -17,6 +19,27 @@ public sealed record ClearBranchFeatureOverrideApiRequest(
 
 public static partial class RestaurantConfigEndpoints
 {
+    internal static IResult? ValidateFeatureFlagsPayload(Dictionary<string, bool>? flags)
+    {
+        if (flags == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (var key in flags.Keys)
+            {
+                FeatureFlagKey.ValidateKey(key);
+            }
+            return null;
+        }
+        catch (DomainException ex)
+        {
+            return HandleException(ex);
+        }
+    }
+
     private static void MapFeatureFlagsEndpoints(RouteGroupBuilder root)
     {
         // ==========================================
@@ -35,7 +58,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.GetTenantFeatureFlagsAsync(tenantId, actor, ct);
 
                 if (result.ConcurrencyToken != Guid.Empty)
@@ -61,6 +84,11 @@ public static partial class RestaurantConfigEndpoints
             IJwtClaimPrincipalParser parser,
             CancellationToken ct) =>
         {
+            if (ValidateFeatureFlagsPayload(request.Flags) is { } validationError)
+            {
+                return validationError;
+            }
+
             var token = ExtractConcurrencyToken(request.ConcurrencyToken, httpContext.Request);
             if (token == null)
             {
@@ -70,7 +98,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateFeatureFlagsCommand(request.Flags, token);
                 var result = await service.UpdateTenantFeatureFlagsAsync(tenantId, command, actor, ct);
 
@@ -103,7 +131,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.GetBranchFeatureFlagsOverrideAsync(tenantId, new BranchId(branchId), actor, ct);
 
                 if (result.ConcurrencyToken != Guid.Empty)
@@ -130,6 +158,11 @@ public static partial class RestaurantConfigEndpoints
             IJwtClaimPrincipalParser parser,
             CancellationToken ct) =>
         {
+            if (ValidateFeatureFlagsPayload(request.Flags) is { } validationError)
+            {
+                return validationError;
+            }
+
             var token = ExtractConcurrencyToken(request.ConcurrencyToken, httpContext.Request);
             if (token == null)
             {
@@ -139,7 +172,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateFeatureFlagsCommand(request.Flags, token);
                 var result = await service.UpdateBranchFeatureFlagsOverrideAsync(tenantId, new BranchId(branchId), command, actor, ct);
 
@@ -183,7 +216,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.ClearBranchFeatureFlagsOverrideAsync(tenantId, new BranchId(branchId), token.Value, actor, ct);
                 return Results.Ok(result);
             }
@@ -207,7 +240,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.GetEffectiveFeatureFlagsAsync(tenantId, new BranchId(branchId), actor, ct);
                 return Results.Ok(result);
             }

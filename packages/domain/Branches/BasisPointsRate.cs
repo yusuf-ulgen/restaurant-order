@@ -10,6 +10,7 @@ public readonly record struct BasisPointsRate
 {
     public const int MaxTaxRateBps = 10000; // 100.00%
     public const int MaxServiceChargeRateBps = 5000; // 50.00%
+    public const int DefaultTaxRateBps = 1000; // 10.00% default fallback tax rate
 
     public int Value { get; }
 

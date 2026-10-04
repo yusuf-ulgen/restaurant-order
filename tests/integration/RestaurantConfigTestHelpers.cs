@@ -54,6 +54,8 @@ public static class RestaurantConfigTestHelpers
             KeyId = "k1"
         };
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var now = DateTimeOffset.UtcNow;
+        var expires = now.AddMinutes(15);
         var claims = new List<Claim>
         {
             new(JwtClaimNames.Subject, userId.ToString()),
@@ -64,7 +66,10 @@ public static class RestaurantConfigTestHelpers
             new(JwtClaimNames.AuthMethod, "password"),
             new(JwtClaimNames.SecurityVersion, "1"),
             new(JwtRegisteredClaimNames.Iss, "restaurant-order"),
-            new(JwtRegisteredClaimNames.Aud, "restaurant-order-clients")
+            new(JwtRegisteredClaimNames.Aud, "restaurant-order-clients"),
+            new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new(JwtRegisteredClaimNames.Nbf, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new(JwtRegisteredClaimNames.Exp, expires.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
 
         if (tenantId.HasValue)
@@ -81,7 +86,7 @@ public static class RestaurantConfigTestHelpers
             issuer: "restaurant-order",
             audience: "restaurant-order-clients",
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(15),
+            expires: expires.UtcDateTime,
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

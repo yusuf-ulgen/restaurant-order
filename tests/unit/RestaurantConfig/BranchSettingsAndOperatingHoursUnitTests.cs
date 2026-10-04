@@ -243,4 +243,13 @@ public class BranchSettingsAndOperatingHoursUnitTests
         Assert.Equal(0, settings.ServiceChargeRateBps);
         Assert.False(settings.IsOrderTakingEnabled);
     }
+
+    [Fact]
+    public void BasisPointsRate_DefaultTaxRateBps_Is1000Bps_TenPercent()
+    {
+        Assert.Equal(1000, BasisPointsRate.DefaultTaxRateBps);
+        var rate = BasisPointsRate.FromTaxRateBps(BasisPointsRate.DefaultTaxRateBps);
+        Assert.Equal(0.10m, rate.AsDecimal);
+        Assert.Equal(10.00m, rate.AsPercentage);
+    }
 }

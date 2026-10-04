@@ -31,7 +31,7 @@ public static partial class RestaurantConfigEndpoints
                 return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: "You do not have permission to view branches.", type: "https://httpstatuses.com/403");
             }
 
-            var tenantId = new TenantId(tenantContext.TenantId!.Value);
+            var tenantId = ResolveTenantId(tenantContext, actor);
             BrandId? filterBrandId = brandId.HasValue ? new BrandId(brandId.Value) : null;
             var branches = await service.ListBranchesAsync(tenantId, actor, filterBrandId, ct);
             return Results.Ok(branches);
@@ -56,7 +56,7 @@ public static partial class RestaurantConfigEndpoints
 
             try
             {
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var branch = await service.GetBranchByIdAsync(tenantId, new BranchId(branchId), actor, ct);
                 if (branch == null)
                 {
@@ -84,7 +84,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new CreateBranchCommand(request.BrandId, request.Name, request.Slug, request.Timezone, request.Currency);
                 var branch = await service.CreateBranchAsync(tenantId, command, actor, ct);
                 return BranchResult(httpContext, branch, StatusCodes.Status201Created);
@@ -117,7 +117,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateBranchCommand(request.Name, request.Timezone, request.Currency, token);
                 var branch = await service.UpdateBranchAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return BranchResult(httpContext, branch);
@@ -150,7 +150,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new BranchStateChangeCommand(request?.Reason, token);
                 var branch = await service.ActivateBranchAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return BranchResult(httpContext, branch);
@@ -183,7 +183,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new BranchStateChangeCommand(request?.Reason, token);
                 var branch = await service.SuspendBranchAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return BranchResult(httpContext, branch);
@@ -216,7 +216,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new BranchStateChangeCommand(request?.Reason, token);
                 var branch = await service.CloseBranchAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return BranchResult(httpContext, branch);

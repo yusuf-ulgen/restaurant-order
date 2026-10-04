@@ -290,4 +290,62 @@ public class JwtClaimPrincipalParserTests
 
         Assert.Throws<JwtClaimValidationException>(() => _parser.ParsePrincipal(claims));
     }
+
+    [Fact]
+    public void ParsePrincipal_FromValidatedJwtToken_Succeeds()
+    {
+        var key = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes("super_secret_development_jwt_key_that_is_long_enough_256bits!"))
+        {
+            KeyId = "k1"
+        };
+        var creds = new Microsoft.IdentityModel.Tokens.SigningCredentials(key, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new(JwtClaimNames.Subject, _userId.ToString()),
+            new(JwtClaimNames.SessionId, _sessionId.ToString()),
+            new(JwtClaimNames.JwtId, Guid.NewGuid().ToString("N")),
+            new(JwtClaimNames.PrincipalType, "staff"),
+            new(JwtClaimNames.Role, "RestaurantAdmin"),
+            new(JwtClaimNames.AuthMethod, "password"),
+            new(JwtClaimNames.SecurityVersion, "1"),
+            new(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Iss, "restaurant-order"),
+            new(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Aud, "restaurant-order-clients"),
+            new(JwtClaimNames.TenantId, _tenantId.ToString())
+        };
+
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+            issuer: "restaurant-order",
+            audience: "restaurant-order-clients",
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: creds);
+
+        var tokenStr = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
+
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler { MapInboundClaims = false };
+        var principal = handler.ValidateToken(tokenStr, new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = key,
+            ValidateIssuer = true,
+            ValidIssuer = "restaurant-order",
+            ValidateAudience = true,
+            ValidAudience = "restaurant-order-clients",
+            ValidateLifetime = true,
+        }, out _);
+
+        Assert.NotEmpty(principal.Claims);
+
+        var claimsDict = principal.Claims
+            .GroupBy(c => c.Type)
+            .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
+
+        var tenantClaim = principal.FindFirst(JwtClaimNames.TenantId)?.Value;
+        Assert.NotNull(tenantClaim);
+        Assert.Equal(_tenantId.ToString(), tenantClaim);
+
+        var actor = _parser.ParsePrincipal(claimsDict);
+        Assert.Equal(_userId, actor.SubjectId);
+        Assert.Equal(_tenantId, actor.Scope.TenantId!.Value.Value);
+    }
 }

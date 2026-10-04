@@ -43,7 +43,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var stations = await service.ListPreparationStationsAsync(tenantId, new BranchId(branchId), actor, ct);
                 return Results.Ok(stations);
             }
@@ -67,7 +67,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var stations = await service.GetPreparationStationRuntimeAsync(tenantId, new BranchId(branchId), actor, ct);
                 return Results.Ok(stations);
             }
@@ -91,7 +91,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new CreatePreparationStationCommand(request.Code, request.DisplayName, request.StationType, request.SortOrder);
                 var created = await service.CreatePreparationStationAsync(tenantId, new BranchId(branchId), command, actor, ct);
 
@@ -126,7 +126,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdatePreparationStationCommand(request.DisplayName, request.StationType, token);
                 var updated = await service.UpdatePreparationStationAsync(tenantId, new BranchId(branchId), new PreparationStationId(stationId), command, actor, ct);
 
@@ -170,7 +170,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new ReorderPreparationStationsCommand(items.Select(x => new ReorderItemCommand(x.Id, x.ConcurrencyToken)).ToList());
                 var result = await service.ReorderPreparationStationsAsync(tenantId, new BranchId(branchId), command, actor, ct);
                 return Results.Ok(result);
@@ -203,7 +203,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.ActivatePreparationStationAsync(tenantId, new BranchId(branchId), new PreparationStationId(stationId), token.Value, actor, ct);
                 httpContext.Response.Headers.ETag = $"\"{result.ConcurrencyToken:D}\"";
                 return Results.Ok(result);
@@ -236,7 +236,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var result = await service.DeactivatePreparationStationAsync(tenantId, new BranchId(branchId), new PreparationStationId(stationId), token.Value, actor, ct);
                 httpContext.Response.Headers.ETag = $"\"{result.ConcurrencyToken:D}\"";
                 return Results.Ok(result);

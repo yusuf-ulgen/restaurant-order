@@ -57,7 +57,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var settings = await service.GetEffectiveBranchSettingsAsync(tenantId, new BranchId(branchId), actor, ct);
 
                 if (settings.ConcurrencyToken != Guid.Empty)
@@ -98,7 +98,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateBranchSettingsCommand(
                     Timezone: request.Timezone,
                     Currency: request.Currency,
@@ -155,7 +155,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var hours = await service.GetBranchOperatingHoursAsync(tenantId, new BranchId(branchId), actor, ct);
 
                 if (hours.ConcurrencyToken != Guid.Empty)
@@ -196,7 +196,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
 
                 var days = (request.Days ?? Array.Empty<OperatingDayScheduleApiRequest>())
                     .Select(d => new OperatingDayScheduleDto(

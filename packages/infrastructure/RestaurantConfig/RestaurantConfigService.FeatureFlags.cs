@@ -170,7 +170,7 @@ public partial class RestaurantConfigService
         AuthenticatedPrincipal actor,
         CancellationToken ct = default)
     {
-        EnsureBranchAccess(tenantId, branchId, actor);
+        await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
         var tenantFlags = await _dbContext.TenantFeatureFlags
             .FirstOrDefaultAsync(tf => tf.TenantId == tenantId, ct);

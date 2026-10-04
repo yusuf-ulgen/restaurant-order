@@ -18,10 +18,13 @@ public static partial class RestaurantConfigEndpoints
 
         group.MapGet("/", async (
             ITenantContext tenantContext,
+            HttpContext httpContext,
+            IJwtClaimPrincipalParser parser,
             IRestaurantConfigService service,
             CancellationToken ct) =>
         {
-            var tenantId = new TenantId(tenantContext.TenantId!.Value);
+            var actor = GetActor(httpContext, parser);
+            var tenantId = ResolveTenantId(tenantContext, actor);
             var brands = await service.ListBrandsAsync(tenantId, ct);
             return Results.Ok(brands);
         })
@@ -33,11 +36,13 @@ public static partial class RestaurantConfigEndpoints
         group.MapGet("/{brandId:guid}", async (
             Guid brandId,
             ITenantContext tenantContext,
-            IRestaurantConfigService service,
             HttpContext httpContext,
+            IJwtClaimPrincipalParser parser,
+            IRestaurantConfigService service,
             CancellationToken ct) =>
         {
-            var tenantId = new TenantId(tenantContext.TenantId!.Value);
+            var actor = GetActor(httpContext, parser);
+            var tenantId = ResolveTenantId(tenantContext, actor);
             var brand = await service.GetBrandByIdAsync(tenantId, new BrandId(brandId), ct);
             if (brand == null)
             {
@@ -61,7 +66,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new CreateBrandCommand(request.Name, request.Slug);
                 var brand = await service.CreateBrandAsync(tenantId, command, actor, ct);
                 return BrandResult(httpContext, brand, StatusCodes.Status201Created);
@@ -94,7 +99,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new UpdateBrandCommand(request.Name, token);
                 var brand = await service.UpdateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);
@@ -127,7 +132,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new BrandStateChangeCommand(token);
                 var brand = await service.ActivateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);
@@ -160,7 +165,7 @@ public static partial class RestaurantConfigEndpoints
             try
             {
                 var actor = GetActor(httpContext, parser);
-                var tenantId = new TenantId(tenantContext.TenantId!.Value);
+                var tenantId = ResolveTenantId(tenantContext, actor);
                 var command = new BrandStateChangeCommand(token);
                 var brand = await service.DeactivateBrandAsync(tenantId, new BrandId(brandId), command, actor, ct);
                 return BrandResult(httpContext, brand);

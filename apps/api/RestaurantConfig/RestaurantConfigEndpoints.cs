@@ -4,8 +4,10 @@ using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Api.Tenancy;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.RestaurantConfig;
+using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Common;
+using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Api.RestaurantConfig;
 
@@ -56,7 +58,7 @@ public static partial class RestaurantConfigEndpoints
         return parser.ParsePrincipal(claimsDict);
     }
 
-    private static Guid? ExtractConcurrencyToken(Guid? bodyToken, HttpRequest request)
+    internal static Guid? ExtractConcurrencyToken(Guid? bodyToken, HttpRequest request)
     {
         if (bodyToken.HasValue && bodyToken.Value != Guid.Empty)
         {
@@ -76,7 +78,7 @@ public static partial class RestaurantConfigEndpoints
         return null;
     }
 
-    private static IResult BrandResult(HttpContext context, BrandDto brand, int statusCode = StatusCodes.Status200OK)
+    internal static IResult BrandResult(HttpContext context, BrandDto brand, int statusCode = StatusCodes.Status200OK)
     {
         context.Response.Headers.ETag = $"\"{brand.ConcurrencyToken:D}\"";
         return statusCode == StatusCodes.Status201Created
@@ -84,7 +86,7 @@ public static partial class RestaurantConfigEndpoints
             : Results.Ok(brand);
     }
 
-    private static IResult BranchResult(HttpContext context, BranchDto branch, int statusCode = StatusCodes.Status200OK)
+    internal static IResult BranchResult(HttpContext context, BranchDto branch, int statusCode = StatusCodes.Status200OK)
     {
         context.Response.Headers.ETag = $"\"{branch.ConcurrencyToken:D}\"";
         return statusCode == StatusCodes.Status201Created
@@ -92,16 +94,35 @@ public static partial class RestaurantConfigEndpoints
             : Results.Ok(branch);
     }
 
-    internal static IResult HandleException(Exception ex) => ex switch
+    internal static TenantId ResolveTenantId(ITenantContext tenantContext, AuthenticatedPrincipal actor)
     {
-        ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404"),
-        DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409"),
-        DuplicateSlugException dse => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dse.Message, type: "https://httpstatuses.com/409"),
-        ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409"),
-        ConcurrencyPreconditionException cpe => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: cpe.Message, type: "https://httpstatuses.com/412"),
-        InvalidAuthorizationScopeException iase => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: iase.Message, type: "https://httpstatuses.com/403"),
-        DomainException de => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: de.Message, type: "https://httpstatuses.com/400"),
-        ArgumentException ae => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ae.Message, type: "https://httpstatuses.com/400"),
-        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: ex.Message, type: "https://httpstatuses.com/500")
-    };
+        if (tenantContext.HasTenant && tenantContext.TenantId.HasValue && tenantContext.TenantId.Value != Guid.Empty)
+        {
+            return new TenantId(tenantContext.TenantId.Value);
+        }
+
+        if (actor.Scope.TenantId.HasValue && actor.Scope.TenantId.Value.Value != Guid.Empty)
+        {
+            return actor.Scope.TenantId.Value;
+        }
+
+        throw new InvalidAuthorizationScopeException("Tenant context is required but missing or unauthenticated.");
+    }
+
+    internal static IResult HandleException(Exception ex)
+    {
+        Console.Error.WriteLine($"[CRITICAL RESTAURANT CONFIG ERROR] {ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}");
+        return ex switch
+        {
+            ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404"),
+            DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409"),
+            DuplicateSlugException dse => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dse.Message, type: "https://httpstatuses.com/409"),
+            ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409"),
+            ConcurrencyPreconditionException cpe => Results.Problem(statusCode: StatusCodes.Status412PreconditionFailed, title: "Precondition Failed", detail: cpe.Message, type: "https://httpstatuses.com/412"),
+            InvalidAuthorizationScopeException iase => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden", detail: iase.Message, type: "https://httpstatuses.com/403"),
+            DomainException de => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: de.Message, type: "https://httpstatuses.com/400"),
+            ArgumentException ae => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Bad Request", detail: ae.Message, type: "https://httpstatuses.com/400"),
+            _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Internal Server Error", detail: ex.Message, type: "https://httpstatuses.com/500")
+        };
+    }
 }
