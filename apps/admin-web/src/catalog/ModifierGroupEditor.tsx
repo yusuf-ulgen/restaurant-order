@@ -37,7 +37,7 @@ export const ModifierGroupEditor: React.FC<Props> = ({ branchId, menuId, item, g
     if (!Number.isSafeInteger(priceDeltaMinorUnits) || priceDeltaMinorUnits < 0) { setError('Fiyat farkı sıfır veya üzeri olmalıdır.'); return; }
     void mutate(() => catalogApi.saveModifierOption(branchId, group.id, {
       name: optionName.trim(), sortOrder: option?.sortOrder ?? (group.options?.length ?? 0), isDefault: option?.isDefault ?? false,
-      ...(option || canPrice ? { priceDeltaMinorUnits } : {}),
+      ...(canPrice ? { priceDeltaMinorUnits } : {}),
     }, option ?? undefined));
   };
   const toggleAssignment = (target: ModifierGroupContract, isAssigned: boolean) => {
