@@ -154,5 +154,3 @@ describe('Settings Subcomponents Unit & Interactive Tests', () => {
     expect((taxInput as HTMLInputElement).value).toBe('10');
   });
 });
-
-\n

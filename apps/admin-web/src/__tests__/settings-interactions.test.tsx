@@ -370,5 +370,3 @@ describe('Settings Views Comprehensive Interactions', () => {
     });
   });
 });
-
-\n
