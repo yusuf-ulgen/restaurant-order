@@ -239,4 +239,47 @@ public class CatalogEndpointsHandlerUnitTests
         var prob = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(StatusCodes.Status412PreconditionFailed, prob.StatusCode);
     }
+
+    [Fact]
+    public async Task ReorderCategoriesHandler_EmptyItems_ReturnsBadRequest()
+    {
+        var result = await CatalogEndpoints.ReorderCategoriesHandler(
+            _branchId, _menuId, new ReorderCategoriesApiRequest([]), new DefaultHttpContext(),
+            _mockService.Object, _tenantContext, _mockParser.Object, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public async Task ReorderItemsHandler_RejectsEmptyAndMissingTokens()
+    {
+        var emptyResult = await CatalogEndpoints.ReorderItemsHandler(
+            _branchId, _menuId, Guid.NewGuid(), new ReorderMenuItemsApiRequest([]), new DefaultHttpContext(),
+            _mockService.Object, _tenantContext, _mockParser.Object, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsAssignableFrom<ProblemHttpResult>(emptyResult).StatusCode);
+
+        var missingTokenResult = await CatalogEndpoints.ReorderItemsHandler(
+            _branchId, _menuId, Guid.NewGuid(), new ReorderMenuItemsApiRequest(
+                [new ItemReorderItemApiRequest(Guid.NewGuid(), 1)]), new DefaultHttpContext(),
+            _mockService.Object, _tenantContext, _mockParser.Object, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status412PreconditionFailed,
+            Assert.IsAssignableFrom<ProblemHttpResult>(missingTokenResult).StatusCode);
+    }
+
+    [Fact]
+    public async Task ReorderVariantsHandler_RejectsEmptyAndMissingTokens()
+    {
+        var itemId = Guid.NewGuid();
+        var emptyResult = await CatalogEndpoints.ReorderVariantsHandler(
+            _branchId, _menuId, itemId, new ReorderItemVariantsApiRequest([]), new DefaultHttpContext(),
+            _mockService.Object, _tenantContext, _mockParser.Object, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsAssignableFrom<ProblemHttpResult>(emptyResult).StatusCode);
+
+        var missingTokenResult = await CatalogEndpoints.ReorderVariantsHandler(
+            _branchId, _menuId, itemId, new ReorderItemVariantsApiRequest(
+                [new VariantReorderItemApiRequest(Guid.NewGuid(), 1)]), new DefaultHttpContext(),
+            _mockService.Object, _tenantContext, _mockParser.Object, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status412PreconditionFailed,
+            Assert.IsAssignableFrom<ProblemHttpResult>(missingTokenResult).StatusCode);
+    }
 }
