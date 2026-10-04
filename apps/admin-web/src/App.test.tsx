@@ -167,7 +167,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
 
       expect(screen.getByText('Restoran Yönetim')).toBeDefined();
       expect(screen.getByText('Kontrol Paneli')).toBeDefined();
-      expect(screen.getByText(/Menü Yönetimi/i)).toBeDefined();
+      expect(screen.getByText(/Men.*Katalo/i)).toBeDefined();
       expect(screen.getByText(/Şube & Masalar/i)).toBeDefined();
     });
 
@@ -227,9 +227,9 @@ describe('Admin Web App - Authentication & Access Control', () => {
       expect(activeLink.getAttribute('aria-current')).toBe('page');
       expect(activeLink.getAttribute('href')).toBe('/');
 
-      const disabledMenu = screen.getByTestId('sidebar-item-menu');
-      expect(disabledMenu.getAttribute('aria-disabled')).toBe('true');
-      expect(disabledMenu.textContent).toContain('Menü Yönetimi (Yakında)');
+      const menuLink = screen.getByTestId('sidebar-item-menu');
+      expect(menuLink.getAttribute('aria-disabled')).not.toBe('true');
+      expect(menuLink.textContent).toContain('Men\u00fc Katalo\u011fu');
     });
 
     it('toggles sidebar collapsed state via collapse button', () => {
@@ -267,7 +267,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
         ['dining-areas', /Masa Alan/],
         ['preparation-stations', /Haz.rl.k/],
         ['feature-settings', /Özellik Yönetimi/],
-        ['menu', /Bu mod/],
+        ['menu', /Men.*katalo/i],
       ];
 
       for (const [initialView, expectedText] of cases) {

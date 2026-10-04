@@ -14,7 +14,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | **Phase 5.3** | Modifier Groups & Customization Rules | **Pending** | ModifierGroup & ModifierItem models, min/max selection rules, price deltas | - |
 | **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Pending** | Canonical REST endpoints, ETag/concurrency token guards, EF Core migrations, audit logs | - |
 | **Phase 5.5** | Real-Time Availability & Instant 86 Stockout Engine | **Pending** | Fast 86 toggle API, branch availability overrides, real-time event publishing | - |
-| **Phase 5.6** | Admin Catalog Management UI & Final Verification | **Pending** | Admin Web catalog editor, modifier configurator, 86 modal, CI quality gates closure | - |
+| **Phase 5.6** | Admin Catalog Management UI & Final Verification | **In Progress** | Admin Web catalog editor, modifier configurator, 86 modal, catalog UI, permission controls, responsive editor sheets, final quality gates | - |
 
 ---
 

@@ -62,6 +62,7 @@ public partial class CatalogService
         CancellationToken ct)
     {
         EnsureCatalogManagePermission(actor);
+        EnsurePricingPermission(actor);
         var (branch, menu, item) = await GetMenuItemAndMenuForMutationAsync(tenantId, branchId, menuId, itemId, actor, ct);
 
         var normalizedCode = command.Code.Trim().ToUpperInvariant();

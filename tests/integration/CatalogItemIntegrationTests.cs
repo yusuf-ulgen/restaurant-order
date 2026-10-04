@@ -82,6 +82,13 @@ public class CatalogItemIntegrationTests : IClassFixture<TestcontainersFixture>
         Assert.True(item.IsActive);
         Assert.True(itemResp.Headers.Contains("ETag"));
 
+        // Creating a variant writes its initial price and therefore requires pricing authorization.
+        var deniedVariantReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/catalog/branches/{branchId}/menus/{menu.Id}/items/{item.Id}/variants", cashierToken);
+        deniedVariantReq.Content = JsonContent.Create(new CreateItemVariantApiRequest("Cashier Variant", "CASH", 5000));
+        var deniedVariantResp = await client.SendAsync(deniedVariantReq);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedVariantResp.StatusCode);
+
         // 3. Update Item Price with Cashier token (lacks menu.pricing.manage -> 403 Forbidden)
         var unauthPriceReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Put, $"/api/v1/catalog/branches/{branchId}/menus/{menu.Id}/items/{item.Id}/price", cashierToken);

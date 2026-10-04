@@ -61,6 +61,7 @@ public static partial class CatalogEndpoints
         variantGroup.MapPost("", CreateVariantHandler)
             .RequireAuthorization()
             .RequirePermission(Permissions.MenuCatalogManage)
+            .RequirePermission(Permissions.MenuPricingManage)
             .WithName("CreateItemVariant");
 
         variantGroup.MapPut("/{variantId:guid}", UpdateVariantHandler)

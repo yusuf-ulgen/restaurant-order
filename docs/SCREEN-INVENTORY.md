@@ -43,7 +43,7 @@
 | Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
 | :--- | :--- | :--- | :--- | :--- |
 | `ADM-01` | **Operations Dashboard** | Restoran Admini, Müdür | View live sales, active tables, open orders, station prep latency. | KPI cards, live floor widget, hourly sales chart, top sellers. |
-| `ADM-02` | **Menu Catalog Editor** | Restoran Admini, Müdür | Create/edit categories, items, prices, descriptions, images. | Category tree, item list, drag-and-drop ordering, stock toggles. |
+| `ADM-02` | **Menu Catalog Editor** | Restoran Admini, Şube Müdürü | Create/edit menus, categories, items, variants, modifier groups, dietary/allergen metadata, and availability. | Branch-scoped menu selector, category and item lists, editor sheets, safe catalog preview, Quick-86 and restock controls. |
 | `ADM-03` | **Modifier Groups Manager** | Restoran Admini, Müdür | Create modifier groups, set min/max selections, assign to items. | Modifier groups table, linked items, modifier pricing. |
 | `ADM-04` | **Floor & Table Layout** | Restoran Admini, Müdür | Create dining areas, add/position tables, assign table numbers. | Visual canvas or grid, table capacity, area tabs. |
 | `ADM-05` | **QR Code Generator** | Restoran Admini, Müdür | Generate table QR codes, download print-ready PDF/SVG batch. | Table list, QR preview, batch download CTA, custom branding options. |
