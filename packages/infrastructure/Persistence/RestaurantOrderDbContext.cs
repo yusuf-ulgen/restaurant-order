@@ -29,6 +29,8 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<PreparationStation> PreparationStations => Set<PreparationStation>();
     public DbSet<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags> TenantFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>();
     public DbSet<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags> BranchFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>();
+    public DbSet<RestaurantOrder.Domain.Catalog.Menu> Menus => Set<RestaurantOrder.Domain.Catalog.Menu>();
+    public DbSet<RestaurantOrder.Domain.Catalog.MenuCategory> MenuCategories => Set<RestaurantOrder.Domain.Catalog.MenuCategory>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -95,6 +97,8 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<PreparationStation>().HasQueryFilter(ps => HasTenant && ps.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>().HasQueryFilter(tf => HasTenant && tf.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>().HasQueryFilter(bf => HasTenant && bf.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.Menu>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuCategory>().HasQueryFilter(c => HasTenant && c.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

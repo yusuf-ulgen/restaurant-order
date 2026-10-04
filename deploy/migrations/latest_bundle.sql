@@ -2410,3 +2410,129 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE TABLE tenancy.menus (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        slug character varying(50) NOT NULL,
+        description character varying(500),
+        status integer NOT NULL,
+        sort_order integer NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        updated_at timestamp with time zone,
+        concurrency_token uuid NOT NULL,
+        CONSTRAINT "PK_menus" PRIMARY KEY (id),
+        CONSTRAINT "AK_menus_tenant_id_id" UNIQUE (tenant_id, id),
+        CONSTRAINT fk_menus_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_menus_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE TABLE tenancy.menu_categories (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        menu_id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        slug character varying(50) NOT NULL,
+        description character varying(500),
+        sort_order integer NOT NULL,
+        is_active boolean NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        updated_at timestamp with time zone,
+        concurrency_token uuid NOT NULL,
+        CONSTRAINT "PK_menu_categories" PRIMARY KEY (id),
+        CONSTRAINT fk_menu_categories_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_menu_categories_menus_tenant_id_menu_id FOREIGN KEY (tenant_id, menu_id) REFERENCES tenancy.menus (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_menu_categories_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE INDEX "IX_menu_categories_tenant_id_branch_id" ON tenancy.menu_categories (tenant_id, branch_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE UNIQUE INDEX ix_menu_categories_tenant_id_menu_id_slug ON tenancy.menu_categories (tenant_id, menu_id, slug);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE INDEX ix_menu_categories_tenant_id_menu_id_sort_order ON tenancy.menu_categories (tenant_id, menu_id, sort_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE UNIQUE INDEX ix_menus_tenant_id_branch_id_slug ON tenancy.menus (tenant_id, branch_id, slug);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    CREATE INDEX ix_menus_tenant_id_branch_id_sort_order ON tenancy.menus (tenant_id, branch_id, sort_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+
+                    ALTER TABLE tenancy.menus ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.menus FORCE ROW LEVEL SECURITY;
+
+                    ALTER TABLE tenancy.menu_categories ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.menu_categories FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS menus_isolation_policy ON tenancy.menus;
+                    CREATE POLICY menus_isolation_policy ON tenancy.menus
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DROP POLICY IF EXISTS menu_categories_isolation_policy ON tenancy.menu_categories;
+                    CREATE POLICY menu_categories_isolation_policy ON tenancy.menu_categories
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.menus TO restaurant_app_runtime;
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.menu_categories TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004140337_AddMenusAndCategories') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261004140337_AddMenusAndCategories', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;

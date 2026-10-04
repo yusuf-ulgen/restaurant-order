@@ -8,8 +8,8 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 
 | Sub-Phase | Title | Status | Primary Output | Commit SHA |
 | :--- | :--- | :--- | :--- | :--- |
-| **Phase 5.0** | Delivery Baseline & Hardening Preparation | **Completed** | Clean baseline, safe RFC 7807 500s, correlation IDs, warning-free React test suite | *Pending* |
-| **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Pending** | Menu & MenuCategory aggregates, display order, slug uniqueness, lifecycle, RLS | - |
+| **Phase 5.0** | Delivery Baseline & Hardening Preparation | **Completed** | Clean baseline, safe RFC 7807 500s, correlation IDs, warning-free React test suite | `717348b` |
+| **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Completed** | Menu & MenuCategory aggregates, branch-scoped catalog, slug uniqueness, lifecycle, RLS, REST API | `d040db8` |
 | **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Pending** | MenuItem aggregate, ItemVariant pricing, dietary/allergen badges, station routing | - |
 | **Phase 5.3** | Modifier Groups & Customization Rules | **Pending** | ModifierGroup & ModifierItem models, min/max selection rules, price deltas | - |
 | **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Pending** | Canonical REST endpoints, ETag/concurrency token guards, EF Core migrations, audit logs | - |
@@ -39,15 +39,40 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Zero warning suppression, zero test muting, and zero coverage reduction.
 
 ### Phase 5.1: Tenant-Scoped Menu & Category Management
-- [ ] **Menu Aggregate Root:**
-  - Tenant and brand scoping with optional branch-level assignment.
-  - Service period / schedule assignment (e.g. Breakfast, Lunch, Dinner, All-Day).
-  - State machine: `Draft`, `Active`, `Archived`.
-- [ ] **MenuCategory Aggregate / Entity:**
-  - Hierarchical or flat grouping (e.g. Starters, Mains, Desserts, Beverages).
-  - Display order index with atomic reorder capabilities and optimistic concurrency tokens.
-  - Unique slug per brand/tenant scope.
-  - Preparation station affinity (e.g. Food -> Kitchen, Drinks -> Bar).
+- [x] **Branch-Scoped Menu Aggregate Root:**
+  - Strict tenant and branch scoping enforcing tenant isolation (`TenantId`, `BranchId`).
+  - Menu fields: `Id`, `TenantId`, `BranchId`, `Name`, `Slug`, `Description`, `Status`, `SortOrder`, `CreatedAtUtc`, `UpdatedAtUtc`, `ConcurrencyToken`.
+  - State machine: `Draft -> Active -> Archived`. `Archived` is strictly terminal (no reactivations, no mutations, no hard delete).
+  - Slug uniqueness per branch, positive sort orders, HTML tag sanitization.
+- [x] **MenuCategory Entity & Ordering:**
+  - Hierarchical grouping scoped to Tenant, Branch, and parent Menu.
+  - Fields: `Id`, `TenantId`, `BranchId`, `MenuId`, `Name`, `Slug`, `Description`, `SortOrder`, `IsActive`, `ConcurrencyToken`, timestamps.
+  - Display order index with atomic reorder capabilities and strict concurrency token validation across all categories.
+  - Unique slug per parent Menu scope.
+  - Active/Inactive toggle with concurrency verification.
+  - Mutation guard: changes blocked if parent Menu is archived or Branch is closed/suspended.
+- [x] **Persistence & Row-Level Security:**
+  - EF Core configurations (`MenuConfiguration`, `MenuCategoryConfiguration`) in `tenancy` schema.
+  - Composite foreign keys (`tenant_id`, `branch_id`) to `branches` and (`tenant_id`, `menu_id`) to `menus`.
+  - PostgreSQL Row Level Security enabled and forced (`FORCE ROW LEVEL SECURITY`).
+  - Tenant isolation policies using `tenancy.get_current_tenant_id()`.
+  - Runtime permissions granted to `restaurant_app_runtime`.
+  - EF Core migration `20261004140337_AddMenusAndCategories` generated via official EF tooling and validated with `migration-ops.mjs`.
+- [x] **REST API & RBAC Matrix:**
+  - Endpoints at `/api/v1/catalog/branches/{branchId}/menus/...` for Menus and Categories.
+  - Permissions: `menu.catalog.view` (all roles including Customer), `menu.catalog.manage` (RestaurantAdmin, BranchManager).
+  - BranchManager access strictly verified against assigned `BranchId` (cross-branch returns 403).
+  - SuperAdmin prevented from bypassing tenant context (cross-tenant returns 403/404).
+  - Concurrency token checked via request body or `If-Match` header (missing -> 412 Precondition Failed, stale -> 409 Conflict).
+  - Standardized RFC 7807 ProblemDetails returned on all failure branches.
+  - Audit logging via `SecurityAuditEvent` on all mutations (`menu_created`, `menu_updated`, `menu_activated`, `menu_archived`, `menu_category_created`, etc.).
+- [x] **Verification & Test Coverage:**
+  - Domain unit tests in `MenuAndCategoryUnitTests.cs` (lifecycle, terminal state, input validation, sort order).
+  - Endpoint & RBAC unit tests in `CatalogEndpointsUnitTests.cs` and `CatalogEndpointsHandlerUnitTests.cs`.
+  - Global query filter tests in `GlobalTenantQueryFilterTests.cs`.
+  - End-to-end integration tests in `CatalogIntegrationTests.cs` and `CatalogIntegrationTests.Categories.cs`.
+  - 1051 unit tests, 10 architecture tests, 11 integration tests all verified passing.
+
 
 ### Phase 5.2: Menu Items, Portions & Variant Pricing Models
 - [ ] **MenuItem Aggregate Root:**

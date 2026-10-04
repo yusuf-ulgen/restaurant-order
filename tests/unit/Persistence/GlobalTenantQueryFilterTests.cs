@@ -47,6 +47,18 @@ public class GlobalTenantQueryFilterTests
         Assert.NotNull(branchSql);
         Assert.Contains("FROM tenancy.branches", branchSql);
         Assert.Contains("WHERE", branchSql);
+
+        // Verify Menus query filter translates to PostgreSQL SQL
+        var menuSql = dbContext.Menus.ToQueryString();
+        Assert.NotNull(menuSql);
+        Assert.Contains("FROM tenancy.menus", menuSql);
+        Assert.Contains("WHERE", menuSql);
+
+        // Verify MenuCategories query filter translates to PostgreSQL SQL
+        var categorySql = dbContext.MenuCategories.ToQueryString();
+        Assert.NotNull(categorySql);
+        Assert.Contains("FROM tenancy.menu_categories", categorySql);
+        Assert.Contains("WHERE", categorySql);
     }
 
     [Fact]

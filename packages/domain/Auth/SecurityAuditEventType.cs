@@ -50,4 +50,15 @@ public static class SecurityAuditEventType
     public const string TenantFeatureFlagsUpdated = "tenant_feature_flags_updated";
     public const string BranchFeatureFlagsUpdated = "branch_feature_flags_updated";
     public const string BranchFeatureFlagsCleared = "branch_feature_flags_cleared";
+
+    // Menu & Catalog
+    public const string MenuCreated = "menu_created";
+    public const string MenuUpdated = "menu_updated";
+    public const string MenuActivated = "menu_activated";
+    public const string MenuArchived = "menu_archived";
+    public const string MenuCategoryCreated = "menu_category_created";
+    public const string MenuCategoryUpdated = "menu_category_updated";
+    public const string MenuCategoryActivated = "menu_category_activated";
+    public const string MenuCategoryDeactivated = "menu_category_deactivated";
+    public const string MenuCategoriesReordered = "menu_categories_reordered";
 }
