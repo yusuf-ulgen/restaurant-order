@@ -45,8 +45,16 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 - **Brand:** A distinct restaurant concept under an organization (e.g., "Gourmet Burger", "Gourmet Pizza"). Menus can be scoped to a brand.
 - **Branch:** A physical restaurant location belonging to a brand (e.g., "Gourmet Burger - Kadıköy Branch"). Holds tables, printers, staff, and localized inventory.
 
-### 3.2. Table & Floor Management
-- **DiningArea:** A physical zone within a branch (e.g., "Terrace", "Main Hall", "Bar Area", "Garden").
+### 3.2. Restaurant Configuration & Operations
+- **BrandAppearance:** Visual theme configuration for a brand, including primary/secondary/accent colors, border radius, logo URL, and active navigation items (`NavigationConfig`).
+- **BranchThemeOverride:** Optional branch-level theme customization overriding brand defaults.
+- **BranchSettings:** Branch-level financial and operational settings (timezone, currency, default/supported locales, tax inclusion, tax rates, service charges in basis points, order acceptance toggle, and contact fields).
+- **BranchOperatingHours:** Day-of-week operating hours and order acceptance schedules with cross-midnight support.
+- **DiningArea:** A physical zone within a branch (Indoor, Terrace, Garden, BarArea, Other) with code, sort order, and active/inactive lifecycle.
+- **PreparationStation:** Branch prep routing station (Kitchen, Bar, Other) with unique branch-scoped code, display name, and active/inactive lifecycle.
+- **BranchFeatureFlags:** Granular feature toggles per branch evaluated with strict authorization precedence.
+
+### 3.3. Table & Floor Management
 - **Table:** A numbered dining table or seat with a unique identifier within the branch. Associated with a persistent QR code.
 - **TableSession:** An active dining session created when guests are seated or place their first order. Closed upon bill settlement.
 

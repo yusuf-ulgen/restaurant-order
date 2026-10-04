@@ -68,3 +68,51 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
   1. Returns `403 Forbidden` immediately.
   2. The incident is recorded in the platform security audit log with IP, timestamp, and attempted resource.
   3. The client application redirects to the table welcome page.
+
+---
+
+## 3. Restaurant Configuration & Multi-Tenant Negative Flows (Phase 4)
+
+### 3.1. Cross-Tenant Configuration Access (Tenant A vs Tenant B)
+- **Scenario:** Tenant A attempts to read or mutate settings, themes, dining areas, or stations of Tenant B.
+- **Handling:** PostgreSQL RLS and EF Core query filters enforce strict isolation. Missing/cross-tenant IDs evaluate to non-existent (`404 Not Found`), completely preventing unauthorized disclosure or modification.
+
+### 3.2. Cross-Branch Mutation by Branch Manager
+- **Scenario:** Branch Manager of Branch 1 attempts to update configuration, dining areas, or feature flags of Branch 2 within the same tenant.
+- **Handling:** Branch authorization handler compares the caller's assigned branch against the target resource. Mismatch immediately rejects with `403 Forbidden`.
+
+### 3.3. Unauthorized Role Configuration Mutation
+- **Scenario:** Non-administrative roles (`Garson`, `Operasyon/Kasa`, `Mutfak`, `Bar`, `Müşteri`) invoke configuration write endpoints.
+- **Handling:** Deny-by-default RBAC middleware requires `branch.configuration.manage` or `tenant.branding.manage`. Unauthorized requests receive `403 Forbidden`.
+
+### 3.4. Missing or Invalid Tenant Context (Fail-Closed)
+- **Scenario:** API request arrives without tenant identification or with an unresolvable domain.
+- **Handling:** Middleware fails closed, terminating the pipeline immediately with `400 Bad Request` or `401 Unauthorized` (RFC 7807 ProblemDetails). Database session variable defaults to `NULL`, returning 0 rows.
+
+### 3.5. Stale Concurrency Token (Lost Update Prevention)
+- **Scenario:** Two managers update the same branch settings, dining area, or station concurrently with a stale ETag/token.
+- **Handling:** Optimistic concurrency check detects version mismatch and aborts with `409 Conflict` (RFC 7807), preventing silent overwrites.
+
+### 3.6. Invalid Theme, URL, Tax, or Operating Hours Input
+- **Scenario:** Client submits invalid hex colors, CSS expression injection, malformed URLs, tax rates > 10,000 basis points (100%), negative service charges, or invalid time formats.
+- **Handling:** FluentValidation / model validators intercept before persistence and return `400 Bad Request` with structured validation errors.
+
+### 3.7. Mutation on Closed / Suspended Branch
+- **Scenario:** Manager attempts to create dining areas or update settings on an inactive/suspended branch.
+- **Handling:** Application service verifies branch active status. Inactive branches reject operational mutations with `400 Bad Request` or `409 Conflict`.
+
+### 3.8. Feature Flags Cannot Bypass RBAC
+- **Scenario:** A feature flag is enabled (e.g., `order_acceptance`), but the calling user lacks the required permission.
+- **Handling:** Feature flags control application feature logic only. Authorization checks occur first; requests without permission claims are rejected with `403 Forbidden`.
+
+### 3.9. Atomic Transaction Rollback on Failure
+- **Scenario:** Database failure occurs halfway through creating a dining area or updating complex operating hours.
+- **Handling:** Operations run within explicit database transactions (`BeginTransactionAsync`). Any exception triggers complete rollback, guaranteeing no partial or orphaned state.
+
+### 3.10. Admin Shell Graceful Fallback on API Failure
+- **Scenario:** Branding or settings API returns 500 or network times out while rendering admin web shell.
+- **Handling:** Frontend shell catches errors gracefully, displaying standard design system tokens and default navigation without crashing or showing blank screens.
+
+### 3.11. Tenant Theme Purging on Switch
+- **Scenario:** Super Admin or multi-tenant staff switches between Tenant A and Tenant B.
+- **Handling:** Theme injector cleanses all dynamic CSS variables from `:root` before mounting the new tenant's theme, preventing visual bleed.

@@ -89,4 +89,124 @@ public class TenantTransactionMiddlewareUnitTests
 
         Assert.True(nextCalled);
     }
+
+    [Theory]
+    [InlineData("tenant_id")]
+    [InlineData("tenantid")]
+    public async Task InvokeAsync_WhenTenantContextEmpty_ExtractsFromUserClaims(string claimType)
+    {
+        var tenantId = Guid.Empty; // Guid.Empty bypasses db transaction while exercising claim extraction branches
+        var claims = new[] { new System.Security.Claims.Claim(claimType, tenantId.ToString()) };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        var user = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var context = new DefaultHttpContext { User = user };
+        context.Request.Path = "/api/v1/orders";
+
+        ITenantContext? updatedContext = null;
+        _mockAccessor.Setup(a => a.TenantContext).Returns(TenantContext.Empty);
+        _mockAccessor.SetupSet(a => a.TenantContext = It.IsAny<ITenantContext>())
+            .Callback<ITenantContext>(tc => updatedContext = tc);
+
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new TenantTransactionMiddleware(next, _mockLogger.Object);
+        using var dbContext = CreateMockDbContext();
+        await middleware.InvokeAsync(context, _mockAccessor.Object, dbContext);
+
+        Assert.True(nextCalled);
+        Assert.NotNull(updatedContext);
+        Assert.Null(updatedContext.TenantId);
+        Assert.False(updatedContext.HasTenant);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenClaimValueIsInvalidGuid_DoesNotSetTenantContext()
+    {
+        var claims = new[] { new System.Security.Claims.Claim("tenant_id", "invalid-guid") };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        var user = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var context = new DefaultHttpContext { User = user };
+        context.Request.Path = "/api/v1/orders";
+
+        _mockAccessor.Setup(a => a.TenantContext).Returns(TenantContext.Empty);
+
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new TenantTransactionMiddleware(next, _mockLogger.Object);
+        using var dbContext = CreateMockDbContext();
+        await middleware.InvokeAsync(context, _mockAccessor.Object, dbContext);
+
+        Assert.True(nextCalled);
+        _mockAccessor.VerifySet(a => a.TenantContext = It.IsAny<ITenantContext>(), Times.Never);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenUserUnauthenticated_DoesNotAttemptClaimExtraction()
+    {
+        var claims = new[] { new System.Security.Claims.Claim("tenant_id", Guid.Empty.ToString()) };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims); // unauthenticated
+        var user = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var context = new DefaultHttpContext { User = user };
+        context.Request.Path = "/api/v1/orders";
+
+        _mockAccessor.Setup(a => a.TenantContext).Returns(TenantContext.Empty);
+
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new TenantTransactionMiddleware(next, _mockLogger.Object);
+        using var dbContext = CreateMockDbContext();
+        await middleware.InvokeAsync(context, _mockAccessor.Object, dbContext);
+
+        Assert.True(nextCalled);
+        _mockAccessor.VerifySet(a => a.TenantContext = It.IsAny<ITenantContext>(), Times.Never);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenTenantContextAlreadyHasTenant_DoesNotOverwriteContext()
+    {
+        var mockContext = new Mock<ITenantContext>();
+        mockContext.Setup(c => c.TenantId).Returns((Guid?)null);
+        mockContext.Setup(c => c.HasTenant).Returns(true);
+
+        var claims = new[] { new System.Security.Claims.Claim("tenant_id", Guid.Empty.ToString()) };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        var user = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var context = new DefaultHttpContext { User = user };
+        context.Request.Path = "/api/v1/orders";
+
+        _mockAccessor.Setup(a => a.TenantContext).Returns(mockContext.Object);
+
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new TenantTransactionMiddleware(next, _mockLogger.Object);
+        using var dbContext = CreateMockDbContext();
+        await middleware.InvokeAsync(context, _mockAccessor.Object, dbContext);
+
+        Assert.True(nextCalled);
+        _mockAccessor.VerifySet(a => a.TenantContext = It.IsAny<ITenantContext>(), Times.Never);
+    }
 }

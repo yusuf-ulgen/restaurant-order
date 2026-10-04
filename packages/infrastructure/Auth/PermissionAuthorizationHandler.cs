@@ -58,7 +58,47 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
                 break;
 
             case PermissionGrantType.OwnOrAssigned:
-                if (context.Resource is ResourceOwnershipContext resourceContext &&
+                var resourceContext = context.Resource as ResourceOwnershipContext;
+                if (resourceContext == null && context.Resource is Microsoft.AspNetCore.Http.HttpContext httpContext)
+                {
+                    Guid? branchId = null;
+                    if (httpContext.Request.RouteValues.TryGetValue("branchId", out var bVal) &&
+                        Guid.TryParse(bVal?.ToString(), out var bGuid))
+                    {
+                        branchId = bGuid;
+                    }
+
+                    Guid? tableSessionId = null;
+                    if (httpContext.Request.RouteValues.TryGetValue("tableSessionId", out var tsVal) &&
+                        Guid.TryParse(tsVal?.ToString(), out var tsGuid))
+                    {
+                        tableSessionId = tsGuid;
+                    }
+
+                    Guid? staffId = null;
+                    if (httpContext.Request.RouteValues.TryGetValue("staffId", out var sVal) &&
+                        Guid.TryParse(sVal?.ToString(), out var sGuid))
+                    {
+                        staffId = sGuid;
+                    }
+
+                    string? station = null;
+                    if (httpContext.Request.RouteValues.TryGetValue("station", out var stVal))
+                    {
+                        station = stVal?.ToString();
+                    }
+
+                    resourceContext = new ResourceOwnershipContext
+                    {
+                        BranchId = branchId,
+                        TableSessionId = tableSessionId,
+                        AssignedStaffId = staffId,
+                        OwnerStaffId = staffId,
+                        Station = station
+                    };
+                }
+
+                if (resourceContext != null &&
                     _ownershipRequirement.Satisfies(principal, requirement.Permission, resourceContext))
                 {
                     context.Succeed(requirement);

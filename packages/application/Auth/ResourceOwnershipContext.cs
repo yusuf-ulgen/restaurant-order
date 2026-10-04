@@ -11,6 +11,10 @@ public sealed record ResourceOwnershipContext
     public Guid? TableSessionId { get; init; }
     public string? Station { get; init; }
     public Guid? RegisterSessionId { get; init; }
+    public Guid? BranchId { get; init; }
+
+    public static ResourceOwnershipContext ForBranch(Guid branchId) =>
+        new() { BranchId = branchId };
 
     public static ResourceOwnershipContext ForTableSession(Guid tableSessionId) =>
         new() { TableSessionId = tableSessionId };

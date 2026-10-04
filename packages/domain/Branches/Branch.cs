@@ -167,7 +167,7 @@ public class Branch
         Name = name.Trim();
     }
 
-    private void EnsureNotClosed()
+    public void EnsureNotClosed()
     {
         if (Status == BranchStatus.Closed)
         {

@@ -40,10 +40,6 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsAssembly(typeof(RestaurantOrderDbContext).Assembly.FullName);
-                npgsqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorCodesToAdd: null);
             });
 
             if (environment.IsDevelopment())
@@ -117,6 +113,9 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.ITrustedTerminalService, RestaurantOrder.Infrastructure.Auth.TrustedTerminalService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffPinAuthService, RestaurantOrder.Infrastructure.Auth.StaffPinAuthService>();
         services.AddScoped<RestaurantOrder.Application.Auth.IStaffIdentityService, RestaurantOrder.Infrastructure.Auth.StaffIdentityService>();
+
+        // Restaurant Configuration Services
+        services.AddScoped<RestaurantOrder.Application.RestaurantConfig.IRestaurantConfigService, RestaurantOrder.Infrastructure.RestaurantConfig.RestaurantConfigService>();
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();

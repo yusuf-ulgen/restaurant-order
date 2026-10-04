@@ -24,11 +24,15 @@ public class DefaultTenantContextResolver : ITenantContextResolver
             return Task.FromResult(TenantContext.Empty);
         }
 
-        var tenantIdClaim = httpContext.User.FindFirst(JwtClaimNames.TenantId)?.Value;
+        var tenantIdClaim = httpContext.User.FindFirst(JwtClaimNames.TenantId)?.Value
+            ?? httpContext.User.FindFirst("tenant_id")?.Value
+            ?? httpContext.User.FindFirst("tenantid")?.Value;
         if (Guid.TryParse(tenantIdClaim, out var tenantId))
         {
             Guid? branchId = null;
-            var branchIdClaim = httpContext.User.FindFirst(JwtClaimNames.BranchId)?.Value;
+            var branchIdClaim = httpContext.User.FindFirst(JwtClaimNames.BranchId)?.Value
+                ?? httpContext.User.FindFirst("branch_id")?.Value
+                ?? httpContext.User.FindFirst("branchid")?.Value;
             if (Guid.TryParse(branchIdClaim, out var bId))
             {
                 branchId = bId;

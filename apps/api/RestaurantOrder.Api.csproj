@@ -24,4 +24,9 @@
     <ProjectReference Include="..\..\packages\infrastructure\RestaurantOrder.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="RestaurantOrder.UnitTests" />
+    <InternalsVisibleTo Include="RestaurantOrder.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
