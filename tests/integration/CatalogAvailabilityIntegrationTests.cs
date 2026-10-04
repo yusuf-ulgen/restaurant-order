@@ -311,8 +311,8 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
         await conn.OpenAsync();
 
         var brandSql = @"
-            INSERT INTO tenancy.brands (id, tenant_id, name, slug, is_active, created_at, concurrency_token)
-            VALUES (@id, @tenantId, @name, @slug, true, NOW(), @token)
+            INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+            VALUES (@id, @tenantId, @name, @slug, 'Active', NOW(), @token)
             ON CONFLICT (id) DO NOTHING;";
         await using (var cmd = new NpgsqlCommand(brandSql, conn))
         {
@@ -326,7 +326,7 @@ public class CatalogAvailabilityIntegrationTests : IClassFixture<TestcontainersF
 
         var branchSql = @"
             INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
-            VALUES (@id, @tenantId, @brandId, @name, @slug, 'Europe/Istanbul', 'TRY', 1, NOW(), @token)
+            VALUES (@id, @tenantId, @brandId, @name, @slug, 'Europe/Istanbul', 'TRY', 'Active', NOW(), @token)
             ON CONFLICT (id) DO NOTHING;";
         await using (var cmd = new NpgsqlCommand(branchSql, conn))
         {

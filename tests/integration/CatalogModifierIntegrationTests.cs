@@ -189,22 +189,38 @@ public class CatalogModifierIntegrationTests : IClassFixture<TestcontainersFixtu
 
     private async Task SeedBranchAsync(Guid tenantId, Guid branchId, string name, string slug)
     {
+        var brandId = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
         await conn.OpenAsync();
+
+        await using (var brand = conn.CreateCommand())
+        {
+            brand.CommandText = @"
+                INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+                VALUES (@id, @tenant_id, @name, @slug, 'Active', NOW(), @token);";
+            brand.Parameters.AddWithValue("id", brandId);
+            brand.Parameters.AddWithValue("tenant_id", tenantId);
+            brand.Parameters.AddWithValue("name", $"{name} Brand");
+            brand.Parameters.AddWithValue("slug", $"brand-{slug}");
+            brand.Parameters.AddWithValue("token", Guid.NewGuid());
+            await brand.ExecuteNonQueryAsync();
+        }
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO tenancy.branches (
-                id, tenant_id, name, slug, status, created_at
+                id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token
             ) VALUES (
-                @id, @tenant_id, @name, @slug, @status, NOW()
+                @id, @tenant_id, @brand_id, @name, @slug, 'Europe/Istanbul', 'TRY', @status, NOW(), @token
             ) ON CONFLICT (id) DO NOTHING;";
 
         cmd.Parameters.AddWithValue("id", branchId);
         cmd.Parameters.AddWithValue("tenant_id", tenantId);
+        cmd.Parameters.AddWithValue("brand_id", brandId);
         cmd.Parameters.AddWithValue("name", name);
         cmd.Parameters.AddWithValue("slug", slug);
-        cmd.Parameters.AddWithValue("status", (int)BranchStatus.Active);
+        cmd.Parameters.AddWithValue("status", BranchStatus.Active.ToString());
+        cmd.Parameters.AddWithValue("token", Guid.NewGuid());
 
         await cmd.ExecuteNonQueryAsync();
     }

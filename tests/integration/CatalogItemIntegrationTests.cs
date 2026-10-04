@@ -212,8 +212,8 @@ public class CatalogItemIntegrationTests : IClassFixture<TestcontainersFixture>
         await conn.OpenAsync();
 
         var brandSql = @"
-            INSERT INTO tenancy.brands (id, tenant_id, name, slug, is_active, created_at, concurrency_token)
-            VALUES (@id, @tenantId, @name, @slug, true, NOW(), @token)
+            INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+            VALUES (@id, @tenantId, @name, @slug, 'Active', NOW(), @token)
             ON CONFLICT (id) DO NOTHING;";
         await using (var cmd = new NpgsqlCommand(brandSql, conn))
         {
@@ -236,7 +236,7 @@ public class CatalogItemIntegrationTests : IClassFixture<TestcontainersFixture>
             cmd.Parameters.AddWithValue("brandId", brandId);
             cmd.Parameters.AddWithValue("name", name);
             cmd.Parameters.AddWithValue("slug", slug);
-            cmd.Parameters.AddWithValue("status", (int)status);
+            cmd.Parameters.AddWithValue("status", status.ToString());
             cmd.Parameters.AddWithValue("token", Guid.NewGuid());
             await cmd.ExecuteNonQueryAsync();
         }
