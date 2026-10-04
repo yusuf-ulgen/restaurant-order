@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeColorFields, ThemeColors } from '../settings/ThemeColorFields';
 import { ThemeBrandIdentityFields, ThemeBrandIdentity } from '../settings/ThemeBrandIdentityFields';
 import { ThemeTextHeaderFooterFields, ThemeTextHeaderFooter } from '../settings/ThemeTextHeaderFooterFields';
@@ -152,5 +152,67 @@ describe('Settings Subcomponents Unit & Interactive Tests', () => {
     const resetBtn = screen.getAllByRole('button')[0]!;
     fireEvent.click(resetBtn);
     expect((taxInput as HTMLInputElement).value).toBe('10');
+  });
+
+  it('submits valid financial settings as basis points', async () => {
+    const settings: EffectiveBranchSettingsContract = {
+      branchId: 'branch-1',
+      branchName: 'Kadikoy Branch',
+      timezone: 'Europe/Istanbul',
+      currency: 'TRY',
+      defaultLocale: 'tr-TR',
+      supportedLocales: ['tr-TR', 'en-US'],
+      pricesIncludeTax: true,
+      defaultTaxRateBps: 1000,
+      isServiceChargeEnabled: false,
+      serviceChargeRateBps: 0,
+      isOrderTakingEnabled: true,
+      hasCustomSettings: true,
+      concurrencyToken: 'token-settings-1',
+    };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onHasUnsavedChanges = vi.fn();
+
+    render(
+      <BranchFinancialSettingsForm
+        settings={settings}
+        isSubmitting={false}
+        onSave={onSave}
+        onReset={vi.fn()}
+        onHasUnsavedChanges={onHasUnsavedChanges}
+      />
+    );
+    fireEvent.change(screen.getByTestId('input-timezone'), { target: { value: 'Europe/London' } });
+    fireEvent.change(screen.getByTestId('input-currency'), { target: { value: 'GBP' } });
+    fireEvent.change(screen.getByTestId('input-default-locale'), { target: { value: 'en-US' } });
+    fireEvent.change(screen.getByTestId('input-supported-locales'), { target: { value: 'en-US, tr-TR' } });
+    fireEvent.click(screen.getByTestId('switch-prices-include-tax'));
+    fireEvent.click(screen.getByTestId('switch-service-charge'));
+    fireEvent.change(screen.getByTestId('input-service-charge-rate'), { target: { value: '5' } });
+    fireEvent.click(screen.getByTestId('switch-order-taking'));
+    fireEvent.change(screen.getByTestId('input-display-name'), { target: { value: '  Kadikoy  ' } });
+    fireEvent.change(screen.getByTestId('input-phone-number'), { target: { value: '5550100' } });
+    fireEvent.change(screen.getByTestId('input-email'), { target: { value: 'branch@example.test' } });
+    fireEvent.change(screen.getByTestId('input-address'), { target: { value: 'Main Street' } });
+    fireEvent.click(screen.getByTestId('btn-save-financial'));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultTaxRateBps: 1000,
+          currency: 'GBP',
+          timezone: 'Europe/London',
+          defaultLocale: 'en-US',
+          isServiceChargeEnabled: true,
+          serviceChargeRateBps: 500,
+          supportedLocales: ['en-US', 'tr-TR'],
+          displayName: 'Kadikoy',
+          phoneNumber: '5550100',
+          email: 'branch@example.test',
+          address: 'Main Street',
+          concurrencyToken: 'token-settings-1',
+        })
+      )
+    );
   });
 });

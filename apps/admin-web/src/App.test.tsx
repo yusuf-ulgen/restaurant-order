@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App, AdminContent, type AdminAppProps } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { AdminConfigProvider, createDefaultFallbackTheme } from './config/AdminConfigContext';
+import * as contracts from '@restaurant-order/contracts';
 import { UserPrincipalDto } from '@restaurant-order/contracts';
 
 const mockAdminUser: UserPrincipalDto = {
@@ -24,7 +25,15 @@ const mockUnauthorizedUser: UserPrincipalDto = {
 const renderAdminContent = (user: UserPrincipalDto | null, props: AdminAppProps = {}) =>
   render(
     <AuthProvider initialUser={user}>
-      <AdminConfigProvider initialTheme={createDefaultFallbackTheme()}>
+      <AdminConfigProvider
+        initialTheme={createDefaultFallbackTheme('tenant-1', 'branch-1')}
+        initialBranches={[{
+          id: 'branch-1', brandId: 'brand-1', name: 'Test Branch', slug: 'test-branch', isActive: true, status: 'Active',
+        }, {
+          id: 'branch-2', brandId: 'brand-1', name: 'Second Branch', slug: 'second-branch', isActive: true, status: 'Active',
+        }]}
+        initialBranchId="branch-1"
+      >
         <AdminContent {...props} />
       </AdminConfigProvider>
     </AuthProvider>
@@ -269,6 +278,76 @@ describe('Admin Web App - Authentication & Access Control', () => {
 
       renderAdminContent(null, { initialView: 'dashboard', hasMetrics: false });
       expect(screen.getByText(/Raporlan/)).toBeDefined();
+    });
+
+    it('returns to the dashboard when each settings view is closed', () => {
+      const closableViews: Array<[NonNullable<AdminAppProps['initialView']>, RegExp]> = [
+        ['brand-settings', /ptal/],
+        ['dining-areas', /Kapat/],
+        ['preparation-stations', /Kapat/],
+        ['feature-settings', /Kapat/],
+      ];
+
+      for (const [initialView, closeButton] of closableViews) {
+        const rendered = renderAdminContent(null, { initialView });
+        fireEvent.click(screen.getByRole('button', { name: closeButton }));
+        expect(screen.getByText(/Metrik/)).toBeDefined();
+        rendered.unmount();
+      }
+    });
+
+    it('navigates through the sidebar and switches branches from the header', async () => {
+      const rendered = renderAdminContent(mockAdminUser);
+      fireEvent.click(screen.getByTestId('sidebar-item-brand-settings'));
+      expect(screen.getByTestId('branding-settings-view')).toBeDefined();
+
+      fireEvent.change(screen.getByTestId('branch-switcher'), { target: { value: 'branch-2' } });
+      await waitFor(() => expect(screen.getByTestId('header-branch-name').textContent).toBe('Second Branch'));
+      rendered.unmount();
+    });
+
+    it('runs the save completion callbacks for both branch settings tabs', async () => {
+      const settings = {
+        branchId: 'branch-1', branchName: 'Test Branch', timezone: 'Europe/Istanbul', currency: 'TRY',
+        defaultLocale: 'tr-TR', supportedLocales: ['tr-TR'], pricesIncludeTax: true, defaultTaxRateBps: 1000,
+        isServiceChargeEnabled: false, serviceChargeRateBps: 0, isOrderTakingEnabled: true,
+        hasCustomSettings: true, concurrencyToken: 'settings-token',
+      };
+      const hours = {
+        branchId: 'branch-1',
+        days: [
+          { dayOfWeek: 1, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 2, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 3, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 4, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 5, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 6, isClosed: false, slots: [{ openTime: '09:00', closeTime: '22:00' }] },
+          { dayOfWeek: 0, isClosed: true, slots: [] },
+        ],
+        concurrencyToken: 'hours-token',
+      };
+      const fetchSpy = vi.spyOn(contracts, 'fetchWithCsrf').mockImplementation(async (input, init) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (init?.method === 'PUT') return new Response(JSON.stringify({}), { status: 200 });
+        if (url.endsWith('/settings')) return new Response(JSON.stringify(settings), { status: 200 });
+        if (url.endsWith('/operating-hours')) return new Response(JSON.stringify(hours), { status: 200 });
+        return new Response(JSON.stringify([]), { status: 200 });
+      });
+
+      const financial = renderAdminContent(mockAdminUser, { initialView: 'branch-settings' });
+      await screen.findByTestId('branch-financial-form');
+      fireEvent.click(screen.getByTestId('btn-save-financial'));
+      await waitFor(() => expect(screen.getByText(/Genel Bak/)).toBeDefined());
+      financial.unmount();
+
+      const operatingHours = renderAdminContent(mockAdminUser, { initialView: 'operating-hours' });
+      await screen.findByTestId('branch-operating-hours-form');
+      fireEvent.click(screen.getByTestId('btn-save-hours'));
+      await waitFor(() => expect(screen.getByText(/Genel Bak/)).toBeDefined());
+
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/settings'), expect.anything());
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/operating-hours'), expect.anything());
+      operatingHours.unmount();
     });
 
     it('formats roles in the header badge', () => {

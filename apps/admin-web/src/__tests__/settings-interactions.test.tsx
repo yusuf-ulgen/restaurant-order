@@ -346,6 +346,7 @@ describe('Settings Views Comprehensive Interactions', () => {
 
       // Go to branch override
       fireEvent.click(screen.getByTestId('tab-branch-override'));
+      fireEvent.click(screen.getByTestId('branch-flag-Tips'));
       const branchSaveBtn = screen.getByTestId('save-branch-flags');
       fireEvent.click(branchSaveBtn);
 
@@ -358,6 +359,7 @@ describe('Settings Views Comprehensive Interactions', () => {
 
       // Go to tenant defaults
       fireEvent.click(screen.getByTestId('tab-tenant-defaults'));
+      fireEvent.click(screen.getByTestId('tenant-flag-Tips'));
       const tenantSaveBtn = screen.getByTestId('save-tenant-flags');
       fireEvent.click(tenantSaveBtn);
 
@@ -367,6 +369,39 @@ describe('Settings Views Comprehensive Interactions', () => {
           expect.objectContaining({ method: 'PUT' })
         );
       });
+    });
+
+    it('confirms and clears branch overrides', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const fetchSpy = vi.spyOn(contracts, 'fetchWithCsrf').mockImplementation(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('/features/effective')) {
+          return new Response(JSON.stringify(mockEffectiveFlags), { status: 200 });
+        }
+        if (url.includes('/features/override')) {
+          return new Response(JSON.stringify(mockBranchFlags), { status: 200 });
+        }
+        if (url.includes('/tenant/features')) {
+          return new Response(JSON.stringify(mockTenantFlags), { status: 200 });
+        }
+        if (url === '/api/v1/restaurant-config/branches') {
+          return new Response(JSON.stringify([{ id: 'branch-1', name: 'Test Branch' }]), { status: 200 });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      });
+
+      renderWithProviders(<FeatureFlagsView />);
+      await waitFor(() => expect(screen.getByText(/^QR Men/)).toBeDefined());
+      fireEvent.click(screen.getByTestId('tab-branch-override'));
+      fireEvent.click(screen.getByTestId('clear-branch-overrides'));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          expect.stringContaining('/features/override'),
+          expect.objectContaining({ method: 'DELETE' })
+        )
+      );
+      expect(confirmSpy).toHaveBeenCalledOnce();
     });
   });
 });

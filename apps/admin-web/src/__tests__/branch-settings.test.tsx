@@ -240,6 +240,10 @@ describe('Branch Operational & Financial Settings (Phase 4.4)', () => {
 
       expect(screen.getByTestId('slot-1-1')).toBeDefined();
 
+      fireEvent.change(screen.getByTestId('input-open-1-1'), { target: { value: '23:00' } });
+      fireEvent.change(screen.getByTestId('input-close-1-1'), { target: { value: '22:00' } });
+      expect(screen.getByTestId('overnight-badge-1-1')).toBeDefined();
+
       // Remove the second slot
       const removeBtn = screen.getByTestId('btn-remove-slot-1-1');
       fireEvent.click(removeBtn);
@@ -319,6 +323,26 @@ describe('Branch Operational & Financial Settings (Phase 4.4)', () => {
       expect(finForm).toBeDefined();
     });
 
+    it('saves financial and operating-hour settings and invokes the completion callback', async () => {
+      const onSaved = vi.fn();
+      renderWithProviders(<BranchSettingsView onSaved={onSaved} />);
+
+      await screen.findByTestId('branch-financial-form');
+      fireEvent.click(screen.getByTestId('btn-save-financial'));
+      await waitFor(() => {
+        expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
+          expect.stringContaining('/settings'),
+          expect.objectContaining({ method: 'PUT' })
+        );
+      });
+      await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByTestId('tab-hours'));
+      await screen.findByTestId('branch-operating-hours-form');
+      fireEvent.click(screen.getByTestId('btn-save-hours'));
+      await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(2));
+    });
+
     it('handles 409 Concurrency Conflict and allows reloading data', async () => {
       renderWithProviders(<BranchSettingsView />);
 
@@ -362,6 +386,8 @@ describe('Branch Operational & Financial Settings (Phase 4.4)', () => {
       expect(summary).toBeDefined();
       expect(summary.textContent).toContain('Europe/Istanbul');
       expect(summary.textContent).toContain('TRY');
+      fireEvent.click(screen.getAllByRole('button', { name: 'Kapat' })[1]!);
+      await waitFor(() => expect(screen.queryByTestId('mobile-summary-sheet')).toBeNull());
     });
   });
 });
