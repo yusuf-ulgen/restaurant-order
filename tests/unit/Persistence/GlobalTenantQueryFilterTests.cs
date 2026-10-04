@@ -59,6 +59,12 @@ public class GlobalTenantQueryFilterTests
         Assert.NotNull(categorySql);
         Assert.Contains("FROM tenancy.menu_categories", categorySql);
         Assert.Contains("WHERE", categorySql);
+
+        // Verify BranchItemAvailabilities query filter translates to PostgreSQL SQL
+        var availabilitySql = dbContext.BranchItemAvailabilities.ToQueryString();
+        Assert.NotNull(availabilitySql);
+        Assert.Contains("FROM tenancy.branch_item_availabilities", availabilitySql);
+        Assert.Contains("WHERE", availabilitySql);
     }
 
     [Fact]

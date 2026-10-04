@@ -147,23 +147,46 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - `CatalogModifierIntegrationTests.cs`: End-to-end lifecycle, pricing permission enforcement, cross-tenant isolation, metadata consistency.
   - 1141 unit tests, 10 architecture tests, integration test suite verified passing.
 
-### Phase 5.4: Menu Catalog REST APIs & EF Core Persistence
-- [ ] **Persistence & Multi-Tenancy:**
-  - PostgreSQL schema tables: `menus`, `menu_categories`, `menu_items`, `item_variants`, `modifier_groups`, `modifier_items`.
-  - Composite foreign keys enforcing `tenant_id` consistency across all relations.
-  - PostgreSQL Row-Level Security (`FORCE ROW LEVEL SECURITY`) with runtime isolation policies.
-  - Additive, reversible EF Core migrations following expand-contract principles.
-- [ ] **REST API Endpoints:**
-  - Full CRUD under `/api/v1/menu` with RFC 7807 ProblemDetails and ETag / concurrency token guards.
-  - RBAC enforcement: `menu.catalog.manage`, `menu.pricing.manage`, `menu.catalog.view`.
-  - Append-only security audit log recording for catalog modifications.
+### Phase 5.4: Branch Item Availability and Quick 86 (COMPLETED)
+- [x] **Decoupled Inventory Availability & Domain Invariants:**
+  - `BranchItemAvailability` aggregate decoupling temporary stock status (`IsAvailable`) from product lifecycle (`IsActive`).
+  - Closed `AvailabilityReasonCode` enum: `SoldOut`, `IngredientUnavailable`, `TemporarilyDisabled`, `KitchenCapacity`, `Manual`, `Restocked`.
+  - Item and variant availability independence:
+    - 86ing a specific variant only marks that variant unavailable.
+    - 86ing an item causes all its variants to appear unavailable in the runtime read model.
+  - Safe plain-text note validation (HTML tags strictly rejected, 500 max length).
+  - `ExpectedAvailableAtUtc` future date validation (past dates rejected with 422 Unprocessable Entity).
+  - Optimistic concurrency control via `ConcurrencyToken` on all mutations.
+- [x] **Multi-Tenancy & Persistence:**
+  - `branch_item_availabilities` table with PostgreSQL Row-Level Security (`FORCE ROW LEVEL SECURITY`).
+  - Global tenant query filter configured with compile-time translatability.
+  - Preparation station reference (`PreparationStationId`) on `MenuItem` ensuring cross-branch station links are blocked.
+  - Reversible EF Core migration `20261004151108_AddBranchItemAvailabilityAndStations`.
+- [x] **Granular RBAC & Station Scoping:**
+  - `menu.inventory.quick86` permission enforced.
+  - `RestaurantAdmin` and `BranchManager` authorized within their branch scope.
+  - `Kitchen` station scope restriction: only permitted on items assigned to Kitchen stations.
+  - `Bar` station scope restriction: only permitted on items assigned to Bar stations.
+  - `Waiter` and `Customer` denied mutation access.
+  - Zero bypass via feature flags.
+- [x] **Effective Runtime Menu Read Model:**
+  - Branch runtime read model under `/api/v1/catalog/branches/{branchId}/runtime-menu`.
+  - Returns only active menus, categories, items, variants, modifier groups, and options.
+  - Computes `is_available` dynamically with item-level 86 propagation to all variants.
+  - Includes branch currency code and strips all administrative, audit, and internal fields.
+- [x] **Post-Commit Event Contract:**
+  - `CatalogAvailabilityChangedEvent` application/domain event published strictly post-transaction commit via `ICatalogAvailabilityEventPublisher`.
+  - No SignalR runtime coupling, no fake in-memory / uncommitted event dispatch.
+- [x] **Security Audit Logging:**
+  - `ItemAvailabilityChanged`, `ItemRestocked`, `ItemVariantAvailabilityChanged`, `ItemVariantRestocked` audit events written on every mutation.
+- [x] **Verification & Test Coverage:**
+  - `BranchItemAvailabilityUnitTests.cs`: Lifecycle independence, HTML note rejection, past expected date rejection, restock transitions.
+  - `CatalogAvailabilityEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, 412 Precondition Failed, 409 Conflict, RBAC matrix.
+  - `CatalogAvailabilityIntegrationTests.cs`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, and waiter denial.
 
 ### Phase 5.5: Real-Time Availability & Instant 86 Stockout Engine
-- [ ] **Quick 86 APIs:**
-  - One-tap out-of-stock toggle endpoint (`/api/v1/menu/items/{id}/stockout`).
-  - Branch-level availability overrides without modifying parent brand catalog.
-  - Permitted roles: Kitchen, Bar, BranchManager, RestaurantAdmin (`menu.inventory.quick86`).
-- [ ] **Realtime Event Dispatch:**
+- [ ] **Realtime Event Dispatch (SignalR Bridge):**
+  - SignalR hub integration consuming `CatalogAvailabilityChangedEvent` (Phase 9 integration hook).
   - Event payload `menu.item_86ed` emitted with `tenant_id`, `branch_id`, and `item_id`.
   - Cart checkout race condition prevention (rejecting orders containing 86ed items).
 

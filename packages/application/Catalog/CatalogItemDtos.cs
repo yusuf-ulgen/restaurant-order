@@ -20,6 +20,7 @@ public sealed record MenuItemDto(
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc,
     Guid ConcurrencyToken,
+    Guid? PreparationStationId = null,
     IReadOnlyList<ItemVariantDto>? Variants = null,
     IReadOnlyList<MenuItemModifierGroupDto>? ModifierGroups = null);
 
@@ -87,7 +88,8 @@ public sealed record CreateMenuItemCommand(
     int SortOrder = 0,
     int SpicyLevel = 0,
     IReadOnlyList<string>? DietaryTags = null,
-    IReadOnlyList<string>? AllergenTags = null);
+    IReadOnlyList<string>? AllergenTags = null,
+    Guid? PreparationStationId = null);
 
 public sealed record UpdateMenuItemCommand(
     Guid CategoryId,
@@ -97,7 +99,8 @@ public sealed record UpdateMenuItemCommand(
     string? ImageUrl,
     int SortOrder,
     long? BasePriceMinorUnits = null,
-    Guid? ConcurrencyToken = null);
+    Guid? ConcurrencyToken = null,
+    Guid? PreparationStationId = null);
 
 public sealed record UpdateMenuItemPriceCommand(
     long BasePriceMinorUnits,

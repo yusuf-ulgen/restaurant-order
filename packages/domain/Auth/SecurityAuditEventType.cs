@@ -87,4 +87,10 @@ public static class SecurityAuditEventType
     public const string ModifierOptionActivated = "modifier_option_activated";
     public const string ModifierOptionDeactivated = "modifier_option_deactivated";
     public const string ModifierOptionsReordered = "modifier_options_reordered";
+
+    // Catalog Availability / Quick 86
+    public const string ItemAvailabilityChanged = "item_availability_changed";
+    public const string ItemRestocked = "item_restocked";
+    public const string ItemVariantAvailabilityChanged = "item_variant_availability_changed";
+    public const string ItemVariantRestocked = "item_variant_restocked";
 }

@@ -78,6 +78,11 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .HasColumnName("is_active")
             .IsRequired();
 
+        builder.Property(m => m.PreparationStationId)
+            .HasColumnName("preparation_station_id")
+            .HasConversion(id => id.HasValue ? id.Value.Value : (Guid?)null, value => value.HasValue ? new PreparationStationId(value.Value) : null)
+            .IsRequired(false);
+
         builder.Property(m => m.SpicyLevel)
             .HasColumnName("spicy_level")
             .HasConversion(s => s.Value, value => new SpicyLevel(value))
@@ -173,6 +178,14 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .HasForeignKey(m => m.TenantId)
             .HasConstraintName("fk_menu_items_tenants_tenant_id")
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Optional FK to preparation_stations
+        builder.HasOne<PreparationStation>()
+            .WithMany()
+            .HasForeignKey(m => m.PreparationStationId)
+            .HasConstraintName("fk_menu_items_preparation_stations_station_id")
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // 1-to-many relationship with ItemVariant
         builder.HasMany(m => m.Variants)

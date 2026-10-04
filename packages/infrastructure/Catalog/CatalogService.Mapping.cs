@@ -55,6 +55,7 @@ public partial class CatalogService
         CreatedAtUtc: item.CreatedAtUtc,
         UpdatedAtUtc: item.UpdatedAtUtc,
         ConcurrencyToken: item.ConcurrencyToken,
+        PreparationStationId: item.PreparationStationId?.Value,
         Variants: item.Variants?.Select(MapItemVariant).ToList(),
         ModifierGroups: item.ModifierGroupAssignments?.OrderBy(a => a.SortOrder).Select(a => new MenuItemModifierGroupDto(
             a.ModifierGroupId.Value,

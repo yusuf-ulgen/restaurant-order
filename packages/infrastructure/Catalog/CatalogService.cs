@@ -19,15 +19,19 @@ public partial class CatalogService : ICatalogService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly ILogger<CatalogService> _logger;
     private readonly IPermissionRegistry _permissionRegistry;
+    private readonly ICatalogAvailabilityEventPublisher _eventPublisher;
 
     public CatalogService(
         RestaurantOrderDbContext dbContext,
         ILogger<CatalogService> logger,
-        IPermissionRegistry? permissionRegistry = null)
+        IPermissionRegistry? permissionRegistry = null,
+        ICatalogAvailabilityEventPublisher? eventPublisher = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
+        _eventPublisher = eventPublisher ?? new CatalogAvailabilityEventPublisher(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<CatalogAvailabilityEventPublisher>.Instance);
     }
 
     public async Task<IReadOnlyList<MenuDto>> ListMenusAsync(

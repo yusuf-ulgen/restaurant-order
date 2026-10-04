@@ -106,6 +106,7 @@ public partial class CatalogService
         }
 
         var basePrice = PriceAmount.FromMinorUnits(command.BasePriceMinorUnits);
+        var stationId = await ValidateStationAsync(tenantId, branchId, command.PreparationStationId, ct);
         var item = MenuItem.Create(
             tenantId: tenantId,
             branchId: branchId,
@@ -117,7 +118,8 @@ public partial class CatalogService
             shortDescription: command.ShortDescription,
             fullDescription: command.FullDescription,
             imageUrl: command.ImageUrl,
-            sortOrder: command.SortOrder);
+            sortOrder: command.SortOrder,
+            preparationStationId: stationId);
 
         if (command.SpicyLevel != 0 ||
             (command.DietaryTags != null && command.DietaryTags.Count > 0) ||
@@ -215,13 +217,15 @@ public partial class CatalogService
             }
         }
 
+        var stationId = await ValidateStationAsync(tenantId, branchId, command.PreparationStationId, ct);
         item.UpdateDetails(
             name: command.Name,
             categoryId: categoryId,
             shortDescription: command.ShortDescription,
             fullDescription: command.FullDescription,
             imageUrl: command.ImageUrl,
-            sortOrder: command.SortOrder);
+            sortOrder: command.SortOrder,
+            preparationStationId: stationId);
 
         AddAuditEvent(tenantId, SecurityAuditEventType.MenuItemUpdated, actor, branchId, new
         {

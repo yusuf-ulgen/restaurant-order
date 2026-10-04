@@ -118,7 +118,9 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.RestaurantConfig.IRestaurantConfigService, RestaurantOrder.Infrastructure.RestaurantConfig.RestaurantConfigService>();
 
         // Catalog & Menu Services
+        services.AddScoped<RestaurantOrder.Application.Catalog.ICatalogAvailabilityEventPublisher, RestaurantOrder.Infrastructure.Catalog.CatalogAvailabilityEventPublisher>();
         services.AddScoped<RestaurantOrder.Application.Catalog.ICatalogService, RestaurantOrder.Infrastructure.Catalog.CatalogService>();
+        services.AddScoped<RestaurantOrder.Application.Catalog.ICatalogAvailabilityService>(sp => sp.GetRequiredService<RestaurantOrder.Application.Catalog.ICatalogService>());
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();

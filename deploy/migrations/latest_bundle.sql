@@ -2904,3 +2904,109 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    ALTER TABLE tenancy.menu_items ADD preparation_station_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE TABLE tenancy.branch_item_availabilities (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        menu_item_id uuid NOT NULL,
+        item_variant_id uuid,
+        is_available boolean NOT NULL,
+        reason_code integer NOT NULL,
+        note character varying(500),
+        expected_available_at timestamp with time zone,
+        changed_by_user_id uuid NOT NULL,
+        changed_at timestamp with time zone NOT NULL,
+        concurrency_token uuid NOT NULL,
+        CONSTRAINT "PK_branch_item_availabilities" PRIMARY KEY (id),
+        CONSTRAINT fk_branch_item_availabilities_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_branch_item_availabilities_item_variants_variant_id FOREIGN KEY (item_variant_id) REFERENCES tenancy.item_variants (id) ON DELETE CASCADE,
+        CONSTRAINT fk_branch_item_availabilities_menu_items_item_id FOREIGN KEY (menu_item_id) REFERENCES tenancy.menu_items (id) ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE INDEX "IX_menu_items_preparation_station_id" ON tenancy.menu_items (preparation_station_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE INDEX "IX_branch_item_availabilities_item_variant_id" ON tenancy.branch_item_availabilities (item_variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE INDEX "IX_branch_item_availabilities_menu_item_id" ON tenancy.branch_item_availabilities (menu_item_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE UNIQUE INDEX ix_branch_item_availabilities_item_unique ON tenancy.branch_item_availabilities (tenant_id, branch_id, menu_item_id) WHERE item_variant_id IS NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    CREATE UNIQUE INDEX ix_branch_item_availabilities_variant_unique ON tenancy.branch_item_availabilities (tenant_id, branch_id, menu_item_id, item_variant_id) WHERE item_variant_id IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT fk_menu_items_preparation_stations_station_id FOREIGN KEY (preparation_station_id) REFERENCES tenancy.preparation_stations (id) ON DELETE SET NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+
+                    ALTER TABLE tenancy.branch_item_availabilities ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.branch_item_availabilities FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS branch_item_availabilities_isolation_policy ON tenancy.branch_item_availabilities;
+                    CREATE POLICY branch_item_availabilities_isolation_policy ON tenancy.branch_item_availabilities
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.branch_item_availabilities TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261004151108_AddBranchItemAvailabilityAndStations') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261004151108_AddBranchItemAvailabilityAndStations', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+

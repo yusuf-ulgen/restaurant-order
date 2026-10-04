@@ -27,6 +27,8 @@ public static partial class CatalogEndpoints
         MapVariantEndpoints(branchGroup);
         MapModifierEndpoints(branchGroup);
         MapItemModifierEndpoints(branchGroup);
+        MapAvailabilityEndpoints(branchGroup);
+        MapRuntimeMenuEndpoints(branchGroup);
 
         return app;
     }
@@ -105,6 +107,12 @@ public static partial class CatalogEndpoints
         return statusCode == StatusCodes.Status201Created
             ? Results.Created($"/api/v1/catalog/branches/{option.BranchId}/modifier-groups/{option.ModifierGroupId}/options/{option.Id}", option)
             : Results.Ok(option);
+    }
+
+    internal static IResult AvailabilityResult(HttpContext context, BranchItemAvailabilityDto availability)
+    {
+        context.Response.Headers.ETag = $"\"{availability.ConcurrencyToken:D}\"";
+        return Results.Ok(availability);
     }
 
     internal static TenantId ResolveTenantId(ITenantContext tenantContext, AuthenticatedPrincipal actor)

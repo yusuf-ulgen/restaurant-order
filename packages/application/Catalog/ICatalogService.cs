@@ -9,7 +9,7 @@ namespace RestaurantOrder.Application.Catalog;
 /// Application service contract for menu and catalog operations.
 /// Enforces tenant boundary isolation, branch-level access control, and optimistic concurrency.
 /// </summary>
-public interface ICatalogService
+public interface ICatalogService : ICatalogAvailabilityService
 {
     // Menus
     Task<IReadOnlyList<MenuDto>> ListMenusAsync(

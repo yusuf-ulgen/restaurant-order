@@ -36,6 +36,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Catalog.ModifierGroup> ModifierGroups => Set<RestaurantOrder.Domain.Catalog.ModifierGroup>();
     public DbSet<RestaurantOrder.Domain.Catalog.ModifierOption> ModifierOptions => Set<RestaurantOrder.Domain.Catalog.ModifierOption>();
     public DbSet<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment> MenuItemModifierGroupAssignments => Set<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>();
+    public DbSet<RestaurantOrder.Domain.Catalog.BranchItemAvailability> BranchItemAvailabilities => Set<RestaurantOrder.Domain.Catalog.BranchItemAvailability>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -109,6 +110,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierGroup>().HasQueryFilter(mg => HasTenant && mg.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierOption>().HasQueryFilter(mo => HasTenant && mo.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.BranchItemAvailability>().HasQueryFilter(bia => HasTenant && bia.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
