@@ -105,3 +105,6 @@ pnpm test
 # Run full verification pipeline
 pnpm verify
 ```
+## Phase 5 Catalog Verification
+
+Catalog verification spans domain/unit tests, API handler and permission tests, PostgreSQL/Redis Testcontainers integration tests, admin frontend tests, E2E probes, and coverage gates. Integration tests exercise runtime-role tenant isolation, branch/station scope, lifecycle visibility, pricing validation, duplicate constraints, ETag preconditions/conflicts, availability concurrency, and rollback paths. Testcontainers must fail closed when Docker is unavailable; do not skip integration tests. Record test and coverage totals only from the CI run for the exact commit.

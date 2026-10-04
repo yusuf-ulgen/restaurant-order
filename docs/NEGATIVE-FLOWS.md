@@ -11,7 +11,7 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
 ### 2.1. Item Stockout During Checkout (The "86 Race Condition")
 - **Scenario:** A guest adds the last portion of "Ribeye Steak" to their cart. While they review their order, the kitchen staff marks Ribeye as 86 (out of stock).
 - **Detection:** Pre-commit validation hook checks active inventory / availability status inside the database transaction.
-- **System Response:** 
+- **System Response:**
   1. Transaction aborts with `ITEM_OUT_OF_STOCK` error code.
   2. The cart flags the specific unavailable item with a clear visual warning.
   3. The guest is prompted: *"Sorry, 'Ribeye Steak' just ran out! Please remove it to proceed with the rest of your order."*
@@ -116,3 +116,12 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
 ### 3.11. Tenant Theme Purging on Switch
 - **Scenario:** Super Admin or multi-tenant staff switches between Tenant A and Tenant B.
 - **Handling:** Theme injector cleanses all dynamic CSS variables from `:root` before mounting the new tenant's theme, preventing visual bleed.
+## Phase 5 Catalog Negative Flows
+
+- Cross-tenant and cross-branch object identifiers are scoped at service queries and database RLS/composite constraints; unauthorized scope is denied or appears absent.
+- BranchManager cross-branch writes, and Kitchen/Bar station mismatches, are denied.
+- Negative/overflow prices, duplicate slugs/codes, invalid modifier bounds, unsupported tags and dietary/allergen contradictions fail validation.
+- Missing concurrency token returns 412; stale token, duplicate availability creation and concurrent reorder conflicts return 409.
+- Archived menu mutations are rejected. Inactive menus/categories/items/variants/groups/options are excluded from runtime menu.
+- Database SaveChanges writes catalog changes and audit records in one EF unit of work; failed saves do not dispatch availability events. Unexpected API failures return generic RFC 7807 500 content with correlation ID.
+- Admin network failures retain retry; 409 offers reload/retry and 412 explains refreshing the concurrency token.

@@ -9,12 +9,12 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | Sub-Phase | Title | Status | Primary Output | Commit SHA |
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 5.0** | Delivery Baseline & Hardening Preparation | **Completed** | Clean baseline, safe RFC 7807 500s, correlation IDs, warning-free React test suite | `717348b` |
-| **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Completed** | Menu & MenuCategory aggregates, branch-scoped catalog, slug uniqueness, lifecycle, RLS, REST API | `d040db8` |
-| **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Completed** | MenuItem aggregate, ItemVariant pricing, PriceAmount VO, strict integer minor units, REST APIs, RLS | `[Current]` |
-| **Phase 5.3** | Modifier Groups & Customization Rules | **Pending** | ModifierGroup & ModifierItem models, min/max selection rules, price deltas | - |
-| **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Pending** | Canonical REST endpoints, ETag/concurrency token guards, EF Core migrations, audit logs | - |
-| **Phase 5.5** | Real-Time Availability & Instant 86 Stockout Engine | **Pending** | Fast 86 toggle API, branch availability overrides, real-time event publishing | - |
-| **Phase 5.6** | Admin Catalog Management UI & Final Verification | **In Progress** | Admin Web catalog editor, modifier configurator, 86 modal, catalog UI, permission controls, responsive editor sheets, final quality gates | - |
+| **Phase 5.1** | Tenant-Scoped Menu & Category Management | **Completed** | Menu & MenuCategory aggregates, branch-scoped catalog, slug uniqueness, lifecycle, RLS, REST API | `3d09500` |
+| **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Completed** | MenuItem aggregate, ItemVariant pricing, PriceAmount VO, strict integer minor units, REST APIs, RLS | `e2791ca` |
+| **Phase 5.3** | Modifier Groups & Customization Rules | **Completed** | Modifier groups/options, selection rules, price deltas, dietary/allergen metadata | `8b3f250` |
+| **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Completed** | REST endpoints, ETag/concurrency, additive migrations, audit events | `3d09500–8a0811c` |
+| **Phase 5.5** | Branch Availability & Quick 86 | **Completed** | Availability APIs, station scope, runtime read model and post-commit event contract | `8a0811c` |
+| **Phase 5.6** | Admin Catalog Management UI & Final Verification | **Completed** | Admin catalog editor, security/test review, documentation and CI closure | `6969e3e5a1352beb30faa17614b2e5b25f5611f8` |
 
 ---
 
@@ -184,13 +184,13 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - `CatalogAvailabilityEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, 412 Precondition Failed, 409 Conflict, RBAC matrix.
   - `CatalogAvailabilityIntegrationTests.cs`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, and waiter denial.
 
-### Phase 5.5: Real-Time Availability & Instant 86 Stockout Engine
-- [ ] **Realtime Event Dispatch (SignalR Bridge):**
-  - SignalR hub integration consuming `CatalogAvailabilityChangedEvent` (Phase 9 integration hook).
-  - Event payload `menu.item_86ed` emitted with `tenant_id`, `branch_id`, and `item_id`.
-  - Cart checkout race condition prevention (rejecting orders containing 86ed items).
+### Phase 5.5: Branch Availability & Quick 86 (COMPLETED)
+- [x] **Availability Event Contract (transport integration remains Phase 9):**
+  - `CatalogAvailabilityChangedEvent` is published after persistence succeeds; SignalR transport remains Phase 9 scope.
+  - Event carries tenant, branch, item/variant, availability and reason fields.
+  - Order checkout validation belongs to the later order lifecycle phases.
 
-### Phase 5.6: Admin Catalog Management UI & Final Verification
+### Phase 5.6: Admin Catalog Management UI & Final Verification (VERIFICATION PENDING)
 - [ ] **Admin Web Catalog Management:**
   - Category list with drag-and-drop reordering.
   - Item editor modal with photo upload URL, variant matrix, allergen toggles, and modifier picker.
@@ -203,7 +203,9 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 
 ---
 
-## 3. Verification Status (Phase 5.0 Baseline)
+## 3. Verification Status (historical Phase 5.0 baseline)
+
+The results below document the original Phase 5.0 baseline only. Phase 5.6 closure was verified by both GitHub Actions events for commit `3675b5405e9159b3603a620d65ad8ad0a9a37d23`; see the final verification record below.
 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
@@ -230,3 +232,18 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
    **Mitigation:** Optimistic concurrency tokens and `If-Match` ETags on all catalog mutation endpoints.
 4. **Risk:** Information disclosure via 500 error responses.
    **Mitigation:** Standard RFC 7807 `ProblemDetails` with correlation IDs returned; exception details and stack traces stripped in all production environments.
+## 5. Catalog Delivery Inventory
+
+- Additive migrations: `20261004140337_AddMenusAndCategories`, `20261004142624_AddMenuItemsAndVariants`, `20261004144819_AddModifiersDietaryAndAllergens`, `20261004151108_AddBranchItemAvailabilityAndStations`. No migration history changes are part of Phase 5.6.
+- API root: `/api/v1/catalog/branches/{branchId}`. Endpoint groups cover menus; menu categories and reorder; items, metadata, prices and reorder; variants and prices; modifier groups/options and assignment; branch availability, item/variant `quick-86` and `restock`; and `GET /runtime-menu`.
+- Mutation responses carry ETags. Missing concurrency preconditions return 412; stale state and uniqueness conflicts return 409. Unexpected errors use generic RFC 7807 responses with correlation IDs.
+- Final code fix reviewed: `6969e3e5a1352beb30faa17614b2e5b25f5611f8`. Phase 5.6 closure was verified on commit `3675b5405e9159b3603a620d65ad8ad0a9a37d23`; final status updates receive the same required CI validation.
+
+## 6. Phase 5.6 Final Verification Record
+
+- Testcontainers integration: **218 / 218 passed**, 0 failed, 0 skipped.
+- Backend unit: **1,173 / 1,173 passed**. Architecture: **10 / 10 passed**.
+- Frontend unit: **287 passed** (UI 159, admin 105, customer 8, operations 15). E2E: **2 / 2 passed**.
+- Backend merged coverage gate: **86.19% line, 80.37% branch, 91.25% method**. Frontend statement coverage measured locally: UI 95.15%, admin 93.05%, customer 100%, operations 91.79%.
+- GitHub Actions push: [37224338951](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/37224338951) **success**. Pull request: [37224353155](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/37224353155) **success**.
+- Migration validation/script, quality gates, Docker Compose validation, container smoke/hardening, solution build, and repository cleanliness all passed in CI. No migration was added or rewritten during Phase 5.6.

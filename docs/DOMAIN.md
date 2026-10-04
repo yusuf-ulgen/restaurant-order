@@ -105,3 +105,6 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 | Order to StationTicket | 1 : N | An order splits into station tickets (Kitchen, Bar). |
 | TableSession to Bill | 1 : 1 (active) | A session consolidates into a single bill. |
 | Bill to Payment | 1 : N | A bill can be settled via multiple split payments. |
+## Phase 5 Catalog Integrity
+
+Menus belong to a tenant and branch and move Draft -> Active -> Archived; Archived is terminal. Categories, items, variants, modifier groups and options use soft lifecycle state. Prices and modifier deltas use bounded non-negative integer minor units. Variant prices are absolute. Modifier bounds enforce 0 <= minimum <= maximum <= active option count, with active default count no greater than maximum. Dietary/allergen combinations are validated against the closed supported tag set. Availability is a branch override separate from item lifecycle; an item-level 86 makes its active variants unavailable in the runtime view.

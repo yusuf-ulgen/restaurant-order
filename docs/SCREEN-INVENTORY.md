@@ -68,3 +68,6 @@
 | `SPAD-03`| **Subscription & Billing** | Super Admin | Manage platform tiers, commission rates, view aggregated volume.| Plan pricing, active tenant counts, monthly platform revenue. |
 | `SPAD-04`| **Platform Audit Logs** | Super Admin | Filter audit events by tenant, actor, or action type. | Timestamp, tenant ID, actor, event action, IP address. |
 | `SPAD-05`| **System Health Monitor** | Super Admin | Check DB latency, realtime socket connections, worker queues. | Status indicators, error rate charts, active connection counters. |
+## Phase 5 Admin Catalog
+
+The admin menu screen manages branch menus, categories, items, variants, modifier groups/options, dietary/allergen metadata, and quick-86/restock. It uses the existing admin shell and design system, responsive editor sheets, safe text preview, and permission-aware controls. It is catalog administration only; customer ordering remains a later phase.

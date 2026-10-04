@@ -103,3 +103,6 @@ The system is partitioned into autonomous domain modules. Cross-module communica
 2. **Deterministic State Transitions:** Orders, tickets, and payments must only transition via verified state machines (see [docs/STATE-MACHINES.md](./STATE-MACHINES.md)).
 3. **Idempotency on Financial Operations:** Payment processing, bill closing, and refunds must enforce idempotency keys to prevent double-charging.
 4. **Resilient Hardware Decoupling:** Printer failures must never block KDS progression or order placement.
+## Phase 5 Catalog Boundary
+
+The catalog API is rooted at /api/v1/catalog/branches/{branchId}. Application services enforce tenant, branch, role, lifecycle and concurrency rules; PostgreSQL composite foreign keys and forced RLS provide persistence-level isolation. Mutations record audit events in the same unit of work. ETags expose concurrency tokens; missing preconditions return 412 and stale writes return 409. The runtime-menu projection includes only active menus, categories, items, variants, modifier groups and options, and omits administrative/audit fields. Availability events are dispatched after successful persistence; SignalR delivery and order checkout race handling remain later-phase work.

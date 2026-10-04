@@ -45,7 +45,7 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
                                         |
                                         v
 +-------------------------------------------------------------------------------+
-|  PHASE 5: MENU & CATALOG [IN PROGRESS]                                         |
+|  PHASE 5: MENU & CATALOG [COMPLETED]                                         |
 |  - Menu categories, items, and variant pricing models                         |
 |  - Modifier groups (required single-select, optional multi-select, free/paid) |
 +-------------------------------------------------------------------------------+
@@ -101,13 +101,14 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Branch feature flags toggle engine with strict RBAC precedence (Phase 4.5).
 - [x] Tenant and branch isolation, RLS policies, composite foreign keys, and fail-closed security (Phase 4.6).
 
-### Phase 5: Menu & Catalog (Status: Geliştiriliyor / In Progress)
-- [ ] Menu categories, items, and variant pricing models.
-- [ ] Modifier groups (required single-select, optional multi-select, free/paid).
-- [ ] Dietary, allergen, and spicy badges.
-- [ ] Real-time item 86ing (mark out-of-stock) data flow.
+### Phase 5: Menu & Catalog (Status: COMPLETED — CI verified)
+- [x] Menu/category/item/variant catalog with tenant and branch scoping, integer minor-unit prices, lifecycle controls, ETag concurrency, and audit records.
+- [x] Modifier groups/options, selection invariants, price deltas, dietary/allergen metadata, and availability controls.
+- [x] Dietary, allergen, and spicy metadata with contradiction validation.
+- [x] Admin catalog editor and filtered runtime catalog read model with quick-86/restock controls.
+- [x] Final hardening and closure; push and pull_request CI green (218/218 integration tests).
 
-### Phase 6: Tables, QR & Sessions (Status: Planlandı / Planned)
+### Phase 6: Tables, QR & Sessions (Status: NEXT)
 - [ ] Table numbering, capacity, and physical layout positioning.
 - [ ] Dynamic and static QR code generation with cryptographic signature.
 - [ ] Dining session lifecycle state machine (Open -> Active -> Bill Requested -> Closed).
