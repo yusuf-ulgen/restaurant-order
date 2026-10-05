@@ -15,7 +15,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | **Phase 6.0** | Planning and contracts | **Completed** | Implementation tracker, contracts, architecture alignment | `feat(floor)` |
 | **Phase 6.1** | Tables and physical layout | **Completed** | `RestaurantTable` aggregate, composite FKs, RLS, REST APIs, Testcontainers tests | `feat(floor)` |
 | **Phase 6.2** | Dining session lifecycle | **Completed** | `DiningSession` aggregate, PostgreSQL partial unique index, state machine, RBAC & REST APIs | `feat(floor)` |
-| **Phase 6.3** | Static/dynamic QR security | **Planned** | Cryptographic QR payload, signature verification, version bumping, anti-tamper | Pending |
+| **Phase 6.3** | Static/dynamic QR security | **Completed** | Signed QR payloads, HMAC-SHA256, SVG rendering, customer session exchange, ADR-0011 | `feat(qr)` |
 | **Phase 6.4** | Table transfer and merge | **Planned** | Atomic table session transfer, merge validation, audit event logging | Pending |
 | **Phase 6.5** | Admin/customer UI | **Planned** | Visual floor layout canvas, table status indicator, table modal, QR generator preview | Pending |
 | **Phase 6.6** | Hardening and closure | **Planned** | Full regression suite, gates verification, file size checks, CI verification | Pending |
@@ -125,10 +125,37 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Concurrency: `If-Match` / ETag support on all session mutations (412 on missing header, 409 on conflict).
   - Atomic security audit logging within ambient transaction: `DiningSessionOpened`, `DiningSessionActivated`, `DiningSessionBillRequested`, `DiningSessionClosed`.
 
-### Phase 6.3: Static/dynamic QR security (PLANNED)
-- Cryptographic signature for table QR codes.
-- Dynamic vs. static QR tokens.
-- QR version bumping and invalidation.
+### Phase 6.3: Static/dynamic QR security
+- [x] **Cryptographic QR Payload & Security Architecture:**
+  - Strongly typed payload (`QrPayload`) with strict canonical pipe-delimited format:
+    - Static: `v=1|kid={key_id}|mode=1|t={tenant}|b={branch}|tc={public_code}|qv={qr_version}`
+    - Dynamic: `v=1|kid={key_id}|mode=2|t={tenant}|b={branch}|tc={public_code}|qv={qr_version}|sid={session_id}|exp={exp_unix}|nce={nonce}`
+  - Zero raw customer JWTs in QR URLs; zero predictable internal database IDs.
+  - Opaque 128-bit cryptographically secure `public_code` per table (`RestaurantTable.PublicCode`).
+  - HMAC-SHA256 signatures with constant-time verification (`CryptographicOperations.FixedTimeEquals`).
+  - Minimum 256-bit signing keys loaded via environment variables with zero secrets in code, logs, or API responses.
+  - Multi-key rotation support via `key_id`.
+  - Fail-fast startup check in staging/production environments for missing or weak keys (< 256-bit).
+  - Anti-tampering: Payload tampering, signature tampering, missing signatures, unknown `key_id`, expired dynamic tokens, and future-issued tokens immediately rejected.
+- [x] **QR Image Generation Library:**
+  - Integrated `Net.Codecrete.QrCodeGenerator` version `3.2.1` (exact pinned dependency).
+  - MIT licensed, pure C#, zero native dependencies (no GDI+/libgdiplus).
+  - Vector SVG rendering supporting arbitrary DPI and dark/light module styling.
+- [x] **Admin & Staff QR Endpoints:**
+  - `GET /api/v1/floor/branches/{branchId}/tables/{tableId}/qr`: Generate static table QR code (SVG + base64 data URL + raw signed token).
+  - `GET /api/v1/floor/branches/{branchId}/tables/{tableId}/qr/metadata`: Get QR metadata without secrets (version, public code, mode).
+  - `POST /api/v1/floor/branches/{branchId}/tables/{tableId}/qr/rotate`: Rotate QR version (regenerates `public_code` and bumps `qr_version`), revoking all previous physical QR codes.
+  - `GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/qr`: Generate short-lived dynamic QR code for active non-closed session.
+- [x] **Public Customer QR Endpoints & Session Exchange:**
+  - `GET /api/v1/qr/resolve?token={token}` & `POST /api/v1/qr/resolve`: Validates signature and returns sanitized welcome info (`tenantName`, `branchName`, `tableNumber`, `hasActiveSession`).
+  - `POST /api/v1/qr/exchange`: Validates token, atomically acquires or creates an active session on static scan, or joins target session on dynamic scan.
+  - Concurrency safety: PostgreSQL partial unique index `ix_dining_sessions_tenant_branch_table_active` guarantees single active session; race conditions gracefully join existing session.
+  - Issues Customer JWT access token stored in `HttpOnly`, `Secure`, `SameSite=Lax` cookie (`restaurant_customer_session`).
+  - Customer Principal: `PrincipalType.Customer`, `role=Customer`, `tenant_id`, `branch_id`, `table_session_id`.
+  - Fail-closed customer validation: `ICustomerSessionValidator` rejects customer requests once dining session is closed.
+  - Public endpoint distributed sliding-window rate limiting (`IQrRateLimiter`) with fail-closed behavior on Redis disconnects.
+- [x] **Architecture Decision Record:**
+  - Published [ADR-0011: Static/Dynamic QR Security & Customer Session Exchange](adr/0011-qr-security-and-customer-session-exchange.md) (`ACCEPTED`).
 
 ### Phase 6.4: Table transfer and merge (PLANNED)
 - Table transfer mechanics.

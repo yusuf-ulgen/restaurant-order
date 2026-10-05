@@ -20,6 +20,7 @@ export interface RestaurantTableDto {
   shape: TableShape;
   isActive: boolean;
   qrVersion: number;
+  publicCode: string;
   concurrencyToken: string;
   createdAtUtc: string;
   updatedAtUtc?: string | null;
@@ -101,3 +102,65 @@ export interface CloseDiningSessionRequest {
 export interface TransitionSessionRequest {
   concurrencyToken?: string;
 }
+
+export type QrMode = 'static' | 'dynamic';
+
+export interface TableQrCodeDto {
+  tableId: string;
+  publicCode: string;
+  qrVersion: number;
+  mode: 'static';
+  token: string;
+  svg: string;
+}
+
+export interface SessionDynamicQrDto {
+  sessionId: string;
+  tableId: string;
+  publicCode: string;
+  mode: 'dynamic';
+  token: string;
+  svg: string;
+  expiresAt: string;
+}
+
+export interface TableQrMetadataDto {
+  tableId: string;
+  tableNumber: string;
+  name: string;
+  publicCode: string;
+  qrVersion: number;
+  isActive: boolean;
+  keyId: string;
+}
+
+export interface RotateQrVersionRequest {
+  concurrencyToken?: string;
+}
+
+export interface QrResolveResponse {
+  tenantId: string;
+  branchId: string;
+  brandName: string;
+  branchName: string;
+  tableNumber: string;
+  tableName: string;
+  mode: QrMode;
+  hasActiveSession: boolean;
+  activeSessionStatus?: DiningSessionStatus | null;
+}
+
+export interface QrExchangeRequest {
+  token: string;
+}
+
+export interface QrExchangeResponse {
+  sessionId: string;
+  sessionStatus: DiningSessionStatus;
+  accessTokenExpiresAt: string;
+  tenantId: string;
+  branchId: string;
+  tableNumber: string;
+  tableName: string;
+}
+

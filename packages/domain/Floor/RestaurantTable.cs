@@ -42,6 +42,7 @@ public class RestaurantTable
 
     public bool IsActive { get; private set; }
     public int QrVersion { get; private set; }
+    public string PublicCode { get; private set; } = null!;
     public Guid ConcurrencyToken { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
@@ -65,7 +66,8 @@ public class RestaurantTable
         int height = 100,
         int rotationDegrees = 0,
         TableShape shape = TableShape.Square,
-        RestaurantTableId? id = null)
+        RestaurantTableId? id = null,
+        string? publicCode = null)
     {
         var validatedNumber = ValidateTableNumber(tableNumber);
         var validatedName = ValidateName(name);
@@ -73,6 +75,7 @@ public class RestaurantTable
         ValidateLayout(positionX, positionY, width, height, rotationDegrees, shape);
 
         var tableId = id ?? RestaurantTableId.New();
+        var code = string.IsNullOrWhiteSpace(publicCode) ? GeneratePublicCode() : publicCode.Trim();
 
         return new RestaurantTable
         {
@@ -91,6 +94,7 @@ public class RestaurantTable
             Shape = shape,
             IsActive = true,
             QrVersion = InitialQrVersion,
+            PublicCode = code,
             ConcurrencyToken = Guid.NewGuid(),
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -160,8 +164,14 @@ public class RestaurantTable
     public void BumpQrVersion()
     {
         QrVersion++;
+        PublicCode = GeneratePublicCode();
         UpdatedAtUtc = DateTime.UtcNow;
         ConcurrencyToken = Guid.NewGuid();
+    }
+
+    public static string GeneratePublicCode()
+    {
+        return Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
     }
 
     private static string ValidateTableNumber(string tableNumber)

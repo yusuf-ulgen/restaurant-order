@@ -60,6 +60,9 @@ The `restaurant-order` platform maintains 6 strictly isolated operational enviro
 | `FORWARDED_HEADERS_FORWARD_LIMIT` | Max forwarded proxy limit | Optional | No | `2` |
 | `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
 | `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
+| `QrSecurity:CurrentKeyId` | Active signing key ID for QR payloads | Staging, Prod | No | `k1` |
+| `QrSecurity:Keys:<key_id>` | 256-bit HMAC-SHA256 signing secret for table QR | Staging, Prod | Yes | `[Secured in Secret Manager]` |
+| `QrSecurity:DynamicQrLifetimeMinutes` | Validity window for dynamic QR codes (minutes) | Optional | No | `15` |
 
 ---
 

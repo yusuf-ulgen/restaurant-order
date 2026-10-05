@@ -124,6 +124,40 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
             },
             OnTokenValidated = async context =>
             {
+                var principalTypeClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.PrincipalType)?.Value
+                    ?? context.Principal?.FindFirst("principal_type")?.Value;
+
+                if (string.Equals(principalTypeClaim, "customer", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tableSessionClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TableSessionId)?.Value
+                        ?? context.Principal?.FindFirst("table_session_id")?.Value
+                        ?? context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.Subject)?.Value
+                        ?? context.Principal?.FindFirst("sub")?.Value;
+
+                    if (Guid.TryParse(tableSessionClaim, out var tableSessionId))
+                    {
+                        try
+                        {
+                            var customerValidator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Floor.ICustomerSessionValidator>();
+                            var isValid = await customerValidator.ValidateSessionActiveAsync(tableSessionId, context.HttpContext.RequestAborted);
+                            if (!isValid)
+                            {
+                                context.Fail("Customer dining session is closed or invalid.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            context.Fail($"Customer token validation failed closed: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        context.Fail("Customer token is missing valid table_session_id.");
+                    }
+
+                    return;
+                }
+
                 var validator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Auth.ITokenRevocationValidator>();
 
                 var sidClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.SessionId)?.Value

@@ -99,6 +99,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for dining sessions and lifecycle (Phase 6.2)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005205206_AddTablePublicCodeAndQrSecurity.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table public code and QR security (Phase 6.3)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

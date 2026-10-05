@@ -103,6 +103,11 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
             .HasColumnName("qr_version")
             .IsRequired();
 
+        builder.Property(rt => rt.PublicCode)
+            .HasColumnName("public_code")
+            .HasMaxLength(64)
+            .IsRequired();
+
         builder.Property(rt => rt.ConcurrencyToken)
             .HasColumnName("concurrency_token")
             .IsConcurrencyToken()
@@ -122,6 +127,11 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
         builder.HasIndex(rt => new { rt.TenantId, rt.BranchId, rt.TableNumber })
             .IsUnique()
             .HasDatabaseName("ix_restaurant_tables_tenant_id_branch_id_table_number");
+
+        // Unique public code per branch in tenant
+        builder.HasIndex(rt => new { rt.TenantId, rt.BranchId, rt.PublicCode })
+            .IsUnique()
+            .HasDatabaseName("ix_restaurant_tables_tenant_branch_public_code");
 
         builder.HasIndex(rt => new { rt.TenantId, rt.BranchId, rt.DiningAreaId })
             .HasDatabaseName("ix_restaurant_tables_tenant_id_branch_id_dining_area_id");

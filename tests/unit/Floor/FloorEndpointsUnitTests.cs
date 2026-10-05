@@ -100,6 +100,7 @@ public class FloorEndpointsUnitTests
             Shape: "Square",
             IsActive: true,
             QrVersion: 1,
+            PublicCode: "tbl-pub-code-01",
             ConcurrencyToken: token,
             CreatedAtUtc: DateTime.UtcNow,
             UpdatedAtUtc: null);

@@ -296,6 +296,9 @@ public static class FloorEndpoints
         .WithSummary("Deactivate a table");
 
         branchGroup.MapFloorSessionEndpoints();
+        branchGroup.MapFloorQrEndpoints();
+
+        app.MapQrCustomerEndpoints();
 
         return app;
     }

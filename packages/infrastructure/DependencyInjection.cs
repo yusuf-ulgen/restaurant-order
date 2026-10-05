@@ -122,6 +122,12 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Catalog.ICatalogAvailabilityService>(sp => sp.GetRequiredService<RestaurantOrder.Application.Catalog.ICatalogService>());
 
         // Floor & Table Services (Phase 6)
+        services.Configure<RestaurantOrder.Infrastructure.Floor.QrSecurityOptions>(
+            configuration.GetSection(RestaurantOrder.Infrastructure.Floor.QrSecurityOptions.SectionName));
+        services.AddSingleton<RestaurantOrder.Application.Floor.IQrSecurityService, RestaurantOrder.Infrastructure.Floor.QrSecurityService>();
+        services.AddScoped<RestaurantOrder.Application.Floor.IQrRateLimiter, RestaurantOrder.Infrastructure.Floor.RedisQrRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Floor.ICustomerSessionValidator, RestaurantOrder.Infrastructure.Floor.CustomerSessionValidator>();
+        services.AddScoped<RestaurantOrder.Application.Floor.IQrPublicService, RestaurantOrder.Infrastructure.Floor.QrPublicService>();
         services.AddScoped<RestaurantOrder.Application.Floor.IFloorService, RestaurantOrder.Infrastructure.Floor.FloorService>();
 
         // Identity Notifications & Outbox Infrastructure

@@ -19,15 +19,21 @@ public partial class FloorService : IFloorService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly ILogger<FloorService> _logger;
     private readonly IPermissionRegistry _permissionRegistry;
+    private readonly IQrSecurityService _qrSecurity;
+    private readonly QrSecurityOptions _qrOptions;
 
     public FloorService(
         RestaurantOrderDbContext dbContext,
         ILogger<FloorService> logger,
-        IPermissionRegistry? permissionRegistry = null)
+        IPermissionRegistry? permissionRegistry = null,
+        IQrSecurityService? qrSecurity = null,
+        Microsoft.Extensions.Options.IOptions<QrSecurityOptions>? qrOptions = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
+        _qrSecurity = qrSecurity!;
+        _qrOptions = qrOptions?.Value ?? new QrSecurityOptions();
     }
 
     public async Task<IReadOnlyList<RestaurantTableDto>> ListTablesAsync(
@@ -354,6 +360,7 @@ public partial class FloorService : IFloorService
             t.Shape.ToString(),
             t.IsActive,
             t.QrVersion,
+            t.PublicCode,
             t.ConcurrencyToken,
             t.CreatedAtUtc,
             t.UpdatedAtUtc);

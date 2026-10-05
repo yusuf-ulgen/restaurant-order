@@ -104,4 +104,6 @@ public static class SecurityAuditEventType
     public const string DiningSessionActivated = "dining_session_activated";
     public const string DiningSessionBillRequested = "dining_session_bill_requested";
     public const string DiningSessionClosed = "dining_session_closed";
+    public const string TableQrRotated = "table_qr_rotated";
+    public const string QrExchanged = "qr_exchanged";
 }

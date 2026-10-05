@@ -126,4 +126,34 @@ public interface IFloorService
         Guid? concurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default);
+
+    Task<TableQrCodeDto> GenerateTableStaticQrAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<SessionDynamicQrDto> GenerateSessionDynamicQrAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<RestaurantTableDto> RotateTableQrVersionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<TableQrMetadataDto> GetTableQrMetadataAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
 }
+

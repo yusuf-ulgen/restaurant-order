@@ -19,6 +19,7 @@ public record RestaurantTableDto(
     string Shape,
     bool IsActive,
     int QrVersion,
+    string PublicCode,
     Guid ConcurrencyToken,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc);
@@ -115,3 +116,78 @@ public record CloseDiningSessionRequest(
 /// </summary>
 public record TransitionSessionRequest(
     Guid? ConcurrencyToken = null);
+
+/// <summary>
+/// Data transfer object representing generated static QR code for a table.
+/// </summary>
+public record TableQrCodeDto(
+    Guid TableId,
+    string PublicCode,
+    int QrVersion,
+    string Mode,
+    string Token,
+    string Svg);
+
+/// <summary>
+/// Data transfer object representing generated dynamic QR code for an active dining session.
+/// </summary>
+public record SessionDynamicQrDto(
+    Guid SessionId,
+    Guid TableId,
+    string PublicCode,
+    string Mode,
+    string Token,
+    string Svg,
+    DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// Metadata for table QR code state (does not leak keys or secret tokens).
+/// </summary>
+public record TableQrMetadataDto(
+    Guid TableId,
+    string TableNumber,
+    string Name,
+    string PublicCode,
+    int QrVersion,
+    bool IsActive,
+    string KeyId);
+
+/// <summary>
+/// Request payload to rotate table QR version.
+/// </summary>
+public record RotateQrVersionRequest(
+    Guid? ConcurrencyToken = null);
+
+/// <summary>
+/// Public response returned when resolving a signed table QR token.
+/// </summary>
+public record QrResolveResponse(
+    Guid TenantId,
+    Guid BranchId,
+    string BrandName,
+    string BranchName,
+    string TableNumber,
+    string TableName,
+    string Mode,
+    bool HasActiveSession,
+    string? ActiveSessionStatus);
+
+/// <summary>
+/// Request payload for exchanging a signed QR token for customer access credentials.
+/// </summary>
+public record QrExchangeRequest(
+    string Token);
+
+/// <summary>
+/// Internal result produced when exchanging a signed QR token.
+/// </summary>
+public record QrExchangeResult(
+    string AccessToken,
+    DateTimeOffset AccessTokenExpiresAt,
+    Guid SessionId,
+    string SessionStatus,
+    Guid TenantId,
+    Guid BranchId,
+    string TableNumber,
+    string TableName);
+

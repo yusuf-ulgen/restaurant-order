@@ -3661,3 +3661,35 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    ALTER TABLE tenancy.restaurant_tables ADD public_code character varying(64) NOT NULL DEFAULT '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    UPDATE tenancy.restaurant_tables SET public_code = substr(md5(random()::text || clock_timestamp()::text || id::text), 1, 32) WHERE public_code = '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    CREATE UNIQUE INDEX ix_restaurant_tables_tenant_branch_public_code ON tenancy.restaurant_tables (tenant_id, branch_id, public_code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261005205206_AddTablePublicCodeAndQrSecurity', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;

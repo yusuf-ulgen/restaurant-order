@@ -14,6 +14,14 @@ public interface IAuthCookieService
 
     void ClearAuthCookies(HttpResponse response, bool isHttps);
 
+    void SetCustomerSessionCookie(
+        HttpResponse response,
+        string accessToken,
+        DateTimeOffset accessExpiresAt,
+        bool isHttps);
+
+    void ClearCustomerSessionCookie(HttpResponse response, bool isHttps);
+
     void SetTerminalCookie(HttpResponse response, Guid terminalId, string deviceSecret, bool isHttps);
 
     void ClearTerminalCookie(HttpResponse response, bool isHttps);
@@ -115,6 +123,37 @@ public sealed class AuthCookieService : IAuthCookieService
             HttpOnly = false,
             Secure = secure,
             SameSite = SameSiteMode.Strict,
+            Path = "/"
+        });
+    }
+
+    public void SetCustomerSessionCookie(
+        HttpResponse response,
+        string accessToken,
+        DateTimeOffset accessExpiresAt,
+        bool isHttps)
+    {
+        var secure = ResolveSecure(isHttps);
+
+        response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Lax,
+            Path = "/",
+            Expires = accessExpiresAt
+        });
+    }
+
+    public void ClearCustomerSessionCookie(HttpResponse response, bool isHttps)
+    {
+        var secure = ResolveSecure(isHttps);
+
+        response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Lax,
             Path = "/"
         });
     }
