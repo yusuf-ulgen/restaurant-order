@@ -12,6 +12,7 @@ public class PreparationStationConfiguration : IEntityTypeConfiguration<Preparat
         builder.ToTable("preparation_stations", "tenancy");
 
         builder.HasKey(ps => ps.Id);
+        builder.HasAlternateKey(ps => new { ps.TenantId, ps.BranchId, ps.Id });
 
         builder.Property(ps => ps.Id)
             .HasColumnName("id")

@@ -92,6 +92,47 @@ public static class RestaurantConfigTestHelpers
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    public static string GenerateCustomerToken(
+        Guid tenantId,
+        Guid branchId,
+        Guid tableSessionId)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(RestaurantOrder.Api.ConfigurationValidator.InsecureDevJwtSecret))
+        {
+            KeyId = "k1"
+        };
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var now = DateTimeOffset.UtcNow;
+        var expires = now.AddMinutes(15);
+        var claims = new List<Claim>
+        {
+            new(JwtClaimNames.Subject, tableSessionId.ToString()),
+            new(JwtClaimNames.SessionId, tableSessionId.ToString()),
+            new(JwtClaimNames.JwtId, Guid.NewGuid().ToString("N")),
+            new(JwtClaimNames.PrincipalType, "customer"),
+            new(JwtClaimNames.Role, "Customer"),
+            new(JwtClaimNames.AuthMethod, "customer_qr_session"),
+            new(JwtClaimNames.SecurityVersion, "0"),
+            new(JwtClaimNames.TenantId, tenantId.ToString()),
+            new(JwtClaimNames.BranchId, branchId.ToString()),
+            new(JwtClaimNames.TableSessionId, tableSessionId.ToString()),
+            new(JwtRegisteredClaimNames.Iss, "restaurant-order"),
+            new(JwtRegisteredClaimNames.Aud, "restaurant-order-clients"),
+            new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new(JwtRegisteredClaimNames.Nbf, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new(JwtRegisteredClaimNames.Exp, expires.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: "restaurant-order",
+            audience: "restaurant-order-clients",
+            claims: claims,
+            expires: expires.UtcDateTime,
+            signingCredentials: creds);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public static async Task SeedTenantAsync(
         string connectionString,
         Guid tenantId,

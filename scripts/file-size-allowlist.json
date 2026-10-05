@@ -63,6 +63,34 @@
       "reason": "Machine-generated EF Core migration designer metadata for dining areas, preparation stations, and feature flag tables (Phase 4.5)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004140337_AddMenusAndCategories.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for menus and menu categories tables (Phase 5.1)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004142624_AddMenuItemsAndVariants.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for menu items and item variants tables (Phase 5.2)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004144819_AddModifiersDietaryAndAllergens.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for modifier groups, modifier options, assignments, dietary and allergens (Phase 5.3)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004151108_AddBranchItemAvailabilityAndStations.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for branch item availability and preparation station references (Phase 5.4)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox.cs",
+      "reason": "Machine-generated EF Core migration for catalog cross-branch referential constraints, alternate keys, and availability transactional outbox table."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for catalog cross-branch referential constraints and availability transactional outbox table."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005141523_HardenCatalogOutboxAndPreparationStationConstraints.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for catalog outbox hardening and preparation station constraint update."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

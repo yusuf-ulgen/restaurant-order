@@ -29,6 +29,15 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<PreparationStation> PreparationStations => Set<PreparationStation>();
     public DbSet<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags> TenantFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>();
     public DbSet<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags> BranchFeatureFlags => Set<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>();
+    public DbSet<RestaurantOrder.Domain.Catalog.Menu> Menus => Set<RestaurantOrder.Domain.Catalog.Menu>();
+    public DbSet<RestaurantOrder.Domain.Catalog.MenuCategory> MenuCategories => Set<RestaurantOrder.Domain.Catalog.MenuCategory>();
+    public DbSet<RestaurantOrder.Domain.Catalog.MenuItem> MenuItems => Set<RestaurantOrder.Domain.Catalog.MenuItem>();
+    public DbSet<RestaurantOrder.Domain.Catalog.ItemVariant> ItemVariants => Set<RestaurantOrder.Domain.Catalog.ItemVariant>();
+    public DbSet<RestaurantOrder.Domain.Catalog.ModifierGroup> ModifierGroups => Set<RestaurantOrder.Domain.Catalog.ModifierGroup>();
+    public DbSet<RestaurantOrder.Domain.Catalog.ModifierOption> ModifierOptions => Set<RestaurantOrder.Domain.Catalog.ModifierOption>();
+    public DbSet<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment> MenuItemModifierGroupAssignments => Set<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>();
+    public DbSet<RestaurantOrder.Domain.Catalog.BranchItemAvailability> BranchItemAvailabilities => Set<RestaurantOrder.Domain.Catalog.BranchItemAvailability>();
+    public DbSet<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage> CatalogAvailabilityOutbox => Set<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -95,6 +104,14 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<PreparationStation>().HasQueryFilter(ps => HasTenant && ps.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.TenantFeatureFlags>().HasQueryFilter(tf => HasTenant && tf.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags>().HasQueryFilter(bf => HasTenant && bf.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.Menu>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuCategory>().HasQueryFilter(c => HasTenant && c.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuItem>().HasQueryFilter(i => HasTenant && i.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ItemVariant>().HasQueryFilter(v => HasTenant && v.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierGroup>().HasQueryFilter(mg => HasTenant && mg.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.ModifierOption>().HasQueryFilter(mo => HasTenant && mo.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.BranchItemAvailability>().HasQueryFilter(bia => HasTenant && bia.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
@@ -106,6 +123,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<InvitationToken>().HasQueryFilter(it => HasTenant && it.TenantId == CurrentTenantId);
         modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(pr => HasTenant && pr.TenantId == CurrentTenantId);
         modelBuilder.Entity<IdentityNotificationOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
     }
 
     /// <summary>

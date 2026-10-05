@@ -1389,6 +1389,659 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.BranchItemAvailability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<Guid>("ChangedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by_user_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime?>("ExpectedAvailableAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expected_available_at");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_available");
+
+                    b.Property<Guid?>("ItemVariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_variant_id");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<int>("ReasonCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("reason_code");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "MenuItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_branch_item_availabilities_item_unique")
+                        .HasFilter("item_variant_id IS NULL");
+
+                    b.HasIndex("TenantId", "BranchId", "MenuItemId", "ItemVariantId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_branch_item_availabilities_variant_unique")
+                        .HasFilter("item_variant_id IS NOT NULL");
+
+                    b.ToTable("branch_item_availabilities", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("aggregate_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatched_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<DateTimeOffset?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_utc");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptUtc")
+                        .HasDatabaseName("ix_catalog_availability_outbox_status_next_attempt");
+
+                    b.HasIndex("TenantId", "BranchId")
+                        .HasDatabaseName("ix_catalog_availability_outbox_tenant_id_branch_id");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_catalog_availability_outbox_tenant_id_idempotency_key");
+
+                    b.ToTable("catalog_availability_outbox", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ItemVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AbsolutePriceMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("absolute_price_minor_units");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("MenuId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_id");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "MenuItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_variants_single_active_default")
+                        .HasFilter("is_default = true AND is_active = true");
+
+                    b.HasIndex("TenantId", "BranchId", "MenuId");
+
+                    b.HasIndex("TenantId", "MenuItemId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_variants_tenant_id_menu_item_id_code");
+
+                    b.HasIndex("TenantId", "MenuItemId", "SortOrder")
+                        .HasDatabaseName("ix_item_variants_tenant_id_menu_item_id_sort_order");
+
+                    b.ToTable("item_variants", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.Menu", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("slug");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_menus_tenant_id_branch_id_slug");
+
+                    b.HasIndex("TenantId", "BranchId", "SortOrder")
+                        .HasDatabaseName("ix_menus_tenant_id_branch_id_sort_order");
+
+                    b.ToTable("menus", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MenuId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("slug");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "MenuId", "Id");
+
+                    b.HasIndex("TenantId", "MenuId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_menu_categories_tenant_id_menu_id_slug");
+
+                    b.HasIndex("TenantId", "MenuId", "SortOrder")
+                        .HasDatabaseName("ix_menu_categories_tenant_id_menu_id_sort_order");
+
+                    b.ToTable("menu_categories", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AllergenTags")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("allergen_tags");
+
+                    b.Property<long>("BasePriceMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("base_price_minor_units");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DietaryTags")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("dietary_tags");
+
+                    b.Property<string>("FullDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("full_description");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("MenuId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("PreparationStationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("preparation_station_id");
+
+                    b.Property<string>("ShortDescription")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("short_description");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("slug");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int>("SpicyLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("spicy_level");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "MenuId", "Id");
+
+                    b.HasAlternateKey("TenantId", "BranchId", "MenuId", "Id");
+
+                    b.HasIndex("TenantId", "BranchId", "PreparationStationId");
+
+                    b.HasIndex("TenantId", "CategoryId", "SortOrder")
+                        .HasDatabaseName("ix_menu_items_tenant_id_category_id_sort_order");
+
+                    b.HasIndex("TenantId", "MenuId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_menu_items_tenant_id_menu_id_slug");
+
+                    b.HasIndex("TenantId", "BranchId", "MenuId", "CategoryId");
+
+                    b.ToTable("menu_items", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<Guid>("ModifierGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modifier_group_id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("MenuId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("TenantId", "MenuItemId", "ModifierGroupId");
+
+                    b.HasIndex("TenantId", "BranchId", "MenuItemId");
+
+                    b.HasIndex("TenantId", "BranchId", "ModifierGroupId");
+
+                    b.HasIndex("TenantId", "MenuItemId", "SortOrder")
+                        .HasDatabaseName("ix_item_modifier_assignments_tenant_item_sort_order");
+
+                    b.ToTable("menu_item_modifier_group_assignments", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("MaxSelections")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_selections");
+
+                    b.Property<int>("MinSelections")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_selections");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "SortOrder")
+                        .HasDatabaseName("ix_modifier_groups_tenant_id_branch_id_sort_order");
+
+                    b.ToTable("modifier_groups", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("ModifierGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modifier_group_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<long>("PriceDeltaMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("price_delta_minor_units");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "ModifierGroupId");
+
+                    b.HasIndex("TenantId", "ModifierGroupId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_modifier_options_tenant_id_group_id_name");
+
+                    b.HasIndex("TenantId", "ModifierGroupId", "SortOrder")
+                        .HasDatabaseName("ix_modifier_options_tenant_id_group_id_sort_order");
+
+                    b.ToTable("modifier_options", "tenancy");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -1820,6 +2473,235 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_brands_tenants_tenant_id");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.BranchItemAvailability", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_branch_item_availabilities_branches_tenant_id_branch_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.MenuItem", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuItemId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_branch_item_availabilities_menu_items_tenant_branch_item");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.ItemVariant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuItemId", "ItemVariantId")
+                        .HasPrincipalKey("TenantId", "BranchId", "MenuItemId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_branch_item_availabilities_variants_tenant_branch_variant");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_catalog_availability_outbox_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_catalog_availability_outbox_branches_tenant_id_branch_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ItemVariant", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_variants_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_variants_branches_tenant_id_branch_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.Menu", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_variants_menus_tenant_branch_menu");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.MenuItem", null)
+                        .WithMany("Variants")
+                        .HasForeignKey("TenantId", "BranchId", "MenuItemId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_variants_menu_items_tenant_branch_item");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.Menu", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menus_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menus_branches_tenant_id_branch_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuCategory", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_categories_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_categories_branches_tenant_id_branch_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.Menu", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_categories_menus_tenant_branch_menu");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_branches_tenant_id_branch_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.Menu", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_menus_tenant_branch_menu");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.PreparationStation", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "PreparationStationId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_menu_items_prep_stations_tenant_branch_station");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.MenuCategory", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MenuId", "CategoryId")
+                        .HasPrincipalKey("TenantId", "BranchId", "MenuId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_categories_tenant_branch_menu_cat");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItemModifierGroupAssignment", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_modifier_assignments_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.MenuItem", "MenuItem")
+                        .WithMany("ModifierGroupAssignments")
+                        .HasForeignKey("TenantId", "BranchId", "MenuItemId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_modifier_assignments_menu_items_tenant_branch_item");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.ModifierGroup", "ModifierGroup")
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "ModifierGroupId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_modifier_assignments_groups_tenant_branch_group");
+
+                    b.Navigation("MenuItem");
+
+                    b.Navigation("ModifierGroup");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierGroup", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_modifier_groups_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_modifier_groups_branches_tenant_id_branch_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierOption", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_modifier_options_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.ModifierGroup", null)
+                        .WithMany("Options")
+                        .HasForeignKey("TenantId", "BranchId", "ModifierGroupId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_modifier_options_modifier_groups_tenant_branch_group");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags", b =>
                 {
                     b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
@@ -1846,6 +2728,18 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_tenant_feature_flags_tenants_tenant_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>
+                {
+                    b.Navigation("ModifierGroupAssignments");
+
+                    b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierGroup", b =>
+                {
+                    b.Navigation("Options");
                 });
 #pragma warning restore 612, 618
         }

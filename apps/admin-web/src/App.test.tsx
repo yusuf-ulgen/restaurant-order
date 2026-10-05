@@ -167,7 +167,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
 
       expect(screen.getByText('Restoran Yönetim')).toBeDefined();
       expect(screen.getByText('Kontrol Paneli')).toBeDefined();
-      expect(screen.getByText(/Menü Yönetimi/i)).toBeDefined();
+      expect(screen.getByText(/Men.*Katalo/i)).toBeDefined();
       expect(screen.getByText(/Şube & Masalar/i)).toBeDefined();
     });
 
@@ -227,9 +227,9 @@ describe('Admin Web App - Authentication & Access Control', () => {
       expect(activeLink.getAttribute('aria-current')).toBe('page');
       expect(activeLink.getAttribute('href')).toBe('/');
 
-      const disabledMenu = screen.getByTestId('sidebar-item-menu');
-      expect(disabledMenu.getAttribute('aria-disabled')).toBe('true');
-      expect(disabledMenu.textContent).toContain('Menü Yönetimi (Yakında)');
+      const menuLink = screen.getByTestId('sidebar-item-menu');
+      expect(menuLink.getAttribute('aria-disabled')).not.toBe('true');
+      expect(menuLink.textContent).toContain('Men\u00fc Katalo\u011fu');
     });
 
     it('toggles sidebar collapsed state via collapse button', () => {
@@ -267,16 +267,16 @@ describe('Admin Web App - Authentication & Access Control', () => {
         ['dining-areas', /Masa Alan/],
         ['preparation-stations', /Haz.rl.k/],
         ['feature-settings', /Özellik Yönetimi/],
-        ['menu', /Bu mod/],
+        ['menu', /Men.*katalo/i],
       ];
 
       for (const [initialView, expectedText] of cases) {
-        const rendered = renderAdminContent(null, { initialView });
-        expect(screen.getByText(expectedText)).toBeDefined();
+        const rendered = renderAdminContent(mockAdminUser, { initialView });
+        expect(screen.getAllByText(expectedText)[0]).toBeDefined();
         rendered.unmount();
       }
 
-      renderAdminContent(null, { initialView: 'dashboard', hasMetrics: false });
+      renderAdminContent(mockAdminUser, { initialView: 'dashboard', hasMetrics: false });
       expect(screen.getByText(/Raporlan/)).toBeDefined();
     });
 
@@ -289,7 +289,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
       ];
 
       for (const [initialView, closeButton] of closableViews) {
-        const rendered = renderAdminContent(null, { initialView });
+        const rendered = renderAdminContent(mockAdminUser, { initialView });
         fireEvent.click(screen.getByRole('button', { name: closeButton }));
         expect(screen.getByText(/Metrik/)).toBeDefined();
         rendered.unmount();

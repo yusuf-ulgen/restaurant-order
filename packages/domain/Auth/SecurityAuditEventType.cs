@@ -50,4 +50,47 @@ public static class SecurityAuditEventType
     public const string TenantFeatureFlagsUpdated = "tenant_feature_flags_updated";
     public const string BranchFeatureFlagsUpdated = "branch_feature_flags_updated";
     public const string BranchFeatureFlagsCleared = "branch_feature_flags_cleared";
+
+    // Menu & Catalog
+    public const string MenuCreated = "menu_created";
+    public const string MenuUpdated = "menu_updated";
+    public const string MenuActivated = "menu_activated";
+    public const string MenuArchived = "menu_archived";
+    public const string MenuCategoryCreated = "menu_category_created";
+    public const string MenuCategoryUpdated = "menu_category_updated";
+    public const string MenuCategoryActivated = "menu_category_activated";
+    public const string MenuCategoryDeactivated = "menu_category_deactivated";
+    public const string MenuCategoriesReordered = "menu_categories_reordered";
+    public const string MenuItemCreated = "menu_item_created";
+    public const string MenuItemUpdated = "menu_item_updated";
+    public const string MenuItemPriceUpdated = "menu_item_price_updated";
+    public const string MenuItemActivated = "menu_item_activated";
+    public const string MenuItemDeactivated = "menu_item_deactivated";
+    public const string MenuItemsReordered = "menu_items_reordered";
+    public const string ItemVariantCreated = "item_variant_created";
+    public const string ItemVariantUpdated = "item_variant_updated";
+    public const string ItemVariantPriceUpdated = "item_variant_price_updated";
+    public const string ItemVariantActivated = "item_variant_activated";
+    public const string ItemVariantDeactivated = "item_variant_deactivated";
+    public const string ItemVariantsReordered = "item_variants_reordered";
+    public const string MenuItemMetadataUpdated = "menu_item_metadata_updated";
+    public const string MenuItemModifierGroupAssigned = "menu_item_modifier_group_assigned";
+    public const string MenuItemModifierGroupRemoved = "menu_item_modifier_group_removed";
+    public const string MenuItemModifierGroupsReordered = "menu_item_modifier_groups_reordered";
+    public const string ModifierGroupCreated = "modifier_group_created";
+    public const string ModifierGroupUpdated = "modifier_group_updated";
+    public const string ModifierGroupActivated = "modifier_group_activated";
+    public const string ModifierGroupDeactivated = "modifier_group_deactivated";
+    public const string ModifierOptionCreated = "modifier_option_created";
+    public const string ModifierOptionUpdated = "modifier_option_updated";
+    public const string ModifierOptionPriceUpdated = "modifier_option_price_updated";
+    public const string ModifierOptionActivated = "modifier_option_activated";
+    public const string ModifierOptionDeactivated = "modifier_option_deactivated";
+    public const string ModifierOptionsReordered = "modifier_options_reordered";
+
+    // Catalog Availability / Quick 86
+    public const string ItemAvailabilityChanged = "item_availability_changed";
+    public const string ItemRestocked = "item_restocked";
+    public const string ItemVariantAvailabilityChanged = "item_variant_availability_changed";
+    public const string ItemVariantRestocked = "item_variant_restocked";
 }

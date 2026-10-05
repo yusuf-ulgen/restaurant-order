@@ -10,21 +10,43 @@ import { parseArgs, logStep } from './lib/common.mjs';
 export const FORBIDDEN_PRE_CUTOVER_PATTERNS = [
   { pattern: /\bDROP\s+TABLE\b/i, description: 'DROP TABLE is destructive and breaks active slot' },
   { pattern: /\bDROP\s+COLUMN\b/i, description: 'DROP COLUMN breaks active slot backward compatibility' },
-  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\b/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
+  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\s+(?!CONSTRAINT\b)/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
   { pattern: /\bRENAME\s+COLUMN\b/i, description: 'RENAME COLUMN is prohibited; use expand (add new) + contract' },
   { pattern: /\bTRUNCATE\b/i, description: 'TRUNCATE is destructive' },
   { pattern: /\bADD\s+COLUMN\s+.*\bNOT\s+NULL\b(?!\s+DEFAULT)/i, description: 'ADD COLUMN NOT NULL without DEFAULT breaks concurrent inserts' },
 ];
+import {
+  ALLOWED_CONSTRAINT_REPLACEMENTS,
+  ALLOWED_FK_REPLACEMENTS,
+  extractUpMethodContent,
+  validateConstraintSafety,
+} from './lib/migration-safety.mjs';
 
-export function validateSqlMigration(sqlContent) {
+export {
+  ALLOWED_CONSTRAINT_REPLACEMENTS,
+  ALLOWED_FK_REPLACEMENTS,
+  extractUpMethodContent,
+  validateConstraintSafety,
+};
+
+
+export function validateSqlMigration(sqlContent, options = {}) {
   const violations = [];
   if (!sqlContent || typeof sqlContent !== 'string') return violations;
 
+  const content = options.isCSharp ? extractUpMethodContent(sqlContent) : sqlContent;
+
   for (const { pattern, description } of FORBIDDEN_PRE_CUTOVER_PATTERNS) {
-    if (pattern.test(sqlContent)) {
+    if (pattern.test(content)) {
       violations.push(description);
     }
   }
+
+  const constraintViolations = validateConstraintSafety(sqlContent, options);
+  if (constraintViolations.length > 0) {
+    violations.push(...constraintViolations);
+  }
+
   return violations;
 }
 
@@ -80,7 +102,8 @@ export function runMigrationCheck(options = {}) {
   for (const file of migrationFiles) {
     try {
       const content = fs.readFileSync(file, 'utf8');
-      const violations = validateSqlMigration(content);
+      const isCSharp = file.endsWith('.cs');
+      const violations = validateSqlMigration(content, { ...options, isCSharp });
       for (const v of violations) {
         allViolations.push(`${path.basename(file)}: ${v}`);
       }

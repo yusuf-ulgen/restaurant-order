@@ -259,6 +259,36 @@ app.Use(async (context, next) =>
         });
         await context.Response.WriteAsync(problemJson);
     }
+    catch (Exception ex)
+    {
+        var correlationId = context.Response.Headers["X-Correlation-Id"].ToString();
+        if (string.IsNullOrWhiteSpace(correlationId))
+        {
+            correlationId = context.Request.Headers["X-Correlation-Id"].ToString();
+            if (string.IsNullOrWhiteSpace(correlationId))
+            {
+                correlationId = context.TraceIdentifier;
+                if (string.IsNullOrWhiteSpace(correlationId)) correlationId = Guid.NewGuid().ToString("D");
+            }
+            context.Response.Headers["X-Correlation-Id"] = correlationId;
+        }
+
+        var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Global");
+        logger?.LogError(ex, "Unhandled server error. CorrelationId: {CorrelationId}", correlationId);
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+        var problemJson = JsonSerializer.Serialize(new
+        {
+            type = "https://httpstatuses.com/500",
+            title = "Internal Server Error",
+            status = StatusCodes.Status500InternalServerError,
+            detail = "An unexpected error occurred while processing your request.",
+            instance = context.Request.Path.Value,
+            correlationId
+        });
+        await context.Response.WriteAsync(problemJson);
+    }
 });
 
 app.UseCors("DefaultCorsPolicy");
@@ -334,6 +364,7 @@ RestaurantOrder.Api.Auth.TerminalEndpoints.MapTerminalEndpoints(app);
 RestaurantOrder.Api.Auth.PinAuthEndpoints.MapPinAuthEndpoints(app);
 RestaurantOrder.Api.Auth.StaffEndpoints.MapStaffEndpoints(app);
 RestaurantOrder.Api.RestaurantConfig.RestaurantConfigEndpoints.MapRestaurantConfigEndpoints(app);
+RestaurantOrder.Api.Catalog.CatalogEndpoints.MapCatalogEndpoints(app);
 
 app.Run();
 

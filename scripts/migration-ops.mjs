@@ -15,11 +15,26 @@ import { spawnSync } from 'node:child_process';
 export const FORBIDDEN_DESTRUCTIVE_PATTERNS = [
   { pattern: /\bDROP\s+TABLE\b/i, description: 'DROP TABLE is destructive and breaks active slot' },
   { pattern: /\bDROP\s+COLUMN\b/i, description: 'DROP COLUMN breaks active slot backward compatibility' },
-  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\b/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
+  { pattern: /\bALTER\s+TABLE\s+.*\bDROP\s+(?!CONSTRAINT\b)/i, description: 'ALTER TABLE ... DROP is prohibited before cutover' },
   { pattern: /\bRENAME\s+COLUMN\b/i, description: 'RENAME COLUMN is prohibited; use expand (add new) + contract' },
   { pattern: /\bTRUNCATE\b/i, description: 'TRUNCATE is destructive' },
   { pattern: /\bADD\s+COLUMN\s+.*\bNOT\s+NULL\b(?!\s+DEFAULT)/i, description: 'ADD COLUMN NOT NULL without DEFAULT breaks concurrent inserts' },
 ];
+
+import {
+  ALLOWED_CONSTRAINT_REPLACEMENTS,
+  ALLOWED_FK_REPLACEMENTS,
+  extractUpMethodContent,
+  validateConstraintSafety,
+} from './blue-green/lib/migration-safety.mjs';
+
+export {
+  ALLOWED_CONSTRAINT_REPLACEMENTS,
+  ALLOWED_FK_REPLACEMENTS,
+  extractUpMethodContent,
+  validateConstraintSafety,
+};
+
 
 /**
  * Masks passwords and secrets from connection strings before printing to logs.
@@ -49,17 +64,24 @@ export function validateMigrationSql(sqlContent, options = {}) {
   const violations = [];
   if (!sqlContent || typeof sqlContent !== 'string') return violations;
 
+  const content = options.isCSharp ? extractUpMethodContent(sqlContent) : sqlContent;
+
   const allowDestructive = options.allowDestructive === true &&
     process.env.ALLOW_DESTRUCTIVE_MIGRATION === 'true';
 
   for (const { pattern, description } of FORBIDDEN_DESTRUCTIVE_PATTERNS) {
-    if (pattern.test(sqlContent)) {
+    if (pattern.test(content)) {
       if (allowDestructive) {
         violations.push({ description: `[OVERRIDDEN] ${description}`, isOverridden: true });
       } else {
         violations.push({ description, isOverridden: false });
       }
     }
+  }
+
+  const constraintViolations = validateConstraintSafety(sqlContent, options);
+  for (const desc of constraintViolations) {
+    violations.push({ description: desc, isOverridden: false });
   }
 
   return violations;
@@ -113,7 +135,8 @@ export function validateAllMigrations(rootDir = process.cwd(), options = {}) {
   for (const file of files) {
     try {
       const content = fs.readFileSync(file, 'utf8');
-      const violations = validateMigrationSql(content, options);
+      const isCSharp = file.endsWith('.cs');
+      const violations = validateMigrationSql(content, { ...options, isCSharp });
       for (const v of violations) {
         if (!v.isOverridden) {
           allViolations.push(`${path.basename(file)}: ${v.description}`);
@@ -159,7 +182,16 @@ export function generateMigrationScript(options = {}) {
 
   // Validate the generated script
   if (fs.existsSync(outputPath)) {
-    const scriptContent = fs.readFileSync(outputPath, 'utf8');
+    let scriptContent = fs.readFileSync(outputPath, 'utf8');
+    const sanitized = scriptContent
+      .split(/\r?\n/)
+      .map(line => line.trimEnd())
+      .join('\n')
+      .trimEnd() + '\n';
+    if (sanitized !== scriptContent) {
+      fs.writeFileSync(outputPath, sanitized, 'utf8');
+      scriptContent = sanitized;
+    }
     const compatibility = checkExpandContractCompatibility(scriptContent);
     if (!compatibility.isCompatible) {
       throw new Error(`Generated migration script contains destructive operations:\n${compatibility.violations.join('\n')}`);

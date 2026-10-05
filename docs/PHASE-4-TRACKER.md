@@ -221,8 +221,8 @@ The coverage failure on `3aeee15` was caused by admin-web function coverage at 6
 | `dotnet build RestaurantOrder.sln` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
 | `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 973 / 973 passed (100%) |
 | `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 58 / 58 passed across 5 test files (100%) |
-| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 240 / 240 tests passed across packages/ui and 3 web apps (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 77 / 77 passed across 7 test files (100%) |
+| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 259 / 259 tests passed across packages/ui and 3 web apps (100%) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 files exceed 600 strict ceiling |

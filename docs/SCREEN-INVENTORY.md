@@ -43,7 +43,7 @@
 | Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
 | :--- | :--- | :--- | :--- | :--- |
 | `ADM-01` | **Operations Dashboard** | Restoran Admini, Müdür | View live sales, active tables, open orders, station prep latency. | KPI cards, live floor widget, hourly sales chart, top sellers. |
-| `ADM-02` | **Menu Catalog Editor** | Restoran Admini, Müdür | Create/edit categories, items, prices, descriptions, images. | Category tree, item list, drag-and-drop ordering, stock toggles. |
+| `ADM-02` | **Menu Catalog Editor** | Restoran Admini, Şube Müdürü | Create/edit menus, categories, items, variants, modifier groups, dietary/allergen metadata, and availability. | Branch-scoped menu selector, category and item lists, editor sheets, safe catalog preview, Quick-86 and restock controls. |
 | `ADM-03` | **Modifier Groups Manager** | Restoran Admini, Müdür | Create modifier groups, set min/max selections, assign to items. | Modifier groups table, linked items, modifier pricing. |
 | `ADM-04` | **Floor & Table Layout** | Restoran Admini, Müdür | Create dining areas, add/position tables, assign table numbers. | Visual canvas or grid, table capacity, area tabs. |
 | `ADM-05` | **QR Code Generator** | Restoran Admini, Müdür | Generate table QR codes, download print-ready PDF/SVG batch. | Table list, QR preview, batch download CTA, custom branding options. |
@@ -68,3 +68,6 @@
 | `SPAD-03`| **Subscription & Billing** | Super Admin | Manage platform tiers, commission rates, view aggregated volume.| Plan pricing, active tenant counts, monthly platform revenue. |
 | `SPAD-04`| **Platform Audit Logs** | Super Admin | Filter audit events by tenant, actor, or action type. | Timestamp, tenant ID, actor, event action, IP address. |
 | `SPAD-05`| **System Health Monitor** | Super Admin | Check DB latency, realtime socket connections, worker queues. | Status indicators, error rate charts, active connection counters. |
+## Phase 5 Admin Catalog
+
+The admin menu screen manages branch menus, categories, items, variants, modifier groups/options, dietary/allergen metadata, and quick-86/restock. It uses the existing admin shell and design system, responsive editor sheets, safe text preview, and permission-aware controls. It is catalog administration only; customer ordering remains a later phase.

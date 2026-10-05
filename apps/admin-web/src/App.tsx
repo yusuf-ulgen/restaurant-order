@@ -23,6 +23,7 @@ import { BranchSettingsView } from './settings/BranchSettingsView';
 import { DiningAreasView } from './settings/DiningAreasView';
 import { PreparationStationsView } from './settings/PreparationStationsView';
 import { FeatureFlagsView } from './settings/FeatureFlagsView';
+import { MenuCatalogView } from './catalog/MenuCatalogView';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
@@ -247,6 +248,8 @@ export const AdminContent: React.FC<AdminAppProps> = ({
         <FeatureFlagsView
           onCancel={() => setCurrentView('dashboard')}
         />
+      ) : currentView === 'menu' ? (
+        <MenuCatalogView />
       ) : currentView === 'dashboard' ? (
         <>
           <PageHeader

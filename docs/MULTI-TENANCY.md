@@ -45,7 +45,7 @@
 For every incoming request, the tenant context is resolved and propagated across the execution stack:
 
 ```
-[Client Request] 
+[Client Request]
       │
       ▼
 [TenantContextMiddleware] [Implemented]
@@ -169,3 +169,6 @@ If runtime database credentials are ever exposed or suspected compromised:
 - **Runtime Role Requirement:** Integration tests execute with the non-owner runtime role to prevent false-positive PASS reports.
 - **Fail-Closed Verification:** Explicitly verify that missing tenant context, empty string, invalid UUID, and nonexistent tenant UUID return 0 rows.
 - Any vulnerability permitting cross-tenant visibility is classified as a **Sev-1 Security Incident**.
+## Phase 5 Catalog Tables
+
+Catalog tenant/branch isolation covers the tenancy schema tables menus, menu_categories, menu_items, item_variants, modifier_groups, modifier_options, menu_item_modifier_group_assignments, and branch_item_availabilities. Catalog relationships use composite tenant/branch foreign keys where ownership crosses aggregates. These tables enable and force RLS with the current tenant policy. BranchManager requests are checked against the assigned branch; Kitchen and Bar availability mutations are additionally limited to items assigned to matching preparation stations. Runtime-menu queries constrain both tenant and branch before composing the response.

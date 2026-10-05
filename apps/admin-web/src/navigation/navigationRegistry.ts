@@ -45,11 +45,12 @@ export const NAVIGATION_REGISTRY: Record<NavigationRegistryId, NavigationRegistr
   },
   menu: {
     id: 'menu',
-    defaultLabel: 'Menü Yönetimi (Yakında)',
+    defaultLabel: 'Men\u00fc Katalo\u011fu',
     defaultSection: 'main',
     defaultOrder: 2,
-    defaultDisabled: true,
-    requiredPermission: 'menu.catalog.manage',
+    defaultDisabled: false,
+    requiredPermission: 'menu.catalog.view',
+    allowedRoles: ['SuperAdmin', 'RestaurantAdmin', 'BranchManager'],
     href: '#/menu',
   },
   tables: {
@@ -183,6 +184,10 @@ export function hasNavigationAccess(
         'branch.printers.manage',
         'branch.staff.manage',
         'reports.branch.revenue',
+        'menu.catalog.view',
+        'menu.catalog.manage',
+        'menu.pricing.manage',
+        'menu.inventory.quick86',
       ];
       return branchManagerPermissions.includes(item.requiredPermission);
     }
