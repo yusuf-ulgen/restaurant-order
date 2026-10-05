@@ -313,6 +313,14 @@ public partial class FloorService : IFloorService
 
         VerifyConcurrencyToken(table.ConcurrencyToken, concurrencyToken);
 
+        var hasActiveSession = await _dbContext.DiningSessions
+            .AnyAsync(s => s.TenantId == tenantId && s.BranchId == branchId && s.TableId == tableId && s.Status != DiningSessionStatus.Closed, ct);
+
+        if (hasActiveSession)
+        {
+            throw new DomainException("Cannot deactivate table while an active or open dining session is in progress.");
+        }
+
         table.Deactivate();
 
         await ExecuteInTenantTransactionAsync(tenantId, async () =>

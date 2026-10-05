@@ -14,7 +14,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 6.0** | Planning and contracts | **Completed** | Implementation tracker, contracts, architecture alignment | `feat(floor)` |
 | **Phase 6.1** | Tables and physical layout | **Completed** | `RestaurantTable` aggregate, composite FKs, RLS, REST APIs, Testcontainers tests | `feat(floor)` |
-| **Phase 6.2** | Dining session lifecycle | **Planned** | Session state machine (Open -> Active -> Bill Requested -> Closed), concurrency tokens | Pending |
+| **Phase 6.2** | Dining session lifecycle | **Completed** | `DiningSession` aggregate, PostgreSQL partial unique index, state machine, RBAC & REST APIs | `feat(floor)` |
 | **Phase 6.3** | Static/dynamic QR security | **Planned** | Cryptographic QR payload, signature verification, version bumping, anti-tamper | Pending |
 | **Phase 6.4** | Table transfer and merge | **Planned** | Atomic table session transfer, merge validation, audit event logging | Pending |
 | **Phase 6.5** | Admin/customer UI | **Planned** | Visual floor layout canvas, table status indicator, table modal, QR generator preview | Pending |
@@ -81,10 +81,49 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Concurrency: `If-Match` / ETag support, 412 on missing token, 409 on stale token.
   - Atomic security audit logging within the same transaction.
 
-### Phase 6.2: Dining session lifecycle (PLANNED)
-- Dining session state machine (Open -> Active -> Bill Requested -> Closed).
-- Session creation on guest arrival or table seating.
-- Session balance and itemized ordering links.
+### Phase 6.2: Dining session lifecycle
+- [x] **Domain Model & Invariants (`DiningSession`):**
+  - Strongly-typed identifier: `DiningSessionId`.
+  - Scoping fields: `TenantId`, `BranchId`, `RestaurantTableId`.
+  - State machine: `Open (1) -> Active (2) -> BillRequested (3) -> Closed (4)`.
+  - Terminal state: `Closed` cannot transition to any other status.
+  - Guest count validation: 1..100 bounds; rejection of 0 or negative counts.
+  - Optional waiter assignment: `AssignedWaiterId` nullable string (max 100 characters, sanitized).
+  - Chronological timestamp enforcement: `OpenedAtUtc <= ActivatedAtUtc <= BillRequestedAtUtc <= ClosedAtUtc`.
+  - Close metadata: `CloseReason` required when closing (max 200 characters).
+  - Optional `MergedIntoSessionId` field (placeholder for Phase 6.4 table merge).
+  - Optimistic concurrency token: `ConcurrencyToken` updated on every transition.
+  - Table deactivation protection: Inactive tables cannot have new sessions opened, and tables with open/active/bill-requested sessions cannot be deactivated.
+- [x] **Persistence & Concurrency:**
+  - `DiningSessionConfiguration` in `tenancy` schema (`dining_sessions`).
+  - Primary key: `id` (`dining_session_id`).
+  - Alternate key: `(tenant_id, branch_id, id)` for composite constraints.
+  - Partial unique index: `ix_dining_sessions_tenant_branch_table_active` on `(tenant_id, branch_id, restaurant_table_id)` `WHERE status <> 4`.
+  - Composite foreign key to `restaurant_tables (tenant_id, branch_id, id)` with `DeleteBehavior.Restrict`.
+  - Self-referential composite foreign key `(tenant_id, branch_id, merged_into_session_id)` nullable with `DeleteBehavior.Restrict`.
+  - Database check constraints: `ck_dining_sessions_guest_count`, `ck_dining_sessions_status`, `ck_dining_sessions_status_timestamps`.
+  - PostgreSQL Row-Level Security enabled and forced (`FORCE ROW LEVEL SECURITY`).
+  - Tenant isolation policy via `tenancy.get_current_tenant_id()`.
+  - Additive EF Core migration: `20261005203226_AddDiningSessionsAndLifecycle`.
+  - Bundled SQL migration script updated with non-destructive expand-contract validation.
+- [x] **REST API & Granular RBAC:**
+  - Route root: `/api/v1/floor/branches/{branchId}`.
+  - Endpoints:
+    - `GET /status`: Branch floor status with dining areas, tables, and active sessions.
+    - `GET /tables/{tableId}/session`: Get active dining session for table.
+    - `GET /tables/{tableId}/sessions`: List session history for table.
+    - `GET /sessions/{sessionId}`: Get session details.
+    - `POST /tables/{tableId}/session`: Open new dining session (staff only).
+    - `POST /sessions/{sessionId}/activate`: Activate dining session (staff only).
+    - `POST /sessions/{sessionId}/request-bill`: Request bill (staff or customer with matching table session).
+    - `POST /sessions/{sessionId}/close`: Close dining session (staff only).
+  - RBAC:
+    - `floor.sessions.manage`: Authorized for `RestaurantAdmin`, `BranchManager`, `Cashier`, `Waiter`.
+    - Customer own-session authorization: Validated against `actor.TableSessionId == session.Id`; foreign session access rejected (403 Forbidden).
+    - Customer closure prevention: Customer role strictly prohibited from closing sessions (fail-closed, 403 Forbidden).
+    - SuperAdmin tenant boundary isolation enforced.
+  - Concurrency: `If-Match` / ETag support on all session mutations (412 on missing header, 409 on conflict).
+  - Atomic security audit logging within ambient transaction: `DiningSessionOpened`, `DiningSessionActivated`, `DiningSessionBillRequested`, `DiningSessionClosed`.
 
 ### Phase 6.3: Static/dynamic QR security (PLANNED)
 - Cryptographic signature for table QR codes.

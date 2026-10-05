@@ -6,6 +6,7 @@ using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Common;
+using RestaurantOrder.Domain.Floor;
 using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Infrastructure.Floor;
@@ -54,6 +55,25 @@ public partial class FloorService
         if (!_permissionRegistry.HasFullGrant(actor.Role, Permissions.FloorStatusView))
         {
             throw new InvalidAuthorizationScopeException("Actor is not authorized to view floor status.");
+        }
+    }
+
+    private void EnsureSessionsManagePermission(AuthenticatedPrincipal actor)
+    {
+        if (!_permissionRegistry.HasFullGrant(actor.Role, Permissions.FloorSessionsManage))
+        {
+            throw new InvalidAuthorizationScopeException("Actor is not authorized to manage dining sessions.");
+        }
+    }
+
+    private static void EnsureCustomerSessionAccess(DiningSession session, AuthenticatedPrincipal actor)
+    {
+        if (actor.Role == AuthRole.Customer)
+        {
+            if (!actor.TableSessionId.HasValue || actor.TableSessionId.Value != session.Id.Value)
+            {
+                throw new InvalidAuthorizationScopeException("Customer is not authorized to access foreign dining session.");
+            }
         }
     }
 

@@ -52,6 +52,14 @@ internal static class FloorEndpointHelpers
             : Results.Ok(table);
     }
 
+    internal static IResult SessionResult(HttpContext context, DiningSessionDto session, int statusCode = StatusCodes.Status200OK)
+    {
+        context.Response.Headers.ETag = $"\"{session.ConcurrencyToken:D}\"";
+        return statusCode == StatusCodes.Status201Created
+            ? Results.Created($"/api/v1/floor/branches/{session.BranchId}/sessions/{session.Id}", session)
+            : Results.Ok(session);
+    }
+
     internal static TenantId ResolveTenantId(ITenantContext tenantContext, AuthenticatedPrincipal actor)
     {
         if (tenantContext.HasTenant && tenantContext.TenantId.HasValue && tenantContext.TenantId.Value != Guid.Empty)

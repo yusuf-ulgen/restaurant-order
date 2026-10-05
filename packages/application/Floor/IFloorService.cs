@@ -66,4 +66,64 @@ public interface IFloorService
         Guid? concurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default);
+
+    Task<BranchFloorStatusDto> GetBranchFloorStatusAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto?> GetActiveSessionForTableAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<DiningSessionDto>> ListSessionsForTableAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> GetSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> OpenSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        RestaurantTableId tableId,
+        OpenDiningSessionRequest request,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> ActivateSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> RequestBillAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> CloseSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        CloseDiningSessionRequest request,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
 }

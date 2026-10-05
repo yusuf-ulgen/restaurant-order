@@ -100,4 +100,8 @@ public static class SecurityAuditEventType
     public const string RestaurantTableLayoutUpdated = "restaurant_table_layout_updated";
     public const string RestaurantTableActivated = "restaurant_table_activated";
     public const string RestaurantTableDeactivated = "restaurant_table_deactivated";
+    public const string DiningSessionOpened = "dining_session_opened";
+    public const string DiningSessionActivated = "dining_session_activated";
+    public const string DiningSessionBillRequested = "dining_session_bill_requested";
+    public const string DiningSessionClosed = "dining_session_closed";
 }

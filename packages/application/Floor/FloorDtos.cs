@@ -60,3 +60,58 @@ public record UpdateTableLayoutRequest(
     int RotationDegrees,
     string Shape,
     Guid? ConcurrencyToken = null);
+
+/// <summary>
+/// Data transfer object representing a dining session at a table.
+/// </summary>
+public record DiningSessionDto(
+    Guid Id,
+    Guid TenantId,
+    Guid BranchId,
+    Guid TableId,
+    string Status,
+    int GuestCount,
+    Guid? AssignedWaiterId,
+    DateTimeOffset OpenedAtUtc,
+    DateTimeOffset? ActivatedAtUtc,
+    DateTimeOffset? BillRequestedAtUtc,
+    DateTimeOffset? ClosedAtUtc,
+    string? CloseReason,
+    Guid? MergedIntoSessionId,
+    Guid ConcurrencyToken,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset? UpdatedAtUtc);
+
+/// <summary>
+/// Composite DTO combining table layout details and its current active session (if any).
+/// </summary>
+public record TableFloorStatusDto(
+    RestaurantTableDto Table,
+    DiningSessionDto? ActiveSession);
+
+/// <summary>
+/// Composite DTO representing live floor occupancy status for a whole branch.
+/// </summary>
+public record BranchFloorStatusDto(
+    Guid BranchId,
+    IReadOnlyList<TableFloorStatusDto> Tables);
+
+/// <summary>
+/// Request payload to open a new dining session at a table.
+/// </summary>
+public record OpenDiningSessionRequest(
+    int GuestCount,
+    Guid? AssignedWaiterId = null);
+
+/// <summary>
+/// Request payload to transition session to Closed.
+/// </summary>
+public record CloseDiningSessionRequest(
+    string? Reason = null,
+    Guid? ConcurrencyToken = null);
+
+/// <summary>
+/// Request payload for session state transitions (e.g. Activate, RequestBill).
+/// </summary>
+public record TransitionSessionRequest(
+    Guid? ConcurrencyToken = null);

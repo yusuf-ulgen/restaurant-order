@@ -110,6 +110,76 @@ public class FloorEndpointsUnitTests
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
         Assert.Equal($"\"{token:D}\"", httpContext.Response.Headers.ETag.ToString());
         Assert.Equal($"/api/v1/floor/branches/{table.BranchId}/tables/{table.Id}", createdResult.Location);
+
+        var okResult = FloorEndpointHelpers.TableResult(httpContext, table, StatusCodes.Status200OK);
+        Assert.IsAssignableFrom<Ok<RestaurantTableDto>>(okResult);
+    }
+
+    [Fact]
+    public void SessionResult_SetsETagHeaderAndReturnsExpectedStatusCode()
+    {
+        var httpContext = new DefaultHttpContext();
+        var token = Guid.NewGuid();
+        var session = new DiningSessionDto(
+            Id: Guid.NewGuid(),
+            TenantId: Guid.NewGuid(),
+            BranchId: Guid.NewGuid(),
+            TableId: Guid.NewGuid(),
+            Status: "Open",
+            GuestCount: 2,
+            AssignedWaiterId: null,
+            OpenedAtUtc: DateTimeOffset.UtcNow,
+            ActivatedAtUtc: null,
+            BillRequestedAtUtc: null,
+            ClosedAtUtc: null,
+            CloseReason: null,
+            MergedIntoSessionId: null,
+            ConcurrencyToken: token,
+            CreatedAtUtc: DateTimeOffset.UtcNow,
+            UpdatedAtUtc: null);
+
+        var createdResult = FloorEndpointHelpers.SessionResult(httpContext, session, StatusCodes.Status201Created);
+        var created = Assert.IsAssignableFrom<Created<DiningSessionDto>>(createdResult);
+        Assert.Equal(StatusCodes.Status201Created, created.StatusCode);
+        Assert.Equal($"\"{token:D}\"", httpContext.Response.Headers.ETag.ToString());
+        Assert.Equal($"/api/v1/floor/branches/{session.BranchId}/sessions/{session.Id}", created.Location);
+
+        var okResult = FloorEndpointHelpers.SessionResult(httpContext, session, StatusCodes.Status200OK);
+        Assert.IsAssignableFrom<Ok<DiningSessionDto>>(okResult);
+    }
+
+    [Fact]
+    public void ExtractConcurrencyToken_HandlesEmptyGuidAndMalformedHeader()
+    {
+        var httpContext = new DefaultHttpContext();
+
+        // Empty body token should fallback
+        httpContext.Request.Headers.IfMatch = "not-a-valid-guid";
+        var result = FloorEndpointHelpers.ExtractConcurrencyToken(Guid.Empty, httpContext.Request);
+        Assert.Null(result);
+
+        // Whitespace header
+        httpContext.Request.Headers.IfMatch = "   ";
+        var result2 = FloorEndpointHelpers.ExtractConcurrencyToken(null, httpContext.Request);
+        Assert.Null(result2);
+    }
+
+    [Fact]
+    public void ResolveCorrelationId_FallbackBranches()
+    {
+        // 1. Response header present
+        var ctx1 = new DefaultHttpContext();
+        ctx1.Response.Headers["X-Correlation-Id"] = "resp-123";
+        Assert.Equal("resp-123", FloorEndpointHelpers.ResolveCorrelationId(ctx1));
+
+        // 2. TraceIdentifier present
+        var ctx2 = new DefaultHttpContext();
+        ctx2.TraceIdentifier = "trace-456";
+        Assert.Equal("trace-456", FloorEndpointHelpers.ResolveCorrelationId(ctx2));
+
+        // 3. Null context
+        var corr = FloorEndpointHelpers.ResolveCorrelationId(null);
+        Assert.True(Guid.TryParse(corr, out _));
     }
 
     private static ProblemHttpResult AssertProblem(IResult result, int expectedStatusCode)
