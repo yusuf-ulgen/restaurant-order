@@ -19,19 +19,15 @@ public partial class CatalogService : ICatalogService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly ILogger<CatalogService> _logger;
     private readonly IPermissionRegistry _permissionRegistry;
-    private readonly ICatalogAvailabilityEventPublisher _eventPublisher;
 
     public CatalogService(
         RestaurantOrderDbContext dbContext,
         ILogger<CatalogService> logger,
-        IPermissionRegistry? permissionRegistry = null,
-        ICatalogAvailabilityEventPublisher? eventPublisher = null)
+        IPermissionRegistry? permissionRegistry = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
-        _eventPublisher = eventPublisher ?? new CatalogAvailabilityEventPublisher(
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<CatalogAvailabilityEventPublisher>.Instance);
     }
 
     public async Task<IReadOnlyList<MenuDto>> ListMenusAsync(
@@ -74,6 +70,7 @@ public partial class CatalogService : ICatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -124,6 +121,7 @@ public partial class CatalogService : ICatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -155,6 +153,7 @@ public partial class CatalogService : ICatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -185,6 +184,7 @@ public partial class CatalogService : ICatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 

@@ -11,13 +11,24 @@ using Xunit;
 
 namespace RestaurantOrder.IntegrationTests;
 
-public class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<TestcontainersFixture>
+public partial class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<TestcontainersFixture>
 {
     private readonly TestcontainersFixture _fixture;
 
     public CatalogCrossBranchConstraintIntegrationTests(TestcontainersFixture fixture)
     {
         _fixture = fixture;
+    }
+
+    private static void AssertPostgresForeignKeyViolation(DbUpdateException ex, string? expectedConstraintName = null)
+    {
+        var pgEx = ex.InnerException as PostgresException ?? ex.GetBaseException() as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState); // foreign_key_violation
+        if (!string.IsNullOrEmpty(expectedConstraintName))
+        {
+            Assert.Equal(expectedConstraintName, pgEx.ConstraintName);
+        }
     }
 
     private async Task EnsureMigrationsAppliedAsync()
@@ -172,7 +183,7 @@ public class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<Testco
         db.MenuItems.Add(item);
 
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.NotNull(ex.InnerException);
+        AssertPostgresForeignKeyViolation(ex, "fk_menu_items_prep_stations_tenant_branch_station");
     }
 
     [Fact]
@@ -202,7 +213,7 @@ public class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<Testco
         db.MenuCategories.Add(catInBranchA);
 
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.NotNull(ex.InnerException);
+        AssertPostgresForeignKeyViolation(ex, "fk_menu_categories_menus_tenant_branch_menu");
     }
 
     [Fact]
@@ -236,7 +247,7 @@ public class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<Testco
         db.ItemVariants.Add(variantInBranchA);
 
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.NotNull(ex.InnerException);
+        AssertPostgresForeignKeyViolation(ex, "fk_item_variants_menu_items_tenant_branch_item");
     }
 
     [Fact]
@@ -270,6 +281,6 @@ public class CatalogCrossBranchConstraintIntegrationTests : IClassFixture<Testco
         db.BranchItemAvailabilities.Add(availInBranchA);
 
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.NotNull(ex.InnerException);
+        AssertPostgresForeignKeyViolation(ex, "fk_branch_item_availabilities_menu_items_tenant_branch_item");
     }
 }

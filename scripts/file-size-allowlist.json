@@ -87,6 +87,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for catalog cross-branch referential constraints and availability transactional outbox table."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005141523_HardenCatalogOutboxAndPreparationStationConstraints.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for catalog outbox hardening and preparation station constraint update."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

@@ -13,8 +13,8 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | **Phase 5.2** | Menu Items, Portions & Variant Pricing Models | **Completed** | MenuItem aggregate, ItemVariant pricing, PriceAmount VO, strict integer minor units, REST APIs, RLS | `e2791ca` |
 | **Phase 5.3** | Modifier Groups & Customization Rules | **Completed** | Modifier groups/options, selection rules, price deltas, dietary/allergen metadata | `8b3f250` |
 | **Phase 5.4** | Menu Catalog REST APIs & EF Core Persistence | **Completed** | REST endpoints, ETag/concurrency, additive migrations, audit events | `3d09500–8a0811c` |
-| **Phase 5.5** | Branch Availability & Quick 86 | **Completed** | Availability APIs, station scope, runtime read model and post-commit event contract | `8a0811c` |
-| **Phase 5.6** | Admin Catalog Management UI & Hardening Closure | **Completed** | Admin catalog editor, reordering, currency i18n, branch matrix, DB constraints, outbox, and PR CI | Current PR Head |
+| **Phase 5.5** | Branch Availability & Quick 86 | **Completed** | Availability APIs, station scope, runtime read model, and transactional outbox persistence | `8a0811c` |
+| **Phase 5.6** | Admin Catalog Management UI & Hardening Closure | **Completed** | Admin catalog editor, reordering, currency i18n, branch matrix, DB constraints, transactional outbox, and PR CI | Current PR Head |
 
 ---
 
@@ -174,15 +174,18 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Returns only active menus, categories, items, variants, modifier groups, and options.
   - Computes `is_available` dynamically with item-level 86 propagation to all variants.
   - Includes branch currency code and strips all administrative, audit, and internal fields.
-- [x] **Post-Commit Event Contract:**
-  - `CatalogAvailabilityChangedEvent` application/domain event published strictly post-transaction commit via `ICatalogAvailabilityEventPublisher`.
-  - No SignalR runtime coupling, no fake in-memory / uncommitted event dispatch.
+- [x] **Transactional Outbox Event Contract:**
+  - Removed direct/in-memory pre-commit event publisher calls completely from availability service.
+  - Availability state changes and `CatalogAvailabilityOutboxMessage` records are persisted atomically in the same database transaction via `RestaurantOrderDbContext`.
+  - Transaction rollback guarantees: if service throws an exception or response is 500, both availability changes and outbox records roll back atomically.
+  - Fail-closed RLS and query filter applied to outbox table; SignalR transport remains Phase 9 scope.
+  - Outbox idempotency keys are deterministically generated from command concurrency token (`item-86-...`, `item-restock-...`, `variant-86-...`, `variant-restock-...`), preventing duplicate outbox entries on retries.
 - [x] **Security Audit Logging:**
   - `ItemAvailabilityChanged`, `ItemRestocked`, `ItemVariantAvailabilityChanged`, `ItemVariantRestocked` audit events written on every mutation.
 - [x] **Verification & Test Coverage:**
   - `BranchItemAvailabilityUnitTests.cs`: Lifecycle independence, HTML note rejection, past expected date rejection, restock transitions.
   - `CatalogAvailabilityEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, 412 Precondition Failed, 409 Conflict, RBAC matrix.
-  - `CatalogAvailabilityIntegrationTests.cs`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, and waiter denial.
+  - `CatalogAvailabilityIntegrationTests.cs` & `CatalogAvailabilityOutboxIntegrationTests.*`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, transactional rollback, variant outbox persistence, and tenant RLS isolation.
 ### Phase 5.5: Branch Availability & Quick 86 (COMPLETED)
 - [x] **Transactional Outbox Event Contract:**
   - Decoupled `catalog_availability_outbox` table persisted within the same database transaction.
@@ -198,13 +201,18 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Dynamic currency formatting using selected branch's currency (removing hardcoded TRY/₺) across editors, lists, and preview sheets.
 - [x] **Cross-Branch Referential Integrity & Fail-Closed RBAC:**
   - Branch authorization matrix enforced fail-closed (`RestaurantAdmin` permitted cross-branch within tenant; `BranchManager`, `Kitchen`, `Bar`, `Cashier`, `Waiter`, `Customer` strictly scoped to own branch; `SuperAdmin` denied cross-tenant bypass).
-  - Alternate keys and composite foreign keys enforcing physical database constraint protection against cross-branch corruptions.
-  - ModifierGroup deactivation invariant protecting assigned and active groups from dropping below `MinSelections` / `MaxSelections`.
+  - Service-level RBAC: fail-closed `EnsureCatalogManagePermission(actor)` added before database access in all Menu and Category mutation methods (`CreateMenu`, `UpdateMenu`, `ActivateMenu`, `ArchiveMenu`, `CreateCategory`, `UpdateCategory`, `ActivateCategory`, `DeactivateCategory`, `ReorderCategories`).
+  - Alternate keys and composite foreign keys enforcing physical database constraint protection against cross-branch corruptions. Complete matrix tested against real PostgreSQL Testcontainers instance with constraint name assertions.
+  - Preparation station FK on `MenuItem` configured with `DeleteBehavior.Restrict` via corrective additive migration `20261005141523_HardenCatalogOutboxAndPreparationStationConstraints`, preventing unsafe cascade nulling on NOT NULL columns.
+  - Modifier option reordering validates non-empty request, verifies all option IDs belong to the group, requires and verifies concurrency tokens for every option (412 on empty Guid, 409 on stale token), and rejects negative or duplicate sort orders.
+  - Blue/green migration checker re-tightened: rejects unallowlisted DROP CONSTRAINT (PRIMARY KEY, UNIQUE, CHECK, foreign keys) and enforces verified in-place replacement.
 - [x] **Verification & Quality Gates:**
-  - Backend unit (1196/1196), architecture (10/10), and integration test suites passing.
-  - Frontend Vitest suites passing (293/293) across UI and all web apps.
+  - Backend unit (1223/1223), architecture (10/10), and integration test suites (239/239) passing.
+  - Frontend Vitest suites passing (295/295) across UI and all web apps.
+  - Playwright E2E suites passing (2/2).
+  - Script & Gate verification suites passing (89/89).
   - File size gate (< 600 strict ceiling, < 450 warning threshold).
-  - Migration script bundle validated via `migration-ops.mjs`.
+  - Migration script bundle validated via `migration-ops.mjs` and blue-green checker.
 
 ---
 
@@ -213,12 +221,15 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | Command | Scope | Result | Details |
 | :--- | :--- | :--- | :--- |
 | `dotnet build RestaurantOrder.sln -c Release` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
-| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 1196 / 1196 passed (100%) |
+| `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 1223 / 1223 passed (100%) |
 | `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
-| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 111 / 111 passed across 13 test files (100%) |
-| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 293 / 293 passed across packages/ui and 3 web apps (100%) |
+| `dotnet test tests/integration/` | Integration Suite (Testcontainers) | **PASS** | 239 / 239 passed (100%) |
+| `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 113 / 113 passed across 13 test files (100%) |
+| `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 295 / 295 passed across packages/ui and 3 web apps (100%) |
+| `pnpm test:e2e` | Playwright E2E Suite | **PASS** | 2 / 2 passed (100%) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
+| `pnpm verify:gates` | Repository Gates & Safety | **PASS** | 89 / 89 tests passed (100%) |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 human-authored files exceed 600 strict ceiling |
 | `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | Validated, 0 broken links |
 | `node scripts/check-secrets.mjs` | Secret Scanner | **PASS** | Zero credentials or keys exposed |
@@ -245,6 +256,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - `20261004144819_AddModifiersDietaryAndAllergens`
   - `20261004151108_AddBranchItemAvailabilityAndStations`
   - `20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox`
+  - `20261005141523_HardenCatalogOutboxAndPreparationStationConstraints`
 - API root: `/api/v1/catalog/branches/{branchId}`. Endpoint groups cover menus; menu categories and reorder; items, metadata, prices and reorder; variants and prices; modifier groups/options and assignment; branch availability, item/variant `quick-86` and `restock`; and `GET /runtime-menu`.
 - Mutation responses carry ETags. Missing concurrency preconditions return 412; stale state and uniqueness conflicts return 409. Unexpected errors use generic RFC 7807 responses with correlation IDs.
 - Final PR head commit: `feat/phase-05-menu-catalog` branch head closure.

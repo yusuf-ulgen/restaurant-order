@@ -4,10 +4,12 @@ using Microsoft.Extensions.Logging;
 using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Catalog;
+using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Catalog;
+using RestaurantOrder.Domain.Common;
 
 namespace RestaurantOrder.Api.Catalog;
 
@@ -297,6 +299,20 @@ public static partial class CatalogEndpoints
         {
             var actor = GetActor(httpContext, parser);
             var tenantId = ResolveTenantId(tenantContext, actor);
+
+            if (command?.Items == null || command.Items.Count == 0)
+            {
+                throw new DomainException("Reorder items cannot be empty.");
+            }
+
+            foreach (var item in command.Items)
+            {
+                if (item.ConcurrencyToken == Guid.Empty)
+                {
+                    throw new ConcurrencyPreconditionException(
+                        $"Concurrency token is required for modifier option '{item.Id}' in reorder list.");
+                }
+            }
 
             var options = await catalogService.ReorderModifierOptionsAsync(
                 tenantId,

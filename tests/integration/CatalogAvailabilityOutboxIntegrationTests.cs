@@ -12,7 +12,7 @@ using Xunit;
 
 namespace RestaurantOrder.IntegrationTests;
 
-public class CatalogAvailabilityOutboxIntegrationTests : IClassFixture<TestcontainersFixture>
+public partial class CatalogAvailabilityOutboxIntegrationTests : IClassFixture<TestcontainersFixture>
 {
     private readonly TestcontainersFixture _fixture;
 

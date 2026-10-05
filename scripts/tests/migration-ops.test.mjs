@@ -92,6 +92,45 @@ describe('Migration Operations & Safety Tests', () => {
       const violations = validateMigrationSql(sql);
       assert.strictEqual(violations.length, 0);
     });
+
+    it('rejects DROP PRIMARY KEY constraint', () => {
+      const sql = 'ALTER TABLE orders DROP CONSTRAINT pk_orders;';
+      const violations = validateMigrationSql(sql);
+      assert.ok(violations.some(v => v.description.includes('DROP PRIMARY KEY/CONSTRAINT is strictly prohibited')));
+    });
+
+    it('rejects DROP UNIQUE CONSTRAINT when not allowlisted', () => {
+      const sql = 'ALTER TABLE users DROP CONSTRAINT uq_users_email;';
+      const violations = validateMigrationSql(sql);
+      assert.ok(violations.some(v => v.description.includes('DROP UNIQUE CONSTRAINT is strictly prohibited')));
+    });
+
+    it('rejects DROP CHECK CONSTRAINT', () => {
+      const sql = 'ALTER TABLE products DROP CONSTRAINT ck_price_positive;';
+      const violations = validateMigrationSql(sql);
+      assert.ok(violations.some(v => v.description.includes('DROP CHECK CONSTRAINT is strictly prohibited')));
+    });
+
+    it('rejects unallowlisted foreign key drop', () => {
+      const sql = 'ALTER TABLE orders DROP CONSTRAINT fk_orders_random_ref;';
+      const violations = validateMigrationSql(sql);
+      assert.ok(violations.some(v => v.description.includes("prohibited before cutover (unauthorized constraint drop)")));
+    });
+
+    it('rejects allowlisted foreign key drop when replacement is missing', () => {
+      const sql = 'ALTER TABLE branch_item_availabilities DROP CONSTRAINT fk_branch_item_availabilities_menu_items_item_id;';
+      const violations = validateMigrationSql(sql);
+      assert.ok(violations.some(v => v.description.includes("requires replacement 'fk_branch_item_availabilities_menu_items_tenant_branch_item'")));
+    });
+
+    it('permits allowlisted foreign key drop when replacement constraint is present in same migration', () => {
+      const sql = `
+        ALTER TABLE branch_item_availabilities DROP CONSTRAINT fk_branch_item_availabilities_menu_items_item_id;
+        ALTER TABLE branch_item_availabilities ADD CONSTRAINT fk_branch_item_availabilities_menu_items_tenant_branch_item FOREIGN KEY (tenant_id, branch_id, item_id) REFERENCES menu_items (tenant_id, branch_id, id);
+      `;
+      const violations = validateMigrationSql(sql);
+      assert.strictEqual(violations.length, 0);
+    });
   });
 
   describe('checkExpandContractCompatibility', () => {

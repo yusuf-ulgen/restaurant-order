@@ -107,7 +107,7 @@ public partial class CatalogService
             itemId.Value.ToString(),
             "CatalogItemQuick86",
             eventData,
-            $"item-86-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{record.ConcurrencyToken:D}");
+            $"item-86-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{command.ConcurrencyToken:D}");
 
         try
         {
@@ -121,8 +121,6 @@ public partial class CatalogService
         {
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
-
-        await _eventPublisher.PublishAvailabilityChangedAsync(eventData, ct);
 
         return MapAvailability(record);
     }
@@ -199,7 +197,7 @@ public partial class CatalogService
             itemId.Value.ToString(),
             "CatalogItemRestocked",
             restockEventData,
-            $"item-restock-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{record.ConcurrencyToken:D}");
+            $"item-restock-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{command.ConcurrencyToken:D}");
 
         try
         {
@@ -213,8 +211,6 @@ public partial class CatalogService
         {
             throw new ConcurrencyConflictException("A concurrent availability modification was detected.");
         }
-
-        await _eventPublisher.PublishAvailabilityChangedAsync(restockEventData, ct);
 
         return MapAvailability(record);
     }

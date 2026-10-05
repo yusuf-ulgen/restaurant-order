@@ -22,6 +22,157 @@ export const FORBIDDEN_DESTRUCTIVE_PATTERNS = [
 ];
 
 /**
+ * Narrow allowlist of approved foreign key replacement operations.
+ * Each entry requires verified replacement constraint in the same migration.
+ */
+export const ALLOWED_CONSTRAINT_REPLACEMENTS = [
+  {
+    droppedConstraint: 'fk_branch_item_availabilities_item_variants_variant_id',
+    replacementConstraint: 'fk_branch_item_availabilities_variants_tenant_branch_variant',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_branch_item_availabilities_menu_items_item_id',
+    replacementConstraint: 'fk_branch_item_availabilities_menu_items_tenant_branch_item',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_item_variants_menu_items_menu_item_id',
+    replacementConstraint: 'fk_item_variants_menu_items_tenant_branch_item',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_item_variants_menus_tenant_id_menu_id',
+    replacementConstraint: 'fk_item_variants_menus_tenant_branch_menu',
+    reason: 'Replaced legacy tenant FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_menu_categories_menus_tenant_id_menu_id',
+    replacementConstraint: 'fk_menu_categories_menus_tenant_branch_menu',
+    reason: 'Replaced legacy tenant FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_item_modifier_assignments_menu_items_item_id',
+    replacementConstraint: 'fk_item_modifier_assignments_menu_items_tenant_branch_item',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_item_modifier_assignments_modifier_groups_group_id',
+    replacementConstraint: 'fk_item_modifier_assignments_groups_tenant_branch_group',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_menu_items_categories_tenant_id_menu_id_category_id',
+    replacementConstraint: 'fk_menu_items_categories_tenant_branch_menu_cat',
+    reason: 'Replaced legacy FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_menu_items_menus_tenant_id_menu_id',
+    replacementConstraint: 'fk_menu_items_menus_tenant_branch_menu',
+    reason: 'Replaced legacy tenant FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_menu_items_preparation_stations_station_id',
+    replacementConstraint: 'fk_menu_items_prep_stations_tenant_branch_station',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_modifier_options_modifier_groups_group_id',
+    replacementConstraint: 'fk_modifier_options_modifier_groups_tenant_branch_group',
+    reason: 'Replaced legacy single-column FK with composite tenant/branch FK for cross-branch referential integrity (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'AK_menus_tenant_id_id',
+    replacementConstraint: 'AK_menus_tenant_id_branch_id_id',
+    reason: 'Replaced legacy 2-column alternate key with 3-column composite alternate key for branch-scoped menu FKs (Phase 5.5)',
+  },
+  {
+    droppedConstraint: 'fk_menu_items_prep_stations_tenant_branch_station',
+    replacementConstraint: 'fk_menu_items_prep_stations_tenant_branch_station',
+    reason: 'Replaced SetNull composite FK with Restrict delete behavior for preparation station constraint hardening (Phase 5 closing)',
+  },
+];
+
+export const ALLOWED_FK_REPLACEMENTS = ALLOWED_CONSTRAINT_REPLACEMENTS;
+
+export function extractUpMethodContent(content) {
+  if (typeof content !== 'string') return '';
+  const upMatch = content.match(/protected\s+override\s+void\s+Up\s*\(\s*MigrationBuilder\s+\w+\s*\)[\s\S]*?(?=protected\s+override\s+void\s+Down|\}\s*\}\s*$)/);
+  return upMatch ? upMatch[0] : content;
+}
+
+export function validateConstraintSafety(rawContent, options = {}) {
+  const violations = [];
+  if (!rawContent || typeof rawContent !== 'string') return violations;
+
+  const content = options.isCSharp ? extractUpMethodContent(rawContent) : rawContent;
+
+  // Strict blocking of Primary Key, Unique, and Check constraint drops
+  const pkDropRegex = /\b(?:DROP\s+PRIMARY\s+KEY|DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?(?:pk_[a-zA-Z0-9_]*|[a-zA-Z0-9_]*_pkey)["']?)\b/i;
+  if (pkDropRegex.test(content) || /migrationBuilder\.DropPrimaryKey\b/i.test(content)) {
+    violations.push('DROP PRIMARY KEY/CONSTRAINT is strictly prohibited before cutover');
+  }
+
+  const uqDropRegex = /\b(?:DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?(?:uq_[a-zA-Z0-9_]*|[a-zA-Z0-9_]*_key)["']?)\b/i;
+  if (uqDropRegex.test(content) || /migrationBuilder\.DropUniqueConstraint\b/i.test(content)) {
+    const uqMatch = content.match(/DropUniqueConstraint\s*\(\s*name:\s*["']([^"']+)["']/i) ||
+                    content.match(/DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?([^"'\s;]+)["']?/i);
+    const uqName = uqMatch ? uqMatch[1] : '';
+    const isAllowlisted = ALLOWED_CONSTRAINT_REPLACEMENTS.some(r => r.droppedConstraint.toLowerCase() === uqName.toLowerCase());
+    if (!isAllowlisted) {
+      violations.push('DROP UNIQUE CONSTRAINT is strictly prohibited before cutover');
+    }
+  }
+
+  const ckDropRegex = /\b(?:DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?(?:ck_[a-zA-Z0-9_]*|[a-zA-Z0-9_]*_check)["']?)\b/i;
+  if (ckDropRegex.test(content) || /migrationBuilder\.DropCheckConstraint\b/i.test(content)) {
+    violations.push('DROP CHECK CONSTRAINT is strictly prohibited before cutover');
+  }
+
+  // Extract all DROP CONSTRAINT / DropForeignKey / DropUniqueConstraint statements
+  const sqlDropConstraintRegex = /ALTER\s+TABLE\s+(?:ONLY\s+)?(?:[a-zA-Z0-9_]+\.)?[a-zA-Z0-9_]+\s+DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?([a-zA-Z0-9_]+)["']?/gi;
+  const csDropFkRegex = /migrationBuilder\.DropForeignKey\s*\(\s*name:\s*["']([a-zA-Z0-9_]+)["']/gi;
+  const csDropUqRegex = /migrationBuilder\.DropUniqueConstraint\s*\(\s*name:\s*["']([a-zA-Z0-9_]+)["']/gi;
+
+  const droppedNames = [];
+  let match;
+  while ((match = sqlDropConstraintRegex.exec(content)) !== null) {
+    droppedNames.push(match[1]);
+  }
+  while ((match = csDropFkRegex.exec(content)) !== null) {
+    droppedNames.push(match[1]);
+  }
+  while ((match = csDropUqRegex.exec(content)) !== null) {
+    droppedNames.push(match[1]);
+  }
+
+  for (const name of droppedNames) {
+    const lowerName = name.toLowerCase();
+    if (lowerName.startsWith('pk_') || lowerName.endsWith('_pkey') ||
+        lowerName.startsWith('ck_') || lowerName.endsWith('_check')) {
+      continue;
+    }
+
+    const allowEntry = ALLOWED_CONSTRAINT_REPLACEMENTS.find(r => r.droppedConstraint.toLowerCase() === lowerName);
+    if (!allowEntry) {
+      violations.push(`Dropping constraint '${name}' is prohibited before cutover (unauthorized constraint drop)`);
+      continue;
+    }
+
+    const replacement = allowEntry.replacementConstraint.toLowerCase();
+    const hasSqlReplacement = new RegExp(`ADD\\s+(?:CONSTRAINT\\s+)?["']?${replacement}["']?`, 'i').test(content);
+    const hasCsReplacement = new RegExp(`(?:AddForeignKey|AddUniqueConstraint|name:)\\s*\\(?\\s*["']?${replacement}["']?`, 'i').test(content) ||
+                             new RegExp(`name:\\s*["']${replacement}["']`, 'i').test(content);
+
+    if (!hasSqlReplacement && !hasCsReplacement) {
+      violations.push(`Dropping constraint '${name}' requires replacement '${allowEntry.replacementConstraint}' in the same migration, but replacement was not found.`);
+    }
+  }
+
+  return violations;
+}
+
+/**
  * Masks passwords and secrets from connection strings before printing to logs.
  */
 export function maskConnectionString(connStr) {
@@ -49,17 +200,24 @@ export function validateMigrationSql(sqlContent, options = {}) {
   const violations = [];
   if (!sqlContent || typeof sqlContent !== 'string') return violations;
 
+  const content = options.isCSharp ? extractUpMethodContent(sqlContent) : sqlContent;
+
   const allowDestructive = options.allowDestructive === true &&
     process.env.ALLOW_DESTRUCTIVE_MIGRATION === 'true';
 
   for (const { pattern, description } of FORBIDDEN_DESTRUCTIVE_PATTERNS) {
-    if (pattern.test(sqlContent)) {
+    if (pattern.test(content)) {
       if (allowDestructive) {
         violations.push({ description: `[OVERRIDDEN] ${description}`, isOverridden: true });
       } else {
         violations.push({ description, isOverridden: false });
       }
     }
+  }
+
+  const constraintViolations = validateConstraintSafety(sqlContent, options);
+  for (const desc of constraintViolations) {
+    violations.push({ description: desc, isOverridden: false });
   }
 
   return violations;
@@ -113,7 +271,8 @@ export function validateAllMigrations(rootDir = process.cwd(), options = {}) {
   for (const file of files) {
     try {
       const content = fs.readFileSync(file, 'utf8');
-      const violations = validateMigrationSql(content, options);
+      const isCSharp = file.endsWith('.cs');
+      const violations = validateMigrationSql(content, { ...options, isCSharp });
       for (const v of violations) {
         if (!v.isOverridden) {
           allViolations.push(`${path.basename(file)}: ${v.description}`);

@@ -257,10 +257,60 @@ public partial class CatalogService
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
+        if (command == null || command.Items == null || command.Items.Count == 0)
+        {
+            throw new DomainException("Reorder items cannot be empty.");
+        }
+
         var group = await _dbContext.ModifierGroups
             .Include(mg => mg.Options)
             .FirstOrDefaultAsync(mg => mg.TenantId == tenantId && mg.BranchId == branchId && mg.Id == modifierGroupId, ct)
             ?? throw new ResourceNotFoundException($"ModifierGroup '{modifierGroupId.Value}' was not found.");
+
+        if (command.Items.Count != group.Options.Count)
+        {
+            throw new DomainException($"Reorder list must contain all {group.Options.Count} options for this modifier group.");
+        }
+
+        var optionMap = group.Options.ToDictionary(o => o.Id.Value);
+        var seenIds = new HashSet<Guid>();
+        var seenSortOrders = new HashSet<int>();
+
+        foreach (var item in command.Items)
+        {
+            if (item.Id == Guid.Empty)
+            {
+                throw new DomainException("Modifier option ID cannot be empty.");
+            }
+
+            if (!seenIds.Add(item.Id))
+            {
+                throw new DomainException($"Duplicate modifier option ID '{item.Id}' in reorder list.");
+            }
+
+            if (!optionMap.TryGetValue(item.Id, out var option))
+            {
+                throw new DomainException($"Modifier option '{item.Id}' does not belong to this modifier group.");
+            }
+
+            if (item.ConcurrencyToken == Guid.Empty)
+            {
+                throw new ConcurrencyPreconditionException(
+                    $"Concurrency token is required for modifier option '{item.Id}' in reorder list.");
+            }
+
+            VerifyConcurrencyToken(option.ConcurrencyToken, item.ConcurrencyToken);
+
+            if (item.SortOrder < 0)
+            {
+                throw new DomainException("Sort order must be non-negative.");
+            }
+
+            if (!seenSortOrders.Add(item.SortOrder))
+            {
+                throw new DomainException($"Duplicate sort order value '{item.SortOrder}' in reorder list.");
+            }
+        }
 
         var orderings = command.Items
             .Select(i => (OptionId: new ModifierOptionId(i.Id), SortOrder: i.SortOrder))

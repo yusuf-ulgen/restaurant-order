@@ -11,7 +11,7 @@ namespace RestaurantOrder.Domain.Catalog;
 /// Enforces min/max selection bounds, active default option invariants,
 /// and unique option names within the group.
 /// </summary>
-public class ModifierGroup
+public partial class ModifierGroup
 {
     private static readonly Regex HtmlTagRegex = new(@"<[^>]*>", RegexOptions.Compiled);
 
@@ -123,196 +123,6 @@ public class ModifierGroup
         Touch();
     }
 
-    public ModifierOption AddOption(
-        string name,
-        PriceAmount priceDelta,
-        int sortOrder = 0,
-        bool isDefault = false,
-        bool isActive = true)
-    {
-        var validatedName = ValidateOptionName(name);
-
-        if (_options.Any(o => o.Name.Equals(validatedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DomainException($"Option with name '{validatedName}' already exists in modifier group '{Name}'.");
-        }
-
-        if (isDefault && isActive)
-        {
-            var defaultCount = _options.Count(o => o.IsActive && o.IsDefault) + 1;
-            if (defaultCount > MaxSelections)
-            {
-                throw new DomainException(
-                    $"Number of active default options ({defaultCount}) exceeds MaxSelections ({MaxSelections}) for group '{Name}'.");
-            }
-        }
-
-        var option = ModifierOption.Create(
-            TenantId,
-            BranchId,
-            Id,
-            validatedName,
-            priceDelta,
-            sortOrder,
-            isDefault,
-            isActive);
-
-        _options.Add(option);
-        Touch();
-        return option;
-    }
-
-    public void AddOption(ModifierOption option)
-    {
-        if (_options.Any(o => o.Id != option.Id && o.Name.Equals(option.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DomainException($"Option with name '{option.Name}' already exists in modifier group '{Name}'.");
-        }
-
-        if (option.IsDefault && option.IsActive)
-        {
-            var defaultCount = _options.Count(o => o.IsActive && o.IsDefault && o.Id != option.Id) + 1;
-            if (defaultCount > MaxSelections)
-            {
-                throw new DomainException(
-                    $"Number of active default options ({defaultCount}) exceeds MaxSelections ({MaxSelections}) for group '{Name}'.");
-            }
-        }
-
-        _options.Add(option);
-        Touch();
-    }
-
-    public void UpdateOptionDetails(ModifierOptionId optionId, string name, int sortOrder, bool isDefault)
-    {
-        var option = GetOption(optionId);
-        var validatedName = ValidateOptionName(name);
-
-        if (_options.Any(o => o.Id != optionId && o.Name.Equals(validatedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DomainException($"Option with name '{validatedName}' already exists in modifier group '{Name}'.");
-        }
-
-        if (isDefault && option.IsActive)
-        {
-            var otherDefaults = _options.Count(o => o.Id != optionId && o.IsActive && o.IsDefault);
-            if (otherDefaults + 1 > MaxSelections)
-            {
-                throw new DomainException(
-                    $"Number of active default options ({otherDefaults + 1}) exceeds MaxSelections ({MaxSelections}) for group '{Name}'.");
-            }
-        }
-
-        option.UpdateDetails(validatedName, sortOrder, isDefault);
-        Touch();
-    }
-
-    public void UpdateOptionPrice(ModifierOptionId optionId, PriceAmount newPriceDelta)
-    {
-        var option = GetOption(optionId);
-        option.UpdatePriceDelta(newPriceDelta);
-        Touch();
-    }
-
-    public void ActivateOption(ModifierOptionId optionId)
-    {
-        var option = GetOption(optionId);
-        if (option.IsDefault)
-        {
-            var otherDefaults = _options.Count(o => o.Id != optionId && o.IsActive && o.IsDefault);
-            if (otherDefaults + 1 > MaxSelections)
-            {
-                throw new DomainException(
-                    $"Activating default option exceeds MaxSelections ({MaxSelections}) for group '{Name}'.");
-            }
-        }
-
-        option.Activate();
-        Touch();
-    }
-
-    public void DeactivateOption(ModifierOptionId optionId, bool isAssigned = false)
-    {
-        var option = GetOption(optionId);
-        if (!option.IsActive)
-        {
-            return;
-        }
-
-        var remainingActive = _options.Count(o => o.IsActive && o.Id != optionId);
-
-        if (isAssigned && remainingActive == 0)
-        {
-            throw new DomainException(
-                $"Cannot deactivate the last active option for assigned modifier group '{Name}'.");
-        }
-
-        if (IsActive || isAssigned)
-        {
-            if (remainingActive < MinSelections)
-            {
-                throw new DomainException(
-                    $"Deactivating option would leave fewer active options ({remainingActive}) than MinSelections ({MinSelections}).");
-            }
-
-            if (remainingActive < MaxSelections)
-            {
-                throw new DomainException(
-                    $"Deactivating option would leave fewer active options ({remainingActive}) than MaxSelections ({MaxSelections}).");
-            }
-        }
-
-        option.Deactivate();
-        Touch();
-    }
-
-    public void ReorderOptions(IReadOnlyList<(ModifierOptionId OptionId, int SortOrder)> orderings)
-    {
-        var map = _options.ToDictionary(o => o.Id);
-        foreach (var (optId, sortOrder) in orderings)
-        {
-            if (map.TryGetValue(optId, out var option))
-            {
-                option.UpdateSortOrder(sortOrder);
-            }
-        }
-        Touch();
-    }
-
-    public void ValidateOptionsInvariant()
-    {
-        var activeOptionsCount = _options.Count(o => o.IsActive);
-        if (_options.Count > 0 && MaxSelections > activeOptionsCount)
-        {
-            throw new DomainException(
-                $"MaxSelections ({MaxSelections}) cannot exceed total active options ({activeOptionsCount}) for group '{Name}'.");
-        }
-
-        var defaultCount = _options.Count(o => o.IsActive && o.IsDefault);
-        if (defaultCount > MaxSelections)
-        {
-            throw new DomainException(
-                $"Number of active default options ({defaultCount}) exceeds MaxSelections ({MaxSelections}) for group '{Name}'.");
-        }
-    }
-
-    public void ValidateForAssignment()
-    {
-        if (!IsActive)
-        {
-            throw new DomainException($"Cannot assign inactive modifier group '{Name}'.");
-        }
-
-        var activeOptionsCount = _options.Count(o => o.IsActive);
-        if (activeOptionsCount < MaxSelections)
-        {
-            throw new DomainException(
-                $"Modifier group '{Name}' has MaxSelections={MaxSelections} but only {activeOptionsCount} active options.");
-        }
-
-        ValidateOptionsInvariant();
-    }
-
     public void Activate()
     {
         if (IsActive)
@@ -358,11 +168,6 @@ public class ModifierGroup
         ConcurrencyToken = Guid.NewGuid();
     }
 
-    private ModifierOption GetOption(ModifierOptionId optionId)
-    {
-        return _options.FirstOrDefault(o => o.Id == optionId)
-            ?? throw new DomainException($"ModifierOption '{optionId.Value}' does not belong to group '{Name}'.");
-    }
 
     private static void ValidateSelectionBounds(int min, int max)
     {
@@ -403,24 +208,4 @@ public class ModifierGroup
         return trimmed;
     }
 
-    private static string ValidateOptionName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new DomainException("Modifier option name cannot be empty.");
-        }
-
-        var trimmed = name.Trim();
-        if (trimmed.Length is < 1 or > 100)
-        {
-            throw new DomainException("Modifier option name must be between 1 and 100 characters.");
-        }
-
-        if (HtmlTagRegex.IsMatch(trimmed))
-        {
-            throw new DomainException("Modifier option name cannot contain HTML or markup tags.");
-        }
-
-        return trimmed;
-    }
 }

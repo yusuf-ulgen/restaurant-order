@@ -188,7 +188,7 @@ public class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             .HasForeignKey(m => new { m.TenantId, m.BranchId, m.PreparationStationId })
             .HasConstraintName("fk_menu_items_prep_stations_tenant_branch_station")
             .IsRequired(false)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
 
         // 1-to-many relationship with ItemVariant
         builder.HasMany(m => m.Variants)

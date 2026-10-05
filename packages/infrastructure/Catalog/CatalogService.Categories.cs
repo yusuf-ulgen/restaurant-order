@@ -59,6 +59,7 @@ public partial class CatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -118,6 +119,7 @@ public partial class CatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -160,6 +162,7 @@ public partial class CatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -201,6 +204,7 @@ public partial class CatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -241,6 +245,7 @@ public partial class CatalogService
         AuthenticatedPrincipal actor,
         CancellationToken ct)
     {
+        EnsureCatalogManagePermission(actor);
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
         EnsureBranchAllowsCatalogMutation(branch);
 
@@ -261,6 +266,7 @@ public partial class CatalogService
 
         var categoryMap = categories.ToDictionary(c => c.Id.Value);
         var seenIds = new HashSet<Guid>();
+        var seenSortOrders = new HashSet<int>();
 
         foreach (var item in command.Items)
         {
@@ -272,6 +278,16 @@ public partial class CatalogService
             if (!categoryMap.TryGetValue(item.Id, out var category))
             {
                 throw new DomainException($"Category '{item.Id}' does not belong to this menu.");
+            }
+
+            if (item.SortOrder < 0)
+            {
+                throw new DomainException("Sort order must be non-negative.");
+            }
+
+            if (!seenSortOrders.Add(item.SortOrder))
+            {
+                throw new DomainException($"Duplicate sort order value '{item.SortOrder}' in reorder list.");
             }
 
             VerifyConcurrencyToken(category.ConcurrencyToken, item.ConcurrencyToken);

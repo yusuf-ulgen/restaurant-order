@@ -21,10 +21,7 @@ function checkDockerRunning() {
 
 function toDockerVolumePath(p) {
   if (process.platform === 'win32') {
-    const match = p.match(/^([a-zA-Z]):\\(.*)/);
-    if (match) {
-      return `/mnt/${match[1].toLowerCase()}/${match[2].replace(/\\/g, '/')}`;
-    }
+    return p.replace(/\\/g, '/');
   }
   return p;
 }

@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Moq;
 using RestaurantOrder.Api.Catalog;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Catalog;
 using RestaurantOrder.Application.RestaurantConfig;
+using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Common;
 using Xunit;
@@ -137,5 +139,40 @@ public class ModifierEndpointsUnitTests
         var result = CatalogEndpoints.HandleException(ex, context);
         var problem = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(StatusCodes.Status409Conflict, problem.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReorderModifierOptionsHandler_MissingOrEmptyOptions_ReturnsBadRequest()
+    {
+        var mockService = new Mock<ICatalogService>();
+        var tenantContext = new TenantContext(Guid.NewGuid(), isAuthenticated: true);
+        var mockParser = new Mock<IJwtClaimPrincipalParser>();
+        var context = new DefaultHttpContext();
+
+        var emptyCmd = new ReorderModifierOptionsCommand(new List<ModifierOptionReorderItem>());
+        var result = await CatalogEndpoints.ReorderModifierOptionsHandler(
+            Guid.NewGuid(), Guid.NewGuid(), emptyCmd, context, mockService.Object, tenantContext, mockParser.Object, CancellationToken.None);
+
+        var prob = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, prob.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReorderModifierOptionsHandler_EmptyOptionToken_ReturnsPreconditionFailed()
+    {
+        var mockService = new Mock<ICatalogService>();
+        var tenantContext = new TenantContext(Guid.NewGuid(), isAuthenticated: true);
+        var mockParser = new Mock<IJwtClaimPrincipalParser>();
+        var context = new DefaultHttpContext();
+
+        var cmd = new ReorderModifierOptionsCommand(new List<ModifierOptionReorderItem>
+        {
+            new(Guid.NewGuid(), 0, Guid.Empty)
+        });
+        var result = await CatalogEndpoints.ReorderModifierOptionsHandler(
+            Guid.NewGuid(), Guid.NewGuid(), cmd, context, mockService.Object, tenantContext, mockParser.Object, CancellationToken.None);
+
+        var prob = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(StatusCodes.Status412PreconditionFailed, prob.StatusCode);
     }
 }

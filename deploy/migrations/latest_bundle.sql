@@ -3452,3 +3452,28 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005141523_HardenCatalogOutboxAndPreparationStationConstraints') THEN
+    ALTER TABLE tenancy.menu_items DROP CONSTRAINT fk_menu_items_prep_stations_tenant_branch_station;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005141523_HardenCatalogOutboxAndPreparationStationConstraints') THEN
+    ALTER TABLE tenancy.menu_items ADD CONSTRAINT fk_menu_items_prep_stations_tenant_branch_station FOREIGN KEY (tenant_id, branch_id, preparation_station_id) REFERENCES tenancy.preparation_stations (tenant_id, branch_id, id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005141523_HardenCatalogOutboxAndPreparationStationConstraints') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261005141523_HardenCatalogOutboxAndPreparationStationConstraints', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
