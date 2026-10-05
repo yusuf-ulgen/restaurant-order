@@ -91,6 +91,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for catalog outbox hardening and preparation station constraint update."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005185044_AddRestaurantTablesAndLayout.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for restaurant tables and floor layout (Phase 6.1)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

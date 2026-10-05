@@ -365,6 +365,7 @@ RestaurantOrder.Api.Auth.PinAuthEndpoints.MapPinAuthEndpoints(app);
 RestaurantOrder.Api.Auth.StaffEndpoints.MapStaffEndpoints(app);
 RestaurantOrder.Api.RestaurantConfig.RestaurantConfigEndpoints.MapRestaurantConfigEndpoints(app);
 RestaurantOrder.Api.Catalog.CatalogEndpoints.MapCatalogEndpoints(app);
+RestaurantOrder.Api.Floor.FloorEndpoints.MapFloorEndpoints(app);
 
 app.Run();
 

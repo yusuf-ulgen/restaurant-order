@@ -93,4 +93,11 @@ public static class SecurityAuditEventType
     public const string ItemRestocked = "item_restocked";
     public const string ItemVariantAvailabilityChanged = "item_variant_availability_changed";
     public const string ItemVariantRestocked = "item_variant_restocked";
+
+    // Floor & Tables (Phase 6)
+    public const string RestaurantTableCreated = "restaurant_table_created";
+    public const string RestaurantTableUpdated = "restaurant_table_updated";
+    public const string RestaurantTableLayoutUpdated = "restaurant_table_layout_updated";
+    public const string RestaurantTableActivated = "restaurant_table_activated";
+    public const string RestaurantTableDeactivated = "restaurant_table_deactivated";
 }

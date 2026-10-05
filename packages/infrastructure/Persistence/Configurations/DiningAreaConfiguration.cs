@@ -12,6 +12,7 @@ public class DiningAreaConfiguration : IEntityTypeConfiguration<DiningArea>
         builder.ToTable("dining_areas", "tenancy");
 
         builder.HasKey(da => da.Id);
+        builder.HasAlternateKey(da => new { da.TenantId, da.BranchId, da.Id });
 
         builder.Property(da => da.Id)
             .HasColumnName("id")

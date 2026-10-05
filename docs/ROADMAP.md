@@ -108,7 +108,8 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Admin catalog editor and filtered runtime catalog read model with quick-86/restock controls.
 - [x] Final hardening and closure; push and pull_request CI green (218/218 integration tests).
 
-### Phase 6: Tables, QR & Sessions (Status: NEXT)
+### Phase 6: Tables, QR & Sessions (Status: IN PROGRESS)
+- Phase 6 establishes tables, physical floor layout, QR identity, and dining session infrastructure. Orders, KDS, payments, and service calls belong to subsequent phases.
 - [ ] Table numbering, capacity, and physical layout positioning.
 - [ ] Dynamic and static QR code generation with cryptographic signature.
 - [ ] Dining session lifecycle state machine (Open -> Active -> Bill Requested -> Closed).
