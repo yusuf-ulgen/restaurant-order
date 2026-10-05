@@ -185,13 +185,13 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 - [x] **Verification & Test Coverage:**
   - `BranchItemAvailabilityUnitTests.cs`: Lifecycle independence, HTML note rejection, past expected date rejection, restock transitions.
   - `CatalogAvailabilityEndpointsUnitTests.cs`: ETag headers, concurrency token extraction, 412 Precondition Failed, 409 Conflict, RBAC matrix.
-  - `CatalogAvailabilityIntegrationTests.cs` & `CatalogAvailabilityOutboxIntegrationTests.*`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, transactional rollback, variant outbox persistence, and tenant RLS isolation.
+  - `CatalogAvailabilityIntegrationTests.cs` & `CatalogAvailabilityOutboxIntegrationTests.*`: Quick 86, variant isolation, item propagation to all variants in runtime menu, restock, concurrency conflict, station scoping for Kitchen/Bar, transactional rollback, variant outbox persistence, unprivileged runtime PostgreSQL role (`restaurant_app_user` NOSUPERUSER/NOBYPASSRLS) RLS isolation, and concurrent idempotency.
 ### Phase 5.5: Branch Availability & Quick 86 (COMPLETED)
 - [x] **Transactional Outbox Event Contract:**
   - Decoupled `catalog_availability_outbox` table persisted within the same database transaction.
   - Fail-closed RLS and query filter applied to outbox table; SignalR transport remains Phase 9 scope.
   - Event payload carries tenant, branch, item/variant, availability and reason fields with unique idempotency key.
-  - Order checkout validation belongs to later order lifecycle phases.
+  - Order checkout validation and `ITEM_OUT_OF_STOCK` negative flow belong to future order lifecycle phases; Phase 5 provides catalog and availability infrastructure only.
 
 ### Phase 5.6: Admin Catalog Management UI & Hardening Closure (COMPLETED)
 - [x] **Admin Web Catalog Management & Accessibility:**
@@ -207,10 +207,10 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
   - Modifier option reordering validates non-empty request, verifies all option IDs belong to the group, requires and verifies concurrency tokens for every option (412 on empty Guid, 409 on stale token), and rejects negative or duplicate sort orders.
   - Blue/green migration checker re-tightened: rejects unallowlisted DROP CONSTRAINT (PRIMARY KEY, UNIQUE, CHECK, foreign keys) and enforces verified in-place replacement.
 - [x] **Verification & Quality Gates:**
-  - Backend unit (1223/1223), architecture (10/10), and integration test suites (239/239) passing.
+  - Backend unit (1223/1223), architecture (10/10), and integration test suites (249/249) passing.
   - Frontend Vitest suites passing (295/295) across UI and all web apps.
   - Playwright E2E suites passing (2/2).
-  - Script & Gate verification suites passing (89/89).
+  - Script & Gate verification suites passing (115/115).
   - File size gate (< 600 strict ceiling, < 450 warning threshold).
   - Migration script bundle validated via `migration-ops.mjs` and blue-green checker.
 
@@ -223,13 +223,13 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 | `dotnet build RestaurantOrder.sln -c Release` | Backend Solution | **PASS** | 0 Warnings, 0 Errors |
 | `dotnet test tests/unit/` | Unit Test Suite | **PASS** | 1223 / 1223 passed (100%) |
 | `dotnet test tests/architecture/` | Architecture Suite | **PASS** | 10 / 10 passed (100%) |
-| `dotnet test tests/integration/` | Integration Suite (Testcontainers) | **PASS** | 239 / 239 passed (100%) |
+| `dotnet test tests/integration/` | Integration Suite (Testcontainers) | **PASS** | 249 / 249 passed (100%) |
 | `pnpm --filter admin-web test` | Admin Web Vitest | **PASS** | 113 / 113 passed across 13 test files (100%) |
 | `pnpm test:unit:frontend` | Frontend Unit Suites | **PASS** | 295 / 295 passed across packages/ui and 3 web apps (100%) |
 | `pnpm test:e2e` | Playwright E2E Suite | **PASS** | 2 / 2 passed (100%) |
 | `pnpm lint` | ESLint (TS / TSX) | **PASS** | 0 Warnings, 0 Errors |
 | `pnpm typecheck` | TypeScript | **PASS** | 7 / 7 workspace projects clean |
-| `pnpm verify:gates` | Repository Gates & Safety | **PASS** | 89 / 89 tests passed (100%) |
+| `pnpm verify:gates` | Repository Gates & Safety | **PASS** | 115 / 115 tests passed (100%) |
 | `node scripts/check-file-size.mjs` | File Size Gate | **PASS** | 0 human-authored files exceed 600 strict ceiling |
 | `node scripts/check-docs.mjs` | Doc & Links Gate | **PASS** | Validated, 0 broken links |
 | `node scripts/check-secrets.mjs` | Secret Scanner | **PASS** | Zero credentials or keys exposed |
@@ -242,7 +242,7 @@ This document tracks implementation progress across all 7 sub-phases of **Phase 
 1. **Risk:** Floating-point rounding errors in variant pricing and modifier additions.
    **Mitigation:** All prices are strictly stored as integer minor currency units (cents/kuruş). Tax and service charge percentages use integer basis points (`BasisPointsRate`).
 2. **Risk:** Stockout (86) race conditions between customer order submission and kitchen stockout toggle.
-   **Mitigation:** Transactional pre-commit availability validation in order submission pipeline, failing fast with `ITEM_OUT_OF_STOCK` error code.
+   **Mitigation:** Phase 5 provides the catalog availability read/write model and Quick86 infrastructure. Future order-submission pipeline (Phase 7/8) must perform transactional pre-commit availability validation immediately before committing an order, failing fast with `ITEM_OUT_OF_STOCK`. This order submission behavior is a future requirement and is neither implemented nor verified in Phase 5, whose scope is strictly limited to catalog and availability infrastructure.
 3. **Risk:** Stale catalog updates overwriting concurrent administrative modifications.
    **Mitigation:** Optimistic concurrency tokens and `If-Match` ETags on all catalog mutation endpoints.
 4. **Risk:** Information disclosure via 500 error responses.

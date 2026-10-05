@@ -101,44 +101,4 @@ public partial class CatalogAvailabilityOutboxIntegrationTests
             Assert.Contains("Restocked oat milk", msg.Payload);
         }
     }
-
-    [Fact]
-    public async Task TenantIsolation_Outbox_CannotBeAccessedByOtherTenant()
-    {
-        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
-        await EnsureMigrationsAppliedAsync();
-
-        var tenantA = Guid.NewGuid();
-        var tenantB = Guid.NewGuid();
-        var branchA = Guid.NewGuid();
-        var branchB = Guid.NewGuid();
-        await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantA, "Tenant A", $"ta-out-{Guid.NewGuid():N}");
-        await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantB, "Tenant B", $"tb-out-{Guid.NewGuid():N}");
-        await SeedBranchAsync(tenantA, branchA, "Branch A", $"ba-out-{Guid.NewGuid():N}");
-        await SeedBranchAsync(tenantB, branchB, "Branch B", $"bb-out-{Guid.NewGuid():N}");
-
-        // Insert outbox message directly under Tenant A
-        var outboxA = CatalogAvailabilityOutboxMessage.Create(
-            new TenantId(tenantA),
-            new BranchId(branchA),
-            "item-86-test",
-            "CatalogItemQuick86",
-            "{\"test\":true}",
-            Guid.NewGuid().ToString(),
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow);
-
-        await using (var dbA = CreateDbContext(tenantA))
-        {
-            dbA.CatalogAvailabilityOutbox.Add(outboxA);
-            await dbA.SaveChangesAsync();
-        }
-
-        // Query under Tenant B context - must return 0 messages (fail-closed tenant isolation)
-        await using (var dbB = CreateDbContext(tenantB))
-        {
-            var messagesB = await dbB.CatalogAvailabilityOutbox.ToListAsync();
-            Assert.DoesNotContain(messagesB, m => m.Id == outboxA.Id);
-        }
-    }
 }

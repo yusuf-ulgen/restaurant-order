@@ -6,6 +6,7 @@ import {
   checkExpandContractCompatibility,
   applyLocalDevMigrations,
 } from '../migration-ops.mjs';
+import { validateSqlMigration } from '../blue-green/migration-check.mjs';
 
 describe('Migration Operations & Safety Tests', () => {
   describe('maskConnectionString', () => {
@@ -131,6 +132,248 @@ describe('Migration Operations & Safety Tests', () => {
       const violations = validateMigrationSql(sql);
       assert.strictEqual(violations.length, 0);
     });
+  });
+
+  describe('C# Migration Constraint Replacement & False-Positive Guardrails', () => {
+    const validators = [
+      { name: 'validateMigrationSql', fn: (code) => validateMigrationSql(code, { isCSharp: true }).map(v => v.description) },
+      { name: 'validateSqlMigration', fn: (code) => validateSqlMigration(code, { isCSharp: true }) },
+    ];
+
+    for (const { name, fn } of validators) {
+      describe(`${name} C# guardrails`, () => {
+        it('rejects same-name allowlisted DropForeignKey when Add is missing (Drop-only false-positive fix)', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0, 'Must produce violation for drop without add');
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_prep_stations_tenant_branch_station'")));
+        });
+
+        it('accepts same-name allowlisted DropForeignKey with genuine AddForeignKey on matching table', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+
+                migrationBuilder.AddForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items",
+                    columns: new[] { "tenant_id", "branch_id", "preparation_station_id" },
+                    principalSchema: "tenancy",
+                    principalTable: "preparation_stations",
+                    principalColumns: new[] { "tenant_id", "branch_id", "id" },
+                    onDelete: ReferentialAction.Restrict);
+            }
+          `;
+          const violations = fn(cs);
+          assert.strictEqual(violations.length, 0, 'Genuine Drop + Add must be accepted');
+        });
+
+        it('rejects replacement when name appears only in comment', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+                // migrationBuilder.AddForeignKey(name: "fk_menu_items_prep_stations_tenant_branch_station", table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_prep_stations_tenant_branch_station'")));
+        });
+
+        it('rejects replacement when name appears only in string literal', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+                var message = "migrationBuilder.AddForeignKey(name: \\"fk_menu_items_prep_stations_tenant_branch_station\\", table: \\"menu_items\\")";
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_prep_stations_tenant_branch_station'")));
+        });
+
+        it('rejects replacement when Add exists only in Down method', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+
+            protected override void Down(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.AddForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items",
+                    columns: new[] { "tenant_id", "branch_id", "preparation_station_id" });
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_prep_stations_tenant_branch_station'")));
+        });
+
+        it('rejects replacement when AddForeignKey is applied to a different table', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "menu_items");
+
+                migrationBuilder.AddForeignKey(
+                    name: "fk_menu_items_prep_stations_tenant_branch_station",
+                    schema: "tenancy",
+                    table: "orders");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_prep_stations_tenant_branch_station'")));
+        });
+
+        it('accepts different-named allowlisted Drop + correct Add', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_menus_tenant_id_menu_id",
+                    schema: "tenancy",
+                    table: "menu_items");
+
+                migrationBuilder.AddForeignKey(
+                    name: "fk_menu_items_menus_tenant_branch_menu",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.strictEqual(violations.length, 0);
+        });
+
+        it('rejects different-named allowlisted Drop with wrong Add constraint name', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_menu_items_menus_tenant_id_menu_id",
+                    schema: "tenancy",
+                    table: "menu_items");
+
+                migrationBuilder.AddForeignKey(
+                    name: "fk_menu_items_wrong_replacement",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("requires replacement 'fk_menu_items_menus_tenant_branch_menu'")));
+        });
+
+        it('rejects unallowlisted foreign key drop in C#', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropForeignKey(
+                    name: "fk_unallowlisted_ref",
+                    schema: "tenancy",
+                    table: "orders");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.length > 0);
+          assert.ok(violations.some(v => v.includes("prohibited before cutover (unauthorized constraint drop)")));
+        });
+
+        it('rejects Primary Key drop in C#', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropPrimaryKey(
+                    name: "pk_menu_items",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.some(v => v.includes("DROP PRIMARY KEY/CONSTRAINT is strictly prohibited")));
+        });
+
+        it('rejects Check constraint drop in C#', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropCheckConstraint(
+                    name: "ck_items_price",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.some(v => v.includes("DROP CHECK CONSTRAINT is strictly prohibited")));
+        });
+
+        it('rejects unauthorized Unique constraint drop in C#', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropUniqueConstraint(
+                    name: "uq_arbitrary_field",
+                    schema: "tenancy",
+                    table: "menu_items");
+            }
+          `;
+          const violations = fn(cs);
+          assert.ok(violations.some(v => v.includes("DROP UNIQUE CONSTRAINT is strictly prohibited")));
+        });
+
+        it('accepts historical allowlisted unique constraint AK_menus_tenant_id_id with replacement', () => {
+          const cs = `
+            protected override void Up(MigrationBuilder migrationBuilder)
+            {
+                migrationBuilder.DropUniqueConstraint(
+                    name: "AK_menus_tenant_id_id",
+                    schema: "tenancy",
+                    table: "menus");
+
+                migrationBuilder.AddUniqueConstraint(
+                    name: "AK_menus_tenant_id_branch_id_id",
+                    schema: "tenancy",
+                    table: "menus",
+                    columns: new[] { "tenant_id", "branch_id", "id" });
+            }
+          `;
+          const violations = fn(cs);
+          assert.strictEqual(violations.length, 0);
+        });
+      });
+    }
   });
 
   describe('checkExpandContractCompatibility', () => {
