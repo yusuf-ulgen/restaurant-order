@@ -1,95 +1,95 @@
-# Worker Coordination & Distributed Lease Runbook (`docs/runbooks/WORKER-COORDINATION-RUNBOOK.md`)
+# Worker Koordinasyonu ve Dağıtılmış Kiralama Runbook'u (`docs/runbooks/WORKER-COORDINATION-RUNBOOK.md`)
 
-## 1. Overview & Architecture
+## 1. Genel Bakış ve Mimari
 
-In our Blue-Green deployment model, both Blue and Green worker containers run concurrently during release verification. To prevent duplicate execution of queue events, thermal receipt printing, and scheduled jobs:
+Blue/Green dağıtım modelimizde, sürüm doğrulaması sırasında hem Mavi hem de Yeşil çalışan konteynerleri eş zamanlı olarak çalışır. Kuyruk olaylarının, termal makbuz yazdırmanın ve zamanlanmış işlerin yinelenen yürütülmesini önlemek için:
 
-1. **Central Active Slot State (`restaurant-order:active-slot`):** Stored in Redis. Only the slot matching this key is authorized to process work.
-2. **Distributed Leadership Lease (`restaurant-order:lease:worker-leadership`):** Managed via `RedisWorkerLeaseManager` using atomic `SET NX + TTL` and Lua compare-and-expire/delete scripts.
-3. **Idempotency Guard (`IIdempotencyStore`):** Even with lease protection, all background tasks enforce idempotency keys to guarantee at-most-once processing.
+1. **Merkezi Aktif Slot Durumu (`restaurant-order:active-slot`):** Redis'te saklanır. Yalnızca bu anahtarla eşleşen yuvanın işi işleme yetkisi vardır.
+2. **Dağıtılmış Liderlik Kiralaması (`restaurant-order:lease:worker-leadership`):** `RedisWorkerLeaseManager`, atomik `SET NX + TTL` ve Lua karşılaştırma/yenileme/silme betikleriyle yönetir.
+3. **Idempotency Koruması (`IIdempotencyStore`):** Kira korumasına ek olarak her iş idempotency anahtarı kullanır. Dış etkinin en fazla bir kez oluşması yalnızca Redis TTL ile kanıtlanamaz; kalıcı kayıt ve mutabakat tasarımı R07 içinde açıktır.
 
 ---
 
-## 2. Split-Brain Symptoms & Detection
+## 2. Bölünmüş Beyin Belirtileri ve Tespiti
 
-A split-brain condition occurs if both Blue and Green workers simultaneously process jobs.
+Hem Mavi hem de Yeşil çalışanların aynı anda işleri işlemesi durumunda bölünmüş beyin durumu ortaya çıkar.
 
-### 2.1. Key Indicators
-- **Duplicate Thermal Prints:** The same ticket/receipt is printed multiple times at kitchen or bar stations.
-- **Concurrent Worker Active Logs:** Logs from both `restaurant-order-worker-blue` and `restaurant-order-worker-green` display `[WORKER ACTIVE]` simultaneously.
-- **Multiple Lease Holders:** Inconsistent key ownership detected in Redis.
+### 2.1. Temel Göstergeler
+- **Yinelenen Termal Baskılar:** Aynı hazırlık fişi/makbuz mutfak veya bar istasyonlarında birden çok kez basılıyor.
+- **Eşzamanlı Çalışan Aktif Günlükleri:** Hem `restaurant-order-worker-blue` hem `restaurant-order-worker-green` günlüklerinde aynı anda `[WORKER ACTIVE]` görülür.
+- **Çoklu Kira Sahibi:** Redis'te tutarsız anahtar sahipliği algılandı.
 
-### 2.2. Inspection Commands
+### 2.2. Muayene Komutları
 ```bash
-# Check current centralized active slot
+# Merkezi aktif yuvayı kontrol edin
 redis-cli GET restaurant-order:active-slot
 
-# Check which worker instance currently holds the leadership lease
+# Liderlik kirasını tutan worker örneğini kontrol edin
 redis-cli GET restaurant-order:lease:worker-leadership
 
-# Check remaining TTL on the leadership lease (in seconds)
+# Liderlik kirasının kalan süresini saniye cinsinden kontrol edin
 redis-cli TTL restaurant-order:lease:worker-leadership
 
-# Inspect active Nginx upstream routing
+# Etkin Nginx upstream yönlendirmesini inceleyin
 cat deploy/nginx/conf.d/upstream.conf
 ```
 
 ---
 
-## 3. Redis Outage & Fail-Closed Behavior
+## 3. Redis Kesintisi ve Arıza Kapatma Davranışı
 
-When Redis is partitioned or unreachable:
-1. **Immediate Fail-Closed:** `RedisWorkerActivationGuard.IsActiveSlotAsync` returns `false`.
-2. **Immediate Lease Loss:** `RedisWorkerLeaseManager.RenewLeaseAsync` returns `false`.
-3. **Consumption Halt:** Worker loops immediately pause queue consumption, cron schedules, and thermal print spooling.
-4. **Queue Buffering:** In-flight queue messages remain buffered in persistent storage until Redis recovers. No data is lost.
+Redis bölümlendiğinde veya erişilemediğinde:
+1. **Acil Arıza-Kapalı:** `RedisWorkerActivationGuard.IsActiveSlotAsync` geri döner `false`.
+2. **Anında Kira Kaybı:** `RedisWorkerLeaseManager.RenewLeaseAsync` geri döner `false`.
+3. **Tüketimin Durdurulması:** Çalışan döngüleri kuyruk tüketimini, cron programlarını ve termal yazdırma biriktirmeyi anında duraklatır.
+4. **Kuyruk Arabelleğe Alma:** İşlenmekte olan kuyruk mesajları, Redis kurtarılıncaya kadar kalıcı depolama alanında ara belleğe alınmış olarak kalır. Hiçbir veri kaybolmaz.
 
 ---
 
-## 4. Manual Worker Emergency Halt
+## 4. Hatalı Worker İşlemini Acil Durdurma
 
-If an errant worker instance continues consuming jobs after cutover or during split-brain investigation:
+Hatalı bir çalışan örneği, geçişten sonra veya bölünmüş beyin araştırması sırasında işleri tüketmeye devam ederse:
 
-### 4.1. Stop Specific Worker Container
+### 4.1. Belirli Çalışan Konteynerini Durdur
 ```bash
-# Stop green worker immediately
-docker compose -f compose.yml -f compose.prod.green.yml stop worker
+# Green worker işlemini hemen durdurun
+docker compose -p restaurant-order-green -f compose.yml -f compose.prod.green.yml stop worker
 
-# Or stop blue worker immediately
-docker compose -f compose.yml -f compose.prod.blue.yml stop worker
+# Blue worker işlemini hemen durdurun
+docker compose -p restaurant-order-blue -f compose.yml -f compose.prod.blue.yml stop worker
 ```
 
-### 4.2. Force-Release Stale Distributed Lease
-If a worker crashed without releasing its lease and you must reassign leadership immediately:
+### 4.2. Zorunlu Serbest Bırakma Eski Dağıtılmış Kiralama
+Worker, kirasını bırakmadan çöktüyse ve liderliği yeniden atamak gerekiyorsa, önce eski worker işleminin durduğunu doğrulayın:
 ```bash
-# Remove stale lease key so idle replica can acquire immediately
+# Bekleyen örneğin alabilmesi için eski kira anahtarını kaldırın
 redis-cli DEL restaurant-order:lease:worker-leadership
 ```
 
 ---
 
-## 5. Safe Recovery Workflow
+## 5. Güvenli Kurtarma İş Akışı
 
-Follow these steps to recover from worker coordination disruption:
+Çalışan koordinasyonunun bozulmasından kurtulmak için şu adımları izleyin:
 
-1. **Verify Redis Health:**
+1. **Redis Sağlığını Doğrulayın:**
    ```bash
    redis-cli PING
-   # Expected: PONG
+   # Beklenen: PONG
    ```
 
-2. **Reconcile Central Active Slot with Ingress:**
-   Check Nginx upstream port (5001 = blue, 5002 = green) and align Redis:
+2. **Merkezi Aktif Slotu Girişle Uzlaştırın:**
+   Nginx upstream yapılandırmasındaki aktif konteyner adını kontrol edin (blue veya green) ve Redis değerini aynı yuvaya ayarlayın. Konteyner DNS topolojisinde API iç portu her iki yuvada 5000'dir:
    ```bash
-   # If Nginx routes to 5001 (Blue):
+   # Nginx Blue yuvasına yönlendiriyorsa:
    redis-cli SET restaurant-order:active-slot blue
 
-   # If Nginx routes to 5002 (Green):
+   # Nginx Green yuvasına yönlendiriyorsa:
    redis-cli SET restaurant-order:active-slot green
    ```
 
-3. **Verify Worker Logs:**
-   Ensure only the active slot logs `[WORKER ACTIVE]` and acquires the lease:
+3. **Çalışan Günlüklerini Doğrulayın:**
+   Yalnızca aktif yuvanın `[WORKER ACTIVE]` kaydı ürettiğini ve liderlik kirasını aldığını doğrulayın:
    ```bash
    docker logs --tail 50 -f restaurant-order-worker-blue
    docker logs --tail 50 -f restaurant-order-worker-green
@@ -97,19 +97,19 @@ Follow these steps to recover from worker coordination disruption:
 
 ---
 
-## 6. Coordinated Worker Rollback Procedure
+## 6. Koordineli Çalışan Geri Alma Prosedürü
 
-When an emergency rollback is initiated:
+Acil durum geri alma işlemi başlatıldığında:
 
-1. **Execute Rollback Command:**
+1. **Geri Alma Komutunu Yürütün:**
    ```bash
    node scripts/blue-green/rollback.mjs --execute --confirm-rollback
    ```
 
-2. **Automated Steps Executed:**
-   - Ingress upstream reverts to safe slot (e.g., Blue on port 5001).
-   - Validated via `nginx -t` and reloaded with `nginx -s reload`.
-   - Redis key `restaurant-order:active-slot` is updated to restored slot (`blue`).
-   - Failed slot worker notices state change and immediately releases its lease.
-   - Restored slot worker detects active status, acquires lease, and resumes consumption.
-   - Failed slot container remains online for forensic analysis.
+2. **Yürütülen Otomatik Adımlar:**
+   - Yukarı akış girişi güvenli yuvaya geri döner (örneğin Blue yuvası).
+   - Şununla doğrulandı: `nginx -t` ve yeniden yüklendi `nginx -s reload`.
+   - Redis anahtarı `restaurant-order:active-slot` geri yüklenen yuvaya güncellenir (`blue`).
+   - Başarısız slot çalışanı durum değişikliğini fark eder ve kira kontratını derhal iptal eder.
+   - Geri yüklenen slot çalışanı aktif durumu tespit eder, kirayı alır ve tüketimi devam ettirir.
+   - Başarısız slot konteyneri adli analiz için çevrimiçi kalır.

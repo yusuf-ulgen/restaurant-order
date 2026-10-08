@@ -1,174 +1,102 @@
-# Multi-Tenancy Architecture & Isolation (`docs/MULTI-TENANCY.md`)
+# Çok İşletmeli Mimari ve Yalıtım (`docs/MULTI-TENANCY.md`)
 
-## 1. Overview & Hierarchy
+## 1. Genel Bakış ve Hiyerarşi
 
-`restaurant-order` is architected as an enterprise-grade multi-tenant platform. A single platform deployment serves multiple independent restaurant organizations while guaranteeing complete data isolation, privacy, and customized operational configurations.
+Tek platform, bağımsız restoran işletmelerine veri yalıtımı, gizlilik ve ayrı operasyon ayarlarıyla hizmet verir.
 
-```
-+-------------------------------------------------------------------------+
-|                       TENANT / ORGANIZATION                             |
-|               (Billing entity, subscription tier, users)                |
-+------------------------------------+------------------------------------+
-                                     |
-                    +----------------+----------------+
-                    |                                 |
-                    v                                 v
-        +-----------------------+         +-----------------------+
-        |        BRAND A        |         |        BRAND B        |
-        |  (Catalog, Branding)  |         |  (Catalog, Branding)  |
-        +-----------+-----------+         +-----------+-----------+
-                    |                                 |
-         +----------+----------+                      v
-         |                     |              +---------------+
-         v                     v              |   BRANCH B1   |
-+-----------------+   +-----------------+     +---------------+
-|    BRANCH A1    |   |    BRANCH A2    |
-| (Tables, Staff, |   | (Tables, Staff, |
-|  Printers, KDS) |   |  Printers, KDS) |
-+-----------------+   +-----------------+
+```text
+Tenant / Organization: Faturalandırılan kuruluş, abonelik planı, kullanıcılar
+  ├─ Brand A: Katalog ve marka görünümü
+  │    ├─ Branch A1: Masalar, personel, yazıcılar, KDS
+  │    └─ Branch A2: Masalar, personel, yazıcılar, KDS
+  └─ Brand B: Katalog ve marka görünümü
+       └─ Branch B1
 ```
 
----
+## 2. Yalıtım Seçenekleri
 
-## 2. Multi-Tenancy Isolation Models
-
-| Model | Description | Pros | Cons | Status |
+| Model | Açıklama | Artı | Eksi | Durum |
 | :--- | :--- | :--- | :--- | :--- |
-| **Model 1: Shared DB + Row-Level Security (RLS)** | All tenants share one database; every table includes `tenant_id`. PostgreSQL RLS enforces query filters. | Cost-effective, simple migrations, seamless cross-tenant reporting for Super Admin. | Requires rigorous RLS policy testing to prevent data leakage. | `[Implemented / Active]` (ADR-0002) |
-| **Model 2: Schema-per-Tenant** | Each tenant has a dedicated PostgreSQL schema within a shared database instance. | Logical schema boundary, easier per-tenant backups. | Complex migrations across hundreds of schemas; connection pooling overhead. | `[Alternative / Rejected for MVP]` |
-| **Model 3: Database-per-Tenant** | Each tenant has a physically isolated database instance. | Maximum isolation, custom backup/restore. | High infrastructure cost, difficult global analytics, migration complexity. | `[Alternative / Rejected for MVP]` |
+| Paylaşılan veritabanı + RLS | Tablolarda `tenant_id`; filtreyi PostgreSQL uygular. | Düşük maliyet, basit geçiş, platform raporlaması. | Veri sızıntısına karşı ayrıntılı politika testleri gerekir. | `[Implemented / Active]`, ADR-0002 |
+| İşletme başına şema | Ortak PostgreSQL içinde ayrı şema. | Mantıksal sınır, işletme yedeği kolaylığı. | Yüzlerce şemada geçiş ve bağlantı havuzu karmaşıklığı. | `[Alternative / Rejected for MVP]` |
+| İşletme başına veritabanı | Fiziksel olarak ayrı veritabanı. | En güçlü ayrım ve bağımsız geri yükleme. | Yüksek maliyet, global analiz ve geçiş zorluğu. | `[Alternative / Rejected for MVP]` |
 
----
+## 3. İşletme Bağlamının Aktarımı
 
-## 3. Tenant Context Propagation
+1. `TenantContextMiddleware`, `X-Correlation-Id` alır veya RFC 4122 GUID üretir. `ITenantContextResolver` ile `ITenantContext` çözülür; korunan uçlarda `[RequireTenant]` denetlenir. Hata RFC 7807 ProblemDetails olur; istek sonunda AsyncLocal bağlamı kesin temizlenir.
+2. Kimlik katmanı JWT/QR tokenından doğrulanmış `tenant_id`, `brand_id`, `branch_id` çözer. Başlangıç şemasında bu katman Faz 3 planıydı; güncel uygulama için ADR-0009 esastır.
+3. `TenantContext`, scoped DI ve AsyncLocal içinde tutulur; `RequireTenantId()` eksik/geçersiz bağlamı reddeder.
+4. Veritabanında `SELECT set_config('app.current_tenant_id', @tenantId, true);` uygulanır. RLS, `USING (tenant_id = tenancy.get_current_tenant_id())` kullanır. İşlem sonundaki commit/rollback bağlamı otomatik sıfırlar.
 
-For every incoming request, the tenant context is resolved and propagated across the execution stack:
+## 4. Veri Sızıntısını Önleyen Kontroller
 
-```
-[Client Request]
-      │
-      ▼
-[TenantContextMiddleware] [Implemented]
-  - Extract X-Correlation-Id (or generate new RFC 4122 GUID)
-  - Resolve ITenantContext via ITenantContextResolver
-  - Enforce [RequireTenant] metadata on protected endpoints (RFC 7807 ProblemDetails on failure)
-  - Guarantee ambient context cleanup via AsyncLocal on request completion
-      │
-      ▼
-[API Gateway / Auth Middleware] [Phase 3 - Planned]
-  - Extract JWT or QR Session Token
-  - Validate and resolve: tenant_id, brand_id, branch_id
-      │
-      ▼
-[Async Context / Request Scope] [Implemented]
-  - Store ITenantContext (TenantContext) in scoped DI & AsyncLocal
-  - Enforce fail-closed validation: RequireTenantId()
-      │
-      ▼
-[Database Connection Pool / Session] [Implemented]
-  - Execute: SELECT set_config('app.current_tenant_id', @tenantId, true);
-  - PostgreSQL RLS enforces: USING (tenant_id = tenancy.get_current_tenant_id())
-  - Transaction-local scope automatically resets on transaction commit/rollback
-```
+1. **Bileşik yabancı anahtarlar:** Alt varlıklar indeksli `tenant_id` ve `brand_id`/`branch_id` taşır.
+   - `branches(tenant_id, brand_id)` → `brands(tenant_id, id)`, `DeleteBehavior.Restrict` ile işletmeler arası atamayı engeller.
+   - `brand_appearances(tenant_id, brand_id)` → `brands(tenant_id, id)`.
+   - `branch_theme_overrides`, `branch_settings`, `branch_operating_hours`, `dining_areas`, `preparation_stations`, `branch_feature_flags`: `(tenant_id, branch_id)` → `branches(tenant_id, id)`; ilişkiye göre Restrict/Cascade.
+   - Alan ve istasyon kodu şubede benzersizdir: `(tenant_id, branch_id, code)`.
+2. **Zorunlu RLS:** `tenancy.tenants`, `brands`, `branches`, `brand_appearances`, `branch_theme_overrides`, `branch_settings`, `branch_operating_hours`, `dining_areas`, `preparation_stations`, `branch_feature_flags` tablolarında RLS etkin ve `FORCE ROW LEVEL SECURITY` uygulanmıştır. `tenancy.get_current_tenant_id()` eksik/boş/geçersiz ayarda `NULL` döndürür: okumalar sıfır satırdır; ekleme/değiştirme reddedilir.
+3. **Ayrı veritabanı rolleri:** Sahip/geçiş rolü DDL ve politikaları yönetir. `restaurant_app_user`, `tenancy.*` için SELECT/INSERT/UPDATE/DELETE kullanır; `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE` taşır, `tenancy` üzerinde CREATE yoktur. Şemayı veya RLS'yi değiştiremez.
+4. **Ek uygulama filtresi:** EF Core global filtreleri ikinci savunmadır. `IgnoreQueryFilters()` veya ham SQL, veritabanı RLS'sini aşamaz.
+5. **Bağlantı havuzu:** `set_config('app.current_tenant_id', ..., is_local => true)` işlem sonunda sıfırlanır. `ClearTenantSessionAsync` bağlantı havuza dönmeden temizler.
+6. **Worker bağlamı, uygulandı:** `ITenantWorkerJobRunner`, doğrulanmış `ITenantJobEnvelope` ile açık bağlamda çalışır; her durumda temizler.
+7. **Önbellek, uygulandı:** `TenantCacheKeyFactory`, ayraç enjeksiyonu korumasıyla `cache:{tenant_id}:{branch_id}:{resource}:{id}` üretir.
+8. **Canlı kanal, Faz 9 önerisi:** `channel:tenant_{tenant_id}:branch_{branch_id}:kds_kitchen`.
 
----
+## 5. Veritabanı Güvenlik Rolleri
 
-## 4. Leakage Prevention Guardrails
+### 5.1. NOLOGIN Grubu ve LOGIN Kullanıcısı
 
-1. **Mandatory Foreign Keys & Composite Constraints:**
-   - Child entities maintain an indexed `tenant_id` and `brand_id` / `branch_id`.
-   - `branches` enforces a composite foreign key `(tenant_id, brand_id)` referencing `brands(tenant_id, id)` with `DeleteBehavior.Restrict` to physically prevent cross-tenant brand assignment.
-   - `brand_appearances` enforces `(tenant_id, brand_id)` referencing `brands(tenant_id, id)`.
-   - `branch_theme_overrides`, `branch_settings`, `branch_operating_hours`, `dining_areas`, `preparation_stations`, and `branch_feature_flags` all enforce `(tenant_id, branch_id)` composite foreign keys referencing `branches(tenant_id, id)` with `DeleteBehavior.Restrict` / `Cascade`.
-   - `dining_areas` enforces branch-scoped unique code: `(tenant_id, branch_id, code)`.
-   - `preparation_stations` enforces branch-scoped unique code: `(tenant_id, branch_id, code)`.
-2. **Database-Level Row-Level Security (RLS):**
-   - RLS is enabled and forced (`FORCE ROW LEVEL SECURITY`) across all tenancy and configuration tables: `tenancy.tenants`, `tenancy.brands`, `tenancy.branches`, `tenancy.brand_appearances`, `tenancy.branch_theme_overrides`, `tenancy.branch_settings`, `tenancy.branch_operating_hours`, `tenancy.dining_areas`, `tenancy.preparation_stations`, and `tenancy.branch_feature_flags`.
-   - Access is evaluated via `tenancy.get_current_tenant_id()`. If the session setting is missing, empty, or invalid, it returns `NULL`, causing queries to fail-closed (0 rows returned; inserts/updates rejected).
-3. **Dedicated Database Roles:**
-   - **Schema Owner / Migrator:** Owns schema DDL, manages migrations, and defines RLS policies.
-   - **Runtime Application Role (`restaurant_app_user`):** Granted DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on `tenancy.*`. Strictly configured with `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE` and no `CREATE` permission on schema `tenancy`. Cannot disable RLS or alter schema.
-4. **Defense-in-Depth Query Filters:**
-   - EF Core Global Query Filters provide secondary in-app filtering.
-   - Calling `IgnoreQueryFilters()` or executing raw SQL cannot bypass PostgreSQL RLS.
-5. **Connection Pool Isolation:**
-   - Uses transaction-local `set_config('app.current_tenant_id', ..., is_local => true)` ensuring settings are reverted when transactions end.
-   - `ClearTenantSessionAsync` clears session variables before connections return to the pool.
-6. **Worker Tenant Context Propagation [Implemented]:**
-   - `ITenantWorkerJobRunner` runs background jobs within an explicit, validated `ITenantJobEnvelope` tenant context with guaranteed cleanup.
-7. **Cache Namespace Partitioning [Implemented]:**
-   - `TenantCacheKeyFactory` strictly formats keys as `cache:{tenant_id}:{branch_id}:{resource}:{id}` with delimiter injection protection.
-8. **Realtime Event Channel Isolation [Phase 9 - Proposed]:**
-   - `channel:tenant_{tenant_id}:branch_{branch_id}:kds_kitchen`
+1. **`restaurant_app_runtime`:**
+   - Ayrıcalıklı `deploy/bootstrap/001_create_runtime_login_role.sql` oluşturur.
+   - `NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
+   - `20260920182029_AddTenantRowLevelSecurity.cs`, `tenancy` DML ve sequence kullanımını verir; CREATE yetkisini kaldırır.
+   - Geçiş, grup yoksa açıklayıcı hatayla durur. Grup doğrudan giriş yapamaz; parolası yoktur.
+2. **`restaurant_app_user`:**
+   - Yayın hattı, gizli bilgi yöneticisi veya DBA, aynı bootstrap betiğiyle uygulamadan önce oluşturur.
+   - Parola `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` ve `format(%L)` ile güvenli alınır.
+   - `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
+   - `GRANT restaurant_app_runtime TO restaurant_app_user` üyeliği verilir.
+   - Yüksek entropili rastgele parola `DATABASE_URL` üzerinden enjekte edilir; şema yetkilerini bozmadan değiştirilebilir.
+   - Kimlik bilgisi Git'e, geçişe, test verisine veya konteyner imajına **asla eklenmez**.
 
----
+### 5.2. Ortamlara Göre Sağlama
 
-## 5. Security & Role Architecture
+- Yerel geliştirme: Git'e eklenmeyen yerel ortam yapılandırması ve Docker Compose. `.env` ile kontrol betiği uyumsuzluğu R10'da izlenir.
+- Entegrasyon: `TestcontainersFixture`, runtime grubu ve `test_rt_<random_suffix>` gibi geçici kullanıcıyı 256 bit rastgele parolayla oluşturur; üyelik verir ve test sonunda kaldırır.
+- Staging/Production: Yönetilen bulut kimliği veya kasa tarafından üretilen bilgiler ortam sırlarıyla enjekte edilir.
 
-### 5.1. NOLOGIN Runtime Group Role vs LOGIN Role
-To enforce strict zero-secret compliance in source control and database migrations:
-1. **`restaurant_app_runtime` (NOLOGIN Group Role):**
-   - Provisioned via privileged bootstrap script (`deploy/bootstrap/001_create_runtime_login_role.sql`).
-   - Configured with `NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
-   - Granted DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and sequence usage on schema `tenancy` by EF Core migrations (`20260920182029_AddTenantRowLevelSecurity.cs`).
-   - Has `CREATE` revoked on schema `tenancy`.
-   - Migration verifies presence of this group role and fails fast with a descriptive error if missing.
-   - Cannot log in directly and contains NO passwords.
-2. **`restaurant_app_user` (Production LOGIN Role):**
-   - Created exclusively by deployment pipelines / secret managers / DBAs prior to application startup using `deploy/bootstrap/001_create_runtime_login_role.sql`.
-   - Ingests password securely via `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` and `format(%L)`.
-   - Configured with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`.
-   - Granted membership in `restaurant_app_runtime` (`GRANT restaurant_app_runtime TO restaurant_app_user`).
-   - Receives a cryptographically random, high-entropy password injected via environment variables (`DATABASE_URL`).
-   - Supports idempotent in-place credential rotation without interrupting schema grants.
-   - Never committed to git, migrations, test fixtures, or container images.
+### 5.3. Yayın ve Geçiş Sırası
 
-### 5.2. Credential Provisioning Across Environments
-- **Local Development:** Developers use docker-compose with local credentials defined in uncommitted `.env` files.
-- **Integration Tests:** The test fixture (`TestcontainersFixture`) provisions `restaurant_app_runtime` and creates a unique, ephemeral login role (e.g. `test_rt_<random_suffix>`) with a 256-bit cryptographically secure random password per test run, grants membership in `restaurant_app_runtime`, and drops the role on disposal.
-- **Staging & Production:** Managed cloud identity or vault-generated credentials injected via environment secrets into the application container.
+1. DBA, bootstrap betiğini `APP_RUNTIME_PASSWORD` güvenli enjeksiyonuyla çalıştırır; runtime grubu/kullanıcısını hazırlar.
+2. Sahip/geçiş rolü, uygulamadan önce `dotnet ef database update` veya `scripts/migration-ops.mjs` çalıştırır.
+3. Runtime bağlantı bilgisi gizli bilgi yöneticisinden boş Green yuvasına enjekte edilir.
+4. Runtime kullanıcısının bağlanabildiği, bağlamsız sıfır satır ve bağlamla yalnızca yetkili işletme satırları gördüğü doğrulanır.
+5. Aday API konteyneri açılır; havuz ve arka plan hizmetleri ısıtılır.
+6. `/health/live`, `/health/ready` ve hata oranı denetlenir; Nginx üzerinden trafik geçirilir.
 
-### 5.3. Deployment & Migration Sequence
-All production releases follow this deterministic 6-step sequence:
-1. **Privileged DBA Bootstrap:**
-   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (e.g., `postgres` / DBA) with secure environment secret injection (`APP_RUNTIME_PASSWORD`) to provision `restaurant_app_runtime` and `restaurant_app_user`.
-2. **Pre-Cutover Schema Migration:**
-   Execute migrations (`dotnet ef database update` or `scripts/migration-ops.mjs`) as the migration owner role before starting the new application release.
-3. **Runtime Credential Secret Injection:**
-   Inject the production database connection string (with the runtime login user credentials) into the inactive (Green) slot container configuration via the deployment secret manager / vault.
-4. **Runtime Connection & RLS Smoke Verification:**
-   Verify `restaurant_app_user` can connect, fail-closed RLS returns 0 records without tenant context, and returns only authorized tenant records with context.
-5. **Green Application Slot Startup:**
-   Start candidate slot containers (`apps/api`), warming up connection pools and background services.
-6. **Health Verification & Blue/Green Cutover:**
-   Execute synthetic health checks (`/health/live`, `/health/ready`), verify error rates, and perform traffic cutover via the Nginx ingress router.
+### 5.4. Bağlantı Havuzu Varsayımları
 
-### 5.4. Connection Pooling Security Assumptions
-1. **Transaction-Local Setting Scope:**
-   `set_config('app.current_tenant_id', @tenantId, true)` is strictly scoped to the active database transaction (`is_local => true`). When the transaction commits, rolls back, or fails due to an exception, PostgreSQL automatically purges the setting.
-2. **Session Cleanup Guarantee:**
-   `RestaurantOrderDbContext.ClearTenantSessionAsync()` explicitly resets `app.current_tenant_id` to an empty value to guarantee no ambient leakage when physical connections return to the Npgsql pool.
-3. **Non-Owner Enforcement:**
-   Runtime connections strictly execute under the non-owner runtime role where `FORCE ROW LEVEL SECURITY` prevents bypass. The role lacks `BYPASSRLS` and `SUPERUSER`.
-4. **Fail-Closed Default:**
-   If `app.current_tenant_id` is missing, empty string, malformed, or references a nonexistent tenant, `tenancy.get_current_tenant_id()` yields `NULL`, causing RLS policies to evaluate false and return 0 rows.
+- `set_config('app.current_tenant_id', @tenantId, true)` yalnızca açık işlemde geçerlidir (`is_local => true`). Commit, rollback ve hata ayarı temizler.
+- `RestaurantOrderDbContext.ClearTenantSessionAsync()`, Npgsql havuzuna dönüşte `app.current_tenant_id` değerini açıkça boşaltır.
+- Uygulama sahip olmayan rolle çalışır; `FORCE ROW LEVEL SECURITY` uygulanır; SUPERUSER/BYPASSRLS yoktur.
+- Eksik, boş, bozuk veya var olmayan işletme kimliğinde `tenancy.get_current_tenant_id()` NULL döndürür; politika erişimi reddeder, okuma sıfır satırdır.
 
-### 5.5. Incident Response & Credential Rotation Note
-If runtime database credentials are ever exposed or suspected compromised:
-1. Generate a new high-entropy password in the deployment secret manager / vault.
-2. Execute `ALTER ROLE restaurant_app_user WITH PASSWORD '<NEW_STRONG_PASSWORD>';` via DBA connection.
-3. Update connection strings across deployment slots and perform an immediate rolling restart.
-4. Verify audit logs in PostgreSQL for anomalous queries during the exposure window.
+### 5.5. Kimlik Bilgisi Sızıntısı
 
----
+1. Kasada yeni yüksek entropili parola oluşturun.
+2. DBA bağlantısıyla `ALTER ROLE restaurant_app_user WITH PASSWORD '<NEW_STRONG_PASSWORD>';` çalıştırın.
+3. Yuvaların bağlantı bilgilerini güncelleyip kesintisiz yeniden başlatın.
+4. Sızıntı aralığındaki anormal sorguları denetim günlüklerinden inceleyin.
 
-## 6. Multi-Tenant Testing Requirements
+## 6. Test Zorunlulukları
 
-- **Cross-Tenant Test Suite:** Every integration test executes with at least two test tenants (`Tenant A` and `Tenant B`).
-- **Assertion:** Ensure that queries from `Tenant A` explicitly return 0 records when querying IDs belonging to `Tenant B`.
-- **Runtime Role Requirement:** Integration tests execute with the non-owner runtime role to prevent false-positive PASS reports.
-- **Fail-Closed Verification:** Explicitly verify that missing tenant context, empty string, invalid UUID, and nonexistent tenant UUID return 0 rows.
-- Any vulnerability permitting cross-tenant visibility is classified as a **Sev-1 Security Incident**.
-## Phase 5 Catalog Tables
+- Her entegrasyon testi en az sentetik Tenant A ve Tenant B ile çalışır.
+- A bağlamında B kimliklerine erişim sıfır kayıt döndürmelidir.
+- Test sahip olmayan runtime rolüyle çalışır; ayrıcalıklı rolün sahte başarısı kabul edilmez.
+- Eksik/boş/geçersiz UUID ve var olmayan işletme UUID'si açıkça test edilir; sıfır satır beklenir.
+- İşletmeler arası görünürlük açığı **Sev-1 güvenlik olayıdır**.
 
-Catalog tenant/branch isolation covers the tenancy schema tables menus, menu_categories, menu_items, item_variants, modifier_groups, modifier_options, menu_item_modifier_group_assignments, and branch_item_availabilities. Catalog relationships use composite tenant/branch foreign keys where ownership crosses aggregates. These tables enable and force RLS with the current tenant policy. BranchManager requests are checked against the assigned branch; Kitchen and Bar availability mutations are additionally limited to items assigned to matching preparation stations. Runtime-menu queries constrain both tenant and branch before composing the response.
+## Faz 5 Katalog Tabloları
+
+`tenancy` şemasındaki `menus`, `menu_categories`, `menu_items`, `item_variants`, `modifier_groups`, `modifier_options`, `menu_item_modifier_group_assignments`, `branch_item_availability` yalıtılır. Sahipliğin aggregate sınırını geçtiği ilişkilerde bileşik işletme/şube anahtarları kullanılır; RLS etkin ve zorunludur. BranchManager atanmış şubeyle; mutfak/bar bulunabilirlik değişiklikleri kendi hazırlık istasyonunun ürünleriyle sınırlıdır. Çalışma zamanı menüsü yanıttan önce hem işletme hem şubeye göre filtrelenir.

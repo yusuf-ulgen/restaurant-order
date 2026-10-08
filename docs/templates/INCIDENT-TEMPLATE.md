@@ -1,59 +1,52 @@
-# INC-YYYYMMDD-XXX: [Incident Short Title] (`docs/templates/INCIDENT-TEMPLATE.md`)
+# INC-YYYYMMDD-XXX: [Olayın Kısa Başlığı] (`docs/templates/INCIDENT-TEMPLATE.md`)
 
-- **Incident Date:** [YYYY-MM-DD]
-- **Severity Level:** `[Sev-1 | Sev-2 | Sev-3 | Sev-4]`
-- **Incident Commander:** [Name]
-- **Status:** `[RESOLVED | MONITORING]`
-- **Affected Services / Surfaces:** `[e.g., Kitchen KDS, Payment Processing, QR Menu]`
+- **Olay tarihi:** [YYYY-MM-DD]
+- **Önem düzeyi:** `[Sev-1 | Sev-2 | Sev-3 | Sev-4]`
+- **Olay sorumlusu:** [Ad]
+- **Durum:** `[RESOLVED | MONITORING]`
+- **Etkilenen hizmetler / arayüzler:** [Örneğin mutfak KDS, ödeme, QR menü]
 
----
+## 1. Yönetici Özeti ve Etki
 
-## 1. Executive Summary & Impact
+- **Kesinti süresi:** [X saat Y dakika]
+- **Etkilenen işletmeler / şubeler:** [Liste veya sayı]
+- **Finansal / operasyonel etki:** [Kaybedilen siparişler, geciken fişler, başarısız işlemler]
 
-- **Duration of Outage:** [X hours Y minutes]
-- **Affected Tenants / Branches:** [List or count of affected organizations/branches]
-- **Financial / Operational Impact:** [Estimated lost orders, delayed tickets, or failed transactions]
+## 2. Zaman Çizelgesi (UTC)
 
----
+- `HH:MM` — Otomatik uyarı veya kullanıcı bildirimiyle anormallik algılandı.
+- `HH:MM` — Olay sorumlusu Sev-X ilan etti; müdahale ekibi toplandı.
+- `HH:MM` — X hizmetinde/bileşeninde kök neden belirlendi.
+- `HH:MM` — Etki azaltma adımı uygulandı (örneğin Blue/Green geri dönüşü).
+- `HH:MM` — Sağlık ölçümleri dengelendi; trafiğin sağlıklı olduğu doğrulandı.
+- `HH:MM` — Olay resmen çözüldü olarak işaretlendi.
 
-## 2. Chronological Timeline (UTC)
+## 3. Kök Neden Analizi (5 Neden)
 
-- `HH:MM` — Anomaly detected via automated alert or user report.
-- `HH:MM` — Incident Commander declared Sev-X; war room initiated.
-- `HH:MM` — Root cause identified in service/component X.
-- `HH:MM` — Mitigation action executed (e.g., Blue-Green rollback).
-- `HH:MM` — Health metrics stabilized; traffic confirmed healthy.
-- `HH:MM` — Incident formally declared resolved.
+1. **Hata neden oluştu?** [Doğrudan neden]
+2. **Neden?** [Altta yatan teknik etken]
+3. **Neden?** [Süreç veya mimari eksikliği]
+4. **Neden?** [Test veya doğrulama eksikliği]
+5. **Neden?** [Kurumsal ya da tasarımsal sistemik etken]
 
----
+## 4. Olay Sonrası Değerlendirme
 
-## 3. Root Cause Analysis (5 Whys)
+### 4.1. İyi Gidenler
 
-1. **Why did the failure occur?** [Direct cause]
-2. **Why?** [Underlying technical factor]
-3. **Why?** [Process or architectural gap]
-4. **Why?** [Testing or verification gap]
-5. **Why?** [Systemic organizational or design factor]
+- [Hızlı geri dönüş, açık iletişim vb.]
 
----
+### 4.2. Kötü Gidenler
 
-## 4. Post-Incident Review
+- [Uyarı gecikmesi, anlaşılmaz günlükler vb.]
 
-### 4.1. What Went Well
-- [Quick rollback execution, clear communication, etc.]
+### 4.3. Şanslı Olduğumuz Noktalar
 
-### 4.2. What Went Poorly
-- [Alerting latency, unclear logging, etc.]
+- [Yoğun olmayan saatte gerçekleşmesi vb.]
 
-### 4.3. Where We Got Lucky
-- [Happened during off-peak hours, etc.]
+## 5. Önleyici İşler
 
----
-
-## 5. Preventative Action Items
-
-| Action Item | Type | Owner | Due Date | Status |
+| İş | Tür | Sorumlu | Son tarih | Durum |
 | :--- | :--- | :--- | :--- | :--- |
-| Add automated integration test for edge case | Test | [Name] | [YYYY-MM-DD] | `TODO` |
-| Update health check readiness threshold | Config | [Name] | [YYYY-MM-DD] | `TODO` |
-| Refine alert thresholds in monitoring | Ops | [Name] | [YYYY-MM-DD] | `TODO` |
+| Sınır durumu için otomatik entegrasyon testi ekle | Test | [Ad] | [YYYY-MM-DD] | `TODO` |
+| Hazır olma kontrolü eşiğini güncelle | Yapılandırma | [Ad] | [YYYY-MM-DD] | `TODO` |
+| İzleme uyarı eşiklerini iyileştir | İşletim | [Ad] | [YYYY-MM-DD] | `TODO` |

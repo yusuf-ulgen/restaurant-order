@@ -1,79 +1,79 @@
-# ADR-0010: Least-Privilege IAM Login Lookup & SECURITY DEFINER Threat Model
+# ADR-0010: En Az Ayrıcalık IAM Giriş Arama ve SECURITY DEFINER Tehdit Modeli
 
-- **Status:** `ACCEPTED`
-- **Date:** 2026-10-01
-- **Deciders:** Architecture Team, Security Team, Backend Leads
-- **Consulted:** [docs/SECURITY.md](../SECURITY.md), [docs/MULTI-TENANCY.md](../MULTI-TENANCY.md), [docs/adr/0009-authentication-and-session-strategy.md](./0009-authentication-and-session-strategy.md)
-- **Supersedes:** N/A
-
----
-
-## 1. Context & Problem Statement
-
-In a multi-tenant platform, user accounts (`iam.users`) represent global identities that may belong to multiple tenants via memberships (`iam.memberships`).
-During credential login, the application must locate a user by normalized email before any tenant context is established.
-
-If the unprivileged runtime database role (`restaurant_app_runtime`) is granted direct blanket `SELECT` on `iam.users`:
-1. Any SQL injection flaw anywhere in the multi-tenant application could allow dumping credentials and PII of all users across all tenants.
-2. Compromised connection pools could execute cross-tenant account enumeration queries.
-3. Violates the principle of least privilege and zero-trust data segregation.
-
-We must define a secure, least-privilege mechanism to allow login verification without exposing the global user catalog to arbitrary SELECT queries.
+- **Durum:** `ACCEPTED`
+- **Tarih:** 2026-10-01
+- **Karar Verenler:** Mimari Ekibi, Güvenlik Ekibi, Arka Uç Liderleri
+- **Danışıldı:** [SECURITY.md](../SECURITY.md), [MULTI-TENANCY.md](../MULTI-TENANCY.md), [0009-authentication-and-session-strategy.md](./0009-authentication-and-session-strategy.md)
+- **Yerini alır:** N/A
 
 ---
 
-## 2. Threat Model & Mitigations
+## 1. Bağlam ve Sorun Bildirimi
 
-### Threat 1: Global Identity Table Exfiltration (SQL Injection or Compromised Runtime Connection)
-- **Risk:** Attacker executes `SELECT * FROM iam.users` and steals password hashes, salt metadata, and emails.
-- **Mitigation:**
+Çok işletmeli bir platformda kullanıcı hesapları (`iam.users`) üyelikler aracılığıyla birden fazla işletmeye ait olabilecek küresel kimlikleri temsil eder (`iam.memberships`).
+Kimlik bilgileri ile oturum açma sırasında uygulamanın, herhangi bir işletme bağlamı oluşturulmadan önce normalleştirilmiş e-posta yoluyla bir kullanıcıyı bulması gerekir.
+
+Ayrıcalıksız çalışma zamanı veritabanı rolüne (`restaurant_app_runtime`) `iam.users` üzerinde genel `SELECT` yetkisi verilirse:
+1. Uygulamadaki herhangi bir SQL enjeksiyonu açığı, tüm işletmelerdeki kullanıcıların kimlik bilgilerinin ve kişisel verilerinin dışarı sızmasına yol açabilir.
+2. Güvenliği ihlal edilmiş bağlantı havuzları, işletmeler arası hesap numaralandırma sorgularını yürütebilir.
+3. En az ayrıcalık ve sıfır güven veri ayrımı ilkesini ihlal ediyor.
+
+Genel kullanıcı kataloğunu keyfi SELECT sorgularına açmadan giriş doğrulamasını sağlayan, en az ayrıcalıklı mekanizma gerekir.
+
+---
+
+## 2. Tehdit Modeli ve Azaltmalar
+
+### Tehdit 1: Küresel Kimlik Tablosunun Süzülmesi (SQL Enjeksiyon veya Güvenliği Tehlikeye Atılmış Çalışma Zamanı Bağlantısı)
+- **Risk:** Saldırgan şu sorguyu çalıştırır: `SELECT * FROM iam.users` ve şifre karmalarını, tuz meta verilerini ve e-postaları çalar.
+- **Azaltma:**
   - `REVOKE ALL ON iam.users FROM restaurant_app_runtime;`
-  - Grant unprivileged runtime role ONLY column-level access needed for non-sensitive operations (e.g. `UPDATE failed_login_attempts, lockout_end_utc, concurrency_token`).
-  - Table-wide `SELECT` on `iam.users` is strictly prohibited for `restaurant_app_runtime`.
+  - Çalışma zamanı rolüne yalnızca gerekli işlemler için sütun düzeyinde erişim verilir (örneğin `UPDATE failed_login_attempts, lockout_end_utc, concurrency_token`).
+  - `restaurant_app_runtime` rolüne `iam.users` üzerinde tablo genelinde `SELECT` yetkisi verilmez.
 
-### Threat 2: Search-Path Hijacking via SECURITY DEFINER
-- **Risk:** In PostgreSQL, a `SECURITY DEFINER` function executes with the privileges of its owner. If `search_path` is not pinned, an attacker can create malicious objects in public or temporary schemas that hijack function execution.
-- **Mitigation:**
-  - The login lookup function `iam.lookup_user_for_login(p_normalized_email text)` is explicitly pinned with `SET search_path = iam, pg_temp`.
-  - Dynamic SQL (`EXECUTE ...`) is strictly forbidden inside the function.
-  - The function is owned by the schema migrator/DBA role, never by `restaurant_app_runtime`.
+### Tehdit 2: Arama Yolu Ele Geçirme SECURITY DEFINER
+- **Risk:** PostgreSQL'de bir `SECURITY DEFINER` işlev, sahibinin ayrıcalıklarıyla yürütülür. Eğer `search_path` sabitlenmemişse, saldırgan genel veya geçici şemalarda işlev yürütmeyi ele geçiren kötü amaçlı nesneler oluşturabilir.
+- **Azaltma:**
+  - Oturum açma arama işlevi `iam.lookup_user_for_login(p_normalized_email text)` açıkça sabitlenmiştir `SET search_path = iam, pg_temp`.
+  - Dinamik SQL (`EXECUTE ...`) fonksiyon içinde kesinlikle yasaktır.
+  - İşlevin sahibi şema geçişi/DBA rolüdür; `restaurant_app_runtime` sahibi olamaz.
 
-### Threat 3: Data Over-Exposure & PII Leakage
-- **Risk:** Lookup function returns unnecessary columns (names, phone numbers, audit metadata).
-- **Mitigation:**
-  - The function returns strictly a fixed, minimal projection: `(user_id, normalized_email, password_hash, status, security_version, lockout_end_utc)`.
-  - Zero PII is returned.
+### Tehdit 3: Aşırı Veriye Maruz Kalma ve PII Sızıntı
+- **Risk:** Arama işlevi gereksiz sütunları (isimler, telefon numaraları, denetim meta verileri) döndürür.
+- **Azaltma:**
+  - İşlev kesinlikle sabit, minimum bir projeksiyon döndürür: `(user_id, normalized_email, password_hash, status, security_version, lockout_end_utc)`.
+  - Oturum açma için gerekli projeksiyon dışındaki kişisel veriler döndürülmez; e-posta ve parola karması yalnızca sunucudaki doğrulama akışında kullanılır.
 
-### Threat 4: User Enumeration & Cross-Tenant Account Discovery
-- **Risk:** Malicious actor enumerates emails to discover platform accounts.
-- **Mitigation:**
-  - The application authentication handler returns constant-time generic error responses ("Invalid email or password") whether the user exists, is locked, or is invalid.
-  - Password verification is performed using slow PBKDF2/Argon2 hashing even on non-existent users (dummy hash verification) to prevent timing discrepancy.
-  - Even if a user exists globally, access to tenant data requires an active membership verified under PostgreSQL RLS `USING (tenant_id = tenancy.get_current_tenant_id())`.
+### Tehdit 4: Kullanıcı Numaralandırma ve İşletmeler Arası Hesap Keşfi
+- **Risk:** Kötü niyetli aktör, platform hesaplarını keşfetmek için e-postaları sıralıyor.
+- **Azaltma:**
+  - Uygulama kimlik doğrulama işleyicisi, kullanıcı mevcut olsa da, kilitli olsa da veya geçersiz olsa da sabit zamanlı genel hata yanıtlarını ("Geçersiz e-posta veya parola") döndürür.
+  - Parola doğrulaması PBKDF2/Argon2 gibi yavaş karma yöntemiyle yapılır. Kullanıcı yoksa zamanlama farkını azaltmak için sahte karma doğrulaması uygulanır.
+  - Bir kullanıcı global olarak mevcut olsa bile işletme verilerine erişim PostgreSQL kapsamında doğrulanmış aktif bir üyelik gerektirir RLS `USING (tenant_id = tenancy.get_current_tenant_id())`.
 
 ---
 
-## 3. Decision
+## 3. Karar
 
-1. **Dedicated Database Function:**
-   Implement `iam.lookup_user_for_login(p_normalized_email text)` as a `SECURITY DEFINER` PostgreSQL function with pinned `search_path = iam, pg_temp` and static query projection.
-2. **Access Control:**
+1. **Özel Veritabanı İşlevi:**
+   `iam.lookup_user_for_login(p_normalized_email text)`, `SECURITY DEFINER` olarak uygulanır; `search_path = iam, pg_temp` sabitlenir ve statik projeksiyon kullanılır.
+2. **Erişim Kontrolü:**
    - `GRANT EXECUTE ON FUNCTION iam.lookup_user_for_login(text) TO restaurant_app_runtime;`
    - `REVOKE ALL ON iam.users FROM restaurant_app_runtime;`
-   - `GRANT INSERT ON iam.users TO restaurant_app_runtime;` (for user registration/invitation creation)
+   - `GRANT INSERT ON iam.users TO restaurant_app_runtime;` (kullanıcı kaydı/davetiye oluşturmak için)
    - `GRANT UPDATE (password_hash, status, security_version, failed_login_attempts, lockout_end_utc, updated_at_utc, concurrency_token) ON iam.users TO restaurant_app_runtime;`
-3. **Application Gateway:**
-   Create an `IIamUserLookupGateway` abstraction in the application/infrastructure layer that calls this specific function instead of using direct EF Core LINQ table queries on `iam.users`.
+3. **Uygulama Ağ Geçidi:**
+   Uygulama/altyapı katmanında `IIamUserLookupGateway` soyutlaması oluşturulur. `iam.users` üzerinde doğrudan EF Core LINQ sorgusu yerine özel arama işlevi çağrılır.
 
 ---
 
-## 4. Consequences
+## 4. Sonuçlar
 
-### Positive
-- Direct `SELECT * FROM iam.users` is physically blocked at the database engine level for application runtime connections.
-- Clean separation between global authentication lookup and tenant-isolated operations.
-- Pinned `search_path` eliminates privilege escalation attack vectors.
+### Olumlu
+- Doğrudan `SELECT * FROM iam.users` uygulama çalışma zamanı bağlantıları için veritabanı motoru düzeyinde fiziksel olarak engellenir.
+- Genel kimlik doğrulama araması ile işletmeye özel işlemler arasında temiz ayrım.
+- Sabitlendi `search_path` ayrıcalık yükseltme saldırı vektörlerini ortadan kaldırır.
 
-### Negative
-- Requires maintaining the database function in schema migrations.
-- Direct EF Core LINQ queries for email lookup on `iam.users` cannot be executed by `restaurant_app_runtime`; all lookups must go through `IIamUserLookupGateway`.
+### Negatif
+- Şema geçişlerinde veritabanı işlevinin sürdürülmesini gerektirir.
+- `restaurant_app_runtime`, `iam.users` üzerinde doğrudan EF Core LINQ e-posta araması yapamaz; tüm aramalar `IIamUserLookupGateway` üzerinden geçer.

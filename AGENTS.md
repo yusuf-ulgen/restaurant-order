@@ -1,99 +1,104 @@
-# AGENTS.md — Master Agent & Contributor Instructions
+# AGENTS.md — Ana AI Ajanı ve Katkıcı Kuralları
 
-> **Notice:** This document is the **single binding source of truth** for all AI coding agents (Claude, Gemini, GPT, Muse, GitHub Copilot, etc.) and human contributors working on the `restaurant-order` codebase.
-> All tool-specific configuration files (`.AGENT.md`, `CLAUDE.md`, `GEMINI.md`, `.claude/README.md`, etc.) are thin adapters referencing this document.
+> **Bağlayıcı kaynak:** Bu belge, `restaurant-order` üzerinde çalışan tüm AI kodlama ajanları (Claude, Gemini, GPT, Muse, GitHub Copilot vb.) ve insan katkıcılar için **tek bağlayıcı kural kaynağıdır**.
+> Araca özgü dosyalar (`.AGENT.md`, `CLAUDE.md`, `GEMINI.md`, `.claude/README.md` vb.) yalnızca bu belgeye yönlendiren uyarlayıcılardır.
 
----
+## 1. Projenin Amacı ve Kapsamı
 
-## 1. Project Purpose & Scope
+`restaurant-order`, birden fazla işletmeye hizmet veren, restoran siparişlerini ve işletme süreçlerini uçtan uca yöneten bir sistemdir. Beş temel kullanıcı arayüzü vardır:
 
-`restaurant-order` is a multi-tenant, modern restaurant ordering and management system designed to support end-to-end dining experiences and operational workflows across 5 core product surfaces:
+1. **QR Müşteri Web Uygulaması:** Menü inceleme, sipariş verme, servis çağırma ve hesap görüntüleme için mobil öncelikli duyarlı arayüz.
+2. **Garson ve Operasyon Uygulaması:** Masa yönetimi, sipariş oluşturma/değiştirme ve yetkiye göre ödeme işlemleri için mobil arayüz.
+3. **Mutfak / Bar KDS:** Mutfak ve barın hazırlık kuyruklarını gerçek zamanlı gösteren ekranlar.
+4. **Restoran Yönetim Paneli:** Şube ve restoran yöneticilerinin menü, personel, masa, rapor ve yazıcı ayarlarını yönettiği panel.
+5. **Platform Süper Yönetim Paneli:** İşletme, faturalandırma ve işletme yaşam döngüsünün platform düzeyinde yönetimi.
 
-1. **QR Customer Web App:** Responsive, mobile-first web app for browsing menus, placing orders, requesting service, and bill viewing.
-2. **Waiter & Operations Mobile App:** Mobile-optimized interface for waitstaff to manage tables, place/modify orders, and process payments.
-3. **Kitchen / Bar KDS (Kitchen Display System):** Real-time order preparation queues for kitchen and bar stations.
-4. **Restaurant Admin Panel:** Web dashboard for branch managers and restaurant admins (menu management, staff, tables, reports, printer settings).
-5. **Platform Super Admin Panel:** Multi-tenant control plane for platform-wide organization, billing, and tenant lifecycle management.
+## 2. Zorunlu Temel Kurallar
 
----
+### 2.1. Dosya Boyutu Sınırları
 
-## 2. Core Mandatory Rules
+- **450 satır:** Uyarı eşiğidir. Elle yazılan kaynak, test veya dokümantasyon bu sınıra yaklaşınca sorumluluklara göre bölme planı yapılır.
+- **600 satır:** Kesin üst sınırdır; elle yazılan hiçbir dosya bunu aşamaz.
+- **Yalnızca izin listesiyle istisna:** Üretilmiş dosyalar, kilit dosyaları (`package-lock.json` vb.), üçüncü taraf kodu ve anlık görüntüler ancak proje izin listesinde açıkça belirtilirse sınırı aşabilir.
+- **Bölme yöntemi:** Özellik, alan modeli, kullanım senaryosu, uyarlayıcı veya bileşen sorumluluğuna göre bölün; rastgele parçalamayın.
 
-### 2.1. File Size Limits
-- **450 Lines:** Warning threshold. When a human-authored source, test, or documentation file approaches 450 lines, plan modular extraction.
-- **600 Lines:** Absolute strict ceiling. No human-authored file may exceed 600 lines under any circumstances.
-- **Exceptions (Allowlist Only):** Only generated files, lockfiles (`package-lock.json`, etc.), vendor code, and snapshot files may exceed 600 lines, provided they are clearly documented in the project allowlist.
-- **Decomposition Strategy:** Split code by feature, domain, use-case, adapter, or component responsibility—never randomly or arbitrarily.
+### 2.2. Test ve Doğrulama Politikası
 
-### 2.2. Testing & Verification Policy
-- Every behavior, happy path, negative path, permission check, error branch, and state machine transition **must** have corresponding automated tests.
-- **Critical Paths:** Order processing, payment flows, tip distribution, refunds, tenant isolation, network printing, and concurrent operations are strictly critical.
-- **Zero-Unverified-PASS Rule:** Never report an action, test, or build as `PASS`, `SUCCESS`, or `VERIFIED` unless it has actually been executed and verified in the environment. Assumptions are prohibited.
-- When behavior changes, the corresponding test, API contract, and documentation **must** be updated simultaneously.
+- Her davranış, başarılı/başarısız akış, yetki kontrolü, hata dalı ve durum geçişinin otomatik testi bulunmalıdır.
+- **Kritik yollar:** Sipariş, ödeme, bahşiş dağıtımı, iade, işletme yalıtımı, ağ üzerinden yazdırma ve eşzamanlı işlemler.
+- **Doğrulanmamış başarı yok:** Gerçekte çalıştırıp doğrulamadan hiçbir işlem, test veya derleme için `PASS`, `SUCCESS`, `VERIFIED` ya da Türkçe karşılığıyla başarı bildirmeyin. Varsayım kanıt değildir.
+- Davranış değiştiğinde ilgili test, API sözleşmesi ve dokümantasyon aynı değişiklik kapsamında güncellenmelidir.
 
-### 2.3. Security & Data Protection
-- **Zero Secrets in Repository:** API keys, database credentials, JWT secrets, private keys, payment credentials, and access tokens must never be committed to git or printed to log streams.
-- **No Real Customer Data (PII):** Do not commit or log real customer names, phone numbers, credit card data, or personal information. Use synthetic fixtures for testing.
-- Follow OWASP Top 10 guidelines across all layers (input validation, SQL injection prevention, XSS mitigation, secure headers).
-- Tenant data isolation must be enforced at every data access point.
+### 2.3. Güvenlik ve Veri Koruması
 
-### 2.4. Environment Separation
-- Environments are strictly isolated: `local`, `test`, `development`, `staging`, and `production`.
-- Environment configurations must be handled via environment variables with zero hardcoded cross-environment dependencies.
-- Production is designed to operate with **Blue/Green** deployment slots to ensure zero-downtime releases and rapid rollbacks. See [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md).
+- **Depoda gizli bilgi bulunamaz:** API anahtarları, veritabanı parolaları, JWT sırları, özel anahtarlar, ödeme kimlik bilgileri ve erişim tokenları Git'e veya günlük akışına yazılamaz.
+- **Gerçek müşteri verisi bulunamaz:** Gerçek ad, telefon, kart bilgisi ve diğer kişisel verileri eklemeyin veya günlüğe yazmayın. Testlerde sentetik veri kullanın.
+- OWASP Top 10 ilkelerini tüm katmanlarda uygulayın: giriş doğrulama, SQL enjeksiyonu ve XSS önleme, güvenli başlıklar vb.
+- İşletme verisi yalıtımı her veri erişim noktasında zorunludur.
 
-### 2.5. Scope & Decision Governance
-- **No Premature Decisions:** Open architecture and technology decisions must be labeled as `[TBD]`, `[Proposed]`, or `[Requires ADR]`. Do not treat unconfirmed proposals as final.
-- **No Unauthorized Scope Changes:** Do not alter scope, introduce new frameworks, or change existing architectural agreements without explicit user approval.
-- **Respect User Work:** Never touch unrelated files or overwrite uncommitted user modifications.
+### 2.4. Ortam Ayrımı
 
----
+- `local`, `test`, `development`, `staging`, `production` ortamları kesin biçimde ayrılır.
+- Yapılandırma ortam değişkenleriyle yönetilir; ortamlar arası bağımlılıklar koda sabitlenemez.
+- Üretim, kesintisiz yayın ve hızlı geri dönüş için Blue/Green yuvalarıyla tasarlanmıştır. Bkz. [Blue/Green işletim kılavuzu](docs/BLUE-GREEN-RUNBOOK.md).
 
-## 3. Supported Roles (RBAC)
+### 2.5. Kapsam ve Karar Yönetimi
 
-All authorization checks throughout the application must adhere to these 8 defined roles (detailed in [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md)):
+- **Erken kesinleştirme yok:** Açık teknoloji/mimari kararlarını `[TBD]`, `[Öneri / Proposed]` veya `[ADR Gerekli / Requires ADR]` olarak işaretleyin. Onaysız öneriyi kesin karar saymayın.
+- **Yetkisiz kapsam değişikliği yok:** Açık kullanıcı onayı olmadan kapsamı, çerçeveleri veya kabul edilmiş mimari anlaşmaları değiştirmeyin.
+- **Kullanıcı çalışmasını koruyun:** İlgisiz dosyalara ve kaydedilmemiş kullanıcı değişikliklerine dokunmayın.
 
-1. **Super Admin:** Platform owner; oversees all tenants, billing, and platform-wide configuration.
-2. **Restoran Admini (Restaurant Admin):** Brand/tenant owner; manages brands, branches, high-level financials, and users.
-3. **Şube Müdürü (Branch Manager):** Branch lead; manages physical layouts, staff shifts, menus, and branch reports.
-4. **Operasyon/Kasa (Operations/Cashier):** POS operator; manages register, cash drawer, split payments, receipts, and order overrides.
-5. **Mutfak (Kitchen):** Kitchen display station; tracks food tickets, prep states, and ingredient stockouts.
-6. **Bar (Bar):** Beverage station; tracks drink tickets, prep states, and beverage stockouts.
-7. **Garson (Waiter):** Service staff; manages assigned tables, takes orders, calls service, and requests bills.
-8. **Müşteri (Customer):** Dining guest; scans table QR, browses menu, places orders, and views bill.
+### 2.6. Türkçe Dokümantasyon ve İletişim
 
----
+- Projenin dokümantasyon dili **Türkçedir**. Tüm AI ajanları ve katkıcılar yeni/güncellenen dokümanları, ADR açıklamalarını, görev ve devir notlarını, issue/PR başlık ve açıklamalarını, commit açıklamalarını Türkçe yazmalıdır.
+- Çeviri yaparken anlamı, güvenlik zorunluluklarını, karar durumunu, tarihleri ve doğrulama kanıtlarını koruyun; çeviriyi kapsam veya mimari değişikliğine dönüştürmeyin.
+- Dosya yollarını, API uçlarını, sınıf/değişken adlarını, yetki anahtarlarını, enum değerlerini, ortam değişkenlerini, paket/ürün adlarını ve çalıştırılabilir komutları çevirmeyin. `feat`, `fix`, `docs`, `Refs #`, `Closes #` gibi araç sözdizimi korunur; ardından gelen açıklama Türkçedir.
+- Kaynak kodu/test adlarını veya API sözleşmelerini yalnızca dil değişikliği için yeniden adlandırmayın. Kod örneklerindeki açıklama yorumları Türkçe olabilir; örneğin çalışabilirliği korunur.
+- Başlık değişince ilgili bağlantı çapalarını güncelleyin. İngilizce ikinci bir belge kopyası oluşturarak iki ayrı kural kaynağı üretmeyin.
 
-## 4. Documentation Index & Workflow
+## 3. Desteklenen Roller (RBAC)
 
-Before starting or resuming work, follow [docs/CONTRIBUTING-WORKFLOW.md](docs/CONTRIBUTING-WORKFLOW.md): inspect current Git/GitHub state, create or reuse an issue, work on a branch, verify, commit, submit a PR for review, and update [docs/CURRENT-STATE.md](docs/CURRENT-STATE.md). Keep deferred findings in [docs/REVIEW-BACKLOG.md](docs/REVIEW-BACKLOG.md). Never treat a proposed backlog item as an approved architectural decision.
+Yetkilendirmede [rol ve yetki belgesindeki](docs/ROLES-AND-PERMISSIONS.md) sekiz rol esas alınır:
 
-Agents must consult the relevant document in `docs/` before implementing any feature:
+1. **Süper Yönetici (Super Admin):** Tüm işletmeler, platform faturalandırması ve yapılandırması.
+2. **Restoran Admini (Restaurant Admin):** İşletme/marka sahibi; markalar, şubeler, üst düzey finans ve kullanıcılar.
+3. **Şube Müdürü (Branch Manager):** Fiziksel düzen, vardiyalar, menüler ve şube raporları.
+4. **Operasyon/Kasa (Cashier):** Kasa, nakit çekmecesi, bölünmüş ödemeler, fişler ve yetkili sipariş müdahaleleri.
+5. **Mutfak (Kitchen):** Yemek hazırlığı, KDS durumları ve stokta olmayan ürünler.
+6. **Bar:** İçecek hazırlığı, bar KDS durumları ve stokta olmayan içecekler.
+7. **Garson (Waiter):** Atanmış masalar, sipariş alma, servis ve hesap isteme.
+8. **Müşteri (Customer):** Masa QR'ı, menü, sipariş ve hesap görüntüleme.
 
-| Domain Area | Governing Document |
+## 4. Dokümantasyon Dizini ve Çalışma Akışı
+
+Başlarken veya devam ederken [katkı akışını](docs/CONTRIBUTING-WORKFLOW.md) izleyin: Git/GitHub durumunu kontrol edin, issue açın veya mevcut olanı kullanın, dalda çalışın, doğrulayın, commit ve PR oluşturun, [güncel durumu](docs/CURRENT-STATE.md) yenileyin. Ertelenen bulguları [inceleme listesinde](docs/REVIEW-BACKLOG.md) tutun. Öneriyi kabul edilmiş mimari karar saymayın.
+
+Özellik geliştirmeden önce ilgili alan belgesini okuyun:
+
+| Alan | Bağlayıcı belge |
 | :--- | :--- |
-| Overall Overview & Standards | [docs/README.md](docs/README.md) |
-| Product Vision & Scope | [docs/PRODUCT.md](docs/PRODUCT.md) |
-| Domain Models & Concepts | [docs/DOMAIN.md](docs/DOMAIN.md) |
-| Shared Terminology | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
-| Architecture & Bounded Contexts | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Repository Organization & Rules | [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md) |
-| Access Control & RBAC | [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md) |
-| UI & Screen Inventory | [docs/SCREEN-INVENTORY.md](docs/SCREEN-INVENTORY.md) |
-| Design System & Shells | [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) |
-| State Machines & Lifecycles | [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) |
-| Negative Flows & Failures | [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md) |
-| Multi-Tenancy & Isolation | [docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md) |
-| Payments, Tips & Commissions | [docs/PAYMENTS-TIPS-COMMISSIONS.md](docs/PAYMENTS-TIPS-COMMISSIONS.md) |
-| Order Routing & ESC/POS Printing | [docs/ORDER-ROUTING-AND-PRINTING.md](docs/ORDER-ROUTING-AND-PRINTING.md) |
-| Realtime Events & Notifications | [docs/REALTIME-AND-NOTIFICATIONS.md](docs/REALTIME-AND-NOTIFICATIONS.md) |
-| Testing Standards & Verification | [docs/TESTING.md](docs/TESTING.md) |
-| Security & Compliance | [docs/SECURITY.md](docs/SECURITY.md) |
-| Environments & Configuration | [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) |
-| Delivery & Versioning | [docs/DELIVERY.md](docs/DELIVERY.md) |
-| Blue-Green Deployment Runbook | [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md) |
-| Incident Response & Post-Mortems | [docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md) |
-| Product Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) |
-| Architecture Decision Records | [docs/adr/README.md](docs/adr/README.md) |
-| Operations Runbooks | [docs/runbooks/README.md](docs/runbooks/README.md) |
-| Templates | [docs/templates/](docs/templates/) |
+| Genel bakış ve standartlar | [docs/README.md](docs/README.md) |
+| Ürün vizyonu ve kapsam | [docs/PRODUCT.md](docs/PRODUCT.md) |
+| Alan modeli ve kavramlar | [docs/DOMAIN.md](docs/DOMAIN.md) |
+| Ortak terimler | [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| Mimari ve alan sınırları | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Depo düzeni | [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md) |
+| Erişim kontrolü | [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md) |
+| Arayüz ve ekranlar | [docs/SCREEN-INVENTORY.md](docs/SCREEN-INVENTORY.md) |
+| Tasarım sistemi | [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) |
+| Durum makineleri | [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) |
+| Hata akışları | [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md) |
+| Çok işletmeli yalıtım | [docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md) |
+| Ödeme, bahşiş, komisyon | [docs/PAYMENTS-TIPS-COMMISSIONS.md](docs/PAYMENTS-TIPS-COMMISSIONS.md) |
+| Sipariş yönlendirme ve yazdırma | [docs/ORDER-ROUTING-AND-PRINTING.md](docs/ORDER-ROUTING-AND-PRINTING.md) |
+| Canlı olaylar ve bildirimler | [docs/REALTIME-AND-NOTIFICATIONS.md](docs/REALTIME-AND-NOTIFICATIONS.md) |
+| Test standartları | [docs/TESTING.md](docs/TESTING.md) |
+| Güvenlik | [docs/SECURITY.md](docs/SECURITY.md) |
+| Ortamlar | [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) |
+| Teslimat ve sürümler | [docs/DELIVERY.md](docs/DELIVERY.md) |
+| Blue/Green işletimi | [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md) |
+| Olay müdahalesi | [docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md) |
+| Yol haritası | [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Mimari karar kayıtları | [docs/adr/README.md](docs/adr/README.md) |
+| İşletim kılavuzları | [docs/runbooks/README.md](docs/runbooks/README.md) |
+| Şablonlar | [docs/templates/](docs/templates/) |

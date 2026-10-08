@@ -1,110 +1,101 @@
-# Testing Strategy & Verification Standards (`docs/TESTING.md`)
+# Test Stratejisi ve Doğrulama Standartları (`docs/TESTING.md`)
 
-## 1. Quality Philosophy: Zero-Unverified-PASS Policy
+## 1. Doğrulanmamış Başarı Bildirilemez
 
-In `restaurant-order`, quality is an absolute constraint. The **Zero-Unverified-PASS Policy** is non-negotiable for all human contributors and AI coding agents:
+Bu politika insan katkıcılar ve AI ajanları için zorunludur:
 
-> **Core Rule:** Never report an implementation, bugfix, or test suite as `PASS`, `SUCCESS`, or `VERIFIED` unless the corresponding test or build command has actually been executed in the environment and returned an exit code of `0`. Assumptions, theoretical claims, or partial verifications are strictly prohibited.
+> İlgili test/derleme komutu ortamda gerçekten çalıştırılıp `0` çıkış koduyla tamamlanmadan uygulama, düzeltme veya test süiti için `PASS`, `SUCCESS`, `VERIFIED` ya da başarı anlamındaki başka bir ifade kullanmayın. Varsayım, teorik iddia veya kısmi doğrulamayı tam başarı gibi sunmak yasaktır.
 
----
+## 2. Test Piramidi
 
-## 2. The Testing Pyramid
-
-```
-                / \
-               /   \
-              / E2E \          (Cross-surface user journeys, Playwright)
-             /-------\
-            /  Integ  \        (API, Database RLS, Printer Spooler, Gateway)
-           /-----------\
-          /  Unit/State \      (Domain entities, State machines, Math, RBAC)
-         /---------------\
+```text
+E2E: Arayüzler arası kullanıcı yolculukları (Playwright)
+Entegrasyon: API, veritabanı RLS, yazdırma kuyruğu, ağ geçidi
+Birim/durum: Alan varlıkları, durum makineleri, matematik, RBAC
 ```
 
-### 2.1. Unit Tests (Fast, Isolated, In-Memory)
-- **Domain Entities & Calculations:** Order line item subtotaling, modifier pricing, tax rates, split bill math, and commission fee formulas.
-- **State Machine Transitions:** Testing every valid transition and asserting that every invalid transition throws a deterministic error.
-- **RBAC Policy Checks:** Verifying that each of the 8 roles is strictly authorized or denied for each system capability.
+### 2.1. Birim Testleri
 
-### 2.2. Integration Tests (Database & Service Adapters)
-- **PostgreSQL Row-Level Security (RLS):**
-  - Explicit cross-tenant query tests verifying that `Tenant A` cannot read, update, or delete `Tenant B` data.
-  - Runtime application role (`restaurant_app_user`) configured strictly with `NOSUPERUSER NOBYPASSRLS`.
-  - Fail-closed verification: when `tenancy.get_current_tenant_id()` is unset or invalid, queries return 0 rows.
-  - Bypass resistance: `IgnoreQueryFilters()` and raw SQL queries cannot bypass database-level RLS.
-- **Transactional Consistency & Connection Pool Cleanup:**
-  - Testing connection pool tenant session variable reset across sequential and concurrent pool reuse.
-  - Clean migration application verified against a fresh PostgreSQL 16 instance.
-- **Tenant Context Propagation & Middleware:**
-  - HTTP middleware tenant resolution, RFC 7807 ProblemDetails on missing context, and correlation ID propagation.
-  - Worker tenant context propagation with guaranteed ambient context cleanup.
-- **Testcontainers Fail-Closed Guard:**
-  - `TestcontainersGuard` strictly enforces that Docker is present in CI; tests fail-closed if Docker is missing.
-  - Local developers without Docker can explicitly pass `SKIP_TESTCONTAINERS=true` to run non-container tests without false-positive container PASS reports.
+Hızlı, yalıtılmış ve bellek içinde çalışır:
 
-### 2.3. End-to-End (E2E) Tests
-- **Full Dining Lifecycle:**
-  1. Customer scans QR and adds items to cart.
-  2. Order is fired and appears on Kitchen KDS.
-  3. Kitchen marks ticket `READY`.
-  4. Waiter receives notification and delivers to table.
-  5. Cashier splits bill and records payment.
-  6. Table session closes and returns to `AVAILABLE`.
+- **Alan ve hesaplamalar:** Kalem ara toplamı, ek seçenek fiyatı, vergi, hesap paylaşımı ve komisyon formülleri.
+- **Durum geçişleri:** Her geçerli geçiş ve her geçersiz geçişin belirli hatası.
+- **RBAC:** Sekiz rolün her yetenekte tam olarak izinli veya reddedilmiş olması.
 
----
+### 2.2. Entegrasyon Testleri
 
-## 3. Mandatory Critical Test Paths
+- **PostgreSQL RLS:**
+  - İşletme A, B'nin verisini okuyamaz, değiştiremez veya silemez.
+  - Çalışma zamanı rolü `restaurant_app_user`, `NOSUPERUSER NOBYPASSRLS` olmalıdır.
+  - `tenancy.get_current_tenant_id()` yoksa/geçersizse sorgu sıfır satır döndürür.
+  - `IgnoreQueryFilters()` ve ham SQL, veritabanı RLS'sini aşamaz.
+- **İşlem tutarlılığı ve bağlantı havuzu:** Sıralı/eşzamanlı yeniden kullanımda işletme oturum değişkeni temizlenir; geçişler temiz PostgreSQL 16 üzerinde doğrulanır.
+- **Bağlam ve middleware:** HTTP işletme çözümü, eksik bağlamda RFC 7807 Problem Details, correlation ID aktarımı ve worker bağlamının kesin temizlenmesi test edilir.
+- **Testcontainers:** `TestcontainersGuard`, CI'da Docker bulunmasını zorunlu kılar; yoksa test başarısız olmalıdır. Yerelde Docker olmadan yalnızca konteyner dışı testleri çalıştırmak isteyen geliştirici açıkça `SKIP_TESTCONTAINERS=true` seçebilir; bu, konteyner testlerini geçtiği anlamına gelmez.
 
-The following features are classified as **Critical Paths**. Any PR touching these paths without comprehensive automated tests will be rejected:
+### 2.3. Uçtan Uca Testler
 
-1. **Order Processing & Pricing:** Correctness of modifier additions, discounts, and item tax calculations.
-2. **Financial Operations:** Bill splitting, tip allocations, payment balance assertions, and refund audit trails.
-3. **Tenant Isolation:** Multi-tenant security tests asserting zero cross-tenant leakage.
-4. **Hardware Spooler:** Printer failure resilience and manual reprint queues.
-5. **Concurrency & Race Conditions:** Two guests ordering at the same instant; authorized staff cancellation racing with preparation; direct customer cancellation denied by RBAC.
+Hedeflenen tam yemek yaşam döngüsü:
 
----
+1. Müşteri QR'ı tarar, ürünleri sepete ekler.
+2. Sipariş gönderilir ve mutfak KDS'de görünür.
+3. Mutfak fişi `READY` yapar.
+4. Garson uyarıyı alır ve masaya servis eder.
+5. Kasa hesabı böler ve ödemeyi kaydeder.
+6. Masa oturumu kapanır; masa `AVAILABLE` olur.
 
-## 4. Test Data & Synthetic Fixtures
+Bu hedef, mevcut E2E süitinin tüm akışı kapsadığı iddiası değildir; mevcut iki E2E testi HTTP sağlık sorgularıdır.
 
-- **Strict Zero-PII Rule:** Real customer names, phone numbers, credit card numbers, or live payment credentials must **never** be used in test files.
-- Tests must utilize synthetic data factories (e.g., deterministic faker fixtures) with realistic restaurant domain data.
+## 3. Zorunlu Kritik Yollar
 
----
+Bu alanları değiştiren PR kapsamlı otomatik test olmadan kabul edilmez:
 
-## 5. Branch & Invariant Coverage Requirements
+1. Sipariş/fiyat: Ek seçenekler, indirim ve ürün vergileri.
+2. Finans: Hesap paylaşımı, bahşiş, ödeme bakiyesi ve iade denetim izi.
+3. İşletme yalıtımı: İşletmeler arası veri sızıntısının engellenmesi.
+4. Donanım: Yazıcı arızası ve açık yeniden yazdırma kuyruğu.
+5. Eşzamanlılık: Aynı anda iki sipariş; yetkili personel iptali ile hazırlığın yarışı; doğrudan müşteri iptalinin RBAC ile reddi.
 
-For all critical business logic, the following automated coverage thresholds are enforced in configuration and CI gates:
-- **Domain Entities & Calculations:** Minimum **90% branch coverage** and **95% statement coverage**.
-- **State Machines & Transitions:** **100% transition coverage** (every valid transition and every guarded invalid transition must have explicit tests).
-- **RBAC Matrix Enforcement:** **100% role-permission coverage** across all 8 roles.
+## 4. Test Verisi
 
----
+- Gerçek müşteri adı, telefon, kart numarası veya canlı ödeme kimlik bilgisi test dosyalarında **asla kullanılamaz**.
+- Gerçekçi restoran örnekleri için deterministik sentetik veri fabrikaları kullanılır.
 
-## 6. Verification Commands Quick Reference
+## 5. Kapsama Gereksinimleri
+
+Kritik iş mantığı için belirtilen eşikler:
+
+- Alan varlıkları/hesaplamalar: en az %90 dal ve %95 ifade kapsamı.
+- Durum makineleri: %100 geçiş kapsamı; geçerli ve korumayla reddedilen geçişlerin tamamı.
+- RBAC: Sekiz rol boyunca %100 rol/yetki kapsamı.
+
+## 6. Doğrulama Komutları
 
 ```bash
-# Run all quality gates (file size, doc links, secret scanning, gate tests)
+# Dosya, bağlantı, gizli bilgi ve kontrol betiği testleri
 pnpm verify:gates
 
-# Run backend unit tests
+# Backend birim testleri
 dotnet test tests/unit/RestaurantOrder.UnitTests.csproj
 
-# Run backend architecture boundary tests
+# Mimari sınır testleri
 dotnet test tests/architecture/RestaurantOrder.ArchitectureTests.csproj
 
-# Run backend integration tests
+# Entegrasyon testleri
 dotnet test tests/integration/RestaurantOrder.IntegrationTests.csproj
 
-# Run frontend component tests
+# Frontend bileşen testleri
 pnpm --filter @restaurant-order/ui test
 
-# Run all test suites across the monorepo
+# Monorepo birim/mimari testleri
 pnpm test
 
-# Run full verification pipeline
+# Tam doğrulama
 pnpm verify
 ```
-## Phase 5 Catalog Verification
 
-Catalog verification spans domain/unit tests, API handler and permission tests, PostgreSQL/Redis Testcontainers integration tests, admin frontend tests, E2E probes, and coverage gates. Integration tests exercise runtime-role tenant isolation, branch/station scope, lifecycle visibility, pricing validation, duplicate constraints, ETag preconditions/conflicts, availability concurrency, and rollback paths. Testcontainers must fail closed when Docker is unavailable; do not skip integration tests. Record test and coverage totals only from the CI run for the exact commit.
+## Faz 5 Katalog Doğrulaması
+
+Alan/birim testleri, API işleyici/yetki testleri, PostgreSQL/Redis Testcontainers, yönetim arayüzü, E2E sağlık sorguları ve kapsama kontrolleri kullanılır. İşletme/şube/istasyon yalıtımı, yaşam döngüsü görünürlüğü, fiyat doğrulaması, benzersizlik, ETag önkoşulu/çatışması, bulunabilirlik eşzamanlılığı ve geri alma yolları test edilir. Docker yoksa entegrasyon testi başarısız olmalı; atlama başarı sayılamaz. Test ve kapsama sonuçlarını yalnızca ilgili kesin commit'in CI çalışmasına dayanarak kaydedin.
+
+RFC 7807 hata sözleşmesi testlerinde `ProblemDetails` tür adı kullanılır.

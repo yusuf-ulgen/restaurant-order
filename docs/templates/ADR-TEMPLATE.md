@@ -1,67 +1,57 @@
-# ADR-XXX: [Short Title of Decision] (`docs/templates/ADR-TEMPLATE.md`)
+# ADR-XXX: [Kararın Kısa Başlığı] (`docs/templates/ADR-TEMPLATE.md`)
 
-- **Status:** `[PROPOSED | ACCEPTED | SUPERSEDED | REJECTED]`
-- **Deciders:** [List of architects, engineers, stakeholders]
-- **Date:** [YYYY-MM-DD]
-- **Technical Story:** [Issue or PR link]
+- **Durum:** `[PROPOSED | ACCEPTED | SUPERSEDED | REJECTED]`
+- **Karar verenler:** [Mimarlar, mühendisler, paydaşlar]
+- **Tarih:** [YYYY-MM-DD]
+- **Teknik görev:** [Issue veya PR bağlantısı]
 
----
+## 1. Bağlam ve Sorun
 
-## 1. Context and Problem Statement
+[Bağlamı ve ele alınan sorunu açıklayın. Hangi mimari veya teknik güçlük çözülmeli?]
 
-[Describe the context and problem being addressed. What architectural or technical challenge needs to be resolved?]
+## 2. Kararı Belirleyen Etkenler
 
----
+- [Etken 1: Örneğin KDS fiş güncellemelerinde düşük gecikme]
+- [Etken 2: İşletmeler arasında veri yalıtımı güvencesi]
+- [Etken 3: İşletim karmaşıklığı ve maliyet]
 
-## 2. Decision Drivers
+## 3. Değerlendirilen Seçenekler
 
-- [Driver 1: e.g., Low latency on KDS ticket updates]
-- [Driver 2: e.g., Multi-tenant data isolation guarantee]
-- [Driver 3: e.g., Operational complexity and cost]
+1. **Seçenek 1:** [Açıklama]
+2. **Seçenek 2:** [Açıklama]
+3. **Seçenek 3:** [Açıklama]
 
----
+## 4. Karar Sonucu
 
-## 3. Considered Options
+**Seçilen seçenek:** [X]; çünkü [karar etkenlerini ve proje ilkelerini nasıl karşıladığını açıklayın].
 
-1. **Option 1:** [Description of Option 1]
-2. **Option 2:** [Description of Option 2]
-3. **Option 3:** [Description of Option 3]
+### Olumlu Sonuçlar
 
----
+- [Olumlu sonuç 1]
+- [Olumlu sonuç 2]
 
-## 4. Decision Outcome
+### Olumsuz Sonuçlar ve Ödünleşimler
 
-**Chosen Option:** [Option X], because [justification explaining how it satisfies decision drivers and aligns with project principles].
+- [Olumsuz sonuç / ödünleşim]
+- [Riski azaltma yöntemi]
 
-### Positive Consequences
-- [Positive consequence 1]
-- [Positive consequence 2]
+## 5. Seçeneklerin Artıları ve Eksileri
 
-### Negative Consequences / Trade-offs
-- [Negative consequence / trade-off 1]
-- [Mitigation strategy for trade-off]
+### Seçenek 1: [Başlık]
 
----
+- Olumlu, çünkü [gerekçe].
+- Olumsuz, çünkü [gerekçe].
 
-## 5. Pros and Cons of the Options
+### Seçenek 2: [Başlık]
 
-### Option 1: [Title]
-- Good, because [argument]
-- Bad, because [argument]
+- Olumlu, çünkü [gerekçe].
+- Olumsuz, çünkü [gerekçe].
 
-### Option 2: [Title]
-- Good, because [argument]
-- Bad, because [argument]
+## 6. Doğrulama ve Test Planı
 
----
+- [Karar kod ve testlerle nasıl doğrulanacak?]
+- [Başarıyı hangi ölçümler veya karşılaştırmalar gösterecek?]
 
-## 6. Verification & Test Plan
+## 7. Bağlantılar ve Kaynaklar
 
-- [How will this decision be validated in code and tests?]
-- [What metrics or benchmarks confirm its success?]
-
----
-
-## 7. Links & References
-
-- [Link to related domain docs, PRs, or external specifications]
+- [İlgili alan belgeleri, PR'lar veya dış belirtimler]

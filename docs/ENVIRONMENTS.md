@@ -1,89 +1,89 @@
-# Environments & Configuration Management (`docs/ENVIRONMENTS.md`)
+# Ortamlar ve Yapılandırma Yönetimi (`docs/ENVIRONMENTS.md`)
 
-## 1. Environment Topology
+## 1. Ortam Topolojisi
 
-The `restaurant-order` platform maintains 6 strictly isolated operational environments:
+`restaurant-order`, birbirinden yalıtılmış altı çalışma ortamı tanımlar:
 
+```text
+Yerel → Test (CI) → Geliştirme → Üretim Öncesi (Staging)
+                                      ↓
+                          Üretim (Blue / Green)
+Yerel: geliştirici bilgisayarı; test: otomatik kontroller;
+geliştirme: ortak entegrasyon; staging: üretim benzeri sentetik ortam;
+üretim: canlı restoran trafiği.
 ```
-[ LOCAL ] ─────────► [ TEST (CI) ] ─────────► [ DEVELOPMENT ]
-(Dev Machine)         (Automated Gates)       (Shared Integration)
-                                                       │
-                                                       ▼
-[ PRODUCTION (Blue / Green) ] ◄───────────────── [ STAGING ]
-(Live Restaurant Traffic)                         (Production Mirror)
-```
 
-| Environment | Purpose | Database | External Integrations | Access Restrictions |
+| Çevre | Amaç | Veritabanı | Dış Entegrasyonlar | Erişim Kısıtlamaları |
 | :--- | :--- | :--- | :--- | :--- |
-| **Local** | Developer feature building | Local Docker / SQLite / Postgres | Mocked gateways & printers | Developer only |
-| **Test** | Automated CI unit & integration tests | Ephemeral test DB (reset per run) | Mocked gateways & simulated socket | CI runner only |
-| **Development** | Internal team verification & previews | Dedicated Dev Postgres instance | Sandbox payment & test printers | Internal dev team |
-| **Staging** | Pre-production testing, UAT, load tests | Mirrored staging DB (synthetic data)| Live sandbox payment gateways | Team & beta testers |
-| **Production Blue** | Active/standby live slot (port 5001) | Multi-AZ High-Availability Postgres | Live payment gateways & hardware | Public / Role-gated |
-| **Production Green**| Active/standby live slot (port 5002) | Multi-AZ High-Availability Postgres | Live payment gateways & hardware | Public / Role-gated |
+| **Yerel** | Geliştirici özelliği oluşturma | Yerel Docker / SQLite / Postgres | Sahte ağ geçitleri ve yazıcılar | Yalnızca geliştirici |
+| **Test** | Otomatik CI birimi ve entegrasyon testleri | Geçici test veritabanı (çalıştırma başına sıfırlama) | Sahte ağ geçitleri ve simüle edilmiş soket | Yalnızca CI koşucusu |
+| **Geliştirme** | Dahili ekip doğrulaması ve önizlemeleri | Özel Dev Postgres örneği | Korumalı alan ödeme ve test yazıcıları | Dahili geliştirme ekibi |
+| **Üretim Öncesi (Staging)** | Üretim öncesi testler, UAT, yük testleri | Yansıtılmış aşamalandırma DB'si (sentetik veriler)| Canlı korumalı alan ödeme ağ geçitleri | Ekip ve beta test kullanıcıları |
+| **Üretim Blue** | Aktif/bekleme canlı yuvası (bağlantı noktası 5001) | Multi-AZ Yüksek Kullanılabilirlik Postgres'i | Canlı ödeme ağ geçitleri ve donanımı | Genel / Rol Kapılı |
+| **Üretim Green**| Aktif/bekleme canlı yuvası (bağlantı noktası 5002) | Multi-AZ Yüksek Kullanılabilirlik Postgres'i | Canlı ödeme ağ geçitleri ve donanımı | Genel / Rol Kapılı |
 
 ---
 
-## 2. Configuration & Secrets Governance (12-Factor App)
+## 2. Yapılandırma ve Gizli Değerler Yönetişimi (12-Faktör Uygulaması)
 
-- **Configuration via Environment:** All environment-specific behaviors (database URLs, log levels, payment keys) must be injected via environment variables.
-- **Zero Hardcoded URLs/Credentials:** Hardcoded endpoints, IP addresses, or secrets are strictly forbidden.
-- **Fail-Fast Startup Validation:** In Staging and Production, `ConfigurationValidator` (API) and `WorkerConfigurationValidator` (Worker) inspect all required variables during startup. If any critical configuration is missing or malformed, the process terminates immediately with an informative fatal log (without leaking secret values).
-- **Frontend Security Boundary:** Only environment variables prefixed with `VITE_` are bundled into client-side code. Server secrets, database credentials, and private signing keys must never be exposed to frontend apps (`apps/*-web`).
+- **Ortam Yoluyla Yapılandırma:** Ortama özgü tüm davranışların (veritabanı URL'leri, günlük düzeyleri, ödeme anahtarları) ortam değişkenleri aracılığıyla eklenmesi gerekir.
+- **Sıfır Sabit Kodlu URL'ler/Kimlik Bilgileri:** Sabit kodlanmış uç noktalar, IP adresleri veya sırlar kesinlikle yasaktır.
+- **Başlangıçta Doğrulama:** Staging ve Production ortamlarında `ConfigurationValidator` (API) ve `WorkerConfigurationValidator` (worker) gerekli değişkenleri denetler. Herhangi bir kritik konfigürasyon eksik veya hatalı biçimlendirilmişse, süreç bilgilendirici bir ölümcül günlükle (gizli değerler sızdırılmadan) derhal sonlandırılır.
+- **Ön Uç Güvenlik Sınırı:** Yalnızca ön eki olan ortam değişkenleri `VITE_` istemci tarafı koduna paketlenir. Sunucu sırları, veritabanı kimlik bilgileri ve özel imzalama anahtarları hiçbir zaman ön uç uygulamalara açıklanmamalıdır (`apps/*-web`).
 
-### 2.1. Environment Variable Contract Reference
+### 2.1. Ortam Değişkeni Sözleşme Referansı
 
-| Variable Name | Purpose | Required In | Secret | Example / Default |
+| Değişken Adı | Amaç | Gerekli | Gizli | Örnek / Varsayılan |
 | :--- | :--- | :--- | :--- | :--- |
-| `NODE_ENV` | Runtime environment mode | All | No | `development` / `production` |
-| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core hosting mode | All | No | `Development` / `Staging` / `Production` |
-| `DEPLOYMENT_COLOR` | Container slot color (`blue` / `green`)| Staging, Prod | No | `blue` / `green` |
-| `ACTIVE_DEPLOYMENT_SLOT`| Active slot authorized for traffic/work | Staging, Prod | No | `blue` / `green` |
-| `DATABASE_URL` | PostgreSQL connection string | All | Yes (Prod) | `Host=localhost;Port=5432;...` |
-| `REDIS_URL` | Redis host:port connection string | All | Yes (Prod) | `localhost:6379` |
-| `JWT_SECRET` | Cryptographic symmetric key for JWTs | Staging, Prod | Yes | `[Secured in Secret Manager]` |
-| `API_PORT` | Backend HTTP API listening port | Optional | No | `5000` |
-| `API_PORT_BLUE` | Ingress port for Slot Blue API | Optional | No | `5001` |
-| `API_PORT_GREEN` | Ingress port for Slot Green API | Optional | No | `5002` |
-| `VITE_API_URL` | Public API endpoint for web clients | All Web Apps | No | `http://localhost:5000` |
-| `IMAGE_DIGEST` | Immutable container image SHA256 digest | Staging, Prod | No | `sha256:...` |
-| `LOG_LEVEL` | Application logging verbosity | Optional | No | `Information` |
-| `PIN_PEPPER_SECRET` | Secret pepper for staff 4-digit PIN hash | Staging, Prod | Yes | `[Secured in Secret Manager]` |
-| `CORS_ALLOWED_ORIGINS` | Explicit allowed origins (no wildcard/local)| Staging, Prod | No | `https://admin.restaurantorder.app,...` |
-| `NOTIFICATION_PROVIDER` | Notification backend (`TransactionalOutbox`) | Staging, Prod | No | `TransactionalOutbox` |
-| `NOTIFICATION_ENCRYPTION_KEY` | 256-bit AES-GCM key for outbox payload encryption | Staging, Prod | Yes | `[Secured in Secret Manager]` |
-| `WEBHOOK_NOTIFICATION_URL` | Outbound HTTPS endpoint for notification delivery | Staging, Prod | No | `https://notifications.internal/webhook` |
-| `WEBHOOK_NOTIFICATION_SECRET` | HMAC-SHA256 signature secret (min 32 chars) | Staging, Prod | Yes | `[Secured in Secret Manager]` |
-| `FORWARDED_HEADERS_ENABLED` | Enable reverse proxy forwarded headers | Optional | No | `false` / `true` |
-| `FORWARDED_HEADERS_KNOWN_PROXIES` | Trusted reverse proxy IPs (comma-separated)| Staging, Prod (if enabled) | No | `192.0.2.1` |
-| `FORWARDED_HEADERS_KNOWN_NETWORKS` | Trusted CIDR networks (comma-separated)| Staging, Prod (if enabled) | No | `198.51.100.0/24` |
-| `FORWARDED_HEADERS_FORWARD_LIMIT` | Max forwarded proxy limit | Optional | No | `2` |
-| `Tenancy:AllowDevHeaderOverride` | Opt-in for X-Tenant-Id headers | Dev only | No | `false` |
-| `BACKUP_VERIFIED` | Verified DB backup prerequisite for migrations | Staging, Prod | No | `false` |
+| `NODE_ENV` | Çalışma zamanı ortamı modu | Hepsi | Hayır | `development` / `production` |
+| `ASPNETCORE_ENVIRONMENT` | ASP.NET Core barındırma modu | Hepsi | Hayır | `Development` / `Staging` / `Production` |
+| `DEPLOYMENT_COLOR` | Konteyner yuvası rengi (`blue` / `green`)| Staging, Production | Hayır | `blue` / `green` |
+| `ACTIVE_DEPLOYMENT_SLOT`| Trafik/iş için yetkilendirilmiş aktif slot | Staging, Production | Hayır | `blue` / `green` |
+| `DATABASE_URL` | PostgreSQL bağlantı dizesi | Hepsi | Evet (Üretim) | `Host=localhost;Port=5432;...` |
+| `REDIS_URL` | Redis ana bilgisayarı:bağlantı noktası bağlantı dizesi | Hepsi | Evet (Üretim) | `localhost:6379` |
+| `JWT_SECRET` | JWT imzalama için simetrik anahtar | Staging, Production | Evet | `[Secured in Secret Manager]` |
+| `API_PORT` | Arka uç HTTP API dinleme portu | İsteğe bağlı | Hayır | `5000` |
+| `API_PORT_BLUE` | Slot Blue için giriş bağlantı noktası API | İsteğe bağlı | Hayır | `5001` |
+| `API_PORT_GREEN` | Slot Green için giriş bağlantı noktası API | İsteğe bağlı | Hayır | `5002` |
+| `VITE_API_URL` | halka açık API web istemcileri için uç nokta | Tüm Web Uygulamaları | Hayır | `http://localhost:5000` |
+| `IMAGE_DIGEST` | Değişmez konteyner imajının SHA256 özeti | Staging, Production | Hayır | `sha256:...` |
+| `LOG_LEVEL` | Uygulama günlüğü ayrıntı düzeyi | İsteğe bağlı | Hayır | `Information` |
+| `PIN_PEPPER_SECRET` | Personelin dört haneli PIN karması için gizli pepper değeri | Staging, Production | Evet | `[Secured in Secret Manager]` |
+| `CORS_ALLOWED_ORIGINS` | Açıkça izin verilen kaynaklar (joker karakter/yerel yok)| Staging, Production | Hayır | `https://admin.restaurantorder.app,...` |
+| `NOTIFICATION_PROVIDER` | Bildirim arka ucu (`TransactionalOutbox`) | Staging, Production | Hayır | `TransactionalOutbox` |
+| `NOTIFICATION_ENCRYPTION_KEY` | 256-bit AES-GCM Giden kutusu verisi şifreleme anahtarı | Staging, Production | Evet | `[Secured in Secret Manager]` |
+| `WEBHOOK_NOTIFICATION_URL` | Giden HTTPS bildirim teslimi için uç nokta | Staging, Production | Hayır | `https://notifications.internal/webhook` |
+| `WEBHOOK_NOTIFICATION_SECRET` | HMAC-SHA256 imza sırrı (min 32 karakterler) | Staging, Production | Evet | `[Secured in Secret Manager]` |
+| `FORWARDED_HEADERS_ENABLED` | Ters proxy iletilen başlıkları etkinleştir | İsteğe bağlı | Hayır | `false` / `true` |
+| `FORWARDED_HEADERS_KNOWN_PROXIES` | Güvenilir ters proxy IP'leri (virgülle ayrılmış)| Staging, Production (etkinse) | Hayır | `192.0.2.1` |
+| `FORWARDED_HEADERS_KNOWN_NETWORKS` | Güvenilir CIDR ağlar (virgülle ayrılmış)| Staging, Production (etkinse) | Hayır | `198.51.100.0/24` |
+| `FORWARDED_HEADERS_FORWARD_LIMIT` | Maksimum iletilen proxy sınırı | İsteğe bağlı | Hayır | `2` |
+| `Tenancy:AllowDevHeaderOverride` | X-Tenant-Id üstbilgilerini etkinleştirme | Yalnızca geliştirici | Hayır | `false` |
+| `BACKUP_VERIFIED` | Geçişler için doğrulanmış veritabanı yedekleme önkoşulu | Staging, Production | Hayır | `false` |
 
 ---
 
-## 3. Container Hardening & Network Isolation
+## 3. Konteyner Sertleştirme ve Ağ İzolasyonu
 
-All containerized workloads adhere to strict operational security guidelines:
+Konteynerli iş yüklerinin tümü katı operasyonel güvenlik yönergelerine uyar:
 
-1. **Non-Root Execution:**
-   - API & Worker containers run under an unprivileged user (`appuser`, UID `10001`).
-   - Web frontend containers run under unprivileged `nginx` (UID `101`).
-2. **Minimal Writable Filesystem:**
-   - Container root filesystems are mounted read-only (`read_only: true`).
-   - Temporary file operations are restricted to memory-backed tmpfs (`/tmp`).
-3. **Network Isolation:**
-   - Services communicate over an internal bridge network (`app_internal`).
-   - In Staging and Production, PostgreSQL and Redis containers do **not** expose public host ports.
-4. **Production Image Purity:**
-   - Multi-stage Docker builds ensure zero development compilers, SDKs, or development dependencies remain in final production images.
+1. **Root Dışı Yürütme:**
+   - API ve worker konteynerleri ayrıcalıklı olmayan bir kullanıcı altında çalışır (`appuser`, UID `10001`).
+   - Web ön uç kapsayıcıları ayrıcalıksız koşullar altında çalışır `nginx` (UID `101`).
+2. **Minimum Yazılabilir Dosya Sistemi:**
+   - Kapsayıcı kök dosya sistemleri salt okunur olarak bağlanır (`read_only: true`).
+   - Geçici dosya işlemleri bellek destekli tmpf'lerle sınırlıdır (`/tmp`).
+3. **Ağ İzolasyonu:**
+   - Hizmetler dahili bir köprü ağı üzerinden iletişim kurar (`app_internal`).
+   - Staging ve Production ortamlarında PostgreSQL ve Redis konteynerleri dışarıya açık sunucu portu yayımlamaz.
+4. **Prodüksiyon Görüntüsü Saflığı:**
+   - Çok aşamalı Docker yapıları, nihai üretim görüntülerinde sıfır geliştirme derleyicisi, SDK veya geliştirme bağımlılığının kalmasını sağlar.
 
 ---
 
-## 4. Strict Cross-Environment Isolation Rules
+## 4. Katı Ortamlar Arası İzolasyon Kuralları
 
-1. **No Production Data Downstream:** Production database dumps must **never** be restored into `local`, `test`, or `development` environments without full anonymization.
-2. **Network Isolation:** Lower environments cannot initiate network requests to production databases or live payment processor endpoints.
-3. **Dedicated Encryption Keys:** Each environment must utilize distinct cryptographic keys and certificates.
-4. **Migration & Seeding Separation:** Automatic database migrations on web API startup are strictly prohibited in Staging and Production. Staging/production migrations are executed as an independent pre-cutover pipeline step using idempotent scripts. Synthetic seeding (`DevDataSeeder`) is strictly restricted to `Development` and throws fail-closed exceptions if executed in Staging or Production.
+1. **Üretim Verisinin Korunması:** Tam anonimleştirme yapılmadan üretim veritabanı dökümleri `local`, `test` veya `development` ortamlarına kesinlikle yüklenmez.
+2. **Ağ İzolasyonu:** Daha düşük ortamlar, üretim veritabanlarına veya canlı ödeme işlemcisi uç noktalarına ağ isteklerini başlatamaz.
+3. **Özel Şifreleme Anahtarları:** Her ortamın farklı şifreleme anahtarları ve sertifikaları kullanması gerekir.
+4. **Geçiş ve Örnek Veri Ayrımı:** Staging ve Production ortamlarında API başlangıcında otomatik veritabanı geçişi çalıştırılmaz. Geçişler, trafik aktarımından önce ayrı bir adımda, tekrar çalıştırılması güvenli betiklerle uygulanır. Sentetik veri oluşturma (`DevDataSeeder`) yalnızca `Development` ortamında çalışır; diğer ortamlarda istisna fırlatarak işlemi reddeder.

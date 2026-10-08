@@ -1,73 +1,73 @@
-# Screen Inventory across All 5 Surfaces (`docs/SCREEN-INVENTORY.md`)
+# Beş Arayüz İçin Ekran Envanteri (`docs/SCREEN-INVENTORY.md`)
 
-## 1. Surface 1: QR Customer Web App (Mobile-First Guest App)
+## 1. Arayüz 1: QR Müşteri Web Uygulaması (Mobil Öncelikli Misafir Uygulaması)
 
-| Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
 | :--- | :--- | :--- | :--- | :--- |
-| `CUST-01` | **Table Welcome / Landing** | Müşteri | Scan QR, view branch & table info, enter menu. | Branch name, table number, welcome note, active language selector. |
-| `CUST-02` | **Digital Menu & Categories** | Müşteri | Browse categories, search items, filter by dietary/allergens. | Category bar, item cards (photo, title, price, 86 badge). |
-| `CUST-03` | **Item Customizer Modal** | Müşteri | Select variants, choose required/optional modifiers, add notes. | Base price, modifier groups, dynamic total price, "Add to Cart" CTA. |
-| `CUST-04` | **Cart & Order Review** | Müşteri | Adjust quantities, review modifiers, submit order to kitchen. | Line items, selected modifiers, subtotal, tax estimate, submit button. |
-| `CUST-05` | **Live Order Tracker** | Müşteri | Track preparation stages, review past orders in session. | Status timeline (Received -> Preparing -> Served), estimated prep time. |
-| `CUST-06` | **Service Request Modal** | Müşteri | Request waiter, ask for wet wipes, or request bill. | Action buttons ("Call Waiter", "Request Bill"), request confirmation. |
+| `CUST-01` | **Masa Karşılama Ekranı** | Müşteri | QR'yi tarayın, şube ve masa bilgilerini görüntüleyin, menüye girin. | Şube adı, masa numarası, karşılama notu, aktif dil seçici. |
+| `CUST-02` | **Dijital Menü ve Kategoriler** | Müşteri | Kategorilere göz atın, öğeleri arayın, diyete/alerjenlere göre filtreleyin. | Kategori çubuğu, ürün kartları (fotoğraf, başlık, fiyat, 86 Rozet). |
+| `CUST-03` | **Ürün Özelleştirme Penceresi** | Müşteri | Çeşitleri seçin, gerekli/isteğe bağlı değiştiricileri seçin, not ekleyin. | Baz fiyat, değiştirici gruplar, dinamik toplam fiyat, "Sepete Ekle" CTA. |
+| `CUST-04` | **Sepet ve Sipariş İncelemesi** | Müşteri | Miktarları ayarlayın, değiştiricileri gözden geçirin, siparişi mutfağa gönderin. | Satır öğeleri, seçilen değiştiriciler, alt toplam, vergi tahmini, gönder düğmesi. |
+| `CUST-05` | **Canlı Sipariş Takibi** | Müşteri | Hazırlık aşamalarını takip edin, oturumdaki geçmiş siparişleri inceleyin. | Durum zaman çizelgesi (Alındı -> Hazırlanıyor -> Sunuldu), tahmini hazırlık süresi. |
+| `CUST-06` | **Hizmet Talebi Modu** | Müşteri | Garson isteyin, ıslak mendil isteyin veya fatura isteyin. | İşlem düğmeleri ("Garson Çağır", "Fatura İste"), onay isteği. |
 
 ---
 
-## 2. Surface 2: Waiter & Operations Mobile App (Handheld Web App)
+## 2. Arayüz 2: Garson & Operasyon Mobil Uygulaması (El Tipi Web Uygulaması)
 
-| Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
 | :--- | :--- | :--- | :--- | :--- |
-| `WAIT-01` | **Fast PIN Lockscreen** | Garson, Kasa, Müdür | Enter 4-digit PIN, switch user, select branch shift. | Number pad, staff name, branch selector. |
-| `WAIT-02` | **Floor Plan & Table Grid** | Garson, Kasa, Müdür | Select table, filter by area (Terrace, Hall), view table status. | Color-coded tables (Empty, Seated, Order Pending, Bill Requested). |
-| `WAIT-03` | **Table Session Detail** | Garson, Kasa, Müdür | View placed orders, add items, request bill, move table. | Table number, seated duration, itemized order list, total balance. |
-| `WAIT-04` | **Rapid Order Entry** | Garson, Kasa | Fast category tap, modifier selection, custom note, fire order. | Compact menu grid, quick modifier popover, order staging drawer. |
-| `WAIT-05` | **Table Transfer / Merge** | Garson, Müdür | Transfer order to another table, merge two tables. | Source table, target table selector, merge confirmation. |
-| `WAIT-06` | **Mobile Bill & Settlement**| Garson, Kasa | Select payment method, split bill, record cash/card payment. | Balance due, split by amount or item, tip input, print receipt CTA. |
-| `WAIT-07` | **Notification Drawer** | Garson | Acknowledge customer calls, view ready food notifications. | Service call alerts (Table 12: Waiter Call), KDS ready alerts. |
+| `WAIT-01` | **Hızlı PIN Kilit ekranı** | Garson, Kasa, Müdür | Güvenilir terminalde dört haneli PIN ile giriş yapın, kullanıcıyı değiştirin, şube/vardiya seçin. | Sayısal tuş takımı, personel adı, şube seçici. |
+| `WAIT-02` | **Kat Planı ve Masa Izgarası** | Garson, Kasa, Müdür | Masa seçin, alana göre filtreleyin (Teras, Salon), masa durumunu görüntüleyin. | Renk kodlu masalar (Boş, Oturmalı, Sipariş Bekleniyor, Fatura İsteniyor). |
+| `WAIT-03` | **Masa Oturumu Detayı** | Garson, Kasa, Müdür | Verilen siparişleri görüntüleyin, ürün ekleyin, fatura isteyin, masayı taşıyın. | Masa numarası, oturma süresi, ayrıntılı sipariş listesi, toplam bakiye. |
+| `WAIT-04` | **Hızlı Sipariş Girişi** | Garson, Kasa | Hızlı kategoriye dokunma, değiştirici seçimi, özel not, siparişi gönderme. | Kompakt menü ızgarası, hızlı değiştirme açılır penceresi, sipariş hazırlama çekmecesi. |
+| `WAIT-05` | **Masa Taşıma / Birleştirme** | Garson, Müdür | Siparişi başka bir masaya aktarın, iki masayı birleştirin. | Kaynak masa, hedef masa seçici, birleştirme onayı. |
+| `WAIT-06` | **Mobil Fatura ve Ödeme**| Garson, Kasa | Ödeme yöntemini seçin, faturayı bölün, nakit/kart ödemesini kaydedin. | Ödenmesi gereken bakiye, tutara veya öğeye göre bölme, bahşiş girişi, makbuz yazdırma CTA. |
+| `WAIT-07` | **Bildirim Çekmecesi** | Garson | Müşteri çağrılarını kabul edin, hazır yemek bildirimlerini görüntüleyin. | Servis çağrısı uyarıları (Masa 12: Garson Çağrısı), KDS hazır uyarılar. |
 
 ---
 
-## 3. Surface 3: Kitchen & Bar KDS (Station Display System)
+## 3. Arayüz 3: Mutfak & Bar KDS (İstasyon Görüntüleme Sistemi)
 
-| Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
 | :--- | :--- | :--- | :--- | :--- |
-| `KDS-01` | **Station Ticket Queue** | Mutfak, Bar, Müdür | Filter station (Kitchen vs Bar), bump ticket (Prep -> Ready). | Grid of order cards with elapsed timers (green/yellow/red). |
-| `KDS-02` | **Ticket Detail Card** | Mutfak, Bar | Mark individual items complete, view special allergy notes. | Order #, Table #, item names, modifiers highlighted, waiter name. |
-| `KDS-03` | **Recall Tickets Modal** | Mutfak, Bar, Müdür | Review last 20 bumped tickets, restore accidentally cleared ticket.| List of completed tickets with timestamp and bump history. |
-| `KDS-04` | **Quick 86 Stockout Modal** | Mutfak, Bar, Müdür | Search item, toggle out-of-stock (86) status with one tap. | Menu item list with active toggle switches. |
+| `KDS-01` | **İstasyon Hazırlık Fişi Sırası** | Mutfak, Bar, Müdür | İstasyona göre filtreleyin (Mutfak / Bar), fişi ilerletin (Hazırlanıyor -> Hazır). | Geçen zamanlayıcıları (yeşil/sarı/kırmızı) içeren sipariş kartları tablosu. |
+| `KDS-02` | **Hazırlık Fişi Detay Kartı** | Mutfak, Bar | Tek tek öğeleri tamamlandı olarak işaretleyin, özel alerji notlarını görüntüleyin. | Sipariş #, Masa #, öğe adları, vurgulanan değiştiriciler, garson adı. |
+| `KDS-03` | **Hazırlık Fişini Geri Çağırma Penceresi** | Mutfak, Bar, Müdür | Son tamamlanan 20 fişi inceleyin, yanlışlıkla tamamlanan fişi geri açın.| Zaman damgası ve artış geçmişiyle birlikte tamamlanan hazırlık fişlerin listesi. |
+| `KDS-04` | **Hızlı 86 Stok Tükenme Modu** | Mutfak, Bar, Müdür | Öğeyi arayın, stokta yok (86) tek dokunuşla durum. | Aktif geçiş anahtarlarına sahip menü öğesi listesi. |
 
 ---
 
-## 4. Surface 4: Restaurant Admin Panel (Desktop / Tablet Web)
+## 4. Arayüz 4: Restoran Yönetim Paneli (Masaüstü / Tablet Web)
 
-| Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
 | :--- | :--- | :--- | :--- | :--- |
-| `ADM-01` | **Operations Dashboard** | Restoran Admini, Müdür | View live sales, active tables, open orders, station prep latency. | KPI cards, live floor widget, hourly sales chart, top sellers. |
-| `ADM-02` | **Menu Catalog Editor** | Restoran Admini, Şube Müdürü | Create/edit menus, categories, items, variants, modifier groups, dietary/allergen metadata, and availability. | Branch-scoped menu selector, category and item lists, editor sheets, safe catalog preview, Quick-86 and restock controls. |
-| `ADM-03` | **Modifier Groups Manager** | Restoran Admini, Müdür | Create modifier groups, set min/max selections, assign to items. | Modifier groups table, linked items, modifier pricing. |
-| `ADM-04` | **Floor & Table Layout** | Restoran Admini, Müdür | Create dining areas, add/position tables, assign table numbers. | Visual canvas or grid, table capacity, area tabs. |
-| `ADM-05` | **QR Code Generator** | Restoran Admini, Müdür | Generate table QR codes, download print-ready PDF/SVG batch. | Table list, QR preview, batch download CTA, custom branding options. |
-| `ADM-06` | **Staff & Roles Directory** | Restoran Admini, Müdür | Invite staff, assign roles, set/reset 4-digit PINs. | User list, assigned roles, active status, branch assignment. |
-| `ADM-07` | **Printers & Routing** | Restoran Admini, Müdür | Add ESC/POS network printers, map categories to stations. | Printer IP/port, station mapping (Bar, Kitchen, Cashier), test print. |
-| `ADM-08` | **Financial & Z-Reports** | Restoran Admini, Müdür | Export daily sales, end-of-day Z-report, tax summaries. | Daily turnover, payment breakdown (Cash, Card), discount totals. |
-| `ADM-09` | **Brand & Branch Theme** | Restoran Admini, Müdür | Customize colors, logo, border radius, check WCAG contrast. | Palette inputs, contrast badge, token preview, reset button. |
-| `ADM-10` | **Navigation Config** | Restoran Admini | Enable/disable admin navigation items, customize labels. | Route checklist, display labels, ordering controls. |
-| `ADM-11` | **Branch Settings & Hours**| Restoran Admini, Müdür | Configure currency, timezone, basis-point tax/service rates, weekly hours. | Rates inputs, tax inclusion switch, operating hours schedule. |
-| `ADM-12` | **Dining Areas Manager** | Restoran Admini, Müdür | Add/edit dining areas (Indoor, Terrace, Garden), toggle active status. | Area code, area type badge, sort order, active toggle. |
-| `ADM-13` | **Preparation Stations** | Restoran Admini, Müdür | Add/edit stations (Kitchen, Bar, Other), toggle active status. | Station code, display name, station type badge, active toggle. |
-| `ADM-14` | **Branch Feature Flags** | Restoran Admini, Müdür | Toggle operational feature flags with RBAC precedence. | Flag key, enabled toggle, descriptions, audit state. |
+| `ADM-01` | **Operasyon Kontrol Paneli** | Restoran Yöneticisi, Müdür | Canlı satışları, aktif masaları, açık siparişleri, istasyon hazırlık gecikmesini görüntüleyin. | KPI kartlar, canlı kat widget'ı, saatlik satış tablosu, en çok satanlar. |
+| `ADM-02` | **Menü Katalog Düzenleyici** | Restoran Yöneticisi, Şube Müdürü | Menüler, kategoriler, öğeler, çeşitler, değiştirici gruplar, diyet/alerjen meta verileri ve kullanılabilirlik oluşturun/düzenleyin. | Şube kapsamlı menü seçici, kategori ve öğe listeleri, editör sayfaları, güvenli katalog önizlemesi, Hızlı-86 ve stok yenileme kontrolleri. |
+| `ADM-03` | **Değiştirici Gruplar Yöneticisi** | Restoran Yöneticisi, Müdür | Değiştirici gruplar oluşturun, min/maks seçimlerini ayarlayın, öğelere atayın. | Değiştirici grupları tablosu, bağlantılı öğeler, değiştirici fiyatlandırması. |
+| `ADM-04` | **Zemin ve Masa Düzeni** | Restoran Yöneticisi, Müdür | Yemek alanları oluşturun, masa ekleyin/konumlandırın, masa numaraları atayın. | Görsel tuval veya ızgara, masa kapasitesi, alan sekmeleri. |
+| `ADM-05` | **QR Kod Oluşturucu** | Restoran Yöneticisi, Müdür | Masa QR kodları oluşturun, baskıya hazır olarak indirin PDF/SVG olarak topluca. | Masa listesi, QR önizlemesi, toplu indirme CTA, özel markalama seçenekleri. |
+| `ADM-06` | **Personel ve Roller Dizini** | Restoran Yöneticisi, Müdür | Personeli davet edin, rolleri atayın, ayarlayın/sıfırlayın 4-haneli PIN'ler. | Kullanıcı listesi, atanan roller, aktif durum, şube ataması. |
+| `ADM-07` | **Yazıcılar ve Yönlendirme** | Restoran Yöneticisi, Müdür | Ekle ESC/POS ağ yazıcıları, kategorileri istasyonlara eşleyin. | Yazıcı IP/portu, istasyon eşlemesi (Bar, Mutfak, Kasiyer), test baskısı. |
+| `ADM-08` | **Finansal ve Z Raporları** | Restoran Yöneticisi, Müdür | Günlük satışları, gün sonu Z raporunu, vergi özetlerini dışa aktarın. | Günlük ciro, ödeme kırılımı (Nakit, Kart), indirim toplamları. |
+| `ADM-09` | **Marka ve Şube Teması** | Restoran Yöneticisi, Müdür | Renkleri, logoyu, kenarlık yarıçapını özelleştirin, kontrol edin WCAG kontrastını. | Palet girişleri, kontrast rozeti, belirteç önizlemesi, sıfırlama düğmesi. |
+| `ADM-10` | **Gezinme Yapılandırması** | Restoran Yöneticisi | Yönetici gezinme öğelerini etkinleştirin/devre dışı bırakın, etiketleri özelleştirin. | Rota kontrol listesi, ekran etiketleri, sipariş kontrolleri. |
+| `ADM-11` | **Şube Ayarları ve Saatleri**| Restoran Yöneticisi, Müdür | Para birimini, saat dilimini, temel vergi/hizmet oranlarını, haftalık saatleri yapılandırın. | Fiyat girişleri, vergi dahil etme anahtarı, çalışma saatleri programı. |
+| `ADM-12` | **Yemek Alanları Yönetimi** | Restoran Yöneticisi, Müdür | Yemek alanları ekleyin/düzenleyin (İç Mekan, Teras, Bahçe), aktif durumu değiştirin. | Alan kodu, alan türü rozeti, sıralama düzeni, etkin geçiş. |
+| `ADM-13` | **Hazırlama İstasyonları** | Restoran Yöneticisi, Müdür | İstasyon ekleyin/düzenleyin (Mutfak, Bar, Diğer), aktif durumu değiştirin. | İstasyon kodu, görünen ad, istasyon türü rozeti, etkin geçiş. |
+| `ADM-14` | **Şube Özelliği Bayrakları** | Restoran Yöneticisi, Müdür | Operasyonel özellik bayraklarını şununla değiştirin: RBAC önceliğini koruyarak. | Bayrak anahtarı, etkin geçiş, açıklamalar, denetim durumu. |
 
 ---
 
-## 5. Surface 5: Platform Super Admin Panel (Desktop Web)
+## 5. Arayüz 5: Platform Süper Yönetici Paneli (Masaüstü Web)
 
-| Screen ID | Screen Name | Access Role | Primary Actions | Key Data Displayed |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
 | :--- | :--- | :--- | :--- | :--- |
-| `SPAD-01`| **Tenant Directory** | Super Admin | Search, filter, onboard, or suspend restaurant organizations. | Tenant list, subscription status, active branches, creation date. |
-| `SPAD-02`| **Tenant Onboarding Form**| Super Admin | Create tenant, assign initial admin, configure custom domains. | Org details, brand name, initial branch, billing plan picker. |
-| `SPAD-03`| **Subscription & Billing** | Super Admin | Manage platform tiers, commission rates, view aggregated volume.| Plan pricing, active tenant counts, monthly platform revenue. |
-| `SPAD-04`| **Platform Audit Logs** | Super Admin | Filter audit events by tenant, actor, or action type. | Timestamp, tenant ID, actor, event action, IP address. |
-| `SPAD-05`| **System Health Monitor** | Super Admin | Check DB latency, realtime socket connections, worker queues. | Status indicators, error rate charts, active connection counters. |
-## Phase 5 Admin Catalog
+| `SPAD-01`| **İşletme Dizini** | Süper Yönetici | Restoran organizasyonlarını arayın, filtreleyin, ekleyin veya askıya alın. | İşletme listesi, abonelik durumu, aktif şubeler, oluşturulma tarihi. |
+| `SPAD-02`| **İşletme Katılım Formu**| Süper Yönetici | İşletme oluşturun, ilk yöneticiyi atayın, özel etki alanlarını yapılandırın. | Kuruluş ayrıntıları, marka adı, ilk şube, faturalandırma planı seçici. |
+| `SPAD-03`| **Abonelik ve Faturalandırma** | Süper Yönetici | Platform katmanlarını, komisyon oranlarını yönetin, toplu hacmi görüntüleyin.| Plan fiyatlandırması, aktif işletme sayıları, aylık platform geliri. |
+| `SPAD-04`| **Platform Denetim Günlükleri** | Süper Yönetici | Denetim olaylarını işletmeye, aktöre veya eylem türüne göre filtreleyin. | Zaman damgası, işletme kimliği, aktör, etkinlik eylemi, IP adresi. |
+| `SPAD-05`| **Sistem Sağlığı Monitörü** | Süper Yönetici | Veritabanı gecikmesini, gerçek zamanlı soket bağlantılarını, çalışan kuyruklarını kontrol edin. | Durum göstergeleri, hata oranı grafikleri, aktif bağlantı sayaçları. |
+## Aşama 5 Yönetici Kataloğu
 
-The admin menu screen manages branch menus, categories, items, variants, modifier groups/options, dietary/allergen metadata, and quick-86/restock. It uses the existing admin shell and design system, responsive editor sheets, safe text preview, and permission-aware controls. It is catalog administration only; customer ordering remains a later phase.
+Yönetici menüsü ekranı şube menülerini, kategorileri, öğeleri, çeşitleri, değiştirici grupları/seçenekleri, diyet/alerjen meta verilerini ve hızlı86/yeniden stokla. Mevcut yönetici kabuğunu ve tasarım sistemini, duyarlı düzenleyici sayfalarını, güvenli metin önizlemesini ve izne duyarlı kontrolleri kullanır. Yalnızca katalog yönetimidir; müşteri siparişi daha sonraki bir aşama olarak kalır.

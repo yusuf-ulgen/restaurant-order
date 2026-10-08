@@ -1,40 +1,40 @@
-# Operations Runbooks Index (`docs/runbooks/README.md`)
+# Operasyon Runbook'ları Dizini (`docs/runbooks/README.md`)
 
-## 1. Overview
+## 1. Genel Bakış
 
-Runbooks provide operational procedures, diagnostic checklists, and recovery steps for operating the `restaurant-order` platform in staging and production environments.
+Runbook'lar, işletim prosedürlerini, tanılama denetim listelerini ve kurtarma adımlarını sağlar. `restaurant-order` Sahneleme ve prodüksiyon ortamlarında platform.
 
 ---
 
-## 2. Core Runbooks
+## 2. Çekirdek Runbook'lar
 
-| Runbook | Purpose | Target Audience |
+| Runbook'u | Amaç | Hedef Kitle |
 | :--- | :--- | :--- |
-| [docs/BLUE-GREEN-RUNBOOK.md](../BLUE-GREEN-RUNBOOK.md) | Zero-downtime production deployment, health checks & traffic cutover. | DevOps / Release Leads |
-| [docs/INCIDENT-RESPONSE.md](../INCIDENT-RESPONSE.md) | Incident severity classification, escalation paths & post-mortem workflows. | On-Call Engineers / Managers |
-| [docs/runbooks/database-migrations.md](./database-migrations.md) | Zero-downtime Expand-Migrate-Contract database migrations and rollback workflows. | DBA / Release Leads |
+| [BLUE-GREEN-RUNBOOK.md](../BLUE-GREEN-RUNBOOK.md) | Sıfır kesinti süreli üretim dağıtımı, durum kontrolleri ve trafik aktarımı. | DevOps / Sürüm Sorumluları |
+| [INCIDENT-RESPONSE.md](../INCIDENT-RESPONSE.md) | Olay ciddiyet sınıflandırması, üst kademeye iletme yolları ve olay sonrası iş akışları. | Nöbetçi Mühendisler / Yöneticiler |
+| [database-migrations.md](./database-migrations.md) | Sıfır kesinti süreli Genişlet–Taşı–Daralt veritabanı geçişleri ve geri alma iş akışları. | DBA / Sürüm Sorumluları |
 
 ---
 
-## 3. Planned Operational Runbooks (Phase 1 & 2)
+## 3. Planlanan Operasyonel Runbook'lar (Aşama 1 & 2)
 
-The following runbooks will be established as corresponding features are implemented:
+İlgili özellikler uygulandıkça aşağıdaki runbook'lar oluşturulacaktır:
 
 1. **`RUNBOOK-001: Database Backup & Restore`**
-   - Automated nightly backups, Point-in-Time Recovery (PITR) verification, and disaster recovery drills.
+   - Otomatik gecelik yedeklemeler, Belirli Bir Noktadan Kurtarma (PITR) doğrulama ve olağanüstü durum kurtarma tatbikatları.
 2. **`RUNBOOK-002: Branch Thermal Printer Troubleshooting`**
-   - Diagnosing network printer connectivity, ESC/POS socket timeouts, and paper spooler queue recovery.
+   - Ağ yazıcısı bağlantısını teşhis etme, ESC/POS yuva zaman aşımları ve kağıt biriktirici kuyruğu kurtarma.
 3. **`RUNBOOK-003: Tenant Onboarding & Domain Binding`**
-   - Provisioning new restaurant organizations, setting up custom subdomains, and configuring initial branches.
+   - Yeni restoran organizasyonlarının sağlanması, özel alt alanların oluşturulması ve ilk şubelerin yapılandırılması.
 4. **`RUNBOOK-004: Secret & API Key Rotation`**
-   - Zero-downtime rotation of JWT secrets, database credentials, and payment gateway keys.
+   - Sıfır kesinti süreli rotasyon JWT sırlar, veritabanı kimlik bilgileri ve ödeme ağ geçidi anahtarları.
 
 ---
 
-## 4. Runbook Authoring Standards
+## 4. Runbook Yazma Standartları
 
-All runbooks in this directory must adhere to the following structure:
-1. **Prerequisites & Permissions:** Required credentials, tools, and access levels.
-2. **Step-by-Step Execution:** Numbered, copy-pasteable commands with expected outputs.
-3. **Verification Step:** Explicit commands to verify successful completion.
-4. **Failure & Rollback Procedure:** Immediate actions if any step fails.
+Bu dizindeki tüm runbook'ların aşağıdaki yapıya uyması gerekir:
+1. **Önkoşullar ve İzinler:** Gerekli kimlik bilgileri, araçlar ve erişim düzeyleri.
+2. **Adım Adım Yürütme:** Beklenen çıktılara sahip, numaralandırılmış, kopyalanıp yapıştırılabilir komutlar.
+3. **Doğrulama Adımı:** Başarılı bir şekilde tamamlandığını doğrulamak için açık komutlar.
+4. **Arıza ve Geri Alma Prosedürü:** Herhangi bir adım başarısız olursa anında eylem.
