@@ -18,12 +18,14 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub durumunu yenileyin; tarihsel f
 - Sağlayıcıdan bağımsız taşıma sözleşmesi, FirebaseAdmin 3.7.0 FID uyarlayıcısı, ayrı ve varsayılan kapalı PUSH_PROVIDER, sınırlı genel payload ve TTL, iptal/süre/hata sınıflandırması eklendi.
 - [FCM kurulumu ve sınırları](./FCM-SETUP.md), [bildirim planı](./NOTIFICATIONS-PLAN.md). Kimlik bildirimlerinin NOTIFICATION_PROVIDER/outbox/webhook sözleşmesi korunur.
 - Taşıma henüz API veya otomatik işe bağlı değildir. Kalıcı kayıt/iptal, güncel alıcı yetkisi, outbox/deneme kayıtları, istemci service worker/izin deneyimi ve gerçek masa/sipariş olay bağlantıları #11 altında devam eder.
-- Firebase projesi, servis hesabı veya gerçek cihaza gönderim oluşturulmadı. Gerçek HTTPS Android/iPhone testi yapılmadı.
+- Kullanıcı isteğiyle Firebase geliştirme projesi `restaurant-order-development` oluşturuldu: [konsol](https://console.firebase.google.com/project/restaurant-order-development/overview). Ücretsiz Spark planı ve FCM HTTP v1 API'nin etkin olduğu konsolda doğrulandı; oluşturma sırasında Analytics ve Gemini seçenekleri kapatıldı.
+- Kullanıcı “Şimdilik proje kurulumu yeterli” dedi. Web Push anahtar çifti, sunucu kimlik bilgisi ve istemci uygulama kaydı oluşturulmadı. PUSH_PROVIDER kapalı kalır; gerçek HTTPS Android/iPhone teslim testi yapılmadı.
 
 ## Doğrulama
 
 - Önceki Türkçe belge görevinde 2026-10-08 `pnpm verify`, çıkış 0: 1.228 backend birim + 10 mimari + 295 frontend + 249 entegrasyon + 115 kontrol + 2 HTTP sağlık E2E = 1.899 başarılı test. Backend Release 0 uyarı/0 hata.
 - Bu FCM görevinde 2026-10-08 tarihli son pnpm verify çıkış 0: 1.283 backend birim + 10 mimari + 295 frontend + 249 entegrasyon + 115 kontrol + 2 HTTP sağlık E2E = 1.954 başarılı test. Lint, tür ve üretim derlemeleri başarılı; backend Release 0 uyarı/0 hata. Son hedefli Notifications filtresi 56/56 başarılı; bu dal 55 yeni test ekler.
+- Kod başlığı `3eec0b8` için GitHub CI `37766690840` ve `37766686411` başarılı: kapsam, üretim derlemesi, Docker smoke/hardening ve depo temizliği dahil. Sonraki Firebase proje/devir notu yalnızca belgedir; güncel başlığın CI durumunu PR üzerinden kontrol edin.
 - SDK sözleşme testleri gerçek SDK ve sahte HTTP ile çalışır; gerçek cihaz teslim kanıtı değildir. Mevcut E2E yalnızca iki HTTP sağlık sorgusudur; R08 açıktır.
 
 ## Ortam ve Sınırlamalar
@@ -36,4 +38,4 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub durumunu yenileyin; tarihsel f
 
 ## Sonraki Somut Adım
 
-#14 uygulama PR'ını incele ve CI sonucunu GitHub üzerinden doğrula. Ardından #11 kapsamında kayıt sahipliği/iptal ve kalıcı teslim tasarımını uygula. Alıcı yetkisi ve oturum yaşam döngüsü tamamlanmadan taşıma için genel API açma. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izle; yeni uygulama PR'ını açık kullanıcı yetkisi olmadan birleştirme veya yayınlama.
+#14 uygulama PR'ını incele ve CI sonucunu GitHub üzerinden doğrula. Kullanıcı şimdilik Firebase proje kurulumunda durmayı seçti; yeni anahtar/kimlik bilgisi oluşturma. Devam isteğinde #11 kapsamında kayıt sahipliği/iptal ve kalıcı teslim tasarımıyla ilerle. Alıcı yetkisi ve oturum yaşam döngüsü tamamlanmadan taşıma için genel API açma. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izle; yeni uygulama PR'ını açık kullanıcı yetkisi olmadan birleştirme veya yayınlama.

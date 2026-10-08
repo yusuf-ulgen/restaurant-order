@@ -33,4 +33,4 @@ Açık uygulamada canlı sipariş/servis akışı ile uygulama arka plandayken i
 
 ## Doğrulama ve Devir
 
-Ayrıntılı olay/alıcı eşlemesi, aşamalar ve resmi kaynaklar [bildirim planındadır](../NOTIFICATIONS-PLAN.md). İlk uyarlayıcının kurulumu ve sınırları [FCM sunucu belgesindedir](../FCM-SETUP.md). Sağlayıcının kabul edilmesi tüm bildirim akışının tamamlandığı anlamına gelmez. Firebase projesi/servis hesabı oluşturulmadı ve gerçek cihaza bildirim gönderilmedi.
+Ayrıntılı olay/alıcı eşlemesi, aşamalar ve resmi kaynaklar [bildirim planındadır](../NOTIFICATIONS-PLAN.md). İlk uyarlayıcının kurulumu ve sınırları [FCM sunucu belgesindedir](../FCM-SETUP.md). Sağlayıcının kabul edilmesi tüm bildirim akışının tamamlandığı anlamına gelmez. Kullanıcı isteğiyle geliştirme Firebase projesi oluşturuldu; kullanıcı şimdilik burada durmayı seçti. Web Push anahtarı/sunucu kimlik bilgisi oluşturulmadı ve gerçek cihaza bildirim gönderilmedi.

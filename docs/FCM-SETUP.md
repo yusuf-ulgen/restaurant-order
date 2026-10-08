@@ -2,6 +2,8 @@
 
 Karar: [ADR-0011](./adr/0011-background-push-provider.md). Üst görev [#11](https://github.com/yusuf-ulgen/restaurant-order/issues/11), ilk uygulama [#14](https://github.com/yusuf-ulgen/restaurant-order/issues/14).
 
+2026-10-08 kurulum kaydı: Firebase geliştirme projesi oluşturuldu; Spark planı ve FCM HTTP v1 API'nin etkin olduğu konsolda görüldü. Kullanıcı şimdilik proje kurulumunda durmayı seçti. Web Push anahtarı, sunucu kimlik bilgisi ve istemci uygulama kaydı henüz yoktur; push kapalı kalır. Proje bağlantısı ve güncel devir kaydı [CURRENT-STATE.md](./CURRENT-STATE.md) içindedir.
+
 ## Tamamlanan Sınır
 
 `IPushNotificationTransport`, uygulama katmanında sağlayıcıdan bağımsızdır. `FirebasePushNotificationTransport`, infrastructure içinde sabitlenmiş `FirebaseAdmin` 3.7.0 ile tek Firebase Installation ID (FID) hedefine gönderir. Personel ve müşteri için aynı taşıma kullanılabilir; alıcı seçimi bu katmanın işi değildir.
