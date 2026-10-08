@@ -20,7 +20,7 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [Issue #10](https://github.com/yusuf-ulgen/restaurant-order/issues/10), dal: `docs/turkce-dokumantasyon`.
 - Taban: `ba2ec17`, PR #9 dalı. Bağımlı PR bu dala açılır; #9 birleştikten sonra taban main'e alınmalıdır.
 - Kapsam: takip edilen Markdown belgeleri, AI yönergeleri ve issue/PR şablonlarını Türkçeye çevirme; kalıcı Türkçe yazım kuralı. Teknik adlar, komutlar, karar durumları ve kanıtlar korunur.
-- Durum: takip edilen 57 Markdown belgesi Türkçeleştirildi; kalıcı dil kuralı ve araç yönergeleri güncellendi. Dal incelemeye hazırlanıyor. Kaynak kodu ve çalışma zamanı bağımlılıkları değişmedi.
+- Durum: takip edilen 57 Markdown belgesi Türkçeleştirildi; kalıcı dil kuralı ve araç yönergeleri güncellendi. [PR #12](https://github.com/yusuf-ulgen/restaurant-order/pull/12) incelemeye sunuldu; birleştirilmedi. Kaynak kodu ve çalışma zamanı bağımlılıkları değişmedi.
 - Bu görevde 2026-10-08 tarihinde `pnpm verify` çıkış kodu 0: 1.228 backend birim + 10 mimari + 295 frontend + 249 entegrasyon + 115 kontrol + 2 HTTP sağlık E2E = 1.899 başarılı test. Lint, tür denetimi ve üretim derlemeleri başarılı; backend 0 uyarı/0 hata. Son belge düzenlemelerinden sonra bağlantı/dosya/gizli değer kontrolleri ve `git diff --check` ayrıca çalıştırılır.
 - İzin matrisinin anahtar ve izin hücreleri önceki sürümle birebir karşılaştırıldı. Eski faz sayıları tarihsel kayıt olarak korundu. SignalR kararının ve OpenAPI üretim açığının durumu mevcut kayıtlara göre netleştirildi.
 
