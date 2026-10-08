@@ -66,6 +66,8 @@ All authorization checks throughout the application must adhere to these 8 defin
 
 ## 4. Documentation Index & Workflow
 
+Before starting or resuming work, follow [docs/CONTRIBUTING-WORKFLOW.md](docs/CONTRIBUTING-WORKFLOW.md): inspect current Git/GitHub state, create or reuse an issue, work on a branch, verify, commit, submit a PR for review, and update [docs/CURRENT-STATE.md](docs/CURRENT-STATE.md). Keep deferred findings in [docs/REVIEW-BACKLOG.md](docs/REVIEW-BACKLOG.md). Never treat a proposed backlog item as an approved architectural decision.
+
 Agents must consult the relevant document in `docs/` before implementing any feature:
 
 | Domain Area | Governing Document |

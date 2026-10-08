@@ -10,8 +10,8 @@ The billing subsystem supports multiple payment methods, flexible bill splitting
 
 | Method | Type | Description | Status |
 | :--- | :--- | :--- | :--- |
-| **Cash (Nakit)** | Physical | Collected by cashier or waiter; cash drawer accounting. | Supported |
-| **External POS Terminal** | Physical Card | Waiter processes card on standalone bank POS terminal; records auth code in system. | Supported |
+| **Cash (Nakit)** | Physical | Collected by roles with `billing.payment.cash`; cash drawer accounting. Waiters do not have this permission. | Planned |
+| **External POS Terminal** | Physical Card | Authorized staff record standalone terminal payments; waiters are restricted to their own scope by `billing.payment.pos_card`. | Planned |
 | **Integrated Digital Gateway** | Online Card | QR guest pays directly via smartphone gateway (e.g., Stripe, Iyzico). | `[Proposed / ADR Required]` |
 | **Room / Tab Charge** | Account | Charged to customer house account or hotel room folio. | `[Proposed / ADR Required]` |
 
@@ -35,7 +35,7 @@ A bill can be settled in multiple increments using different methods:
 1. **Split by Amount:** The customer specifies an arbitrary amount to pay toward the balance.
 2. **Equal Split:** The system divides the balance equally across $N$ guests:
    $$\text{Guest Share} = \frac{\text{Total Balance}}{N}$$
-   Rounding discrepancies (e.g., $\$100.00 / 3 = \$33.33 \times 3 + \$0.01$) are allocated to the final payment.
+   The current two-decimal calculator accepts only whole-cent totals. Round the base share down, then distribute remaining cents one per guest from the end. For example, 100.01 / 3 gives 33.33, 33.34, 33.34; 0.02 / 4 gives 0.00, 0.00, 0.01, 0.01. Shares must be nonnegative, sum exactly to the total, and differ by at most one cent. Zero shares are allocations, not zero-value payment transactions. Currency-general minor-unit integration remains tracked in [the review backlog](./REVIEW-BACKLOG.md).
 3. **Split by Item:** Specific order items are selected and settled. Remaining items remain open on the bill.
 
 ---

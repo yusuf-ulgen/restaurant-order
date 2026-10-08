@@ -2,6 +2,8 @@
 
 ## 1. Branching Strategy
 
+Follow [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md) for issue creation, implementation, commits, PR descriptions, and persistent handoff. Start each task by reading and refreshing [CURRENT-STATE.md](./CURRENT-STATE.md).
+
 The repository follows a clean, trunk-based feature branch workflow designed for continuous integration:
 
 ```

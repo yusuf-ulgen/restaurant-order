@@ -61,7 +61,7 @@ The following features are classified as **Critical Paths**. Any PR touching the
 2. **Financial Operations:** Bill splitting, tip allocations, payment balance assertions, and refund audit trails.
 3. **Tenant Isolation:** Multi-tenant security tests asserting zero cross-tenant leakage.
 4. **Hardware Spooler:** Printer failure resilience and manual reprint queues.
-5. **Concurrency & Race Conditions:** Two guests ordering at the same instant; customer cancelling while kitchen is preparing.
+5. **Concurrency & Race Conditions:** Two guests ordering at the same instant; authorized staff cancellation racing with preparation; direct customer cancellation denied by RBAC.
 
 ---
 
