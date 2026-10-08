@@ -2,6 +2,17 @@
 
 <!-- Provide a concise summary of the change and the problem it addresses. -->
 
+Closes #<!-- issue number -->
+
+## Scope & Handoff
+
+- Completed behavior:
+- Explicit exclusions / deferred decisions:
+- Remaining risks or blockers:
+- Next concrete action:
+- [ ] [Current-state handoff](../docs/CURRENT-STATE.md) updated with actual verification and task status.
+- [ ] Deferred findings linked to issues or [the review backlog](../docs/REVIEW-BACKLOG.md).
+
 ---
 
 ## Type of Change

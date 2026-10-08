@@ -45,12 +45,12 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
   4. In the event of a timeout, the system queries the gateway transaction status before allowing a retry to prevent double charges.
 
 ### 2.5. Cancellation of Items Already in Preparation
-- **Scenario:** A guest changes their mind and attempts to cancel an item via the QR web app, but the kitchen has already started cooking (`IN_PREPARATION`).
-- **Detection:** State machine check enforces that `CANCEL_ITEM` is only allowed from `SUBMITTED` state (see [docs/STATE-MACHINES.md](./STATE-MACHINES.md)).
+- **Scenario:** A guest asks staff to cancel an item, but the kitchen has already started cooking (`IN_PREPARATION`). Customers do not hold `orders.items.cancel_pre_prep` under the current [RBAC policy](./ROLES-AND-PERMISSIONS.md).
+- **Detection:** Direct customer cancellation is denied regardless of preparation state. An authorized staff command checks permission, version, and `SUBMITTED` state atomically (see [docs/STATE-MACHINES.md](./STATE-MACHINES.md)).
 - **System Response:**
   1. The customer's cancellation request is rejected with message: *"The kitchen has already started preparing this dish. Please speak with your waiter."*
   2. The guest can use the "Call Waiter" button.
-  3. A waiter or manager can override and cancel using their supervisor PIN, which logs a `WASTE_CANCEL` audit record for inventory tracking.
+  3. Only a Restaurant Admin or Branch Manager with `orders.items.void_in_prep` can authorize an in-preparation void using supervisor verification and a reason. A waiter can request assistance but cannot gain that permission by entering a PIN alone. Record the supervisor identity and `WASTE_CANCEL` audit event.
 
 ### 2.6. Network Disconnect on KDS / Mobile App
 - **Scenario:** Wi-Fi drops out on a waiter's smartphone or kitchen KDS tablet while taking an order.

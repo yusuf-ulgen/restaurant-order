@@ -27,6 +27,9 @@ The documentation is organized into clear domains to support developers, product
 - [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md) — Real-time event streams, push notifications, and chime alerts.
 
 ### 1.3. Quality, Operations & Delivery
+- [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md) — Issue-first contributor and agent workflow.
+- [CURRENT-STATE.md](./CURRENT-STATE.md) — Current task, verification, limitations, and next action.
+- [REVIEW-BACKLOG.md](./REVIEW-BACKLOG.md) — Preserved review findings and proposed product decisions.
 - [docs/TESTING.md](./TESTING.md) — Testing strategy, critical paths, and zero-unverified-PASS policy.
 - [docs/SECURITY.md](./SECURITY.md) — Security policies, credential protection, OWASP mitigations, and compliance.
 - [docs/ENVIRONMENTS.md](./ENVIRONMENTS.md) — Environment isolation (local, test, dev, staging, prod).
@@ -37,6 +40,7 @@ The documentation is organized into clear domains to support developers, product
 - [docs/FOUNDATION-VALIDATION.md](./FOUNDATION-VALIDATION.md) — Independent audit, verification matrix, and quality gate evidence.
 
 ### 1.4. ADRs, Runbooks & Templates
+- [TASK-TEMPLATE.md](./templates/TASK-TEMPLATE.md) — Reusable task scope, evidence, and handoff record.
 - [docs/adr/README.md](./adr/README.md) — Architecture Decision Records index and guide.
 - [docs/runbooks/README.md](./runbooks/README.md) — Operational runbooks catalog.
 - [docs/templates/ADR-TEMPLATE.md](./templates/ADR-TEMPLATE.md) — Standard ADR template.
