@@ -1,24 +1,24 @@
-# Realtime Events & Notifications (`docs/REALTIME-AND-NOTIFICATIONS.md`)
+# Gerçek Zamanlı Olaylar ve Bildirimler (`docs/REALTIME-AND-NOTIFICATIONS.md`)
 
-## 1. Overview & Transport Strategy
+## 1. Genel Bakış ve Taşıma
 
-Sub-second real-time communication connects customer smartphones, waiter handhelds, kitchen/bar display systems, and administrative dashboards.
+Müşteri telefonu, garson cihazı, mutfak/bar ekranı ve yönetim paneli arasında bir saniyeden kısa sürede canlı iletişim hedeflenir.
 
-### 1.1. Realtime Transport Comparison
+### 1.1. İlk Taşıma Karşılaştırması
 
-| Criteria | WebSockets (WS) | Server-Sent Events (SSE) |
+| Ölçüt | WebSockets (WS) | Server-Sent Events (SSE) |
 | :--- | :--- | :--- |
-| **Communication** | Full Duplex (Bi-directional) | Simplex (Server to Client only) |
-| **Protocol** | `ws://` / `wss://` | Standard HTTP/2 or HTTP/1.1 |
-| **Firewall / Proxy** | Sometimes blocked or dropped by aggressive proxies | Passes cleanly through standard HTTP proxies |
-| **Best Fit In System**| Interactive KDS and Waiter handhelds | Customer QR status stream & Read-Only Dashboards |
-| **Status** | `[Proposed / ADR Required]` | `[Proposed / ADR Required]` |
+| İletişim | Çift yönlü | Yalnızca sunucudan istemciye |
+| Protokol | `ws://` / `wss://` | HTTP/2 veya HTTP/1.1 |
+| Güvenlik duvarı / vekil | Bazı vekiller engelleyebilir veya bağlantıyı düşürebilir. | Standart HTTP vekillerinden geçer. |
+| Uygun kullanım | Etkileşimli KDS ve garson cihazları | QR durum akışı ve salt okunur paneller |
+| İlk taslak durumu | `[Proposed / ADR Required]` | `[Proposed / ADR Required]` |
 
----
+Canlı iletişim teknolojisi ADR-0001 ile **SignalR + Redis** olarak kabul edilmiştir; bu tablo önceki seçenek değerlendirmesini korur. Ayrıntılı hub/grup tasarımı ADR-0004 kapsamındadır. Telefonun arka planındaki push bildirimi ayrı kanaldır; sağlayıcı kararı [issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11) kapsamında beklenmektedir.
 
-## 2. Event Taxonomy & Schemas
+## 2. Olay Türleri ve Şema
 
-All event payloads are formatted as JSON and adhere to a standardized event envelope:
+Olaylar standart JSON zarfı kullanır:
 
 ```json
 {
@@ -31,39 +31,30 @@ All event payloads are formatted as JSON and adhere to a standardized event enve
 }
 ```
 
-### 2.1. Core System Events
+### 2.1. Temel Olaylar
 
-| Event Type | Producer | Consumers | Payload Highlights |
+| Olay | Üreten | Tüketen | İçerik |
 | :--- | :--- | :--- | :--- |
-| `order.created` | Customer QR, Waiter | KDS, Cashier, Admin | `order_id`, `table_id`, items, modifiers, round. |
-| `order.item_status_changed`| KDS, Waiter | Customer QR, Waiter | `order_id`, `item_id`, `new_status` (`IN_PREP`, `READY`). |
-| `table.service_requested` | Customer QR | Waiter App | `table_id`, `request_type` (`WAITER`, `WIPES`, `BILL`). |
-| `kds.ticket_bumped` | KDS | Waiter App | `ticket_id`, `table_id`, station (`KITCHEN`/`BAR`). |
-| `menu.item_86ed` | KDS, Admin | Customer QR, Waiter | `item_id`, `is_available: false`. |
-| `table.session_closed` | Cashier, Waiter | Customer QR, Admin | `table_id`, `session_id`, `settled_at`. |
+| `order.created` | Müşteri QR, garson | KDS, kasa, yönetim | `order_id`, `table_id`, ürünler, ek seçenekler, sipariş turu |
+| `order.item_status_changed` | KDS, garson | Müşteri QR, garson | `order_id`, `item_id`, `new_status` (`IN_PREP`, `READY`) |
+| `table.service_requested` | Müşteri QR | Garson | `table_id`, `request_type` (`WAITER`, `WIPES`, `BILL`) |
+| `kds.ticket_bumped` | KDS | Garson | `ticket_id`, `table_id`, istasyon (`KITCHEN`/`BAR`) |
+| `menu.item_86ed` | KDS, yönetim | Müşteri QR, garson | `item_id`, `is_available: false` |
+| `table.session_closed` | Kasa, garson | Müşteri QR, yönetim | `table_id`, `session_id`, `settled_at` |
 
----
+## 3. Kanal ve Grup Ayrımı
 
-## 3. Channel & Room Partitioning
+İşletme yalıtımı ve bant genişliği için gruplar ayrılır:
 
-To guarantee tenant isolation and bandwidth efficiency, clients join isolated rooms:
+- **Müşteri QR:** `tenant:{tenant_id}:branch:{branch_id}:table:{table_id}`. Yalnızca mevcut masaya ilişkin olaylar. Bu başlangıç taslağı tek başına yetki sınırı değildir; ADR-0009 gereği aktif masa oturumu yetkisi de denetlenir.
+- **Mutfak:** `tenant:{tenant_id}:branch:{branch_id}:station:kitchen`. Yemek fişleri ve 86 olayları.
+- **Bar:** `tenant:{tenant_id}:branch:{branch_id}:station:bar`. İçecek fişleri ve 86 olayları.
+- **Salon:** `tenant:{tenant_id}:branch:{branch_id}:floor`. Servis çağrıları, hazır ürün ve masa durumu.
 
-- **Customer QR Room:** `tenant:{tenant_id}:branch:{branch_id}:table:{table_id}`
-  - Receives only updates relevant to the current dining table.
-- **Kitchen KDS Room:** `tenant:{tenant_id}:branch:{branch_id}:station:kitchen`
-  - Receives food prep tickets and kitchen 86 events.
-- **Bar KDS Room:** `tenant:{tenant_id}:branch:{branch_id}:station:bar`
-  - Receives beverage prep tickets and bar 86 events.
-- **Floor Staff Room:** `tenant:{tenant_id}:branch:{branch_id}:floor`
-  - Receives service calls, food ready alerts, and table status changes.
+## 4. Ses ve Bildirim Deneyimi
 
----
-
-## 4. Audio Chimes & Notification UX
-
-- **KDS Audio Chime:** A distinct high-frequency audio chime plays on KDS tablets when a new ticket arrives, ensuring cooks hear the order even in a noisy environment.
-- **Waiter Vibration & Alert:** Waiter mobile devices vibrate and display a persistent banner upon customer service requests ("Table 14 - Waiter Call").
-- **Automatic Reconnection:**
-  - Clients implement an exponential backoff reconnect policy (1s, 2s, 4s, up to 15s max).
-  - While disconnected, clients display a non-blocking offline pill.
-  - Upon reconnection, clients fetch a missed-events delta via an HTTP synchronization endpoint.
+- Yeni KDS fişinde, gürültülü mutfakta duyulabilen ayırt edici ses hedeflenir.
+- Garson cihazında servis çağrısı için titreşim ve kalıcı uyarı gösterilir; örneğin “Masa 14 — Garson çağrısı”. Cihaz/tarayıcı desteği gözetilir.
+- Bağlantı tekrarları 1, 2, 4 saniye biçiminde artar; üst sınır 15 saniyedir.
+- Kopma sırasında iş akışını engellemeyen çevrimdışı göstergesi görünür.
+- Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.

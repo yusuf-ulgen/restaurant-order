@@ -1,123 +1,121 @@
-# Blue-Green Deployment Runbook (`docs/BLUE-GREEN-RUNBOOK.md`)
+# Blue/Green Dağıtım Runbook'u (`docs/BLUE-GREEN-RUNBOOK.md`)
 
-## 1. Overview & Architecture
+## 1. Genel Bakış ve Mimari
 
-To guarantee 99.99% availability during peak lunch and dinner services, production releases use a **Blue-Green Deployment** model with two identical production slots:
+Yoğun servis saatlerinde %99,99 kullanılabilirlik hedefi için üretim dağıtımları iki eşdeğer yuvadan oluşan **Blue/Green Dağıtım** modelini kullanır:
 
-```
-[ Ingress / Nginx Reverse Proxy ]
-            │
-            ├────── (Active 100% Traffic) ─────► [ SLOT BLUE  (API: 5000, Web: 8080) ]
-            │                                    (via container DNS: restaurant-order-*-blue)
-            │
-            └────── (Idle / Internal Smoke) ───► [ SLOT GREEN (API: 5000, Web: 8080) ]
-                                                 (via container DNS: restaurant-order-*-green)
+```text
+Nginx Ingress / Ters Proxy
+  ├─ Canlı trafiğin %100'ü → Aktif yuva (Blue veya Green)
+  └─ Dahili temel testler  → Aday yuva (Green veya Blue)
+Her iki yuvada konteyner içi portlar: API 5000, Web 8080.
+Bağlantı Docker DNS ile restaurant-order-*-blue / *-green adlarına yapılır.
 ```
 
-Both slots run **immutable container image digests**, validating all 5 individual component digests during preflight:
+Her iki yuva **değişmez imaj özetleriyle** çalışır. Ön kontrolde beş bileşenin özeti ayrı doğrulanır:
 - `API_IMAGE_DIGEST`
 - `WORKER_IMAGE_DIGEST`
 - `CUSTOMER_WEB_IMAGE_DIGEST`
 - `OPERATIONS_WEB_IMAGE_DIGEST`
 - `ADMIN_WEB_IMAGE_DIGEST`
 
-To prevent Docker Compose container or network collisions during simultaneous blue-green execution, independent Compose project names are strictly enforced:
-- Blue Project: `restaurant-order-blue`
-- Green Project: `restaurant-order-green`
-- Ingress Network: `restaurant_order_ingress` bridge network providing internal DNS routing to containers.
+Eş zamanlı Blue/Green yürütme sırasında Docker Compose konteyner veya ağ çakışmalarını önlemek için bağımsız Compose proje adları sıkı bir şekilde uygulanır:
+- Mavi Proje: `restaurant-order-blue`
+- Yeşil Proje: `restaurant-order-green`
+- Giriş ağı: `restaurant_order_ingress`, konteynerlere DNS üzerinden yönlendirme sağlayan köprü ağıdır.
 
 ---
 
-## 2. Worker Safety & Central State Management
+## 2. Worker Güvenliği ve Merkezi Durum Yönetimi
 
-When Blue and Green containers run concurrently during deployment overlap, background workers must **not** duplicate work:
+Blue ve Green konteynerleri aynı anda çalışırken arka plan işlerinin yinelenmesini önlemek için şu denetimler uygulanır:
 
-1. **Central Authoritative State in Redis:**
-   - The central Redis key `restaurant-order:active-slot` serves as the single source of truth for the active slot.
-   - `RedisWorkerActivationGuard` continuously queries Redis. If the slot matches, the worker enters `Active` state; otherwise, it stays in `Standby`.
-   - In catastrophic Redis downtime during rollbacks, the `--emergency-override` flag permits operational traffic recovery by reverting Nginx routing to the previous slot. However, because Redis cannot be updated, this enters `CRITICAL_INCONSISTENT_STATE`: traffic is restored (`trafficRestored: true`), but Redis reconciliation is NOT verified (`redisReconciled: false`). Workers remain guarded in standby, `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is logged to the deployment journal, and manual reconciliation is strictly required via the returned reconciliation command once Redis recovers.
-2. **Distributed Lease Contract (`RedisWorkerLeaseManager`):**
-   - Active workers acquire an exclusive distributed lease (`restaurant-order:lease:worker-leadership`) via atomic `SET NX PX` with periodic renewal.
-   - If lease renewal fails or the slot is demoted, consumption immediately halts (fail-closed).
-3. **Idempotency Requirement (`RedisIdempotencyStore`):**
-   - All background jobs (order state transitions, billing updates, push notifications) enforce idempotency keys to guarantee at-most-once side effects across blue/green instances.
-4. **Fail-Closed Behavior:**
-   - In Staging and Production, if Redis is unreachable or credentials/slots are invalid, workers immediately fail closed (`Status = Error`) and refuse to process queues.
+1. **Redis'teki Merkezi Yetkili Durum:**
+   - Merkezi Redis anahtarı `restaurant-order:active-slot` aktif slot için tek gerçek kaynağı olarak hizmet eder.
+   - `RedisWorkerActivationGuard` Redis'i sürekli sorgular. Slot eşleşirse worker `Active` durumuna geçer; aksi halde `Standby` durumunda kalır.
+   - Geri alma sırasında Redis'in felaketle sonuçlanan kesintilerinde, `--emergency-override` flag, Nginx yönlendirmesini önceki yuvaya döndürerek operasyonel trafiğin kurtarılmasına izin verir. Ancak Redis güncellenemediği için bu, `CRITICAL_INCONSISTENT_STATE`: trafik yeniden sağlandı (`trafficRestored: true`), ancak Redis mutabakatı doğrulanmadı (`redisReconciled: false`). Worker işlemleri koruma altında kalır; `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` dağıtım günlüğüne kaydedilir ve Redis kurtarıldıktan sonra döndürülen mutabakat komutu aracılığıyla manuel mutabakat kesinlikle gereklidir.
+2. **Dağıtılmış Kira Sözleşmesi (`RedisWorkerLeaseManager`):**
+   - Aktif worker, `restaurant-order:lease:worker-leadership` anahtarında atomik `SET NX PX` ile özel liderlik kirası alır ve düzenli yeniler.
+   - Kira yenileme başarısız olursa veya yuva aktif durumdan çıkarılırsa tüketim hemen durdurulur (arıza-kapanma).
+3. **İdempotans Gereksinimi (`RedisIdempotencyStore`):**
+   - Arka plan işleri (sipariş durumu, hesap ve bildirimler) yinelenen yan etkileri önlemek için idempotency anahtarı kullanmalıdır. Redis TTL rezervasyonu tek başına dış etkinin en fazla bir kez oluşmasını garanti etmez; kalıcı iş kaydı ve sağlayıcı mutabakatı açığı R07 kapsamında izlenir.
+4. **Arıza Kapalı Davranışı:**
+   - Hazırlama ve Üretimde, Redis'e erişilemiyorsa veya kimlik bilgileri/yuvalar geçersizse worker işlemleri hata durumuna geçer (`Status = Error`) ve kuyrukları işlemeyi reddeder.
 
 ---
 
-## 3. Automated Blue-Green Operational Commands
+## 3. Otomatik Blue/Green Operasyonel Komutlar
 
-All operational commands run in **dry-run mode by default**. No live traffic is shifted without explicit operator confirmation flags (`--confirm-cutover`, `--execute`).
+Tüm operasyon komutları **varsayılan olarak prova modunda** çalışır. Açık operatör onay işaretleri olmadan hiçbir canlı trafik kaydırılmaz (`--confirm-cutover`, `--execute`).
 
-### 3.1. Complete Pipeline (Orchestrator)
+### 3.1. Komple İşlem Hattı (Orkestratör)
 
 ```bash
-# Safe dry-run check (Recommended before any deployment)
+# Güvenli prova denetimi (her dağıtım öncesinde önerilir)
 pnpm blue-green:check
-# Or directly:
+# Doğrudan çalıştırma:
 node scripts/blue-green/orchestrator.mjs --dry-run
 
-# Live production execution (Requires operator confirmation)
+# Canlı üretimde çalıştırma (operatör onayı gerekir)
 node scripts/blue-green/orchestrator.mjs --execute --confirm-cutover
 ```
 
-### 3.2. Individual Command Boundaries
+### 3.2. Bireysel Komuta Sınırları
 
-| Stage | Command | Description |
+| Adım | Komut | Açıklama |
 | :--- | :--- | :--- |
-| **1. Preflight** | `node scripts/blue-green/preflight.mjs` | Validates slots, compose files, and image digest |
-| **2. Config Validate**| `node scripts/blue-green/config-validate.mjs` | Validates environment contracts and security rules |
-| **3. Migration Check**| `node scripts/blue-green/migration-check.mjs` | Verifies Expand-Migrate-Contract compliance |
-| **4. Deploy Inactive**| `node scripts/blue-green/deploy-inactive.mjs` | Launches idle slot containers (dry-run default) |
-| **5. Health Check** | `node scripts/blue-green/health-check.mjs` | Probes `/health/live` and `/health/ready` |
-| **6. Warmup** | `node scripts/blue-green/warmup.mjs` | Exercises endpoints to warm JIT & connection pools |
-| **7. Smoke** | `node scripts/blue-green/smoke.mjs` | Runs non-mutating smoke tests on idle slot |
-| **8. Cutover** | `node scripts/blue-green/cutover.mjs --confirm-cutover` | Shifts live traffic upstream to new slot |
-| **9. Observe** | `node scripts/blue-green/observe.mjs` | Monitors post-cutover metrics (< 0.05% error rate) |
-| **10. Drain Old** | `node scripts/blue-green/drain-old.mjs` | Drains connections and stops retired slot |
+| **1. Ön kontrol** | `node scripts/blue-green/preflight.mjs` | Yuvaları, dosyaları oluşturmayı ve görüntü özetini doğrular |
+| **2. Yapılandırma Doğrulama**| `node scripts/blue-green/config-validate.mjs` | Ortam sözleşmelerini ve güvenlik kurallarını doğrular |
+| **3. Geçiş Kontrolü**| `node scripts/blue-green/migration-check.mjs` | Genişlet–Taşı–Daralt uyumluluğunu doğrular |
+| **4. Etkin Değil'i Dağıt**| `node scripts/blue-green/deploy-inactive.mjs` | Boşta kalan yuva kaplarını başlatır (varsayılan deneme çalıştırması) |
+| **5. Sağlık Kontrolü** | `node scripts/blue-green/health-check.mjs` | Problar `/health/live` ve `/health/ready` |
+| **6. Isınma** | `node scripts/blue-green/warmup.mjs` | Isınmak için uç noktaları çalıştırır JIT & bağlantı havuzları |
+| **7. Temel İşlev Testi** | `node scripts/blue-green/smoke.mjs` | Aday yuvada veri değiştirmeyen temel işlev testleri yapar |
+| **8. Geçiş** | `node scripts/blue-green/cutover.mjs --confirm-cutover` | Canlı trafiği yukarı yönde yeni yuvaya kaydırır |
+| **9. Gözlemle** | `node scripts/blue-green/observe.mjs` | Geçiş sonrası metrikleri izler (< 0.05% hata oranı) |
+| **10. Eski Yuvayı Boşalt** | `node scripts/blue-green/drain-old.mjs` | Bağlantıları boşaltır ve kullanımdan kaldırılan yuvayı durdurur |
 
 ---
 
-## 4. Immediate Emergency Rollback (< 60 Seconds)
+## 4. Derhal Acil Durum Geri Alma (< 60 Saniye)
 
-If post-cutover observation reveals errors exceeding `0.05%` or KDS disruption:
+Geçişten sonra hata oranı `0.05%` eşiğini aşarsa veya KDS akışı bozulursa:
 
 ```bash
-# Safe dry-run rollback plan
+# Güvenli geri alma provası
 node scripts/blue-green/rollback.mjs --dry-run
 
-# Live emergency rollback
+# Canlı acil geri alma
 node scripts/blue-green/rollback.mjs --execute --confirm-rollback
 ```
 
-### 4.1. Rollback Invariants
-1. **Immediate Ingress Switch:** Reverts traffic back to the previous safe slot within 60 seconds.
-2. **Forensic Preservation:** The failed slot container is **retained in isolated mode** for memory dump extraction and log analysis.
-3. **Incident Declaration:** Follow [docs/INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md).
+### 4.1. Geri Alma Değişmezleri
+1. **Anında Giriş Anahtarı:** Trafiği önceki güvenli yuvaya geri döndürür 60 saniye içinde.
+2. **Adli Koruma:** Başarısız yuva, bellek dökümü ve günlük analizi için **izole durumda tutulur**.
+3. **Olay Beyanı:** Takip et [INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md).
 
-### 4.2. Emergency Override & Manual Redis Reconciliation
-When Redis is unreachable during a rollback, traffic reversion would normally fail closed to avoid split-brain. In catastrophic outages, the operator can force traffic restoration via the `--emergency-override` CLI flag (supported directly via terminal arguments and programmatically):
+### 4.2. Acil Durum Geçersiz Kılma ve Manuel Redis Mutabakatı
+Geri alma sırasında Redis'e erişilemediğinde, trafiğin geri döndürülmesi normalde iki yuvanın farklı duruma düşmesini önlemek için reddedilir. Acil kesintide operatör `--emergency-override` seçeneğiyle yalnızca trafiğin geri dönmesini sağlayabilir; seçenek terminalden ve program üzerinden desteklenir:
 
 ```bash
-# Emergency rollback when Redis is unreachable (shifts Nginx traffic only)
+# Redis erişilemediğinde acil geri alma (yalnızca Nginx trafiğini değiştirir)
 node scripts/blue-green/rollback.mjs --execute --confirm-rollback --emergency-override
 ```
 
-**Consequences & State Guarantees:**
-- Nginx traffic is restored to the previous safe slot (`trafficRestored: true`).
-- The operation returns `success: false` with status `CRITICAL_INCONSISTENT_STATE`.
-- The state file is **NOT** updated with unverified slot data.
-- `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` is written to `DEPLOYMENT_JOURNAL_FILE` (or default `.deployment-journal.jsonl`).
-- Background workers remain guarded and refuse to process queues in unverified state.
+**Sonuçlar ve Durum Garantileri:**
+- Nginx trafiği önceki güvenli yuvaya geri yüklenir (`trafficRestored: true`).
+- İşlem `success: false` ve `CRITICAL_INCONSISTENT_STATE` döndürür.
+- Durum dosyası doğrulanmamış yuva verileriyle **güncellenmez**.
+- `EMERGENCY_TRAFFIC_RESTORED_REDIS_UNVERIFIED` olayı `DEPLOYMENT_JOURNAL_FILE` dosyasına yazılır (veya varsayılan `.deployment-journal.jsonl`).
+- Arka plan çalışanları gözetim altında kalır ve doğrulanmamış durumdaki kuyrukları işlemeyi reddederler.
 
-**Mandatory Manual Reconciliation Step:**
-Once Redis connectivity is restored, the operator **must** reconcile the central state immediately:
+**Zorunlu Manuel Mutabakat Adımı:**
+Redis bağlantısı yeniden sağlandığında operatör merkezi durumu derhal eşitlemelidir:
 ```bash
-# Execute the reconciliation command output by rollback.mjs:
+# rollback.mjs çıktısındaki mutabakat komutunu çalıştırın:
 redis-cli -u $REDIS_URL SET restaurant-order:active-slot <restored_slot>
 ```
-Verify the active slot value:
+Etkin yuva değerini doğrulayın:
 ```bash
 redis-cli -u $REDIS_URL GET restaurant-order:active-slot
 ```

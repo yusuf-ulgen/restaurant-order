@@ -1,126 +1,126 @@
-# State Machines & Entity Lifecycles (`docs/STATE-MACHINES.md`)
+# Durum Makineleri ve Varlık Yaşam Döngüleri (`docs/STATE-MACHINES.md`)
 
-## 1. Overview
+## 1. Genel Bakış
 
-Deterministic state transitions prevent invalid business states (e.g., paying for an empty table, serving a cancelled item, or cancelling an already prepared dish without authorization). All state mutations must be validated against these state machines.
+Geçersiz durumları önlemek için tüm değişiklikler doğrulanmış geçişleri kullanır: boş masaya ödeme, iptal ürünü servis etme veya yetkisiz hazırlık iptali gibi durumlar engellenir.
 
-These floor/order/billing workflows describe planned phases, not implemented endpoints. Authorization is governed by [ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md); examples never grant additional capabilities. The table diagram below is a legacy floor-display sketch, not a sufficient persisted state model: mixed preparation, multiple order rounds, and partial payments can coexist. Resolve the separate occupancy/session/preparation/settlement proposal in [review item R02](./REVIEW-BACKLOG.md) via ADR before implementing Phase 6. Order lifecycle and partial-refund reconciliation are tracked as R11.
+Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uçlar değildir. Yetkilerin kaynağı [rol matrisi](./ROLES-AND-PERMISSIONS.md) olup örnekler ek yetki vermez. Masa çizimi eski bir salon görünümü taslağıdır; karışık hazırlık, yeni sipariş turları ve kısmi ödemeleri tek kalıcı durumla temsil etmeye yeterli değildir. Doluluk, oturum, hazırlık ve ödeme ayrımı [R02](./REVIEW-BACKLOG.md) kapsamında Faz 6 öncesi ADR ile çözülmelidir. Sipariş yaşam döngüsü ve kısmi iadeler R11'de izlenir.
 
----
-
-## 2. Table State Machine
+## 2. Masa Durum Makinesi
 
 ```
    [ AVAILABLE ]  <----------------------------------------------------+
          |                                                             |
-         | (Guest arrives / QR scanned / Waiter seats)                 |
+         | (Misafir gelir / QR taranır / garson oturtur)                 |
          v                                                             |
     [ SEATED ]                                                         |
          |                                                             |
-         | (Order submitted)                                           |
+         | (Sipariş gönderilir)                                           |
          v                                                             |
 [ ORDER_PENDING ]                                                      |
          |                                                             |
-         | (KDS begins prep)                                           |
+         | (KDS hazırlığı başlatır)                                           |
          v                                                             |
   [ PREPARING ]                                                        |
          |                                                             |
-         | (All items served to table)                                 |
+         | (Tüm ürünler servis edilir)                                 |
          v                                                             |
    [ SERVED ]  <------------------+                                    |
-         |                        | (Subsequent order placed)          |
-         | (Guest requests bill)  |                                    |
+         |                        | (Yeni sipariş turu)          |
+         | (Müşteri hesabı ister)  |                                    |
          v                        |                                    |
 [ BILL_REQUESTED ] ---------------+                                    |
          |                                                             |
-         | (All payments settled)                                      |
+         | (Ödemeler tamamlanır)                                      |
          v                                                             |
      [ PAID ]                                                          |
          |                                                             |
-         | (Table cleared & sanitized)                                 |
+         | (Masa temizlenir)                                 |
          +-------------------------------------------------------------+
 ```
 
-| Current State | Event / Action | Next State | Authorized Roles | Invariants & Guards |
+| Mevcut Durum | Olay / Eylem | Sonraki Durum | Yetkili Roller | Değişmez Kurallar ve Koruma Koşulları |
 | :--- | :--- | :--- | :--- | :--- |
-| `AVAILABLE` | `SEAT_GUESTS` | `SEATED` | Garson, Kasa, Müdür, Müşteri | Table must have no active session. |
-| `SEATED` | `SUBMIT_ORDER` | `ORDER_PENDING` | Müşteri, Garson, Kasa | Order contains at least 1 valid item. |
-| `ORDER_PENDING`| `START_PREPARATION`| `PREPARING` | Mutfak, Bar, System | At least 1 station ticket marked in-prep. |
-| `PREPARING` | `MARK_ALL_SERVED` | `SERVED` | Garson | All noncancelled order items delivered; kitchen/bar mark tickets `READY`, never delivery. |
-| `SERVED` | `REQUEST_BILL` | `BILL_REQUESTED` | Müşteri, Garson | Requires `billing.bill.request` and valid session scope. |
-| `SERVED` | `SUBMIT_NEW_ORDER`| `ORDER_PENDING` | Müşteri, Garson | New items pass submission and preparation guards; they do not skip acknowledgement. |
-| `BILL_REQUESTED`| `SETTLE_PAYMENT`| `PAID` | Roles permitted for the payment method | Requires `billing.payment.cash` or `billing.payment.pos_card` and applicable scope; waiter POS access is own-scope only and does not permit cash. Remaining balance must be zero. |
-| `PAID` | `CLEAR_TABLE` | `AVAILABLE` | Garson, Kasa, Müdür | Session closed, table marked ready for guests. |
+| `AVAILABLE` | `SEAT_GUESTS` | `SEATED` | Garson, Kasa, Müdür, Müşteri | Masada başka etkin oturum bulunamaz. |
+| `SEATED` | `SUBMIT_ORDER` | `ORDER_PENDING` | Müşteri, Garson, Kasa | Sepet ve ürünler doğrulanır; fiyatlar dondurulur. Masa akışında en az bir geçerli kalem gerekir. |
+| `ORDER_PENDING`| `START_PREPARATION`| `PREPARING` | Mutfak, Bar, Sistem | En az bir istasyon fişi hazırlığa alınır. |
+| `PREPARING` | `MARK_ALL_SERVED` | `SERVED` | Garson | İptal edilmemiş tüm kalemler masaya teslim edilir; mutfak/bar yalnızca READY işaretler, servis teslimini yapmaz. |
+| `SERVED` | `REQUEST_BILL` | `BILL_REQUESTED` | Müşteri, Garson | billing.bill.request yetkisi ve geçerli oturum kapsamı gerekir. |
+| `SERVED` | `SUBMIT_NEW_ORDER`| `ORDER_PENDING` | Müşteri, Garson | Yeni kalemler gönderim/hazırlık korumalarından geçer; onay adımını atlayamaz. |
+| `BILL_REQUESTED`| `SETTLE_PAYMENT`| `PAID` | Ödeme yöntemi için izin verilen roller | Ödeme yönteminin billing.payment.cash veya billing.payment.pos_card yetkisi gerekir. Garsonun POS yetkisi kendi kapsamındadır; nakit yetkisi değildir. Kalan borç sıfır olmalıdır. |
+| `PAID` | `CLEAR_TABLE` | `AVAILABLE` | Garson, Kasa, Müdür | Oturum kapanmış ve masa yeni misafir için hazırlanmış olmalıdır. |
 
 ---
 
-## 3. Order & OrderItem State Machine
+## 3. Sipariş ve Sipariş Kalemi Durum Makinesi
 
 ```
    [ DRAFT ] ------------------------> [ CANCELLED ]
        |                                     ^
-       | (Submit order)                      |
+       | (Siparişi gönder)                      |
        v                                     |
-  [ SUBMITTED ] -----------------------------+ (Cancelled before prep)
+  [ SUBMITTED ] -----------------------------+ (Hazırlık öncesi iptal)
        |                                     |
-       | (Received by station)               |
+       | (İstasyon teslim alır)               |
        v                                     |
-[ IN_PREPARATION ] --------------------------+ (Voided with supervisor PIN)
+[ IN_PREPARATION ] --------------------------+ (Yönetici PIN onayıyla iptal)
        |                                     ^
-       | (Station marks ready)               |
+       | (İstasyon hazır işaretler)               |
        v                                     |
-    [ READY ] <--- (Recall Ticket)           |
+    [ READY ] <--- (Fişi geri çağır)           |
        |                                     |
-       | (Delivered to table)                |
+       | (Masaya servis edilir)                |
        v                                     |
-   [ SERVED ] -------------------------------+ (Comped / Voided by Admin)
+   [ SERVED ] -------------------------------+ (Yönetici ikramı / iptali)
 ```
 
-| Current State | Event / Trigger | Next State | Authorized Roles | Notes / Guards |
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Yetkili Roller | Notlar / Koruma Koşulları |
 | :--- | :--- | :--- | :--- | :--- |
-| `DRAFT` | `SUBMIT_ORDER` | `SUBMITTED` | Müşteri, Garson, Kasa | Cart validated, prices frozen. |
-| `SUBMITTED` | `ACKNOWLEDGE_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Appears on KDS; prep timer starts. |
-| `SUBMITTED` | `CANCEL_ITEM` | `CANCELLED` | Restoran Admini, Müdür, Garson, Kasa | Requires `orders.items.cancel_pre_prep`; customers contact staff rather than directly cancelling. |
-| `IN_PREPARATION`| `BUMP_READY` | `READY` | Mutfak, Bar | Waiter notified for floor delivery. |
-| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Requires supervisor PIN & reason. |
-| `READY` | `RECALL_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Accidentally bumped ticket restored. |
-| `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Waiter confirms delivery. |
-| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Requires formal audit log & reason. |
+| `DRAFT` | `SUBMIT_ORDER` | `SUBMITTED` | Müşteri, Garson, Kasa | Sepet ve ürünler doğrulanır; fiyatlar dondurulur. Masa akışında en az bir geçerli kalem gerekir. |
+| `SUBMITTED` | `ACKNOWLEDGE_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Fiş KDS üzerinde görünür; hazırlık sayacı başlar. |
+| `SUBMITTED` | `CANCEL_ITEM` | `CANCELLED` | Restoran Admini, Müdür, Garson, Kasa | orders.items.cancel_pre_prep gerekir; müşteri doğrudan iptal etmez, personelle iletişime geçer. |
+| `IN_PREPARATION`| `BUMP_READY` | `READY` | Mutfak, Bar | Garsona masaya servis için bildirilir. |
+| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Yönetici PIN doğrulaması ve gerekçe gerekir. |
+| `READY` | `RECALL_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Yanlışlıkla hazır işaretlenen fiş hazırlığa geri döner. |
+| `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Garson masaya teslimi doğrular. |
+| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Resmî denetim kaydı ve gerekçe gerekir. |
 
 ---
 
-## 4. Bill & Payment State Machine
+## 4. Hesap ve Ödeme Durum Makinesi
 
 ```
-   [ OPEN ] (New orders aggregate here)
+   [ OPEN ] (Yeni siparişler burada toplanır)
        |
-       | (Partial payment received)
+       | (Kısmi ödeme alınır)
        v
 [ PARTIALLY_PAID ] <-----+
-       |                 | (Additional partial payment)
+       |                 | (Ek kısmi ödeme)
        |                 +--+
-       | (Final balance settled)
+       | (Kalan borç ödenir)
        v
  [ FULLY_PAID ]
        |
-       | (Supervisor refund authorized)
+       | (Yönetici iadeyi onaylar)
        v
   [ REFUNDED ]
 ```
 
-| Current State | Event / Trigger | Next State | Guards & Rules |
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Koruma Koşulları ve Kurallar |
 | :--- | :--- | :--- | :--- |
-| `OPEN` | `RECEIVE_PARTIAL_PAYMENT`| `PARTIALLY_PAID` | Payment amount > 0 and < remaining balance. |
-| `OPEN` | `RECEIVE_FULL_PAYMENT` | `FULLY_PAID` | Payment amount equals remaining balance. |
-| `PARTIALLY_PAID` | `RECEIVE_PARTIAL_PAYMENT` | `PARTIALLY_PAID` | Payment amount > 0 and < remaining balance; method permission and scope checked. |
-| `PARTIALLY_PAID`| `RECEIVE_REMAINING` | `FULLY_PAID` | Remaining balance reaches 0.00. |
-| `FULLY_PAID` | `AUTHORIZE_REFUND` | `REFUNDED` | Requires supervisor PIN, audit trail recorded. |
-| `OPEN` | `VOID_SESSION` | `VOIDED` | Only if all orders are cancelled; balance is 0.00. |
+| `OPEN` | `RECEIVE_PARTIAL_PAYMENT`| `PARTIALLY_PAID` | Ödeme sıfırdan büyük ve kalan borçtan küçüktür; yöntem yetkisi ve kapsam denetlenir. |
+| `OPEN` | `RECEIVE_FULL_PAYMENT` | `FULLY_PAID` | Ödeme kalan borca eşittir. |
+| `PARTIALLY_PAID` | `RECEIVE_PARTIAL_PAYMENT` | `PARTIALLY_PAID` | Ödeme sıfırdan büyük ve kalan borçtan küçüktür; yöntem yetkisi ve kapsam denetlenir. |
+| `PARTIALLY_PAID`| `RECEIVE_REMAINING` | `FULLY_PAID` | Kalan borç 0.00 olur. |
+| `FULLY_PAID` | `AUTHORIZE_REFUND` | `REFUNDED` | Yönetici PIN doğrulaması ve denetim izi gerekir. |
+| `OPEN` | `VOID_SESSION` | `VOIDED` | Yalnızca bütün siparişler iptal edilmişse ve borç 0.00 ise. |
 
 ---
 
-## 5. Concurrency & State Invariants
+## 5. Eşzamanlılık ve Değişmez Kurallar
 
-1. **Optimistic Locking:** Entity records (`orders`, `table_sessions`, `bills`) must carry a `version` column. State transitions must check `WHERE version = :expected_version`.
-2. **Atomic Payment Settlement:** When splitting bills across multiple cards/cash, each transaction is logged independently with a running balance check.
-3. **No Phantom Cancellations:** Customers lack direct cancellation permission. An authorized staff cancellation racing with preparation must atomically check permission, version, and current state; exactly one conflicting transition succeeds. If preparation commits first, ordinary cancellation is rejected and a supervisor void is required. Do not give either request unconditional priority regardless of commit order.
+1. `orders`, `table_sessions`, `bills` kayıtları `version` taşır; geçiş `WHERE version = :expected_version` ile sürümü denetler.
+2. Çoklu kart/nakit paylaşımında her ödeme ayrı kaydedilir; kalan borç atomik olarak kontrol edilir.
+3. Müşterinin doğrudan iptal yetkisi yoktur. Yetkili personelin iptali ile hazırlık yarışında yetki, sürüm ve mevcut durum atomik denetlenir; çelişen geçişlerden yalnızca biri başarılı olur. Hazırlık önce commit edilirse sıradan iptal reddedilir, yönetici iptali gerekir. Commit sırasından bağımsız koşulsuz öncelik verilemez.
+
+Teknik varlık adları: sipariş `Order`, sipariş kalemi `OrderItem`.

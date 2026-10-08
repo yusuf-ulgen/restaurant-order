@@ -1,34 +1,44 @@
-# Current State & Handoff
+# Güncel Durum ve Devir Notu
 
-Updated: 2026-10-08. Refresh this file from Git/GitHub when resuming; historical phase trackers are linked rather than overwritten.
+Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz takiplerini silmeyin veya yeniden yazmayın.
 
-## Product baseline
+## Ürün Tabanı
 
-- Main baseline: `467737b`, merged Phase 5 menu/catalog work.
-- Phases 0-5 are recorded complete; Phase 6 tables/sessions is next in [ROADMAP.md](./ROADMAP.md).
-- See [PHASE-5-TRACKER.md](./PHASE-5-TRACKER.md) for the completed phase and [REVIEW-BACKLOG.md](./REVIEW-BACKLOG.md) for review findings and proposed decisions.
+- Main tabanı: `467737b`, birleşmiş Faz 5 menü/katalog çalışması.
+- Faz 0-5 tamamlandı olarak kayıtlı; [yol haritasında](./ROADMAP.md) sıradaki iş Faz 6 masa/oturum yönetimi.
+- Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Active task
+## Önceki Düzeltme
 
-- Issue: [#8 — Fix equal bill splitting and document contributor handoffs](https://github.com/yusuf-ulgen/restaurant-order/issues/8).
-- Branch: `fix/pricing-and-contributor-handoff`.
-- Status: implemented and locally verified; awaiting PR peer review; not merged or deployed.
-- PR: [#9 — Fix bill splitting and establish issue-to-PR handoffs](https://github.com/yusuf-ulgen/restaurant-order/pull/9), pushed and open for peer review. Check GitHub for current CI/review status.
-- Scope: fix equal splitting, align contradictory permission examples with current RBAC, save review suggestions, and formalize issue/PR/handoff workflow.
-- Exclusions: no new grants, schema changes, payment gateway, contract generator, or implementation of the proposed table/session redesign.
+- [Issue #8](https://github.com/yusuf-ulgen/restaurant-order/issues/8), dal: `fix/pricing-and-contributor-handoff`.
+- [PR #9](https://github.com/yusuf-ulgen/restaurant-order/pull/9): negatif hesap payı düzeltildi; RBAC örnekleri ve katkı/devir akışı düzenlendi. GitHub kontrolleri başarılı; PR henüz birleştirilmedi veya yayınlanmadı.
+- Eski kodda beş yeni regresyon testi başarısızdı; düzeltmeyle 36 hedefli test başarılı. Bir değişmez-kural testi 50.000 toplam/kişi birleşimini kontrol ediyor.
+- 2026-10-08 tarihli önceki `pnpm verify`: 1.228 backend birim, 10 mimari, 295 frontend, 249 entegrasyon, 115 kontrol betiği ve 2 HTTP sağlık E2E testi; toplam 1.899. Lint, tür, dosya/bağlantı/gizli bilgi kontrolleri ve üretim derlemeleri başarılı; backend Release derlemesi sıfır uyarı/hata.
 
-## Verification and environment
+## Aktif Dokümantasyon Görevi
 
-- Original defect reproduced by running PricingService: 0.02 / 4 returned 0.01, 0.01, 0.01, -0.01.
-- Regression evidence: all 5 new tests failed on the original implementation; all 36 targeted pricing tests passed after the fix. One invariant test exercises 50,000 total/guest combinations.
-- Full `pnpm verify` passed on 2026-10-08: 1,228 backend unit tests, 10 architecture tests, 295 frontend tests, 249 integration tests, 115 gate tests, and 2 HTTP E2E health probes (1,899 total). Lint, type checks, file/link/secret gates, and production builds passed. Backend Release build: zero warnings/errors.
-- Test process used local infrastructure settings, no custom JWT_SECRET, and `DOTNET_PROCESSOR_COUNT=2` to constrain integration concurrency. Initial targeted build hit a running local API executable lock; stopping the task-owned API/worker resolved it.
-- Existing nonblocking warnings: one migration exceeds the 450-line warning threshold; operations/admin bundles exceed Vite's 500 kB advisory. No tests were skipped in the reported suites.
-- Local prerequisites: .NET 10, Node with pinned pnpm 11.10.0, PostgreSQL 16, Redis 7, and Docker for integration fixtures.
-- This machine uses ignored `.local` launch helpers and external secret storage. Those helpers are not a portable setup contract; R10 tracks the reproducibility gap.
-- Integration auth fixtures currently expect the repository development JWT key: unset a custom JWT_SECRET for the test process while retaining local infrastructure settings. Constrained test parallelism may be needed for Docker probes. Never unset production settings or commit local secrets.
-- The existing E2E suite contains health probes only; full browser workflows remain R08.
+- [Issue #10](https://github.com/yusuf-ulgen/restaurant-order/issues/10), dal: `docs/turkce-dokumantasyon`.
+- Taban: `ba2ec17`, PR #9 dalı. Bağımlı PR bu dala açılır; #9 birleştikten sonra taban main'e alınmalıdır.
+- Kapsam: takip edilen Markdown belgeleri, AI yönergeleri ve issue/PR şablonlarını Türkçeye çevirme; kalıcı Türkçe yazım kuralı. Teknik adlar, komutlar, karar durumları ve kanıtlar korunur.
+- Durum: takip edilen 57 Markdown belgesi Türkçeleştirildi; kalıcı dil kuralı ve araç yönergeleri güncellendi. [PR #12](https://github.com/yusuf-ulgen/restaurant-order/pull/12) incelemeye sunuldu; birleştirilmedi. Kaynak kodu ve çalışma zamanı bağımlılıkları değişmedi.
+- Bu görevde 2026-10-08 tarihinde `pnpm verify` çıkış kodu 0: 1.228 backend birim + 10 mimari + 295 frontend + 249 entegrasyon + 115 kontrol + 2 HTTP sağlık E2E = 1.899 başarılı test. Lint, tür denetimi ve üretim derlemeleri başarılı; backend 0 uyarı/0 hata. Son belge düzenlemelerinden sonra bağlantı/dosya/gizli değer kontrolleri ve `git diff --check` ayrıca çalıştırılır.
+- İzin matrisinin anahtar ve izin hücreleri önceki sürümle birebir karşılaştırıldı. Eski faz sayıları tarihsel kayıt olarak korundu. SignalR kararının ve OpenAPI üretim açığının durumu mevcut kayıtlara göre netleştirildi.
 
-## Next action
+## Bildirim Çalışması
 
-Review the task PR and its CI results; do not self-merge. After merge, refresh this handoff and settle the proposed Phase 6 business contracts before starting implementation. Follow [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md).
+- [Issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11): push kapsamı ve sağlayıcı kararı.
+- Kullanıcı personel ve müşteriyi birlikte seçti. Sağlayıcı yanıtı bekleniyor; SignalR + FCM önerisi henüz kabul edilmiş ADR değildir.
+- SignalR + Redis, ADR-0001 kapsamında mevcut canlı iletişim kararıdır. Arka plan push ayrı kanaldır. Gerçek masa/sipariş ve müşteri oturumu uygulamaları henüz tamamlanmadığı için bağımlılıklar gizlenmemelidir.
+
+## Ortam ve Sınırlamalar
+
+- .NET 10, sabit pnpm 11.10.0 ile Node, PostgreSQL 16, Redis 7; entegrasyon için Docker gerekir.
+- Bu makinedeki `.local` başlatma yardımcıları ve depo dışı gizli bilgi deposu taşınabilir kurulum sözleşmesi değildir; R10 bunu izler.
+- Entegrasyon kimlik testleri geliştirme JWT anahtarını bekliyor: yalnızca test sürecinde özel `JWT_SECRET` kaldırılır, yerel altyapı ayarları korunur. `DOTNET_PROCESSOR_COUNT=2`, Docker yoklamaları için eşzamanlılığı sınırlar. Üretim ayarlarını kaldırmayın; yerel sırları commit'e eklemeyin.
+- Önceki hedefli derleme açık API dosyası nedeniyle engellendi; göreve ait API/worker durdurulunca çözüldü.
+- Mevcut uyarılar: bir geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
+- E2E süiti yalnızca iki HTTP sağlık sorgusudur; tam tarayıcı iş akışı kapsamı R08 olarak açıktır.
+
+## Sonraki Somut Adım
+
+Çeviri PR incelemesini ve CI sonucunu izleyin. Bildirimler için ayrı feature dalında öneri ADR ve uygulama planını kaydedin; sağlayıcı yanıtı gelmeden entegrasyonu kesinleştirmeyin. Faz 6 öncesi açık iş kurallarını çözün. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izleyin; onaysız birleştirme/yayın yapmayın.

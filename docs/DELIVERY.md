@@ -1,92 +1,83 @@
-# Delivery & Release Engineering (`docs/DELIVERY.md`)
+# Teslimat ve Yayın Mühendisliği (`docs/DELIVERY.md`)
 
-## 1. Branching Strategy
+## 1. Dal Stratejisi
 
-Follow [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md) for issue creation, implementation, commits, PR descriptions, and persistent handoff. Start each task by reading and refreshing [CURRENT-STATE.md](./CURRENT-STATE.md).
+Issue, uygulama, commit, PR açıklaması ve kalıcı devir için [katkı akışını](./CONTRIBUTING-WORKFLOW.md) izleyin. Her görevin başında [güncel durumu](./CURRENT-STATE.md) okuyup yenileyin.
 
-The repository follows a clean, trunk-based feature branch workflow designed for continuous integration:
+Depo, sürekli entegrasyona uygun kısa ömürlü özellik dalları kullanır:
 
-```
-[ feat/feature-name ] ──────┐
-                             ▼
-                    [ PR / Code Review ]
-                    (Tests Pass + Lint)
-                             │
-                             ▼
-[ main (Protected) ] ─────────────────────────► [ Staging ] ──► [ Production ]
+```text
+feat/özellik → PR / kod incelemesi → testler ve lint → korumalı main → staging → production
 ```
 
-### 1.1. Branch Naming Conventions
-- `feat/<feature-slug>`: New user-facing or platform features (e.g., `feat/kds-recall-ticket`).
-- `fix/<issue-slug>`: Bug fixes and defect resolutions (e.g., `fix/printer-spooler-timeout`).
-- `docs/<doc-slug>`: Documentation-only additions or updates (e.g., `docs/add-adr-002`).
-- `refactor/<refactor-slug>`: Code refactoring without behavioral alterations.
+### 1.1. Dal Adları
 
-### 1.2. Main Branch Protection & Quality Gates
-- Direct commits to `main` are strictly prohibited (with the exception of the initial repository setup commit).
-- All changes must merge into `main` via Pull Requests with passing automated tests and mandatory peer review.
-- Force pushes (`git push --force`) and destructive history rewrites on `main` are permanently disabled.
-- **Automated CI Quality Gates (Mandatory Order):**
-  1. `Gate 1:` Repository Policy — File size limits (450 warning / 600 strict ceiling via `scripts/check-file-size.mjs`).
-  2. `Gate 2:` Documentation & Link Integrity (`scripts/check-docs.mjs`).
-  3. `Gate 3:` Secret & Credential Scanning (`scripts/check-secrets.mjs`).
-  4. `Gate 4:` Quality Gate & Blue-Green Scripts Unit Tests (`node --test scripts/tests/`).
-  5. `Gate 5:` ESLint 9 Flat Linting (`pnpm lint`).
-  6. `Gate 6:` TypeScript Strict Typecheck (`pnpm typecheck`).
-  7. `Gate 7:` .NET Architecture Boundary Tests (`dotnet test tests/architecture/...`).
-  8. `Gate 8:` Unit & Integration Tests (.NET & React component tests).
-  9. `Gate 9:` Production Builds (.NET Release build + Vite React builds).
-  10. `Gate 10:` Docker Compose Configuration Validation (`docker compose -f compose.yml -f compose.dev.yml config` and all environment overrides).
-- **No `continue-on-error`:** A failure at any gate halts the pipeline immediately.
-- **Local Pre-Flight Command:** Developers and agents must run `pnpm verify` before creating a pull request.
+- `feat/<feature-slug>`: Yeni kullanıcı/platform özelliği; örneğin `feat/kds-recall-ticket`.
+- `fix/<issue-slug>`: Hata düzeltmesi; örneğin `fix/printer-spooler-timeout`.
+- `docs/<doc-slug>`: Yalnızca dokümantasyon; örneğin `docs/add-adr-002`.
+- `refactor/<refactor-slug>`: Davranışı değiştirmeden kod düzenleme.
 
----
+### 1.2. Main Koruması ve Kalite Kontrolleri
 
-## 2. Release Versioning (SemVer 2.0.0)
+- İlk depo kurulum commit'i dışında main'e doğrudan commit yasaktır.
+- Her değişiklik başarılı otomatik test ve zorunlu ekip incelemesinden sonra PR ile main'e alınır.
+- Main üzerinde `git push --force` ve geçmişi yıkıcı biçimde yeniden yazmak yasaktır.
+- **Zorunlu CI kontrol sırası:**
+  1. Dosya sınırları: 450 uyarı / 600 kesin üst sınır (`scripts/check-file-size.mjs`).
+  2. Belge ve bağlantı bütünlüğü (`scripts/check-docs.mjs`).
+  3. Gizli bilgi ve kimlik bilgisi taraması (`scripts/check-secrets.mjs`).
+  4. Kontrol ve Blue/Green betiklerinin birim testleri (`node --test scripts/tests/`).
+  5. ESLint 9 düz yapılandırma (`pnpm lint`).
+  6. Sıkı TypeScript tür kontrolü (`pnpm typecheck`).
+  7. .NET mimari sınır testleri (`dotnet test tests/architecture/...`).
+  8. .NET ve React birim/entegrasyon testleri.
+  9. .NET Release ve Vite üretim derlemeleri.
+  10. Docker Compose temel ve tüm ortam ek yapılandırmalarının doğrulanması (`docker compose -f compose.yml -f compose.dev.yml config`).
+- `continue-on-error` kullanılamaz; herhangi bir kontrol hatası hattı durdurur.
+- PR oluşturmadan önce geliştirici ve ajanlar `pnpm verify` çalıştırmalıdır.
 
-`restaurant-order` follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
+## 2. Sürümleme (SemVer 2.0.0)
 
-1. **MAJOR (`vX.0.0`):** Incompatible API changes, breaking database schema overhauls, or breaking surface redesigns.
-2. **MINOR (`vx.Y.0`):** New functionality added in a backward-compatible manner.
-3. **PATCH (`vx.y.Z`):** Backward-compatible bug fixes, performance improvements, and documentation enhancements.
+`MAJOR.MINOR.PATCH` uygulanır:
 
----
+1. **MAJOR (`vX.0.0`):** Uyumsuz API, kırıcı şema veya arayüz değişikliği.
+2. **MINOR (`vx.Y.0`):** Geriye uyumlu yeni işlev.
+3. **PATCH (`vx.y.Z`):** Geriye uyumlu hata düzeltmesi, performans ve belge iyileştirmesi.
 
-## 3. Blue-Green Release Pipeline Stages
+## 3. Blue/Green Yayın Aşamaları
 
-Production deployments follow a standardized, provider-independent 10-stage pipeline:
+Sağlayıcıdan bağımsız on adım:
 
-1. **Preflight:** Validates active slot (`blue`/`green`), target idle slot, and image digest parity.
-2. **Config Validation:** Verifies Compose overrides and `.env.example` contracts.
-3. **Database Migration Safety:** Verifies Expand-Migrate-Contract compliance and backup readiness.
-4. **Deploy Inactive Slot:** Launches target slot containers without affecting live traffic.
-5. **Health Probes:** Probes `/health/live` and `/health/ready` on the inactive slot.
-6. **Endpoint Warmup:** Exercises endpoints to pre-warm caches, connection pools, and runtime JIT.
-7. **Automated Smoke:** Runs non-mutating smoke tests (PIN auth, KDS display, printer spooler).
-8. **Traffic Cutover:** Switches reverse proxy / ingress upstream pool to the new slot.
-9. **Post-Cutover Observation:** Monitors error rates (`< 0.05%` threshold) and worker activation.
-10. **Drain Retired Slot:** Drains in-flight connections and stops the retired slot.
+1. **Ön kontrol:** Etkin `blue`/`green` yuvası, boş hedef ve imaj özeti eşitliğini doğrula.
+2. **Yapılandırma:** Compose ek ayarlarını ve `.env.example` sözleşmesini doğrula.
+3. **Veritabanı güvenliği:** Genişlet-Taşı-Daralt uyumu ve yedek hazırlığını kontrol et.
+4. **Boş yuvayı başlat:** Canlı trafik etkilenmeden hedef konteynerleri aç.
+5. **Sağlık:** Hedefin `/health/live` ve `/health/ready` uçlarını kontrol et.
+6. **Isıtma:** Önbellek, bağlantı havuzu ve JIT için uçları çalıştır.
+7. **Temel işleyiş testi:** Durum değiştirmeyen PIN, KDS ve yazdırma kuyruğu kontrolleri.
+8. **Trafiği geçir:** Ters vekil/ingress havuzunu yeni yuvaya yönlendir.
+9. **Gözlem:** Hata oranını (`< 0.05%`) ve worker etkinliğini izle.
+10. **Eski yuvayı boşalt:** Devam eden bağlantıların bitmesini bekle ve eski yuvayı durdur.
 
----
+## 4. Kesintisiz Veritabanı Geçişleri
 
-## 4. Zero-Downtime Database Migration Guidelines
+Şema değişiklikleri **Genişlet-Taşı-Daralt (Expand-Migrate-Contract)** yaklaşımını izler:
 
-All database schema changes must adhere to the **Expand-Migrate-Contract** pattern:
-
-```
-Step 1: EXPAND                    Step 2: MIGRATE DATA              Step 3: CONTRACT
-(Add new column nullable)        (Backfill existing rows)          (Deprecate old column)
-[ table: old_col, new_col ]  ──►  [ new_col populated ]        ──►  [ drop old_col ]
+```text
+1. EXPAND: Yeni sütunu nullable ekle
+2. MIGRATE DATA: Eski satırları yeni alana taşı
+3. CONTRACT: Eski sütunu kullanım dışı bırak ve uygun sonraki yayında kaldır
 ```
 
-### 4.1. Invariants for Safe Migrations
-1. **No Destructive DDL Pre-Cutover:** `DROP TABLE`, `DROP COLUMN`, `RENAME COLUMN`, and `TRUNCATE` are strictly prohibited before cutover.
-2. **Backward Compatibility:** Both Blue and Green must be compatible with the database schema simultaneously.
-3. **Non-Null Defaults:** New non-nullable columns must have safe default values.
-4. **Concurrent Indexing:** Indexes must be created concurrently (`CREATE INDEX CONCURRENTLY`).
-5. **Rollback Compatibility:** If cutover fails, the database must remain fully compatible with the previous application version.
-6. **Operational Tooling:**
-   - `pnpm migration:validate`: Validates migration files against destructive DDL patterns.
-   - `pnpm migration:script`: Generates audited, idempotent deployment SQL scripts.
-   - `pnpm migration:apply:dev`: Applies migrations to local development database only.
-   - Production API startup never applies migrations automatically. Migrations are executed as a dedicated pre-cutover pipeline step.
+### 4.1. Güvenlik Kuralları
+
+1. Trafik geçişinden önce `DROP TABLE`, `DROP COLUMN`, `RENAME COLUMN`, `TRUNCATE` yasaktır.
+2. Blue ve Green aynı anda şemayla uyumlu kalmalıdır.
+3. Yeni zorunlu sütunlar güvenli varsayılan değer taşımalıdır.
+4. İndeksler eşzamanlı oluşturulur (`CREATE INDEX CONCURRENTLY`).
+5. Trafik geçişi başarısızsa önceki uygulama aynı veritabanıyla çalışabilmelidir.
+6. Araçlar:
+   - `pnpm migration:validate`: Yıkıcı DDL desenlerini denetler.
+   - `pnpm migration:script`: Denetlenebilir, tekrar çalıştırılabilir SQL üretir.
+   - `pnpm migration:apply:dev`: Yalnızca yerel geliştirme veritabanına uygular.
+   - Üretim API'si başlangıçta otomatik geçiş yapmaz; geçişler trafik öncesi ayrı işlem hattında uygulanır.

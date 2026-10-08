@@ -1,30 +1,30 @@
-# Task: <short outcome>
+# Görev: <kısa sonuç>
 
-- Date / owner:
-- Issue (or unsynced local task):
-- Branch / base commit:
+- Tarih / sorumlu:
+- Issue (veya henüz eşitlenmemiş yerel görev):
+- Dal / taban commit:
 - PR:
-- Status: proposed / in progress / blocked / ready for review / merged
+- Durum: öneri / devam ediyor / engelli / incelemeye hazır / birleştirildi
 
-## Problem and evidence
+## Sorun ve Kanıt
 
-Describe the trigger, observed behavior, expected behavior, and affected surfaces.
+Tetikleyiciyi, gözlenen/beklenen davranışı ve etkilenen arayüzleri açıklayın.
 
-## Scope and acceptance criteria
+## Kapsam ve Kabul Ölçütleri
 
-- [ ] Observable outcome, including negative paths and authorization where relevant.
-- [ ] Regression tests and synchronized documentation/contracts.
+- [ ] Başarısız akışlar ve gerekli yetkilendirme dâhil gözlenebilir sonuç.
+- [ ] Regresyon testleri ile eşzamanlı dokümantasyon/sözleşme güncellemeleri.
 
-Explicit exclusions:
-Required decisions / ADR links:
+Kapsam dışı işler:
+Gerekli kararlar / ADR bağlantıları:
 
-## Verification
+## Doğrulama
 
-Record actual commands, date, environment prerequisites, results, and unrun checks. Never store secrets or synthetic credentials here.
+Gerçekten çalıştırılan komutları, tarihi, ortam önkoşullarını, sonuçları ve çalıştırılmayan kontrolleri yazın. Gizli bilgi veya sentetik kimlik bilgilerini burada saklamayın.
 
-## Handoff
+## Devir Notu
 
-Completed:
-Remaining / blockers:
-Next concrete action:
-Related backlog / phase tracker:
+Tamamlananlar:
+Kalanlar / engeller:
+Sonraki somut adım:
+İlgili inceleme listesi / faz takip belgesi:

@@ -1,75 +1,59 @@
-# Payments, Tips & Platform Commissions (`docs/PAYMENTS-TIPS-COMMISSIONS.md`)
+# Ödemeler, Bahşişler ve Platform Komisyonları (`docs/PAYMENTS-TIPS-COMMISSIONS.md`)
 
-## 1. Payment Processing Overview
+## 1. Genel Bakış
 
-The billing subsystem supports multiple payment methods, flexible bill splitting, optional gratuity collection, and platform commission calculations.
+Hesap alt sistemi birden fazla ödeme yöntemi, esnek hesap paylaşımı, isteğe bağlı bahşiş ve platform komisyonlarını kapsar.
 
----
+## 2. Ödeme Yöntemleri
 
-## 2. Supported Payment Methods
-
-| Method | Type | Description | Status |
+| Yöntem | Tür | Açıklama | Durum |
 | :--- | :--- | :--- | :--- |
-| **Cash (Nakit)** | Physical | Collected by roles with `billing.payment.cash`; cash drawer accounting. Waiters do not have this permission. | Planned |
-| **External POS Terminal** | Physical Card | Authorized staff record standalone terminal payments; waiters are restricted to their own scope by `billing.payment.pos_card`. | Planned |
-| **Integrated Digital Gateway** | Online Card | QR guest pays directly via smartphone gateway (e.g., Stripe, Iyzico). | `[Proposed / ADR Required]` |
-| **Room / Tab Charge** | Account | Charged to customer house account or hotel room folio. | `[Proposed / ADR Required]` |
+| Nakit | Fiziksel | `billing.payment.cash` yetkili roller tahsil eder; kasa çekmecesi muhasebesi tutulur. Garsonda bu yetki yoktur. | Planlandı |
+| Harici POS terminali | Fiziksel kart | Yetkili personel ayrı banka terminalinin ödemesini kaydeder; garson `billing.payment.pos_card` ile yalnızca kendi kapsamındadır. | Planlandı |
+| Entegre dijital ağ geçidi | Çevrimiçi kart | Müşteri telefonundan Stripe/Iyzico gibi sağlayıcıyla öder. | `[Proposed / ADR Required]` |
+| Oda / cari hesap | Hesaba borç | Müşteri cari hesabına veya otel odası hesabına kaydedilir. | `[Proposed / ADR Required]` |
 
----
+## 3. Hesap Paylaşımı
 
-## 3. Split Billing Workflows
+120.00 tutarındaki hesap; 40.00 nakit, 40.00 POS, 40.00 POS şeklinde ödenebilir. Kalan borç sırasıyla 80.00, 40.00 ve 0.00 olur; son adımda hesap kapanır.
 
-A bill can be settled in multiple increments using different methods:
+### 3.1. Paylaşım Yöntemleri
 
+1. **Tutara göre:** Müşteri kalan borca karşı ödeyeceği tutarı seçer.
+2. **Eşit paylaşım:** Toplam borç N kişiye bölünür. Mevcut iki ondalıklı yardımcı yalnızca tam kuruş/sent tutarlarını kabul eder. Taban pay aşağı yuvarlanır; kalan kuruşlar sondan başlayarak kişi başına en fazla bir kuruş dağıtılır. `100.01 / 3` sonucu `33.33, 33.34, 33.34`; `0.02 / 4` sonucu `0.00, 0.00, 0.01, 0.01` olur. Paylar negatif olamaz, toplamları hesaba eşit olmalı ve aralarındaki fark en fazla bir kuruş olmalıdır. Sıfır pay bir dağılım sonucudur; sıfır tutarlı ödeme işlemi değildir. Genel para birimi desteği [inceleme listesinde](./REVIEW-BACKLOG.md) izlenir.
+3. **Ürüne göre:** Belirli sipariş kalemleri ödenir; kalan kalemler açık kalır.
+
+## 4. Bahşiş Mimarisi
+
+### 4.1. Toplama ve Dağıtma
+
+- **Yüzde seçenekleri:** QR ve mobil ödeme ekranları %5, %10, %15, %20 ve özel bahşiş alanı sunar.
+- **Doğrudan garsona:** Bahşiş masanın birincil garsonuna yazılır.
+- **Ortak havuz (Tronc):** Vardiya bahşişleri birleştirilir; mutfak, bar ve salon personeline çalışılan saate göre dağıtılır.
+- **Raporlama:** Günlük Z raporları ve vardiya özetleri satış ile bahşişi ayırarak bordro/vergi muhasebesini kolaylaştırır.
+
+## 5. Platform Komisyonu
+
+Dijital ağ geçidinden geçen ödemelerde:
+
+```text
+Platform ücreti = (İşlem tutarı × Komisyon oranı %) + Sipariş başına sabit ücret
 ```
-[ Active Bill: $120.00 ]
-           │
-           ├─► Payment 1: $40.00 (Cash)        ──► Remaining Balance: $80.00
-           │
-           ├─► Payment 2: $40.00 (Card - POS)  ──► Remaining Balance: $40.00
-           │
-           └─► Payment 3: $40.00 (Card - POS)  ──► Remaining Balance: $0.00 (Bill Closed)
+
+### 5.1. Muhasebe ve Mutabakat
+
+- Kesinleşen dijital ödeme için mevcut taslak iki alacak kaydı tanımlar:
+  - `credit`: İşletmeye ödenecek hesap; net = brüt - komisyon.
+  - `credit`: Platform gelir hesabı; komisyon tutarı.
+- Komisyonlar abonelik anlaşmasına göre haftalık veya aylık olarak mutabakata bağlanır.
+- Bu metin muhasebe alt sisteminin uygulanmış olduğunu göstermez; defterin karşı borç kaydı ve iade modeli ödeme fazında kesinleştirilmelidir.
+
+## 6. İade ve İptal Yönetimi
+
+- İade için yönetici PIN doğrulaması gerekir; garson iade yapamaz.
+- İade ödemenin tamamına veya belirli bir sipariş kalemine uygulanabilir; tutar asıl işlem toplamını aşamaz.
+- Her iptal/iade değiştirilemez denetim kaydı üretir:
+
+```text
+{ timestamp, tenant_id, branch_id, bill_id, supervisor_id, reason, original_amount, refund_amount }
 ```
-
-### 3.1. Split Modes
-1. **Split by Amount:** The customer specifies an arbitrary amount to pay toward the balance.
-2. **Equal Split:** The system divides the balance equally across $N$ guests:
-   $$\text{Guest Share} = \frac{\text{Total Balance}}{N}$$
-   The current two-decimal calculator accepts only whole-cent totals. Round the base share down, then distribute remaining cents one per guest from the end. For example, 100.01 / 3 gives 33.33, 33.34, 33.34; 0.02 / 4 gives 0.00, 0.00, 0.01, 0.01. Shares must be nonnegative, sum exactly to the total, and differ by at most one cent. Zero shares are allocations, not zero-value payment transactions. Currency-general minor-unit integration remains tracked in [the review backlog](./REVIEW-BACKLOG.md).
-3. **Split by Item:** Specific order items are selected and settled. Remaining items remain open on the bill.
-
----
-
-## 4. Tip & Gratuity Architecture
-
-### 4.1. Tip Collection Models
-- **Percentage Presets:** QR app and mobile payment screens offer quick percentage selections (e.g., 5%, 10%, 15%, 20%) alongside a "Custom Tip" field.
-- **Allocation Strategies:**
-  1. **Direct-to-Server:** Tips are attributed directly to the primary waiter assigned to the table.
-  2. **Pooled (Tronc):** All tips collected in a shift are pooled and distributed across kitchen, bar, and floor staff based on hours worked.
-- **Reporting:** Daily Z-reports and staff shift summaries separate base sales from tips to simplify payroll and tax accounting.
-
----
-
-## 5. Platform Commission Engine
-
-For digital transactions processed via platform payment gateways, platform fees are calculated and tracked:
-
-$$\text{Platform Fee} = (\text{Transaction Amount} \times \text{Commission Rate \%}) + \text{Fixed Fee Per Order}$$
-
-### 5.1. Ledger & Settlement
-- Every settled digital payment generates a dual-entry ledger record:
-  - `credit`: Tenant Payable Account (Net amount = Gross - Commission).
-  - `credit`: Platform Revenue Account (Commission fee).
-- Commissions are settled weekly or monthly based on the tenant's subscription agreement.
-
----
-
-## 6. Refunds & Void Governance
-
-- **Refund Authorization:** Refunds require supervisor PIN validation. Floor waitstaff cannot execute refunds.
-- **Partial vs. Full Refunds:**
-  - A refund can apply to the entire payment or a specific line item.
-  - The refund amount cannot exceed the original transaction total.
-- **Audit Logging:** Every void and refund writes an immutable audit record containing:
-  `{ timestamp, tenant_id, branch_id, bill_id, supervisor_id, reason, original_amount, refund_amount }`

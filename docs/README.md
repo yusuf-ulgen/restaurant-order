@@ -1,57 +1,52 @@
-# Documentation Index & Architecture Blueprint (`docs/README.md`)
+# Dokümantasyon Dizini
 
-Welcome to the technical and operational documentation repository for the **Restaurant Order Management System** (`restaurant-order`).
+Bu dizin `restaurant-order` ürün kapsamını, mimari kararlarını, iş kurallarını ve operasyon adımlarını içerir. Önce [AGENTS.md](../AGENTS.md), [katkı iş akışı](./CONTRIBUTING-WORKFLOW.md) ve [güncel durum](./CURRENT-STATE.md) okunur.
 
----
+## Ürün ve Alan
 
-## 1. Documentation Structure & Map
+- [PRODUCT.md](./PRODUCT.md): Ürün vizyonu ve beş kullanıcı arayüzü.
+- [DOMAIN.md](./DOMAIN.md): Varlıklar, ilişkiler ve alan sınırları.
+- [GLOSSARY.md](./GLOSSARY.md): Türkçe açıklamalı ortak terminoloji; İngilizce teknik karşılıklar.
+- [SCREEN-INVENTORY.md](./SCREEN-INVENTORY.md): Ekranlar, roller ve eylemler.
 
-The documentation is organized into clear domains to support developers, product managers, and automated coding agents:
+## Mimari ve İş Kuralları
 
-### 1.1. Product & Domain Specifications
-- [docs/PRODUCT.md](./PRODUCT.md) — Product vision, user journeys, target personas, and the 5 product surfaces.
-- [docs/DOMAIN.md](./DOMAIN.md) — Ubiquitous language, core entities, relationships, and bounded contexts.
-- [docs/GLOSSARY.md](./GLOSSARY.md) — Standardized bilingual (TR/EN) terminology dictionary.
-- [docs/SCREEN-INVENTORY.md](./SCREEN-INVENTORY.md) — Detailed catalog of UI screens across all surfaces.
+- [ARCHITECTURE.md](./ARCHITECTURE.md): Mimari ve kabul edilmiş teknoloji kararları.
+- [DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md): Tasarım değişkenleri, erişilebilir bileşenler ve uygulama kabukları.
+- [REPOSITORY-STRUCTURE.md](./REPOSITORY-STRUCTURE.md): Depo düzeni, modül sınırları ve dosya boyutu kuralları.
+- [ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md): Sekiz rol için izin matrisi.
+- [STATE-MACHINES.md](./STATE-MACHINES.md): Masa, sipariş, hazırlık fişi ve ödeme durumları.
+- [NEGATIVE-FLOWS.md](./NEGATIVE-FLOWS.md): Hatalar, zaman aşımı ve eşzamanlılık senaryoları.
+- [MULTI-TENANCY.md](./MULTI-TENANCY.md): İşletmeler arasında veri ve erişim yalıtımı.
+- [PAYMENTS-TIPS-COMMISSIONS.md](./PAYMENTS-TIPS-COMMISSIONS.md): Ödeme, hesap bölme, bahşiş ve komisyon.
+- [ORDER-ROUTING-AND-PRINTING.md](./ORDER-ROUTING-AND-PRINTING.md): İstasyon yönlendirme ve ESC/POS yazdırma.
+- [REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md): Canlı olaylar, push bildirimleri ve sesli uyarılar.
 
-### 1.2. Architecture & Technical Foundations
-- [docs/ARCHITECTURE.md](./ARCHITECTURE.md) — System architecture, bounded contexts, event model, and proposed technology stack.
-- [docs/DESIGN-SYSTEM.md](./DESIGN-SYSTEM.md) — Centralized design tokens, accessible UI components, and application shells.
-- [docs/REPOSITORY-STRUCTURE.md](./REPOSITORY-STRUCTURE.md) — Repository layout, module boundaries, and file size limits (450/600 lines).
-- [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md) — RBAC matrix across the 8 system roles.
-- [docs/STATE-MACHINES.md](./STATE-MACHINES.md) — Formal state lifecycle models for tables, orders, tickets, and payments.
-- [docs/NEGATIVE-FLOWS.md](./NEGATIVE-FLOWS.md) — Failure handling, edge cases, timeouts, and race conditions.
-- [docs/MULTI-TENANCY.md](./MULTI-TENANCY.md) — Multi-tenant isolation architecture and data safety.
-- [docs/PAYMENTS-TIPS-COMMISSIONS.md](./PAYMENTS-TIPS-COMMISSIONS.md) — Payment gateway integration, split billing, tips, and platform fees.
-- [docs/ORDER-ROUTING-AND-PRINTING.md](./ORDER-ROUTING-AND-PRINTING.md) — Kitchen/bar routing and ESC/POS thermal printing.
-- [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md) — Real-time event streams, push notifications, and chime alerts.
+## Kalite, Operasyon ve Planlama
 
-### 1.3. Quality, Operations & Delivery
-- [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md) — Issue-first contributor and agent workflow.
-- [CURRENT-STATE.md](./CURRENT-STATE.md) — Current task, verification, limitations, and next action.
-- [REVIEW-BACKLOG.md](./REVIEW-BACKLOG.md) — Preserved review findings and proposed product decisions.
-- [docs/TESTING.md](./TESTING.md) — Testing strategy, critical paths, and zero-unverified-PASS policy.
-- [docs/SECURITY.md](./SECURITY.md) — Security policies, credential protection, OWASP mitigations, and compliance.
-- [docs/ENVIRONMENTS.md](./ENVIRONMENTS.md) — Environment isolation (local, test, dev, staging, prod).
-- [docs/DELIVERY.md](./DELIVERY.md) — Branching workflow, SemVer, and zero-downtime database migrations.
-- [docs/BLUE-GREEN-RUNBOOK.md](./BLUE-GREEN-RUNBOOK.md) — Zero-downtime production blue/green release runbook.
-- [docs/INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md) — Incident severity levels, escalation, and post-mortem procedures.
-- [docs/ROADMAP.md](./ROADMAP.md) — Development phases and milestone tracking.
-- [docs/FOUNDATION-VALIDATION.md](./FOUNDATION-VALIDATION.md) — Independent audit, verification matrix, and quality gate evidence.
+- [CONTRIBUTING-WORKFLOW.md](./CONTRIBUTING-WORKFLOW.md): Issue, dal, commit, doğrulama, PR ve devir akışı.
+- [CURRENT-STATE.md](./CURRENT-STATE.md): Etkin görev, doğrulama kanıtları, sınırlar ve sonraki adım.
+- [REVIEW-BACKLOG.md](./REVIEW-BACKLOG.md): İnceleme bulguları ve gelecekte değerlendirilecek öneriler.
+- [TESTING.md](./TESTING.md): Test stratejisi ve doğrulanmamış başarı bildirimi yasağı.
+- [SECURITY.md](./SECURITY.md): Güvenlik ve gizli değer yönetimi.
+- [ENVIRONMENTS.md](./ENVIRONMENTS.md): Ortamlar ve yapılandırma sözleşmesi.
+- [DELIVERY.md](./DELIVERY.md): Sürüm, CI ve veritabanı geçişi kuralları.
+- [BLUE-GREEN-RUNBOOK.md](./BLUE-GREEN-RUNBOOK.md): Üretim dağıtımı ve geri alma adımları.
+- [INCIDENT-RESPONSE.md](./INCIDENT-RESPONSE.md): Olay seviyeleri, müdahale ve olay sonrası inceleme.
+- [ROADMAP.md](./ROADMAP.md): Geliştirme aşamaları.
+- [FOUNDATION-VALIDATION.md](./FOUNDATION-VALIDATION.md): Temel doğrulama matrisi ve tarihsel kanıtlar.
+- Faz izleme kayıtları: [Faz 3](./PHASE-3-TRACKER.md), [Faz 4](./PHASE-4-TRACKER.md), [Faz 5](./PHASE-5-TRACKER.md).
 
-### 1.4. ADRs, Runbooks & Templates
-- [TASK-TEMPLATE.md](./templates/TASK-TEMPLATE.md) — Reusable task scope, evidence, and handoff record.
-- [docs/adr/README.md](./adr/README.md) — Architecture Decision Records index and guide.
-- [docs/runbooks/README.md](./runbooks/README.md) — Operational runbooks catalog.
-- [docs/templates/ADR-TEMPLATE.md](./templates/ADR-TEMPLATE.md) — Standard ADR template.
-- [docs/templates/FEATURE-TEMPLATE.md](./templates/FEATURE-TEMPLATE.md) — Standard feature specification template.
-- [docs/templates/INCIDENT-TEMPLATE.md](./templates/INCIDENT-TEMPLATE.md) — Standard post-mortem incident template.
+## Karar Kayıtları ve Şablonlar
 
----
+- [ADR dizini](./adr/README.md) ve [operasyon rehberleri](./runbooks/README.md).
+- [Görev](./templates/TASK-TEMPLATE.md), [ADR](./templates/ADR-TEMPLATE.md), [özellik](./templates/FEATURE-TEMPLATE.md) ve [olay](./templates/INCIDENT-TEMPLATE.md) şablonları.
 
-## 2. Documentation Governance Rules
+## Belge Kuralları
 
-1. **Synchronized Updates:** When code behavior or an API contract changes, the corresponding document **must** be updated within the same commit/PR.
-2. **Strict Line Count Limits:** All documentation files must respect the 450-line warning and 600-line strict maximum ceiling. Split long documents logically.
-3. **No Phantom Decisions:** Architectural choices that have not been approved by the user must be explicitly marked as `[Proposed / ADR Required]` or `[TBD]`.
-4. **Verifiable Links:** All internal links must use relative markdown links and point to existing files.
+1. Belgeler ve yapay zekâ tarafından üretilen açıklamalar Türkçedir; teknik tanımlayıcılar korunur.
+2. Davranış ve sözleşme değişikliklerinin belgeleri aynı commit/PR içinde güncellenir.
+3. Dosya başına 450 satır uyarı, 600 satır üst sınırdır.
+4. Onaylanmamış mimari tercihler `[Proposed / ADR Required]` veya `[TBD]` olarak işaretlenir; kabul edilmiş ADR'ler geçerlidir.
+5. İç bağlantılar göreli Markdown bağlantıları kullanır ve doğrulanır.
+6. Tarihsel test sayıları güncel çalıştırma sonucu gibi sunulmaz.

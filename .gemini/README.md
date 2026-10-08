@@ -1,10 +1,10 @@
-# Gemini Configuration & Context (.gemini/README.md)
+# AI Aracı Yönerge Uyarlayıcısı — .gemini/README.md
 
-> **Binding Authority:** This file is a directory adapter for Gemini tools. You **must** read and adhere to the master instructions in [AGENTS.md](../AGENTS.md) before performing any operation.
+> **Bağlayıcı kaynak:** Herhangi bir işlemden veya kod üretiminden önce [AGENTS.md](../AGENTS.md) okunmalı ve tüm kuralları uygulanmalıdır. Bu dosya bağımsız bir kural kaynağı değildir.
 
-## Operational Instructions
+## Çalışma Kuralları
 
-1. **Master Source of Truth:** All development rules, line count limits (450 warning / 600 strict ceiling), testing policies, and architectural requirements are governed by [AGENTS.md](../AGENTS.md).
-2. **Domain Documents:** Read relevant functional and technical specifications in [docs/](../docs/) prior to implementing code or suggesting architectural changes.
-3. **Integrity:** Never report unverified actions as PASS. Treat all unconfirmed technology choices as `[Proposed / ADR Required]`.
-
+1. Kodlama, test, güvenlik, mimari, Blue/Green ve dosya sınırları (450 satır uyarı / 600 satır kesin üst sınır) AGENTS.md tarafından yönetilir.
+2. Görevle ilgili alan belgelerini [docs/](../docs/) altında okuyun; mimari, alan modeli, durum makineleri, hata akışları, roller, arayüzler, ortamlar ve donanım belgelerini görevin kapsamına göre seçin.
+3. İlgisiz dosyaları ve kullanıcı değişikliklerini koruyun. Gizli bilgi veya gerçek müşteri verisi eklemeyin. Çalıştırılmamış test ve işlemleri başarılı göstermeyin; açık mimari kararlarını öneri/ADR gerekli olarak işaretleyin.
+4. AGENTS.md içindeki Türkçe dil kuralını uygulayın: doküman, issue/PR, commit açıklaması ve devir notları Türkçe olmalıdır; teknik tanımlayıcıları ve komutları koruyun. Ana kuralları çoğaltmayın veya onlarla çelişmeyin.

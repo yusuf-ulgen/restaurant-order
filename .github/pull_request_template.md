@@ -1,68 +1,58 @@
-## Description
+## Açıklama
 
-<!-- Provide a concise summary of the change and the problem it addresses. -->
+<!-- Değişikliği ve çözülen sorunu kısa ve açık biçimde yazın. -->
 
-Closes #<!-- issue number -->
+Closes #<!-- issue numarası -->
 
-## Scope & Handoff
+## Kapsam ve Devir Notu
 
-- Completed behavior:
-- Explicit exclusions / deferred decisions:
-- Remaining risks or blockers:
-- Next concrete action:
-- [ ] [Current-state handoff](../docs/CURRENT-STATE.md) updated with actual verification and task status.
-- [ ] Deferred findings linked to issues or [the review backlog](../docs/REVIEW-BACKLOG.md).
+- Tamamlanan davranış:
+- Kapsam dışı işler / ertelenen kararlar:
+- Kalan riskler veya engeller:
+- Sonraki somut adım:
+- [ ] [Güncel durum](../docs/CURRENT-STATE.md) gerçek doğrulama ve görev durumuyla yenilendi.
+- [ ] Ertelenen bulgular issue'lara veya [inceleme listesine](../docs/REVIEW-BACKLOG.md) bağlandı.
 
----
+## Değişiklik Türü
 
-## Type of Change
+- [ ] `feat`: Yeni özellik veya kullanıcı yeteneği
+- [ ] `fix`: Hata düzeltmesi
+- [ ] `docs`: Dokümantasyon ekleme veya güncelleme
+- [ ] `refactor`: Davranış değiştirmeden kod düzenleme
+- [ ] `ci`: CI/CD akışı veya kalite kontrolü değişikliği
+- [ ] `chore`: Bağımlılık güncellemesi veya derleme araçları
 
-- [ ] `feat`: New feature or user capability
-- [ ] `fix`: Bug fix or defect resolution
-- [ ] `docs`: Documentation addition or update
-- [ ] `refactor`: Code refactoring without behavior changes
-- [ ] `ci`: CI/CD workflow or quality gate update
-- [ ] `chore`: Dependency updates or build tooling
+## Mimari ve Yönetişim Kontrolleri
 
----
+- [ ] **Mimari karar kaydı (ADR):**
+  - [ ] Bu değişiklik ADR gerektiriyor (yeni çerçeve, durum, depolama veya protokol).
+  - [ ] ADR, `docs/adr/` altında `PROPOSED` veya `ACCEPTED` durumunda oluşturuldu.
+  - [ ] Bu değişiklik için ADR gerekmiyor.
+- [ ] **Dosya sınırları:**
+  - [ ] Elle yazılan dosyalar 450 satırın altında (ve her durumda kesin sınırın altında).
+  - [ ] 600 satırı aşan izinli dosyalar `scripts/file-size-allowlist.json` içinde belirtiliyor.
+- [ ] **Gizli bilgi ve kişisel veri yok:**
+  - [ ] API anahtarı, parola, JWT sırrı veya gerçek müşteri verisi commit'e/günlüklere eklenmedi.
+- [ ] **Doğrulanmamış başarı yok:**
+  - [ ] Bildirilen otomatik testler ortamda gerçekten çalıştırılıp doğrulandı.
 
-## Architectural & Governance Checks
+## Test Kanıtı
 
-- [ ] **Architecture Decision Record (ADR):**
-  - [ ] This change requires an ADR (new framework, state change, storage, or protocol).
-  - [ ] ADR is created under `docs/adr/` in `PROPOSED` or `ACCEPTED` status.
-  - [ ] No ADR required for this change.
-- [ ] **File Size Limits:**
-  - [ ] All human-authored files are under 450 lines (or strictly < 600 lines).
-  - [ ] Any file exceeding 600 lines is documented in `scripts/file-size-allowlist.json`.
-- [ ] **Zero Secrets & PII:**
-  - [ ] No API keys, credentials, JWT secrets, or real customer data are committed or logged.
-- [ ] **Zero-Unverified-PASS Policy:**
-  - [ ] All automated tests have been executed and verified in the environment.
-
----
-
-## Test Evidence
-
-<!-- Paste command output proving that all tests and quality checks passed. -->
+<!-- Gerçek komutları, sonuçları ve çalıştırılmayan kontrolleri belirtin. -->
 
 ```bash
-# Example: pnpm verify / dotnet test
+# Örnek: pnpm verify / dotnet test
 ```
 
----
+## Dokümantasyon Eşzamanlılığı
 
-## Documentation Synchronization
+- [ ] `docs/` altındaki ilgili belgeler değişiklikle birlikte güncellendi.
+- [ ] Göreli Markdown bağlantıları `node scripts/check-docs.mjs` ile doğrulandı.
 
-- [ ] Relevant documentation under `docs/` updated in sync with this change.
-- [ ] Relative markdown links verified with `node scripts/check-docs.mjs`.
+## Veritabanı ve Geçiş Etkisi
 
----
-
-## Database & Migration Impact
-
-- [ ] **No database impact.**
-- [ ] **Database changes included:**
-  - [ ] Migration follows the **Expand and Contract** zero-downtime pattern (see `docs/DELIVERY.md`).
-  - [ ] Indexes are created concurrently (`CREATE INDEX CONCURRENTLY`).
-  - [ ] Multi-tenant `tenant_id` and `branch_id` filters are enforced via RLS.
+- [ ] **Veritabanına etkisi yok.**
+- [ ] **Veritabanı değişikliği var:**
+  - [ ] Geçiş, kesintisiz **Genişlet ve Daralt** yaklaşımına uyuyor (`docs/DELIVERY.md`).
+  - [ ] İndeksler eşzamanlı oluşturuluyor (`CREATE INDEX CONCURRENTLY`).
+  - [ ] `tenant_id` ve `branch_id` yalıtımı RLS ile uygulanıyor.

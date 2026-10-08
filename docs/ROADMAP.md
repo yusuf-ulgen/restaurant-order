@@ -1,185 +1,165 @@
-# Product & Technical Roadmap (`docs/ROADMAP.md`)
+# Ürün ve Teknik Yol Haritası (`docs/ROADMAP.md`)
 
-## 1. Roadmap Overview & Phased Milestones
+## 1. Yol Haritasına Genel Bakış ve Aşamalı Kilometre Taşları
 
-The `restaurant-order` platform is developed in 18 structured, sequential phases. Each phase builds upon the verified architecture, domain invariants, and quality gates established in preceding milestones.
+`restaurant-order` için 18 aşamalı geliştirme planı tanımlanmıştır. Her aşama, önceki kilometre taşlarında oluşturulan doğrulanmış mimariye, alan değişmezlerine ve kalite kontrollerine dayanır.
 
-```
-+-------------------------------------------------------------------------------+
-|  PHASE 0: FOUNDATION & GOVERNANCE [COMPLETED]                                 |
-|  - AGENTS.md binding rules, thin adapters & quality gates                     |
-|  - Monorepo architecture, Docker Compose, ASP.NET Core 10 & React 19 shells   |
-|  - Distributed worker lease coordination & fail-closed blue/green engine      |
-+---------------------------------------+---------------------------------------+
-                                        |
-                                        v
-+-------------------------------------------------------------------------------+
-|  PHASE 1: DESIGN SYSTEM & APPLICATION SHELLS [COMPLETED]                      |
-|  - Centralized design token system (neutral palette, typography, spacing)     |
-|  - Global CSS foundations, touch targets (44px), safe areas, reduced motion   |
-|  - Shared UI component library & responsive application shells                |
-+---------------------------------------+---------------------------------------+
-                                        |
-                                        v
-+-------------------------------------------------------------------------------+
-|  PHASE 2: DATA & MULTI-TENANCY [COMPLETED]                                    |
-|  - Multi-tenant PostgreSQL 16 schema with RLS & tenant resolution             |
-|  - EF Core 10 persistence selection & zero-downtime migration tooling         |
-|  - Tenant, Brand, Branch domain model & strict runtime/migration role split   |
-+---------------------------------------+---------------------------------------+
-                                        |
-                                        v
-+-------------------------------------------------------------------------------+
-|  PHASE 3: AUTHENTICATION & RBAC [COMPLETED]                                   |
-|  - Identity & Access Management (IAM) module with 8 supported roles           |
-|  - JWT tokens, secure cookies, refresh flows, and fast 4-digit PIN auth       |
-|  - Role-Based Access Control (RBAC) authorization middleware                  |
-+---------------------------------------+---------------------------------------+
-                                        |
-                                        v
-+-------------------------------------------------------------------------------+
-|  PHASE 4: RESTAURANT CONFIGURATION [COMPLETED]                                |
-|  - Brand & branch configuration, operating hours, service charges, tax rates  |
-|  - Dining areas, station definitions & feature flags with strict tenant RBAC  |
-+---------------------------------------+---------------------------------------+
-                                        |
-                                        v
-+-------------------------------------------------------------------------------+
-|  PHASE 5: MENU & CATALOG [COMPLETED]                                         |
-|  - Menu categories, items, and variant pricing models                         |
-|  - Modifier groups (required single-select, optional multi-select, free/paid) |
-+-------------------------------------------------------------------------------+
+```text
+Faz 0: Temel ve katkı kuralları [Tamamlandı]
+  AGENTS.md, araç yönergeleri, monorepo ve kalite kontrolleri;
+  React 19 / ASP.NET Core 10 kabukları, Docker Compose;
+  dağıtılmış worker kirası ve hata halinde erişimi reddeden Blue/Green motoru.
+        ↓
+Faz 1: Tasarım sistemi ve uygulama kabukları [Tamamlandı]
+  Ortak renk, tipografi, aralık değişkenleri; 44px dokunma hedefleri;
+  güvenli alanlar, azaltılmış hareket ve erişilebilir ortak bileşenler.
+        ↓
+Faz 2: Veri ve çok işletmeli yapı [Tamamlandı]
+  PostgreSQL 16, RLS, işletme çözümleme, EF Core 10;
+  Tenant / Brand / Branch ve çalışma zamanı/geçiş rolü ayrımı.
+        ↓
+Faz 3: Kimlik doğrulama ve RBAC [Tamamlandı]
+  Sekiz rol, JWT, güvenli çerezler, yenileme;
+  güvenilir terminalde dört haneli PIN ve merkezi yetkilendirme.
+        ↓
+Faz 4: Restoran yapılandırması [Tamamlandı]
+  Marka/şube, çalışma saatleri, vergi ve hizmet ücreti;
+  yemek alanları, istasyonlar ve yetki kontrollü özellik bayrakları.
+        ↓
+Faz 5: Menü ve katalog [Tamamlandı]
+  Kategori, ürün, porsiyon fiyatları ve seçenek grupları;
+  zorunlu/isteğe bağlı, tek/çoklu, ücretsiz/ücretli seçimler.
 ```
 
 ---
 
-## 2. Detailed Milestone Deliverables
+## 2. Ayrıntılı Kilometre Taşı Teslimatları
 
-### Phase 0: Foundation & Governance (Status: Tamamlandı / Completed)
-- [x] Establish single binding source of truth: `AGENTS.md` and thin adapters (`.AGENT.md`, `CLAUDE.md`, `GEMINI.md`).
-- [x] Comprehensive domain, product, architecture, and operational documentation (`docs/*`).
-- [x] Monorepo scaffold (`pnpm` workspaces, ASP.NET Core 10 API, .NET 10 Worker, React 19 web shells).
-- [x] Distributed worker lease coordination with Redis, central active-slot state, and idempotency store.
-- [x] Fail-closed Blue/Green deployment engine and automated verification suite.
-- [x] Automated quality gates: file size limits (450/600 lines), secret scanning, link integrity, and 67 verified tests.
+### Aşama 0: Temel ve Katkı Kuralları (Durum: Tamamlandı)
+- [x] Tek bağlayıcı hakikat kaynağı oluşturun: `AGENTS.md` ve ince adaptörler (`.AGENT.md`, `CLAUDE.md`, `GEMINI.md`).
+- [x] Kapsamlı alan, ürün, mimari ve operasyonel belgeler (`docs/*`).
+- [x] Monorepo iskelesi (`pnpm` çalışma alanları, ASP.NET Core 10 API, .NET 10 İşçi, React 19 ağ kabukları).
+- [x] Redis, merkezi aktif slot durumu ve idempotency deposu ile dağıtılmış çalışan kiralama koordinasyonu.
+- [x] Arıza durumunda kapatılan Blue/Green dağıtım motoru ve otomatik doğrulama paketi.
+- [x] Otomatik kalite kontrolleri: dosya boyutu sınırları (450/600 satır), gizli tarama, bağlantı bütünlüğü ve 67 doğrulanmış testler
 
-### Phase 1: Design System & Application Shells (Status: Tamamlandı / Completed)
-- [x] Centralized, tenant-extensible design token system in `packages/ui` (colors, typography, spacing, radius, elevation).
-- [x] Neutral, modern color palette with semantic status indicators (no decorative gradients).
-- [x] Fundamental global styles: consistent box-sizing, font stacks, focus-visible, mobile overflow protection.
-- [x] Minimum touch target enforcement (44px WCAG / iOS standard) and iOS safe-area support.
-- [x] Reduced-motion accessibility preparation across transitions and animations.
-- [x] Token helper utilities and comprehensive unit test coverage.
-- [x] Accessible overlay primitives (Modal, BottomSheet, Drawer, ConfirmationDialog, Toast).
-- [x] Responsive application shell layouts across Customer, Operations, and Admin surfaces.
-- [x] Integration across `apps/customer-web`, `apps/operations-web`, and `apps/admin-web`.
+### Aşama 1: Tasarım Sistemi ve Uygulama Kabukları (Durum: Tamamlandı)
+- [x] Merkezi, işletme tarafından genişletilebilir tasarım belirteci sistemi `packages/ui` (renkler, tipografi, aralık, yarıçap, yükseklik).
+- [x] Semantik durum göstergelerine sahip nötr, modern renk paleti (dekoratif degradeler yok).
+- [x] Temel küresel stiller: tutarlı kutu boyutlandırma, yazı tipi yığınları, odak görünürlüğü, mobil taşma koruması.
+- [x] Minimum dokunma hedefi uygulaması (44 piksel) WCAG / iOS standardı) ve iOS güvenli alan desteği.
+- [x] Geçişler ve animasyonlar arasında azaltılmış hareket erişilebilirliği hazırlığı.
+- [x] Token yardımcı programları ve kapsamlı birim testi kapsamı.
+- [x] Erişilebilir katman temel öğeleri (Modal, BottomSheet, Drawer, ConfirmationDialog, Toast).
+- [x] Müşteri, Operasyonlar ve Yönetici arayüzlerinde duyarlı uygulama kabuğu düzenleri.
+- [x] Entegrasyon `apps/customer-web`, `apps/operations-web`ve `apps/admin-web`.
 
-### Phase 2: Data & Multi-Tenancy (Status: Tamamlandı / Completed)
-- [x] Multi-tenant PostgreSQL 16 schema design with Row-Level Security (RLS).
-- [x] Entity Framework Core 10 persistence selection ([ADR-0002](./adr/0002-persistence-selection.md) ACCEPTED).
-- [x] Tenant, Brand, and Branch domain aggregate models with strict lifecycle rules and strong IDs.
-- [x] PostgreSQL mapping, composite foreign keys, and initial EF Core migration (`001_initial_tenancy_schema.sql`).
-- [x] Database role separation: `postgres` migration owner vs `restaurant_app_user` (NOSUPERUSER, NOBYPASSRLS) runtime role.
-- [x] Fail-closed RLS policies with `tenancy.get_current_tenant_id()` session variable.
-- [x] Tenant context resolution middleware, RFC 7807 ProblemDetails, and correlation ID propagation.
-- [x] Background worker tenant context propagation (`ITenantWorkerJobRunner`) and cache key namespacing (`TenantCacheKeyFactory`).
-- [x] Database migration tooling (`scripts/migration-ops.mjs`) and zero-downtime Blue/Green expand-contract safety.
-- [x] Idempotent synthetic local development seeder (`DevDataSeeder`).
-- [x] Two-tenant real PostgreSQL Testcontainers integration tests verifying strict tenant isolation.
+### Aşama 2: Veri ve Çok İşletmeli Yapı (Durum: Tamamlandı)
+- [x] Çok işletmeli PostgreSQL 16 Satır Düzeyinde Güvenlik ile şema tasarımı (RLS).
+- [x] Varlık Çerçevesi Çekirdeği 10 kalıcılık seçimi ([ADR-0002](./adr/0002-persistence-selection.md) ACCEPTED).
+- [x] İşletme, Marka ve Şube alan adı modelleri, katı yaşam döngüsü kuralları ve güçlü kimliklerle bir araya getirilir.
+- [x] PostgreSQL eşlemesi, bileşik yabancı anahtarlar ve ilk EF Core geçişi (`001_initial_tenancy_schema.sql`).
+- [x] Veritabanı rolü ayrımı: `postgres` taşıma sahibi vs `restaurant_app_user` (NOSUPERUSER, NOBYPASSRLS) çalışma zamanı rolü.
+- [x] arıza-kapalı RLS olan politikalar `tenancy.get_current_tenant_id()` oturum değişkeni.
+- [x] İşletme bağlam çözümleme ara yazılımı, RFC 7807 ProblemDetails ve korelasyon kimliği yayılımı.
+- [x] Arka plan çalışan işletme bağlam yayılımı (`ITenantWorkerJobRunner`) ve önbellek anahtarı ad alanı (`TenantCacheKeyFactory`).
+- [x] Veritabanı geçiş araçları (`scripts/migration-ops.mjs`) ve sıfır kesinti süresi Blue/Green genişletme-sözleşme güvenliği.
+- [x] Tekrar çalıştırılması güvenli yerel örnek veri oluşturucu (`DevDataSeeder`).
+- [x] İki işletmeli gerçek PostgreSQL Testcontainers entegrasyon testleri, katı işletme izolasyonunu doğrular.
 
-### Phase 3: Authentication & RBAC (Status: Tamamlandı / Completed)
-- [x] Identity & Access Management (IAM) module with 8 supported roles.
-- [x] JWT authentication, token refresh flows, and secure cookie storage.
-- [x] Fast 4-digit PIN authentication for waiter and operations mobile terminals.
-- [x] Role-Based Access Control (RBAC) authorization middleware and permission matrix.
+### Aşama 3: Kimlik Doğrulama ve RBAC (Durum: Tamamlandı)
+- [x] Kimlik ve Erişim Yönetimi (IAM) modülü ile 8 desteklenen roller
+- [x] JWT kimlik doğrulama, belirteç yenileme akışları ve güvenli çerez depolama.
+- [x] Hızlı 4-hane PIN Garson ve operasyon mobil terminalleri için kimlik doğrulama.
+- [x] Rol Tabanlı Erişim Kontrolü (RBAC) yetkilendirme ara yazılımı ve izin matrisi.
 
-### Phase 4: Restaurant Configuration (Status: Tamamlandı / Completed)
-- [x] Brand appearance and branch theme overrides with CSS sanitization and contract validation (Phase 4.1 & 4.2).
-- [x] Admin navigation items and brand navigation configuration API/UI (Phase 4.3).
-- [x] Branch financial settings (timezone, currency, locales, tax rates, service charges) and operating hours with basis-point accuracy (Phase 4.4).
-- [x] Dining areas (Indoor, Terrace, Garden, BarArea, Other) and preparation stations (Kitchen, Bar, Other) with non-destructive status lifecycle (Phase 4.5).
-- [x] Branch feature flags toggle engine with strict RBAC precedence (Phase 4.5).
-- [x] Tenant and branch isolation, RLS policies, composite foreign keys, and fail-closed security (Phase 4.6).
+### Aşama 4: Restoran Yapılandırması (Durum: Tamamlandı)
+- [x] Marka görünümü ve şube teması geçersiz kılınır CSS sterilizasyon ve sözleşme doğrulama (Aşama) 4.1 & 4.2).
+- [x] Yönetici gezinme öğeleri ve marka gezinme yapılandırması API/UI (Faz 4.3).
+- [x] Şube mali ayarları (saat dilimi, para birimi, yerel ayarlar, vergi oranları, hizmet ücretleri) ve temel nokta doğruluğuyla çalışma saatleri (Aşama) 4.4).
+- [x] Tahribatsız yaşam döngüsüne (Faz) sahip yemek alanları (Kapalı, Teras, Bahçe, BarArea, Diğer) ve hazırlama istasyonları (Mutfak, Bar, Diğer) 4.5).
+- [x] Şube özelliği bayrakları, motoru katı bir şekilde değiştirir RBAC öncelik (Faz 4.5).
+- [x] İşletme ve şube izolasyonu, RLS politikalar, bileşik yabancı anahtarlar ve arızalı güvenlik (Aşama) 4.6).
 
-### Phase 5: Menu & Catalog (Status: COMPLETED — CI verified)
-- [x] Menu/category/item/variant catalog with tenant and branch scoping, integer minor-unit prices, lifecycle controls, ETag concurrency, and audit records.
-- [x] Modifier groups/options, selection invariants, price deltas, dietary/allergen metadata, and availability controls.
-- [x] Dietary, allergen, and spicy metadata with contradiction validation.
-- [x] Admin catalog editor and filtered runtime catalog read model with quick-86/restock controls.
-- [x] Final hardening and closure; push and pull_request CI green (218/218 integration tests).
+### Aşama 5: Menü & Katalog (Durum: COMPLETED — CI doğrulandı)
+- [x] İşletme ve şube kapsamını, tamsayı küçük birim fiyatlarını, yaşam döngüsü kontrollerini, ETag eşzamanlılığını ve denetim kayıtlarını içeren menü/kategori/öğe/varyant kataloğu.
+- [x] Değiştirici gruplar/seçenekler, seçim değişmezleri, fiyat deltaları, diyet/alerjen meta verileri ve bulunabilirlik kontrolleri.
+- [x] Çelişki doğrulamalı diyet, alerjen ve baharatlı meta veriler.
+- [x] Yönetici kataloğu düzenleyicisi ve filtrelenmiş çalışma zamanı kataloğu okuma modeli, hızlı86/yeniden stok kontrolleri.
+- [x] Nihai sertleşme ve kapatma; push ve pull_request CI yeşil (218/218 entegrasyon testleri).
 
-### Phase 6: Tables, QR & Sessions (Status: NEXT)
-- [ ] Table numbering, capacity, and physical layout positioning.
-- [ ] Dynamic and static QR code generation with cryptographic signature.
-- [ ] Dining session lifecycle state machine (Open -> Active -> Bill Requested -> Closed).
-- [ ] Table transfer and table merge mechanics.
+### Aşama 6: Masalar, QR ve Oturumlar (Durum: NEXT)
+- [ ] Masa numaralandırma, kapasite ve fiziksel düzen konumlandırma.
+- [ ] Kriptografik imzayla dinamik ve statik QR kodu oluşturma.
+- [ ] Yemek oturumu yaşam döngüsü durum makinesi (Açık -> Etkin -> Fatura İstendi -> Kapalı).
+- [ ] Masa taşıma ve birleştirme mekaniği.
 
-### Phase 7: Customer Experience (Status: Planlandı / Planned)
-- [ ] Surface 1: QR Customer Web App full implementation.
-- [ ] Responsive menu browsing, allergen filtering, and item search.
-- [ ] Interactive item modifier configuration modal.
-- [ ] Cart management, tax calculation, and order submission.
-- [ ] Service call requests ("Call Waiter", "Request Wet Wipes", "Request Bill").
+### Aşama 7: Müşteri Deneyimi (Durum: Planlandı)
+- [ ] Arayüz 1: QR Müşteri Web Uygulamasının tam uygulaması.
+- [ ] Duyarlı menü taraması, alerjen filtreleme ve öğe arama.
+- [ ] Etkileşimli öğe değiştirici yapılandırma modu.
+- [ ] Sepet yönetimi, vergi hesaplaması ve sipariş gönderimi.
+- [ ] Hizmet çağrısı talepleri ("Garson Çağır", "Islak Mendil İste", "Fatura İste").
 
-### Phase 8: Order Core (Status: Planlandı / Planned)
-- [ ] Order entity lifecycle state machine (Draft -> Submitted -> Accepted -> Preparing -> Ready -> Served -> Paid -> Closed).
-- [ ] Order line item immutability and audit logging.
-- [ ] Order price calculation engine (base, modifiers, taxes, service fees).
-- [ ] Race condition prevention on simultaneous table orders.
+### Aşama 8: Sipariş Çekirdeği (Durum: Planlandı)
+- [ ] Sipariş varlığı yaşam döngüsü durumu makinesi (Taslak -> Gönderildi -> Kabul Edildi -> Hazırlanıyor -> Hazır -> Sunuldu -> Ücretli -> Kapalı).
+- [ ] Satır öğesinin değişmezliği ve denetim günlüğünün düzenlenmesi.
+- [ ] Sipariş fiyatı hesaplama motoru (taban, değiştiriciler, vergiler, hizmet ücretleri).
+- [ ] Eş zamanlı masa siparişlerinde yarış durumunun önlenmesi.
 
-### Phase 9: Realtime & Notifications (Status: Planlandı / Planned)
-- [ ] ASP.NET Core SignalR hub partitioned by `tenant_id` and `branch_id`.
-- [ ] Real-time order propagation (<500ms) from guests/waiters to KDS and operations.
-- [ ] Chime audio alert dispatch and mobile push notifications.
-- [ ] Connection resilience, heartbeat monitoring, and automatic reconnection.
+### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Planlandı)
+- [ ] ASP.NET Core SignalR hub'ı şu şekilde bölümlendirilmiştir: `tenant_id` ve `branch_id`.
+- [ ] Misafirlerden/garsonlara gerçek zamanlı sipariş yayılımı (<500ms) KDS ve operasyonlar.
+- [ ] Chime sesli uyarı gönderimi ve mobil anlık bildirimler.
+- [ ] Bağlantı esnekliği, kalp atışı izleme ve otomatik yeniden bağlanma.
 
-### Phase 10: Waiter & Operations (Status: Planlandı / Planned)
-- [ ] Surface 2: Waiter & Operations Mobile App full implementation.
-- [ ] Interactive floor plan with color-coded table states.
-- [ ] Rapid handheld order entry and modifier selection.
-- [ ] Notification drawer for guest service calls and ready food alerts.
-- [ ] Table transfer and bill settlement triggers.
+### Aşama 10: Garson ve Operasyon (Durum: Planlandı)
+- [ ] Arayüz 2: Garson ve Operasyon Mobil Uygulamasının tam uygulaması.
+- [ ] Renk kodlu tablo durumlarına sahip etkileşimli kat planı.
+- [ ] Hızlı mobil sipariş girişi ve değiştirici seçimi.
+- [ ] Konuk servis çağrıları ve hazır yemek uyarıları için bildirim çekmecesi.
+- [ ] Masa transferi ve fatura ödeme tetikleyicileri.
 
-### Phase 11: KDS & Routing (Status: Planlandı / Planned)
-- [ ] Surface 3: Kitchen & Bar KDS full implementation.
-- [ ] Station-specific ticket routing (Food -> Kitchen, Beverage -> Bar).
-- [ ] Visual prep timer cards (Green <10m, Amber 10–20m, Red >20m).
-- [ ] One-tap ticket bumping (In-Prep -> Ready) and ticket recall modal.
-- [ ] One-tap item 86ing directly from KDS screen.
+### Aşama 11: KDS ve Yönlendirme (Durum: Planlandı)
+- [ ] Arayüz 3: Mutfak & Bar KDS tam uygulama.
+- [ ] İstasyona özel hazırlık fişi yönlendirme (Yiyecek -> Mutfak, İçecek -> Bar).
+- [ ] Görsel hazırlık zamanlayıcı kartları (Yeşil <10 m, Sarı 10–20m, Kırmızı >20m).
+- [ ] Tek dokunuşla hazırlık fişini ilerletme (Hazırlık Aşamasında -> Hazır) ve hazırlık fişi geri çağırma modu.
+- [ ] Doğrudan tek dokunuşla öğe 86 işaretleme işlemi.
 
-### Phase 12: Printing (Status: Planlandı / Planned)
-- [ ] ESC/POS thermal printing engine for kitchen slips and guest bills.
-- [ ] Network printer spooler with socket timeout handling and exponential retry.
-- [ ] Category-to-printer routing rules.
-- [ ] Failover print buffering and manual reprint drawer.
+### Aşama 12: Yazdırma (Durum: Planlandı)
+- [ ] ESC/POS mutfak fişleri ve misafir faturaları için termal baskı motoru.
+- [ ] Soket zaman aşımı yönetimi ve üstel yeniden deneme özelliklerine sahip ağ yazıcısı biriktiricisi.
+- [ ] Kategoriden yazıcıya yönlendirme kuralları.
+- [ ] Yük devretme yazdırma arabelleğe alma ve manuel yeniden yazdırma çekmecesi.
 
-### Phase 13: Billing Engine (Status: Planlandı / Planned)
-- [ ] Bill generation, itemized order summaries, and tax breakdown.
-- [ ] Bill splitting math (split equally, split by item, split custom amounts).
-- [ ] Tip allocation engine and server shift tip tracking.
-- [ ] End-of-Day Z-report generation and audit reconciliation.
+### Aşama 13: Hesap Motoru (Durum: Planlandı)
+- [ ] Fatura oluşturma, ayrıntılı sipariş özetleri ve vergi dökümü.
+- [ ] Fatura bölme matematiği (eşit olarak bölme, öğeye göre bölme, özel tutarları bölme).
+- [ ] Bahşiş tahsis motoru ve personelin vardiya bazında bahşiş takibi.
+- [ ] Gün Sonu Z raporu oluşturma ve denetim mutabakatı.
 
-### Phase 14: Admin & Analytics (Status: Planlandı / Planned)
-- [ ] Surface 4: Restaurant Admin Panel full implementation.
-- [ ] Menu catalog and modifier group editor with drag-and-drop.
-- [ ] Staff directory, role assignment, and PIN management.
-- [ ] Operations dashboard: live turnover, station latency, and top-selling items.
-- [ ] Thermal printer IP configuration and routing management.
+### Aşama 14: Yönetim ve Analiz (Durum: Planlandı)
+- [ ] Arayüz 4: Restoran Yönetici Paneli tam uygulaması.
+- [ ] Sürükle ve bırak özellikli menü kataloğu ve değiştirici grup düzenleyicisi.
+- [ ] Personel dizini, rol ataması ve PIN yönetimi.
+- [ ] Operasyonlar kontrol paneli: canlı ciro, istasyon gecikmesi ve en çok satan ürünler.
+- [ ] Termal yazıcı IP yapılandırması ve yönlendirme yönetimi.
 
-### Phase 15: Platform Super Admin (Status: Planlandı / Planned)
-- [ ] Surface 5: Platform Super Admin Panel full implementation.
-- [ ] Tenant organization lifecycle (onboard, configure custom domains, suspend).
-- [ ] Subscription tier management and platform commission tracking.
-- [ ] Global audit logging, health monitoring, and system metrics.
+### Aşama 15: Platform Süper Yönetici (Durum: Planlandı)
+- [ ] Arayüz 5: Platform Süper Yönetici Paneli'nin tam uygulaması.
+- [ ] İşletme organizasyonu yaşam döngüsü (yerleşik, özel etki alanlarını yapılandırma, askıya alma).
+- [ ] Abonelik katmanı yönetimi ve platform komisyon takibi.
+- [ ] Küresel denetim günlüğü, durum izleme ve sistem ölçümleri.
 
-### Phase 16: Payments (Status: Planlandı / Planned)
-- [ ] Multi-provider payment gateway integration (Stripe, Iyzico) ([ADR-0006](./adr/README.md)).
-- [ ] Idempotency key enforcement on all financial payment endpoints.
-- [ ] POS card reader integration and cash drawer reconciliation.
-- [ ] Refund workflows and partial payment settlements.
+### Aşama 16: Ödemeler (Durum: Planlandı)
+- [ ] Çoklu sağlayıcılı ödeme ağ geçidi entegrasyonu (Stripe, Iyzico) ([ADR-0006](./adr/README.md)).
+- [ ] Tüm finansal ödeme uç noktalarında Idempotency anahtar uygulaması.
+- [ ] POS kart okuyucu entegrasyonu ve yazar kasa mutabakatı.
+- [ ] İade iş akışları ve kısmi ödeme mutabakatları.
 
-### Phase 17: Production Release (Status: Planlandı / Planned)
-- [ ] End-to-end multi-surface dining lifecycle validation.
-- [ ] Blue/Green zero-downtime release rehearsal on staging.
-- [ ] Performance and load testing under peak simulated restaurant volume.
-- [ ] Production security audit, penetration testing, and go-live sign-off.
+### Aşama 17: Üretime Çıkış (Durum: Planlandı)
+- [ ] Uçtan uca çok arayüzli yemek yaşam döngüsü doğrulaması.
+- [ ] Sahnelemede Blue/Green sıfır kesinti süreli yayın provası.
+- [ ] En yüksek simüle edilmiş restoran hacmi altında performans ve yük testi.
+- [ ] Üretim güvenliği denetimi, sızma testi ve canlı yayına geçiş onayı.
