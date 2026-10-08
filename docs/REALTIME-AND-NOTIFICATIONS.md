@@ -14,7 +14,7 @@ Müşteri telefonu, garson cihazı, mutfak/bar ekranı ve yönetim paneli arası
 | Uygun kullanım | Etkileşimli KDS ve garson cihazları | QR durum akışı ve salt okunur paneller |
 | İlk taslak durumu | `[Proposed / ADR Required]` | `[Proposed / ADR Required]` |
 
-Canlı iletişim teknolojisi ADR-0001 ile **SignalR + Redis** olarak kabul edilmiştir; bu tablo önceki seçenek değerlendirmesini korur. Ayrıntılı hub/grup tasarımı ADR-0004 kapsamındadır. Telefonun arka planındaki push bildirimi ayrı kanaldır; sağlayıcı kararı [issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11) kapsamında beklenmektedir.
+Canlı iletişim teknolojisi ADR-0001 ile **SignalR + Redis** olarak kabul edilmiştir; bu tablo önceki seçenek değerlendirmesini korur. Ayrıntılı hub/grup tasarımı ADR-0004 kapsamındadır. Telefonun arka planındaki push bildirimi ayrı kanaldır; [ADR-0011](./adr/0011-background-push-provider.md) ile FCM seçilmiştir. Uygulama [issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11) kapsamında aşamalı sürer.
 
 ## 2. Olay Türleri ve Şema
 
@@ -59,4 +59,4 @@ Olaylar standart JSON zarfı kullanır:
 - Kopma sırasında iş akışını engellemeyen çevrimdışı göstergesi görünür.
 - Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.
 
-Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), sağlayıcı önerisi [ADR-0011](./adr/0011-background-push-provider.md) altında `PROPOSED` durumundadır.
+Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. İlk sunucu taşıması [FCM-SETUP.md](./FCM-SETUP.md) içinde açıklanır; gerçek olay bağlantıları ve istemciler henüz tamamlanmadı.
