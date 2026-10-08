@@ -13,7 +13,7 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub durumunu yenileyin; tarihsel f
 ## Aktif Görev — İlk FCM Sunucu Taşıması
 
 - Üst görev [#11](https://github.com/yusuf-ulgen/restaurant-order/issues/11) açık: personel ve müşteri birlikte. İlk uygulama [#14](https://github.com/yusuf-ulgen/restaurant-order/issues/14).
-- Dal: `feat/fcm-bildirim-altyapisi`, taban main `c2c61a3`. Yerel uygulama ve doğrulama tamamlandı; dal PR incelemesine hazırlanıyor. Birleştirilmedi/yayınlanmadı.
+- Dal: `feat/fcm-bildirim-altyapisi`, taban main `c2c61a3`. Yerel uygulama ve doğrulama tamamlandı, dal push edildi; [PR #15](https://github.com/yusuf-ulgen/restaurant-order/pull/15) incelemeye açıldı. CI sonucunu güncel PR başlığı üzerinden doğrulayın. Birleştirilmedi/yayınlanmadı.
 - Kullanıcının FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) içinde `ACCEPTED`; mevcut SignalR + Redis kararı korunur.
 - Sağlayıcıdan bağımsız taşıma sözleşmesi, FirebaseAdmin 3.7.0 FID uyarlayıcısı, ayrı ve varsayılan kapalı PUSH_PROVIDER, sınırlı genel payload ve TTL, iptal/süre/hata sınıflandırması eklendi.
 - [FCM kurulumu ve sınırları](./FCM-SETUP.md), [bildirim planı](./NOTIFICATIONS-PLAN.md). Kimlik bildirimlerinin NOTIFICATION_PROVIDER/outbox/webhook sözleşmesi korunur.
