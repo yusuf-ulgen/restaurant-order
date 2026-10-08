@@ -28,7 +28,7 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 - [Issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11): push kapsamı ve sağlayıcı kararı.
 - Aktif dal: `feat/push-bildirimleri`; taban `ec943fa`, PR #12 dalı. Birleştirme sırası #9 → #12 → bildirim çalışması.
-- [Bildirim planı](./NOTIFICATIONS-PLAN.md) ve [ADR-0011](./adr/0011-background-push-provider.md) öneri olarak eklendi. Kod/SDK/veritabanı değişikliği veya gerçek push gönderimi yok.
+- [Taslak PR #13](https://github.com/yusuf-ulgen/restaurant-order/pull/13) açıldı; sağlayıcı kararı bekliyor ve issue #11 açık. [Bildirim planı](./NOTIFICATIONS-PLAN.md) ve [ADR-0011](./adr/0011-background-push-provider.md) öneri olarak eklendi. Kod/SDK/veritabanı değişikliği veya gerçek push gönderimi yok.
 - Bu dalda yalnızca plan/ADR ve belge bağlantıları değişti. `pnpm verify:gates` 2026-10-08 tarihinde çıkış 0 ile başarılı: 115/115 kontrol testi, bağlantı/dosya/gizli değer kontrolleri. Aynı kaynak kodu tabanı için yukarıdaki tam 1.899 test doğrulaması geçerlidir; yeni push işlevi test edildiği iddia edilmez.
 - Kullanıcı personel ve müşteriyi birlikte seçti. Sağlayıcı yanıtı bekleniyor; SignalR + FCM önerisi henüz kabul edilmiş ADR değildir.
 - SignalR + Redis, ADR-0001 kapsamında mevcut canlı iletişim kararıdır. Arka plan push ayrı kanaldır. Gerçek masa/sipariş ve müşteri oturumu uygulamaları henüz tamamlanmadığı için bağımlılıklar gizlenmemelidir.
