@@ -15,7 +15,7 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - Eski kodda beş yeni regresyon testi başarısızdı; düzeltmeyle 36 hedefli test başarılı. Bir değişmez-kural testi 50.000 toplam/kişi birleşimini kontrol ediyor.
 - 2026-10-08 tarihli önceki `pnpm verify`: 1.228 backend birim, 10 mimari, 295 frontend, 249 entegrasyon, 115 kontrol betiği ve 2 HTTP sağlık E2E testi; toplam 1.899. Lint, tür, dosya/bağlantı/gizli bilgi kontrolleri ve üretim derlemeleri başarılı; backend Release derlemesi sıfır uyarı/hata.
 
-## Aktif Dokümantasyon Görevi
+## Dokümantasyon Görevi — İncelemede
 
 - [Issue #10](https://github.com/yusuf-ulgen/restaurant-order/issues/10), dal: `docs/turkce-dokumantasyon`.
 - Taban: `ba2ec17`, PR #9 dalı. Bağımlı PR bu dala açılır; #9 birleştikten sonra taban main'e alınmalıdır.
@@ -27,6 +27,9 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 ## Bildirim Çalışması
 
 - [Issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11): push kapsamı ve sağlayıcı kararı.
+- Aktif dal: `feat/push-bildirimleri`; taban `ec943fa`, PR #12 dalı. Birleştirme sırası #9 → #12 → bildirim çalışması.
+- [Bildirim planı](./NOTIFICATIONS-PLAN.md) ve [ADR-0011](./adr/0011-background-push-provider.md) öneri olarak eklendi. Kod/SDK/veritabanı değişikliği veya gerçek push gönderimi yok.
+- Bu dalda yalnızca plan/ADR ve belge bağlantıları değişti. `pnpm verify:gates` 2026-10-08 tarihinde çıkış 0 ile başarılı: 115/115 kontrol testi, bağlantı/dosya/gizli değer kontrolleri. Aynı kaynak kodu tabanı için yukarıdaki tam 1.899 test doğrulaması geçerlidir; yeni push işlevi test edildiği iddia edilmez.
 - Kullanıcı personel ve müşteriyi birlikte seçti. Sağlayıcı yanıtı bekleniyor; SignalR + FCM önerisi henüz kabul edilmiş ADR değildir.
 - SignalR + Redis, ADR-0001 kapsamında mevcut canlı iletişim kararıdır. Arka plan push ayrı kanaldır. Gerçek masa/sipariş ve müşteri oturumu uygulamaları henüz tamamlanmadığı için bağımlılıklar gizlenmemelidir.
 
@@ -41,4 +44,4 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Çeviri PR incelemesini ve CI sonucunu izleyin. Bildirimler için ayrı feature dalında öneri ADR ve uygulama planını kaydedin; sağlayıcı yanıtı gelmeden entegrasyonu kesinleştirmeyin. Faz 6 öncesi açık iş kurallarını çözün. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izleyin; onaysız birleştirme/yayın yapmayın.
+Çeviri PR incelemesini ve CI sonucunu izleyin. Bildirim sağlayıcısı için kullanıcı yanıtını alın; ADR-0011 onaylanmadan sağlayıcı entegrasyonunu kesinleştirmeyin. Sonrasında planın kayıt/iptal, taşıma ve gerçek olay entegrasyonu adımlarıyla ilerleyin. Faz 6 öncesi açık iş kurallarını çözün. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izleyin; onaysız birleştirme/yayın yapmayın.

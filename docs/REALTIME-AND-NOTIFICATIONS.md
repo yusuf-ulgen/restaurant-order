@@ -58,3 +58,5 @@ Olaylar standart JSON zarfı kullanır:
 - Bağlantı tekrarları 1, 2, 4 saniye biçiminde artar; üst sınır 15 saniyedir.
 - Kopma sırasında iş akışını engellemeyen çevrimdışı göstergesi görünür.
 - Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.
+
+Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), sağlayıcı önerisi [ADR-0011](./adr/0011-background-push-provider.md) altında `PROPOSED` durumundadır.
