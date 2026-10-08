@@ -13,7 +13,7 @@ Updated: 2026-10-08. Refresh this file from Git/GitHub when resuming; historical
 - Issue: [#8 — Fix equal bill splitting and document contributor handoffs](https://github.com/yusuf-ulgen/restaurant-order/issues/8).
 - Branch: `fix/pricing-and-contributor-handoff`.
 - Status: implemented and locally verified; awaiting PR peer review; not merged or deployed.
-- PR: to be linked after creation; discover by branch if resuming before this note is refreshed.
+- PR: [#9 — Fix bill splitting and establish issue-to-PR handoffs](https://github.com/yusuf-ulgen/restaurant-order/pull/9), pushed and open for peer review. Check GitHub for current CI/review status.
 - Scope: fix equal splitting, align contradictory permission examples with current RBAC, save review suggestions, and formalize issue/PR/handoff workflow.
 - Exclusions: no new grants, schema changes, payment gateway, contract generator, or implementation of the proposed table/session redesign.
 
