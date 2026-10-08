@@ -51,6 +51,9 @@ geliştirme: ortak entegrasyon; staging: üretim benzeri sentetik ortam;
 | `PIN_PEPPER_SECRET` | Personelin dört haneli PIN karması için gizli pepper değeri | Staging, Production | Evet | `[Secured in Secret Manager]` |
 | `CORS_ALLOWED_ORIGINS` | Açıkça izin verilen kaynaklar (joker karakter/yerel yok)| Staging, Production | Hayır | `https://admin.restaurantorder.app,...` |
 | `NOTIFICATION_PROVIDER` | Bildirim arka ucu (`TransactionalOutbox`) | Staging, Production | Hayır | `TransactionalOutbox` |
+| `PUSH_PROVIDER` | IAM'den ayrı operasyon push taşıması | İsteğe bağlı | Hayır | `Disabled` / `Fcm` |
+| `FCM_PROJECT_ID` | Hedef Firebase projesi | PUSH_PROVIDER=Fcm ise | Hayır | Ortama özgü proje kimliği |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Yerelde gerekiyorsa güvenilir, depo dışı ADC dosyasının yolu | Yönetilen ADC yoksa | Dosya içeriği gizlidir | Git'e veya imaja eklenmez |
 | `NOTIFICATION_ENCRYPTION_KEY` | 256-bit AES-GCM Giden kutusu verisi şifreleme anahtarı | Staging, Production | Evet | `[Secured in Secret Manager]` |
 | `WEBHOOK_NOTIFICATION_URL` | Giden HTTPS bildirim teslimi için uç nokta | Staging, Production | Hayır | `https://notifications.internal/webhook` |
 | `WEBHOOK_NOTIFICATION_SECRET` | HMAC-SHA256 imza sırrı (min 32 karakterler) | Staging, Production | Evet | `[Secured in Secret Manager]` |
@@ -60,6 +63,8 @@ geliştirme: ortak entegrasyon; staging: üretim benzeri sentetik ortam;
 | `FORWARDED_HEADERS_FORWARD_LIMIT` | Maksimum iletilen proxy sınırı | İsteğe bağlı | Hayır | `2` |
 | `Tenancy:AllowDevHeaderOverride` | X-Tenant-Id üstbilgilerini etkinleştirme | Yalnızca geliştirici | Hayır | `false` |
 | `BACKUP_VERIFIED` | Geçişler için doğrulanmış veritabanı yedekleme önkoşulu | Staging, Production | Hayır | `false` |
+
+FCM taşıması varsayılan kapalıdır; etkinse sağlayıcı/proje ayarı servis kaydında, ADC kimliği ilk çözümlemede yüklenir. API sağlık yanıtı Firebase erişim kanıtı değildir. Güvenli kurulum, ortam ayrımı ve kalan cihaz/olay bağımlılıkları için [FCM-SETUP.md](./FCM-SETUP.md) belgesine bakın.
 
 ---
 

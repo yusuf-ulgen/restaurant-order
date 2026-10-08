@@ -124,6 +124,7 @@ public static class DependencyInjection
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
         services.AddHttpClient();
+        RestaurantOrder.Infrastructure.Notifications.PushServiceCollectionExtensions.AddOperationalPush(services, configuration);
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationTransport, RestaurantOrder.Infrastructure.Auth.WebhookIdentityNotificationTransport>();
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IIdentityNotificationOutboxDispatcher, RestaurantOrder.Infrastructure.Auth.IdentityNotificationOutboxDispatcher>();
 

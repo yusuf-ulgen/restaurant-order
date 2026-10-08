@@ -1,10 +1,10 @@
-# Push Bildirimleri — Karar Taslağı
+# Push Bildirimleri — Uygulama Planı
 
-- Durum: `PROPOSED` — sağlayıcı seçimi kullanıcı yanıtını bekliyor.
+- Karar: `ACCEPTED` — kullanıcı 2026-10-08 tarihinde FCM ile devam etmeyi onayladı; uygulama aşamalı sürüyor.
 - Görev: [#11](https://github.com/yusuf-ulgen/restaurant-order/issues/11).
-- Dal: `feat/push-bildirimleri`; taban `ec943fa` / `docs/turkce-dokumantasyon`.
-- Bağımlılık: önce PR #9, sonra PR #12; bu taslak daha sonra değerlendirilir.
-- Karar kaydı: [ADR-0011](./adr/0011-background-push-provider.md), `PROPOSED`.
+- İlk taşıma görevi: [#14](https://github.com/yusuf-ulgen/restaurant-order/issues/14), dal `feat/fcm-bildirim-altyapisi`; taban main `c2c61a3`.
+- Önceki fiyatlandırma, Türkçe belge ve bildirim planı PR'ları #9, #12, #13 main'e birleştirildi.
+- Karar kaydı: [ADR-0011](./adr/0011-background-push-provider.md), `ACCEPTED`.
 - Hedef kitle: Kullanıcı 2026-10-08 tarihinde personel ve müşteriyi birlikte seçti.
 - Mevcut bağlayıcı karar: ADR-0001, uygulama açıkken canlı iletişim için SignalR + Redis kullanır. Bu karar push sağlayıcısından bağımsızdır.
 
@@ -17,9 +17,9 @@
 | Müşteri/operasyon `manifest.json` | PWA başlangıç dosyaları vardır; push aboneliği, service worker ve iOS cihaz doğrulaması henüz yoktur. |
 | SignalR + Redis, ADR-0001 | Kabul edilmiş teknoloji kararıdır; mevcut depoda restoran olaylarına bağlı tam hub/istemci akışı henüz uygulanmış değildir. |
 
-Mevcut `NOTIFICATION_PROVIDER=TransactionalOutbox` kimlik bildirim sözleşmesidir. FCM seçilirse bu değer körlemesine değiştirilmez; operasyon push yapılandırması ve uyarlayıcısı ayrı tasarlanır.
+Mevcut `NOTIFICATION_PROVIDER=TransactionalOutbox` kimlik bildirim sözleşmesidir. Bu değer değiştirilmez; operasyon push için ayrı `PUSH_PROVIDER=Disabled|Fcm` kullanılır. [İlk taşıma uyarlayıcısı](./FCM-SETUP.md) kayıt, yetkilendirme veya outbox yerine geçmez.
 
-## Öneri
+## Kabul Edilen Yaklaşım
 
 Canlı ekran akışını SignalR ile, izin verilmiş arka plan bildirimlerini Firebase Cloud Messaging ile sağlayın. Bildirim, sipariş/ödeme verisinin doğruluğunun veya teslim edildiğinin kanıtı değildir; sunucu kayıtları tek doğruluk kaynağıdır. FCM, Firebase Auth veya Firestore'a geçiş gerektirmez; mevcut .NET kimlik ve PostgreSQL alan modeli korunur.
 
@@ -55,9 +55,9 @@ FCM de web üzerinde tarayıcının Push API desteğine ve izinlere bağlıdır.
 
 Sipariş, masa oturumu ve müşteri QR kimliği henüz tam uygulanmadı. Bildirim altyapısı gerçek olmayan sipariş/masa uçları icat ederek tamamlanmış gösterilmemelidir.
 
-1. Sağlayıcı kararını ve ilk olayları onayla; ADR oluştur.
+1. Sağlayıcı seçimi tamamlandı: FCM. Olay/alıcı eşlemesi aşağıdaki taslaktır; gerçek bağlantılar ilgili alan fazlarında doğrulanır.
 2. Alan/uygulama sınırında kanal ve alıcı politikası, kayıt yaşam döngüsü ve kalıcı gönderim tasarımını belirle.
-3. Sağlayıcı uyarlayıcısını ve güvenli yapılandırmayı ekle; testte sahte sağlayıcı kullan.
+3. İlk sunucu uyarlayıcısı ve güvenli yapılandırma #14 kapsamındadır; testte gerçek SDK ve sahte HTTP taşıması kullanılır. Cihaz kaydı ve kalıcı gönderim henüz yoktur.
 4. Personel ve müşteri arayüzlerinde destek/izin durumu, service worker ve uygulama içi bildirimleri ekle.
 5. Gerçek masa/sipariş olayları ilgili fazlarda hazır olduğunda bağla; tenant/şube/oturum yalıtım testleriyle doğrula.
 6. HTTPS test ortamında Android ve iPhone gerçek cihaz denemelerini kaydet. Bunlar yapılmadan gerçek push teslimini doğrulanmış sayma.

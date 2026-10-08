@@ -38,7 +38,7 @@ Kararlar `PROPOSED` durumunda başlar. `ACCEPTED` olarak işaretlenmeden önce k
 | [ADR-0009](./0009-authentication-and-session-strategy.md) | Kimlik Doğrulama, Oturum ve Çok İşletmeli Yetkilendirme Stratejisi | `ACCEPTED` | Personel ve Müşteri QR ayrımı, güvenilir terminaller, JWT/çerez rotasyonu, RBAC matris |
 | [ADR-0010](./0010-least-privilege-iam-login-and-security-definer.md) | En Az Ayrıcalık IAM Giriş Arama ve SECURITY DEFINER Tehdit Modeli | `ACCEPTED` | SECURITY DEFINER işlev, sabitlenmiş search_path, çalışma zamanı SELECT yasağı |
 
-| [ADR-0011](./0011-background-push-provider.md) | Personel ve müşteri için arka plan push sağlayıcısı | `PROPOSED` | FCM / Web Push karşılaştırması; kullanıcı sağlayıcı yanıtı bekleniyor |
+| [ADR-0011](./0011-background-push-provider.md) | Personel ve müşteri için arka plan push sağlayıcısı | `ACCEPTED` | Kullanıcı FCM ile devam etmeyi onayladı; SignalR + Redis korunur |
 
 ---
 
