@@ -20,7 +20,8 @@ namespace RestaurantOrder.Infrastructure.Floor;
 /// </summary>
 public sealed class QrSecurityService : IQrSecurityService
 {
-    private const string SyntheticDevKey = "synthetic-dev-qr-key-32chars-minimum-entropy!!";
+    // Valid Base64-encoded synthetic key decoding to 45 random/synthetic bytes for Development/Testing only
+    private const string SyntheticDevKey = "c3ludGhldGljLWRldi10ZXN0LXFyLXNpZ25pbmcta2V5LTMyYi1lbnRyb3B5IQ==";
 
     private readonly QrSecurityOptions _options;
     private readonly Dictionary<string, byte[]> _keyBytes = new(StringComparer.Ordinal);
@@ -48,15 +49,32 @@ public sealed class QrSecurityService : IQrSecurityService
             _options.Keys[_options.CurrentKeyId] = SyntheticDevKey;
         }
 
-        foreach (var (keyId, secret) in _options.Keys)
+        foreach (var (keyId, base64Secret) in _options.Keys)
         {
-            if (string.IsNullOrWhiteSpace(secret) || secret.Length < 32)
+            if (string.IsNullOrWhiteSpace(base64Secret))
             {
                 throw new InvalidOperationException(
-                    $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must be at least 32 characters (256 bits) in length.");
+                    $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must not be empty.");
             }
 
-            _keyBytes[keyId] = Encoding.UTF8.GetBytes(secret);
+            byte[] decodedKey;
+            try
+            {
+                decodedKey = Convert.FromBase64String(base64Secret);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must be a valid Base64 encoded string.", ex);
+            }
+
+            if (decodedKey.Length < 32)
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must decode to at least 32 bytes (256 bits entropy). Decoded length was {decodedKey.Length} bytes.");
+            }
+
+            _keyBytes[keyId] = decodedKey;
         }
     }
 
@@ -77,6 +95,7 @@ public sealed class QrSecurityService : IQrSecurityService
             bid: payload.BranchId.Value,
             tcode: payload.PublicTableCode,
             qv: payload.QrVersion,
+            iat: payload.IssuedAtUnix,
             sid: payload.TableSessionId?.Value,
             exp: payload.ExpiresAtUnix,
             nonce: payload.Nonce);
@@ -99,6 +118,11 @@ public sealed class QrSecurityService : IQrSecurityService
         if (string.IsNullOrWhiteSpace(token))
         {
             throw new QrSecurityException("QR token cannot be null or empty.");
+        }
+
+        if (token.Length > _options.MaxTokenLength)
+        {
+            throw new QrSecurityException($"QR token length ({token.Length}) exceeds maximum allowed limit of {_options.MaxTokenLength}.");
         }
 
         var parts = token.Split('.');
@@ -134,9 +158,9 @@ public sealed class QrSecurityService : IQrSecurityService
             throw new QrSecurityException("QR token payload was null.");
         }
 
-        if (wire.v != QrPayload.CurrentSchemaVersion)
+        if (wire.v is not (1 or 2))
         {
-            throw new QrSecurityException($"Unsupported QR schema version '{wire.v}'.");
+            throw new QrSecurityException($"Unsupported QR schema version '{wire.v}'. Expected 1 or {QrPayload.CurrentSchemaVersion}.");
         }
 
         if (string.IsNullOrWhiteSpace(wire.kid) || !_keyBytes.TryGetValue(wire.kid, out var key))
@@ -144,7 +168,7 @@ public sealed class QrSecurityService : IQrSecurityService
             throw new QrSecurityException($"Unknown or untrusted QR key_id '{wire.kid}'.");
         }
 
-        // Canonical verification
+        // Canonical signature verification with constant-time equality check
         var canonicalString = BuildCanonicalString(wire);
         var canonicalBytes = Encoding.UTF8.GetBytes(canonicalString);
 
@@ -154,6 +178,41 @@ public sealed class QrSecurityService : IQrSecurityService
         if (!CryptographicOperations.FixedTimeEquals(expectedSignatureBytes, providedSignatureBytes))
         {
             throw new QrSecurityException("Invalid or tampered QR token signature.");
+        }
+
+        if (wire.tid == Guid.Empty)
+        {
+            throw new QrSecurityException("QR token tenant_id cannot be empty.");
+        }
+
+        if (wire.bid == Guid.Empty)
+        {
+            throw new QrSecurityException("QR token branch_id cannot be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(wire.tcode))
+        {
+            throw new QrSecurityException("QR token table code cannot be empty.");
+        }
+
+        if (wire.qv < 1)
+        {
+            throw new QrSecurityException("QR token qr_version must be >= 1.");
+        }
+
+        var nowUnix = nowUtc.ToUnixTimeSeconds();
+
+        // Enforce issued_at (iat) timestamp validation and future-issuance rejection
+        if (wire.iat.HasValue)
+        {
+            if (wire.iat.Value > nowUnix + _options.ClockSkewSeconds)
+            {
+                throw new QrSecurityException("QR token was issued in the future beyond allowed clock skew.");
+            }
+        }
+        else if (wire.v == 2)
+        {
+            throw new QrSecurityException("QR token schema version 2 requires an issued_at (iat) timestamp.");
         }
 
         var mode = string.Equals(wire.mode, "dynamic", StringComparison.OrdinalIgnoreCase)
@@ -174,7 +233,6 @@ public sealed class QrSecurityService : IQrSecurityService
                 throw new QrSecurityException("Dynamic QR token requires an expiration timestamp.");
             }
 
-            var nowUnix = nowUtc.ToUnixTimeSeconds();
             if (nowUnix > wire.exp.Value + _options.ClockSkewSeconds)
             {
                 throw new QrSecurityException("Dynamic QR token has expired.");
@@ -183,6 +241,11 @@ public sealed class QrSecurityService : IQrSecurityService
             if (wire.exp.Value > nowUtc.AddDays(7).ToUnixTimeSeconds())
             {
                 throw new QrSecurityException("Dynamic QR token expiration timestamp is invalid.");
+            }
+
+            if (wire.iat.HasValue && wire.exp.Value < wire.iat.Value)
+            {
+                throw new QrSecurityException("Dynamic QR token expiration timestamp precedes issued_at timestamp.");
             }
         }
 
@@ -194,6 +257,7 @@ public sealed class QrSecurityService : IQrSecurityService
             branchId: BranchId.From(wire.bid),
             publicTableCode: wire.tcode,
             qrVersion: wire.qv,
+            issuedAtUnix: wire.iat,
             tableSessionId: wire.sid.HasValue ? DiningSessionId.From(wire.sid.Value) : null,
             expiresAtUnix: wire.exp,
             nonce: wire.nonce);
@@ -223,7 +287,7 @@ public sealed class QrSecurityService : IQrSecurityService
 
     private static string BuildCanonicalString(QrWirePayload wire)
     {
-        var sb = new StringBuilder(128);
+        var sb = new StringBuilder(160);
         sb.Append("v=").Append(wire.v)
           .Append("&kid=").Append(wire.kid)
           .Append("&mode=").Append(wire.mode)
@@ -231,6 +295,11 @@ public sealed class QrSecurityService : IQrSecurityService
           .Append("&bid=").Append(wire.bid.ToString("D"))
           .Append("&tcode=").Append(wire.tcode)
           .Append("&qv=").Append(wire.qv);
+
+        if (wire.iat.HasValue)
+        {
+            sb.Append("&iat=").Append(wire.iat.Value);
+        }
 
         if (string.Equals(wire.mode, "dynamic", StringComparison.OrdinalIgnoreCase))
         {
@@ -259,6 +328,7 @@ public sealed class QrSecurityService : IQrSecurityService
         [property: JsonPropertyName("bid")] Guid bid,
         [property: JsonPropertyName("tcode")] string tcode,
         [property: JsonPropertyName("qv")] int qv,
+        [property: JsonPropertyName("iat")] long? iat = null,
         [property: JsonPropertyName("sid")] Guid? sid = null,
         [property: JsonPropertyName("exp")] long? exp = null,
         [property: JsonPropertyName("nonce")] string? nonce = null);

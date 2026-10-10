@@ -14,4 +14,6 @@ public sealed class QrSecurityOptions
     public int DynamicQrLifetimeMinutes { get; set; } = 30;
 
     public int ClockSkewSeconds { get; set; } = 30;
+
+    public int MaxTokenLength { get; set; } = 2048;
 }

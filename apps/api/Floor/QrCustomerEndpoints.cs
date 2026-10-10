@@ -112,13 +112,21 @@ public static class QrCustomerEndpoints
 
     internal static IResult HandleCustomerException(Exception ex, HttpContext context)
     {
+        var logger = context.RequestServices?.GetService(typeof(Microsoft.Extensions.Logging.ILogger<IQrPublicService>)) as Microsoft.Extensions.Logging.ILogger<IQrPublicService>;
+
+        if (ex is QrSecurityException se)
+        {
+            logger?.LogWarning(se, "QR security validation failed on {Path}: {Detail}",
+                context.Request.Path.Value, se.Message);
+            return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", "The provided QR token is invalid, expired, or malformed.");
+        }
+
         return ex switch
         {
             QrRateLimitException rle => RateLimitProblem(context, rle),
-            QrSecurityException se => ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", se.Message),
-            QrRevokedException re => ProblemResult(context, StatusCodes.Status410Gone, "QR Code Revoked", re.Message),
-            QrSessionClosedException sce => ProblemResult(context, StatusCodes.Status410Gone, "Session Closed", sce.Message),
-            QrTableInactiveException tie => ProblemResult(context, StatusCodes.Status400BadRequest, "Table Inactive", tie.Message),
+            QrRevokedException re => ProblemResult(context, StatusCodes.Status410Gone, "QR Code Revoked", "The scanned table QR code has been revoked. Please request a new code from staff."),
+            QrSessionClosedException sce => ProblemResult(context, StatusCodes.Status410Gone, "Session Closed", "The dining session for this table is closed."),
+            QrTableInactiveException tie => ProblemResult(context, StatusCodes.Status400BadRequest, "Table Inactive", "The requested table is currently inactive."),
             DistributedSecurityStateUnavailableException => ProblemResult(context, StatusCodes.Status503ServiceUnavailable, "Service Unavailable", "Rate limiting service temporarily unavailable."),
             _ => ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "An unexpected error occurred while processing the QR request.")
         };

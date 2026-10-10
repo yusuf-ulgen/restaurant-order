@@ -31,6 +31,10 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
             t.HasCheckConstraint(
                 "ck_restaurant_tables_qr_version",
                 "qr_version >= 1");
+
+            t.HasCheckConstraint(
+                "ck_restaurant_tables_public_code",
+                "length(public_code) >= 16 AND length(public_code) <= 64 AND public_code ~ '^[0-9a-zA-Z_-]+$'");
         });
 
         builder.HasKey(rt => rt.Id);

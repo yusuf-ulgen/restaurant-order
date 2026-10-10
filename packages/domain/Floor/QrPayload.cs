@@ -10,7 +10,7 @@ namespace RestaurantOrder.Domain.Floor;
 /// </summary>
 public sealed record QrPayload
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; init; }
     public string KeyId { get; init; }
@@ -19,6 +19,7 @@ public sealed record QrPayload
     public BranchId BranchId { get; init; }
     public string PublicTableCode { get; init; }
     public int QrVersion { get; init; }
+    public long? IssuedAtUnix { get; init; }
     public DiningSessionId? TableSessionId { get; init; }
     public long? ExpiresAtUnix { get; init; }
     public string? Nonce { get; init; }
@@ -31,13 +32,19 @@ public sealed record QrPayload
         BranchId branchId,
         string publicTableCode,
         int qrVersion,
+        long? issuedAtUnix = null,
         DiningSessionId? tableSessionId = null,
         long? expiresAtUnix = null,
         string? nonce = null)
     {
-        if (schemaVersion != CurrentSchemaVersion)
+        if (schemaVersion is not (1 or 2))
         {
-            throw new DomainException($"Unsupported QR payload schema version '{schemaVersion}'. Expected {CurrentSchemaVersion}.");
+            throw new DomainException($"Unsupported QR payload schema version '{schemaVersion}'. Expected 1 or {CurrentSchemaVersion}.");
+        }
+
+        if (schemaVersion == 2 && (!issuedAtUnix.HasValue || issuedAtUnix.Value <= 0))
+        {
+            throw new DomainException("QR payload schema version 2 requires a positive IssuedAtUnix timestamp.");
         }
 
         if (string.IsNullOrWhiteSpace(keyId))
@@ -102,6 +109,7 @@ public sealed record QrPayload
         BranchId = branchId;
         PublicTableCode = publicTableCode.Trim();
         QrVersion = qrVersion;
+        IssuedAtUnix = issuedAtUnix;
         TableSessionId = tableSessionId;
         ExpiresAtUnix = expiresAtUnix;
         Nonce = string.IsNullOrWhiteSpace(nonce) ? null : nonce.Trim();
@@ -112,7 +120,8 @@ public sealed record QrPayload
         TenantId tenantId,
         BranchId branchId,
         string publicTableCode,
-        int qrVersion)
+        int qrVersion,
+        long? issuedAtUnix = null)
     {
         return new QrPayload(
             schemaVersion: CurrentSchemaVersion,
@@ -121,7 +130,8 @@ public sealed record QrPayload
             tenantId: tenantId,
             branchId: branchId,
             publicTableCode: publicTableCode,
-            qrVersion: qrVersion);
+            qrVersion: qrVersion,
+            issuedAtUnix: issuedAtUnix ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
     public static QrPayload CreateDynamic(
@@ -132,7 +142,8 @@ public sealed record QrPayload
         int qrVersion,
         DiningSessionId tableSessionId,
         long expiresAtUnix,
-        string? nonce = null)
+        string? nonce = null,
+        long? issuedAtUnix = null)
     {
         return new QrPayload(
             schemaVersion: CurrentSchemaVersion,
@@ -142,6 +153,7 @@ public sealed record QrPayload
             branchId: branchId,
             publicTableCode: publicTableCode,
             qrVersion: qrVersion,
+            issuedAtUnix: issuedAtUnix ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             tableSessionId: tableSessionId,
             expiresAtUnix: expiresAtUnix,
             nonce: nonce);

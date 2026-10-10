@@ -20,7 +20,8 @@ namespace RestaurantOrder.UnitTests.Floor;
 
 public class QrPublicServiceUnitTests
 {
-    private const string ValidKey = "synthetic-dev-qr-key-32chars-minimum-entropy!!";
+    private static readonly string ValidKey = Convert.ToBase64String(
+        System.Text.Encoding.UTF8.GetBytes("synthetic-dev-qr-key-32chars-minimum-entropy!!"));
     private readonly TenantId _tenantId = TenantId.New();
     private readonly BranchId _branchId = BranchId.New();
     private readonly DiningAreaId _areaId = DiningAreaId.New();

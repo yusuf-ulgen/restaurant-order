@@ -42,8 +42,7 @@ public sealed class QrPublicService : IQrPublicService
 
         var payload = _qrSecurity.VerifyAndDecodeToken(token, DateTimeOffset.UtcNow);
         var fingerprint = _qrSecurity.GetFingerprint(token);
-        _logger.LogInformation("Resolving QR code with fingerprint {Fingerprint} for table code {TableCode}",
-            fingerprint, payload.PublicTableCode);
+        _logger.LogInformation("Resolving QR code with fingerprint {Fingerprint}", fingerprint);
 
         // Open verified tenant transaction context so PostgreSQL Row-Level Security (RLS) is satisfied for runtime users without IgnoreQueryFilters()
         var tx = await _dbContext.BeginTenantTransactionAsync(payload.TenantId.Value, cancellationToken: ct);
@@ -127,138 +126,139 @@ public sealed class QrPublicService : IQrPublicService
 
         var payload = _qrSecurity.VerifyAndDecodeToken(token, DateTimeOffset.UtcNow);
         var fingerprint = _qrSecurity.GetFingerprint(token);
-        _logger.LogInformation("Exchanging QR token with fingerprint {Fingerprint} for table code {TableCode}",
-            fingerprint, payload.PublicTableCode);
+        _logger.LogInformation("Exchanging QR token with fingerprint {Fingerprint}", fingerprint);
 
-        QrExchangeResult? result = null;
-
-        // Execute in tenant transaction context to ensure RLS & atomic session creation
-        var tx = await _dbContext.BeginTenantTransactionAsync(payload.TenantId.Value, cancellationToken: ct);
-        try
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var table = await _dbContext.RestaurantTables
-                .FirstOrDefaultAsync(t => t.TenantId == payload.TenantId &&
-                                          t.BranchId == payload.BranchId &&
-                                          t.PublicCode == payload.PublicTableCode, ct)
-                ?? throw new QrTableInactiveException($"Table with code '{payload.PublicTableCode}' was not found.");
-
-            if (!table.IsActive)
+            // Execute in tenant transaction context to ensure RLS & atomic session creation
+            var tx = await _dbContext.BeginTenantTransactionAsync(payload.TenantId.Value, cancellationToken: ct);
+            try
             {
-                throw new QrTableInactiveException($"Table '{table.TableNumber}' is currently inactive.");
-            }
+                var table = await _dbContext.RestaurantTables
+                    .FirstOrDefaultAsync(t => t.TenantId == payload.TenantId &&
+                                              t.BranchId == payload.BranchId &&
+                                              t.PublicCode == payload.PublicTableCode, ct)
+                    ?? throw new QrTableInactiveException($"Table with code '{payload.PublicTableCode}' was not found.");
 
-            if (table.QrVersion != payload.QrVersion)
-            {
-                throw new QrRevokedException(
-                    $"Table QR code has been revoked. Current version is {table.QrVersion}, token has {payload.QrVersion}.");
-            }
-
-            DiningSession targetSession;
-
-            if (payload.Mode == QrMode.Dynamic)
-            {
-                var session = await _dbContext.DiningSessions
-                    .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
-                                              s.BranchId == payload.BranchId &&
-                                              s.Id == payload.TableSessionId!.Value, ct)
-                    ?? throw new QrSessionClosedException("Dining session referenced by dynamic QR does not exist.");
-
-                if (session.TableId != table.Id)
+                if (!table.IsActive)
                 {
-                    throw new QrSecurityException("Dynamic QR token table does not match session table.");
+                    throw new QrTableInactiveException($"Table '{table.TableNumber}' is currently inactive.");
                 }
 
-                if (session.Status == DiningSessionStatus.Closed)
+                if (table.QrVersion != payload.QrVersion)
                 {
-                    throw new QrSessionClosedException("Dining session is closed.");
+                    throw new QrRevokedException(
+                        $"Table QR code has been revoked. Current version is {table.QrVersion}, token has {payload.QrVersion}.");
                 }
 
-                targetSession = session;
-            }
-            else
-            {
-                // Static QR flow: join existing active session or atomically create new Open session
-                var existingSession = await _dbContext.DiningSessions
-                    .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
-                                              s.BranchId == payload.BranchId &&
-                                              s.TableId == table.Id &&
-                                              s.Status != DiningSessionStatus.Closed, ct);
-
-                if (existingSession != null)
+                // Deterministic row-level lock on table to serialize concurrent exchange requests for the same table
+                if (_dbContext.Database.IsNpgsql())
                 {
-                    targetSession = existingSession;
+                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT id FROM tenancy.restaurant_tables WHERE id = {table.Id.Value} AND tenant_id = {payload.TenantId.Value} FOR UPDATE", ct);
+                }
+
+                DiningSession targetSession;
+
+                if (payload.Mode == QrMode.Dynamic)
+                {
+                    var session = await _dbContext.DiningSessions
+                        .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
+                                                  s.BranchId == payload.BranchId &&
+                                                  s.Id == payload.TableSessionId!.Value, ct)
+                        ?? throw new QrSessionClosedException("Dining session referenced by dynamic QR does not exist.");
+
+                    if (session.TableId != table.Id)
+                    {
+                        throw new QrSecurityException("Dynamic QR token table does not match session table.");
+                    }
+
+                    if (session.Status == DiningSessionStatus.Closed)
+                    {
+                        throw new QrSessionClosedException("Dining session is closed.");
+                    }
+
+                    targetSession = session;
                 }
                 else
                 {
-                    var newSession = DiningSession.Open(payload.TenantId, payload.BranchId, table, guestCount: 1);
-                    _dbContext.DiningSessions.Add(newSession);
+                    // Static QR flow: join existing active session or atomically create new Open session under table lock
+                    var existingSession = await _dbContext.DiningSessions
+                        .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
+                                                  s.BranchId == payload.BranchId &&
+                                                  s.TableId == table.Id &&
+                                                  s.Status != DiningSessionStatus.Closed, ct);
 
-                    try
+                    if (existingSession != null)
                     {
+                        targetSession = existingSession;
+                    }
+                    else
+                    {
+                        var newSession = DiningSession.Open(payload.TenantId, payload.BranchId, table, guestCount: 1);
+                        _dbContext.DiningSessions.Add(newSession);
                         await _dbContext.SaveChangesAsync(ct);
                         targetSession = newSession;
                     }
-                    catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
-                    {
-                        // Concurrent race condition: another request created the active session
-                        _dbContext.ChangeTracker.Clear();
-                        targetSession = await _dbContext.DiningSessions
-                            .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
-                                                      s.BranchId == payload.BranchId &&
-                                                      s.TableId == table.Id &&
-                                                      s.Status != DiningSessionStatus.Closed, ct)
-                            ?? throw new InvalidOperationException("Failed to acquire dining session during concurrent exchange.");
-                    }
                 }
+
+                // Issue short-lived Customer JWT Access Token
+                var nowUtc = DateTimeOffset.UtcNow;
+                var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
+                    userId: new UserId(targetSession.Id.Value),
+                    sessionId: targetSession.Id.Value,
+                    principalType: PrincipalType.Customer,
+                    role: AuthRole.Customer,
+                    scope: AuthorizationScope.ForTableSession(payload.TenantId, payload.BranchId, targetSession.Id.Value),
+                    authMethod: AuthenticationMethod.CustomerQrSession,
+                    securityVersion: 0,
+                    nowUtc: nowUtc);
+
+                var auditEvent = SecurityAuditEvent.Create(
+                    tenantId: payload.TenantId,
+                    eventType: SecurityAuditEventType.QrExchanged,
+                    nowUtc: nowUtc,
+                    userId: null,
+                    branchId: payload.BranchId,
+                    detailsJson: System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        tableId = table.Id.Value,
+                        tableNumber = table.TableNumber,
+                        sessionId = targetSession.Id.Value,
+                        mode = payload.Mode.ToString(),
+                        fingerprint
+                    }));
+
+                _dbContext.SecurityAuditEvents.Add(auditEvent);
+                await _dbContext.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+
+                return new QrExchangeResult(
+                    AccessToken: tokenResult.Token,
+                    AccessTokenExpiresAt: tokenResult.ExpiresAtUtc,
+                    SessionId: targetSession.Id.Value,
+                    SessionStatus: targetSession.Status.ToString(),
+                    TenantId: payload.TenantId.Value,
+                    BranchId: payload.BranchId.Value,
+                    TableNumber: table.TableNumber,
+                    TableName: table.Name);
             }
-
-            // Issue short-lived Customer JWT Access Token
-            var nowUtc = DateTimeOffset.UtcNow;
-            var tokenResult = _jwtTokenGenerator.GenerateAccessToken(
-                userId: new UserId(targetSession.Id.Value),
-                sessionId: targetSession.Id.Value,
-                principalType: PrincipalType.Customer,
-                role: AuthRole.Customer,
-                scope: AuthorizationScope.ForTableSession(payload.TenantId, payload.BranchId, targetSession.Id.Value),
-                authMethod: AuthenticationMethod.CustomerQrSession,
-                securityVersion: 0,
-                nowUtc: nowUtc);
-
-            var auditEvent = SecurityAuditEvent.Create(
-                tenantId: payload.TenantId,
-                eventType: SecurityAuditEventType.QrExchanged,
-                nowUtc: nowUtc,
-                userId: null,
-                branchId: payload.BranchId,
-                detailsJson: System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    tableId = table.Id.Value,
-                    tableNumber = table.TableNumber,
-                    sessionId = targetSession.Id.Value,
-                    mode = payload.Mode.ToString(),
-                    fingerprint
-                }));
-
-            _dbContext.SecurityAuditEvents.Add(auditEvent);
-            await _dbContext.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-
-            result = new QrExchangeResult(
-                AccessToken: tokenResult.Token,
-                AccessTokenExpiresAt: tokenResult.ExpiresAtUtc,
-                SessionId: targetSession.Id.Value,
-                SessionStatus: targetSession.Status.ToString(),
-                TenantId: payload.TenantId.Value,
-                BranchId: payload.BranchId.Value,
-                TableNumber: table.TableNumber,
-                TableName: table.Name);
-        }
-        finally
-        {
-            await tx.DisposeAsync();
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex) && attempt < maxAttempts)
+            {
+                // Concurrency race condition: another request committed an active session concurrently.
+                // Cleanly roll back the aborted transaction to avoid PostgreSQL 25P02 error.
+                _logger.LogWarning("Concurrent static QR exchange collision on attempt {Attempt}. Rolling back transaction and retrying in a fresh transaction.", attempt);
+                await tx.RollbackAsync(ct);
+                _dbContext.ChangeTracker.Clear();
+            }
+            finally
+            {
+                await tx.DisposeAsync();
+            }
         }
 
-        return result;
+        throw new InvalidOperationException("Failed to acquire dining session during concurrent exchange retry attempts.");
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)

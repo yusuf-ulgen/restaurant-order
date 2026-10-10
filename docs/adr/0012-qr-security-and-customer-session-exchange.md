@@ -33,32 +33,38 @@ We need a tamper-proof, versioned, cryptographically signed QR architecture with
 ### Threat 2: Payload Tampering & Forgery
 - **Risk:** Attackers alter payload parameters (e.g., expiry, table ID, session ID) or forge arbitrary QR codes.
 - **Mitigation:**
-  - All QR payloads use a strict canonical pipe-delimited format:
-    - Static: `v=1|kid={key_id}|mode=1|t={tenant}|b={branch}|tc={public_code}|qv={qr_version}`
-    - Dynamic: `v=1|kid={key_id}|mode=2|t={tenant}|b={branch}|tc={public_code}|qv={qr_version}|sid={session_id}|exp={exp_unix}|nce={nonce}`
-  - Payloads are signed with HMAC-SHA256 using a minimum 256-bit secret key.
+  - All QR payloads use a strict canonical format versioned as Schema v2:
+    - Static: `v=2&kid={key_id}&mode=static&tid={tenant}&bid={branch}&tcode={public_code}&qv={qr_version}&iat={issued_at}`
+    - Dynamic: `v=2&kid={key_id}&mode=dynamic&tid={tenant}&bid={branch}&tcode={public_code}&qv={qr_version}&iat={issued_at}&sid={session_id}&exp={exp_unix}&nonce={nonce}`
+  - Payloads are signed with HMAC-SHA256 using a Base64-encoded signing key providing at least 32 decoded bytes (256 bits) of entropy.
+  - Future-issued tokens beyond clock-skew tolerance (default 30s) are rejected immediately.
+  - Oversized tokens exceeding `MaxTokenLength` (default 2048 chars) are rejected prior to decoding.
   - Signatures are verified using constant-time comparison (`CryptographicOperations.FixedTimeEquals`) to eliminate timing attacks.
+  - Public error responses return generic `ProblemDetails` without leaking internal cryptographic exception messages.
 
 ### Threat 3: Static QR Physical Vandalism & Table Reassignment
 - **Risk:** A printed QR code on a physical table is photographed or compromised, and needs to be revoked without re-registering the entire table.
 - **Mitigation:**
   - Each table maintains a monotonic `qr_version` counter and regenerated `public_code`.
-  - Calling the `/tables/{id}/qr/rotate` endpoint bumps `qr_version` and regenerates `public_code`, immediately invalidating all previously printed physical QR codes.
+  - Calling the `/tables/{id}/qr/rotate` endpoint bumps `qr_version` and regenerates `public_code` using PostgreSQL CSPRNG (`gen_random_bytes(16)` via `pgcrypto`), immediately invalidating all previously printed physical QR codes.
+  - Corrective database migrations enforce `NOT NULL` and `ck_restaurant_tables_public_code` check constraints, removing insecure defaults.
 
 ### Threat 4: Dynamic QR Replay After Session Close
 - **Risk:** A guest or bystander captures a dynamic QR code for a bill/ordering session and uses it after settlement.
 - **Mitigation:**
   - Dynamic QR codes have short-lived expiry (default 15 minutes) and are bound to a specific `table_session_id`.
   - Token validation strictly verifies that the session exists and is NOT closed (`status <> 4`).
-  - Closed session dynamic QR exchanges fail-closed with HTTP 409 Conflict.
+  - Closed session dynamic QR exchanges fail-closed with HTTP 410 Gone / 400 Bad Request.
 
 ### Threat 5: Key Leakage & Key Lifecycle
 - **Risk:** Signing keys leak into git repositories, logs, client bundles, or API responses.
 - **Mitigation:**
-  - Signing keys are loaded exclusively from secure environment variables (`QR_SECURITY_KEYS_*`).
+  - Signing keys are loaded exclusively from secure environment variables (`QrSecurity:Keys:<key_id>`).
+  - Keys must be Base64-encoded strings that decode to minimum 32 random bytes. String length is NOT accepted as entropy.
+  - Malformed Base64 or keys decoding to < 32 bytes are rejected at startup.
+  - Staging and production fail-fast during startup via `IValidateOptions<QrSecurityOptions>` and `ValidateOnStart()`.
   - The configuration supports multiple named keys (`key_id`) for zero-downtime key rotation.
-  - Staging and production fail-fast during service startup if keys are missing or shorter than 256 bits (32 bytes).
-  - Raw keys and raw QR tokens are strictly excluded from logging, error responses, and telemetry (only SHA-256 fingerprints may be logged).
+  - Raw keys, raw tokens, signatures, and public table codes are strictly excluded from logging and telemetry; only SHA-256 fingerprints may be logged.
 
 ### Threat 6: Public Endpoint Abuse & Redis Failures
 - **Risk:** Public resolve and exchange endpoints are flooded, exhausting server resources or database connections.
@@ -72,11 +78,11 @@ We need a tamper-proof, versioned, cryptographically signed QR architecture with
 ## 3. Decision
 
 1. **Cryptographic QR Payload & URL Structure:**
-   - Web application URL schema: `https://{domain}/qr?token={url_safe_base64_payload}`.
-   - The token combines canonical pipe-delimited metadata and an HMAC-SHA256 signature separated by a period (`{canonical_payload}.{signature}`).
+   - Web application URL schema: `https://{domain}/qr?token={url_safe_base64_payload}.{url_safe_base64_signature}`.
+   - The token combines canonical UTF-8 JSON wire payload (Schema v2 with `iat`) and an HMAC-SHA256 signature separated by a period.
 2. **QR Image Generation Library:**
    - Selected **`Net.Codecrete.QrCodeGenerator`** version `3.2.1` (pinned).
-   - Rationale: High-performance, mature, 100% managed C# implementation with zero external native dependencies (no GDI+ or `libgdiplus`), published under the MIT license, and native support for clean vector SVG output suitable for crisp printing.
+   - Rationale: High-performance, mature, 100% managed C# implementation with zero external native dependencies, published under MIT license, and native support for clean vector SVG output.
 3. **Public API Contract:**
    - `GET /api/v1/qr/resolve?token={token}`: Validates signature and returns sanitized welcome metadata (`tenantName`, `branchName`, `tableNumber`, `mode`, `hasActiveSession`). Zero internal secrets or sensitive IDs returned.
    - `POST /api/v1/qr/exchange`: Validates signature and state, ensures or creates an active `DiningSession` atomically, and issues a Customer JWT access token.
@@ -86,8 +92,10 @@ We need a tamper-proof, versioned, cryptographically signed QR architecture with
    - Token validated on every request via `ICustomerSessionValidator` which checks `tenancy.dining_sessions.status <> 4`. When a dining session closes, customer access immediately terminates (fail-closed).
    - Customer principal is strictly forbidden from staff operations and foreign dining sessions.
 5. **Race Condition Prevention on Static QR Exchange:**
-   - Concurrency is protected by PostgreSQL partial unique index `ix_dining_sessions_tenant_branch_table_active`.
-   - If two guests scan simultaneously, one transaction creates the session, while the other catches the conflict and seamlessly joins the existing active session.
+   - Inside the verified tenant transaction, exchange executes `SELECT id FROM tenancy.restaurant_tables WHERE id = @tableId FOR UPDATE` to serialize concurrent requests deterministically.
+   - If concurrent requests arrive simultaneously, they block on the row-level lock. The first creates the session, while subsequent requests observe the committed session and join it seamlessly.
+   - Bounded retry loop (max 3 attempts): on unique constraint collision, the aborted transaction is cleanly rolled back (`tx.RollbackAsync`) and retried in a fresh transaction, preventing PostgreSQL `25P02` (transaction aborted) errors.
+   - PostgreSQL partial unique index `ix_dining_sessions_tenant_branch_table_active` remains as database defense-in-depth.
 
 ---
 
