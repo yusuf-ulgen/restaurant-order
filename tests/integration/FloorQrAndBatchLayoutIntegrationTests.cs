@@ -414,29 +414,36 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
         var dynJsonResp = await client.SendAsync(dynJsonReq);
         Assert.Equal(HttpStatusCode.OK, dynJsonResp.StatusCode);
 
-        // 7. GET /sessions/{sessionId}
-        var getSessionReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}", adminToken);
-        var getSessionResp = await client.SendAsync(getSessionReq);
+        // 7. Session detail and history
+        var getSessionResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}", adminToken));
         Assert.Equal(HttpStatusCode.OK, getSessionResp.StatusCode);
-
-        // 8. GET /tables/{tableId}/sessions (history)
-        var historyReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/sessions", adminToken);
-        var historyResp = await client.SendAsync(historyReq);
+        var historyResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/sessions", adminToken));
         Assert.Equal(HttpStatusCode.OK, historyResp.StatusCode);
 
-        // 9. POST /sessions/{sessionId}/close with body concurrency token
+        // 8. Session transitions: Open -> Active -> BillRequested -> Closed
+        var actReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/activate", adminToken);
+        actReq.Content = JsonContent.Create(new TransitionSessionRequest(session.ConcurrencyToken));
+        var actResp = await client.SendAsync(actReq);
+        Assert.Equal(HttpStatusCode.OK, actResp.StatusCode);
+        var activated = await actResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
+        var billReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/request-bill", adminToken);
+        billReq.Content = JsonContent.Create(new TransitionSessionRequest(activated!.ConcurrencyToken));
+        var billResp = await client.SendAsync(billReq);
+        Assert.Equal(HttpStatusCode.OK, billResp.StatusCode);
+        var billed = await billResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
         var closeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/close", adminToken);
-        closeReq.Content = JsonContent.Create(new CloseDiningSessionRequest("Testing", session.ConcurrencyToken));
+        closeReq.Content = JsonContent.Create(new CloseDiningSessionRequest("Paid", billed!.ConcurrencyToken));
         var closeResp = await client.SendAsync(closeReq);
         Assert.Equal(HttpStatusCode.OK, closeResp.StatusCode);
 
-        // 10. GET /tables/{tableId}/session (404 when closed)
-        var closedSessionReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/session", adminToken);
-        var closedSessionResp = await client.SendAsync(closedSessionReq);
-        Assert.Equal(HttpStatusCode.NotFound, closedSessionResp.StatusCode);
+        // 9. Table session 404 when closed
+        var closedCheck = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/session", adminToken));
+        Assert.Equal(HttpStatusCode.NotFound, closedCheck.StatusCode);
     }
 }
