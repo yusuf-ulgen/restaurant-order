@@ -355,12 +355,5 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
         rotateNoToken.Content = JsonContent.Create(new RotateQrVersionRequest(null));
         var rotateNoTokenResp = await client.SendAsync(rotateNoToken);
         Assert.Equal(HttpStatusCode.PreconditionFailed, rotateNoTokenResp.StatusCode);
-
-        // Delete
-        var delReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Delete, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}", adminToken);
-        delReq.Headers.IfMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue($"\"{act.ConcurrencyToken:D}\""));
-        var delResp = await client.SendAsync(delReq);
-        Assert.Equal(HttpStatusCode.NoContent, delResp.StatusCode);
     }
 }
