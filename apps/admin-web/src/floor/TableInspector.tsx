@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Button } from '@restaurant-order/ui';
 import type { RestaurantTableDto, TableShape } from '@restaurant-order/contracts';
+import { TABLE_LAYOUT_LIMITS } from '@restaurant-order/contracts';
 
 export interface LocalTableLayout {
   positionX: number;
@@ -82,9 +83,14 @@ export const TableInspector: React.FC<TableInspectorProps> = ({
               className="floor-input-control"
               aria-label="Masa X Koordinatı"
               value={layout.positionX}
+              min={TABLE_LAYOUT_LIMITS.minCoordinate}
+              max={TABLE_LAYOUT_LIMITS.maxCoordinate}
               onChange={(e) =>
                 onUpdateLayout({
-                  positionX: Math.max(0, parseInt(e.target.value, 10) || 0),
+                  positionX: Math.min(
+                    TABLE_LAYOUT_LIMITS.maxCoordinate,
+                    Math.max(TABLE_LAYOUT_LIMITS.minCoordinate, parseInt(e.target.value, 10) || 0)
+                  ),
                 })
               }
             />
@@ -97,9 +103,14 @@ export const TableInspector: React.FC<TableInspectorProps> = ({
               className="floor-input-control"
               aria-label="Masa Y Koordinatı"
               value={layout.positionY}
+              min={TABLE_LAYOUT_LIMITS.minCoordinate}
+              max={TABLE_LAYOUT_LIMITS.maxCoordinate}
               onChange={(e) =>
                 onUpdateLayout({
-                  positionY: Math.max(0, parseInt(e.target.value, 10) || 0),
+                  positionY: Math.min(
+                    TABLE_LAYOUT_LIMITS.maxCoordinate,
+                    Math.max(TABLE_LAYOUT_LIMITS.minCoordinate, parseInt(e.target.value, 10) || 0)
+                  ),
                 })
               }
             />
@@ -112,9 +123,14 @@ export const TableInspector: React.FC<TableInspectorProps> = ({
               className="floor-input-control"
               aria-label="Masa Genişliği"
               value={layout.width}
+              min={TABLE_LAYOUT_LIMITS.minDimension}
+              max={TABLE_LAYOUT_LIMITS.maxDimension}
               onChange={(e) =>
                 onUpdateLayout({
-                  width: Math.max(40, parseInt(e.target.value, 10) || 40),
+                  width: Math.min(
+                    TABLE_LAYOUT_LIMITS.maxDimension,
+                    Math.max(TABLE_LAYOUT_LIMITS.minDimension, parseInt(e.target.value, 10) || TABLE_LAYOUT_LIMITS.minDimension)
+                  ),
                 })
               }
             />
@@ -127,9 +143,14 @@ export const TableInspector: React.FC<TableInspectorProps> = ({
               className="floor-input-control"
               aria-label="Masa Yüksekliği"
               value={layout.height}
+              min={TABLE_LAYOUT_LIMITS.minDimension}
+              max={TABLE_LAYOUT_LIMITS.maxDimension}
               onChange={(e) =>
                 onUpdateLayout({
-                  height: Math.max(40, parseInt(e.target.value, 10) || 40),
+                  height: Math.min(
+                    TABLE_LAYOUT_LIMITS.maxDimension,
+                    Math.max(TABLE_LAYOUT_LIMITS.minDimension, parseInt(e.target.value, 10) || TABLE_LAYOUT_LIMITS.minDimension)
+                  ),
                 })
               }
             />

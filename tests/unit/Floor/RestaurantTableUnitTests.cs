@@ -74,7 +74,7 @@ public class RestaurantTableUnitTests
 
     [Theory]
     [InlineData(0, 0)]
-    [InlineData(10000, 10000)]
+    [InlineData(9900, 9900)]
     public void Create_Coordinates_Valid(int x, int y)
     {
         var table = RestaurantTable.Create(
@@ -93,6 +93,25 @@ public class RestaurantTableUnitTests
         var ex = Assert.Throws<DomainException>(() => RestaurantTable.Create(
             _tenantId, _branchId, _diningAreaId, "T-1", "Table 1", 4, x, y, 100, 100, 0, TableShape.Square));
         Assert.Contains("Position", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(9950, 0, 100, 100)]
+    [InlineData(0, 9950, 100, 100)]
+    [InlineData(9995, 9995, 10, 10)]
+    public void Create_Coordinates_ExceedsCanvasBoundary_ThrowsDomainException(int x, int y, int width, int height)
+    {
+        var ex = Assert.Throws<DomainException>(() => RestaurantTable.Create(
+            _tenantId, _branchId, _diningAreaId, "T-1", "Table 1", 4, x, y, width, height, 0, TableShape.Square));
+        Assert.Contains("canvas", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_InvalidShape_ThrowsDomainException()
+    {
+        var ex = Assert.Throws<DomainException>(() => RestaurantTable.Create(
+            _tenantId, _branchId, _diningAreaId, "T-1", "Table 1", 4, 0, 0, 100, 100, 0, (TableShape)99));
+        Assert.Contains("TableShape", ex.Message);
     }
 
     [Theory]

@@ -13,21 +13,29 @@ export default defineConfig({
     baseURL: API_BASE_URL,
     trace: 'on-first-retry',
   },
-  webServer: {
-    command: 'dotnet run --project ../../apps/api --no-launch-profile',
-    url: `${API_BASE_URL}/health/live`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60 * 1000,
-    env: {
-      ASPNETCORE_URLS: API_BASE_URL,
-      ASPNETCORE_ENVIRONMENT: 'Development',
-      DEPLOYMENT_COLOR: 'blue',
+  webServer: [
+    {
+      command: 'dotnet run --project ../../apps/api --no-launch-profile',
+      url: `${API_BASE_URL}/health/live`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+      env: {
+        ASPNETCORE_URLS: API_BASE_URL,
+        ASPNETCORE_ENVIRONMENT: 'Development',
+        DEPLOYMENT_COLOR: 'blue',
+      },
     },
-  },
+    {
+      command: 'pnpm --filter customer-web dev',
+      url: 'http://127.0.0.1:3001',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+  ],
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], channel: 'msedge' },
     },
   ],
 });

@@ -33,6 +33,14 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
                 "qr_version >= 1");
 
             t.HasCheckConstraint(
+                "ck_restaurant_tables_shape",
+                "shape IN (1, 2, 3)");
+
+            t.HasCheckConstraint(
+                "ck_restaurant_tables_canvas_bounds",
+                "position_x + width <= 10000 AND position_y + height <= 10000");
+
+            t.HasCheckConstraint(
                 "ck_restaurant_tables_public_code",
                 "length(public_code) >= 16 AND length(public_code) <= 64 AND public_code ~ '^[0-9a-zA-Z_-]+$'");
         });

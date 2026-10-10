@@ -2191,11 +2191,13 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
 
                     b.ToTable("dining_sessions", "tenancy", t =>
                         {
+                            t.HasCheckConstraint("ck_dining_sessions_chronology", "((activated_at_utc IS NULL OR opened_at_utc <= activated_at_utc) AND (bill_requested_at_utc IS NULL OR (activated_at_utc IS NOT NULL AND activated_at_utc <= bill_requested_at_utc)) AND (closed_at_utc IS NULL OR (    (merged_into_session_id IS NULL AND bill_requested_at_utc IS NOT NULL AND bill_requested_at_utc <= closed_at_utc)     OR (merged_into_session_id IS NOT NULL AND (        (activated_at_utc IS NOT NULL AND activated_at_utc <= closed_at_utc)         OR (activated_at_utc IS NULL AND opened_at_utc <= closed_at_utc)    )))))");
+
                             t.HasCheckConstraint("ck_dining_sessions_guest_count", "guest_count >= 1");
 
                             t.HasCheckConstraint("ck_dining_sessions_status", "status IN (1, 2, 3, 4)");
 
-                            t.HasCheckConstraint("ck_dining_sessions_status_timestamps", "((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL) OR (status = 2 AND activated_at_utc IS NOT NULL AND closed_at_utc IS NULL) OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL) OR (status = 4 AND closed_at_utc IS NOT NULL))");
+                            t.HasCheckConstraint("ck_dining_sessions_status_timestamps", "((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 2 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 4 AND merged_into_session_id IS NULL AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NOT NULL) OR (status = 4 AND merged_into_session_id IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NOT NULL))");
                         });
                 });
 
@@ -2389,6 +2391,8 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
 
                     b.ToTable("restaurant_tables", "tenancy", t =>
                         {
+                            t.HasCheckConstraint("ck_restaurant_tables_canvas_bounds", "position_x + width <= 10000 AND position_y + height <= 10000");
+
                             t.HasCheckConstraint("ck_restaurant_tables_capacity", "capacity >= 1 AND capacity <= 100");
 
                             t.HasCheckConstraint("ck_restaurant_tables_coordinates", "position_x >= 0 AND position_x <= 10000 AND position_y >= 0 AND position_y <= 10000");
@@ -2400,6 +2404,8 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_restaurant_tables_qr_version", "qr_version >= 1");
 
                             t.HasCheckConstraint("ck_restaurant_tables_rotation", "rotation_degrees >= 0 AND rotation_degrees < 360");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_shape", "shape IN (1, 2, 3)");
                         });
                 });
 

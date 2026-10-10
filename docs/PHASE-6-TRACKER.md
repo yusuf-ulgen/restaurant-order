@@ -23,7 +23,7 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 | **Phase 6.3** | Static/dynamic QR security | **Completed** | Signed QR payloads, HMAC-SHA256, SVG rendering, customer session exchange, ADR-0011 | `f1d152a` |
 | **Phase 6.4** | Table transfer and merge | **Completed** | `DiningSessionMovement` immutable history aggregate, row locking, deterministic concurrency, transfer and merge REST endpoints, Testcontainers and unit tests | HEAD |
 | **Phase 6.5** | Admin and customer UI | **Completed** | Visual floor layout canvas, TableInspector, TableEditorSheet, QR generator, customer welcome screen | `bc62766` |
-| **Phase 6.6** | Hardening and closure | **Completed** | Cache invalidation on session close, comprehensive unit/coverage suites, gates verification | HEAD |
+| **Phase 6.6** | Hardening and closure | **Completed** | Database integrity constraints (shape, canvas bounds, linear timestamps, chronology), additive migration, E2E tests, CI verification | HEAD |
 
 ---
 
@@ -96,9 +96,16 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 - [x] **Token Invalidation & Security Hardening:**
   - Implemented `ICustomerSessionValidator.InvalidateSessionCacheAsync` and wired into `FloorService.CloseSessionAsync` to immediately purge Redis customer session cache upon session closure.
   - Unit tested cache hit, cache miss, database fallback, Redis failure resilience, and key deletion.
+- [x] **Database Integrity Constraints & Migrations:**
+  - Enforced table shape constraint (`shape IN (1, 2, 3)`) and canvas boundary constraint (`position_x + width <= 10000 AND position_y + height <= 10000`) via `ck_restaurant_tables_shape` and `ck_restaurant_tables_canvas_bounds`.
+  - Enforced dining session linear lifecycle timestamps (`ck_dining_sessions_status_timestamps`) and chronological sequence (`ck_dining_sessions_chronology`) ensuring `opened_at <= activated_at <= bill_requested_at <= closed_at` (veya birleştirme kapanışında `opened_at <= closed_at`).
+  - Generated and applied additive migration: `20261011160000_HardenTableAndDiningSessionIntegrityConstraints`.
+  - Added dedicated SQL check constraint integration tests in `FloorAndSessionIntegrityConstraintIntegrationTests.cs`.
+- [x] **End-to-End Testing (Playwright):**
+  - Updated `tests/e2e/tests/floor-qr-welcome.spec.ts` with deterministic dev seeding and tenant-scoped auth token. 100% passing without skips (3 passed, 0 failed, 0 skipped).
 - [x] **Zero Warnings & Quality Gates:**
   - Cleaned all TypeScript ESLint warnings (`@typescript-eslint/no-explicit-any`).
-  - Removed whitespace issues flagged by `git diff --check`.
+  - Clean build in Release mode: 0 Warnings, 0 Errors across backend and frontend.
   - Verified 100% passing test suites across backend and frontend.
 
 ---
@@ -107,15 +114,15 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 
 | Area | Suite | Status | Executed & Verified |
 | :--- | :--- | :--- | :--- |
-| **Backend Unit** | `RestaurantOrder.UnitTests.csproj` | **PASS** | 1366 tests passed (net10.0, 0 failures, 0 skipped) |
+| **Backend Unit** | `RestaurantOrder.UnitTests.csproj` | **PASS** | 1403 tests passed (net10.0, 0 failures, 0 skipped) |
 | **Architecture** | `RestaurantOrder.ArchitectureTests.csproj` | **PASS** | 10 tests passed (Clean Architecture boundaries) |
 | **Backend Build** | `RestaurantOrder.sln` | **PASS** | 0 Warnings, 0 Errors (Release mode) |
 | **Frontend Unit** | Vitest (`ui`, `admin`, `operations`, `customer`) | **PASS** | 359 tests passed (ui: 159, admin: 151, customer: 34, operations: 15) |
 | **Frontend Coverage** | Vitest V8 Coverage (`admin-web`, `customer-web`, `operations-web`, `ui`) | **PASS** | Met global thresholds (lines >= 80%, funcs >= 80%, stmts >= 80%, branch >= 80%) |
 | **Frontend Build** | `pnpm build:frontend` | **PASS** | All 7 projects built successfully with zero errors |
-| **E2E Probes** | Playwright | **PASS** | 2 passed, 1 skipped (live backend seed dependent) |
+| **E2E Probes** | Playwright | **PASS** | 3 passed, 0 skipped (health: 2, floor-qr-welcome: 1) |
 | **Quality Gates** | `pnpm verify:gates` | **PASS** | 115 tests passed across 8 suites |
-| **Database Migrations**| `node scripts/migration-ops.mjs validate` | **PASS** | All 52 migration files verified (non-destructive) |
+| **Database Migrations**| `node scripts/migration-ops.mjs validate` | **PASS** | All 58 migration files verified (non-destructive) |
 | **Blue/Green Safety**| `node scripts/blue-green/migration-check.mjs` | **PASS** | Expand-contract safety verified |
 | **Compose Configs** | `node scripts/blue-green/config-validate.mjs` | **PASS** | All compose files & environment templates verified |
 | **File Size Limits**| `node scripts/check-file-size.mjs` | **PASS** | All 863 human-authored files < 600 lines ceiling |

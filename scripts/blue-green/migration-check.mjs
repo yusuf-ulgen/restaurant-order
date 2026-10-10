@@ -103,7 +103,8 @@ export function runMigrationCheck(options = {}) {
     try {
       const content = fs.readFileSync(file, 'utf8');
       const isCSharp = file.endsWith('.cs');
-      const violations = validateSqlMigration(content, { ...options, isCSharp });
+      const fileName = path.basename(file);
+      const violations = validateSqlMigration(content, { ...options, isCSharp, fileName, filePath: file });
       for (const v of violations) {
         allViolations.push(`${path.basename(file)}: ${v}`);
       }

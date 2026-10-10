@@ -275,8 +275,15 @@ if (app.Environment.IsDevelopment())
         RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder seeder,
         CancellationToken ct) =>
     {
-        var result = await seeder.SeedAsync(ct);
-        return Results.Ok(result);
+        try
+        {
+            var result = await seeder.SeedAsync(ct);
+            return Results.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.ToString(), statusCode: 500);
+        }
     })
     .WithName("DevSeed")
     .WithSummary("Idempotent synthetic seed for local development only")

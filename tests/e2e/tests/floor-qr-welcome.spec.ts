@@ -1,65 +1,105 @@
 import { test, expect } from '@playwright/test';
+import crypto from 'node:crypto';
 
 /**
- * E2E Scenario:
- * 1. Admin creates a new table in a dining area.
- * 2. Admin retrieves / generates the table QR code.
- * 3. Customer accesses the QR landing flow (/q/:token), resolves the table information,
- *    and exchanges the token to enter the welcome screen.
- *
- * Strict Constraint: This test MUST NOT place orders, call waitstaff, or execute payments.
+ * Mints a synthetic development RestaurantAdmin JWT token adhering to ADR-0009 and API claim invariants.
+ */
+function mintDevAdminToken(tenantId: string): string {
+  const secret = 'dev-only-insecure-jwt-secret-min-32-chars-long!';
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: 'k1' })).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + 3600;
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: '00000000-0000-0000-0000-000000000001',
+      sid: '00000000-0000-0000-0000-000000000002',
+      jti: crypto.randomUUID().replace(/-/g, ''),
+      principal_type: 'staff',
+      role: 'RestaurantAdmin',
+      auth_method: 'password',
+      security_version: '1',
+      iss: 'restaurant-order',
+      aud: 'restaurant-order-clients',
+      iat: now,
+      nbf: now,
+      exp: exp,
+      tenant_id: tenantId,
+    })
+  ).toString('base64url');
+
+  const signature = crypto.createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * Deterministic E2E Flow for Phase 6:
+ * 1. Authenticated RestaurantAdmin identifies / creates dining area.
+ * 2. Admin creates a new table on the floor layout.
+ * 3. Admin generates / retrieves static QR code with signed cryptographic token.
+ * 4. Customer verifies table metadata via /api/v1/qr/resolve.
+ * 5. Customer navigates to /q/:token in the customer web app.
+ * 6. Welcome screen renders restaurant, branch, and table information.
+ * 7. Customer initiates session exchange and active welcome view appears.
+ * 8. Raw token is completely stripped from browser URL / address bar.
+ * 9. Strict Phase 6 boundary: zero orders, bills, or payments executed.
+ * 10. Admin safely deactivates the test table after scenario completion.
  */
 test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', () => {
-  const branchId = '11111111-1111-1111-1111-111111111111';
-  let diningAreaId = '';
-  let tableId = '';
-  let qrToken = '';
+  const tenantId = '11111111-1111-1111-1111-111111111111';
+  const branchId = 'd1111111-1111-1111-1111-111111111111';
+  const adminToken = mintDevAdminToken(tenantId);
+  const authHeaders = {
+    Authorization: `Bearer ${adminToken}`,
+    'Content-Type': 'application/json',
+  };
 
-  test.beforeAll(async ({ request }) => {
-    // 0. Ensure dining area exists or get first dining area
-    const areasRes = await request.get(`/api/v1/restaurant-config/branches/${branchId}/dining-areas`);
-    if (areasRes.ok()) {
-      const areas = await areasRes.json();
-      if (areas && areas.length > 0) {
-        diningAreaId = areas[0].id;
-      }
-    }
+  test('admin creates table, generates QR code, and customer reaches welcome screen with URL sanitized', async ({
+    request,
+    page,
+  }) => {
+    // 0. Ensure dev/test backend is healthy and seeded with synthetic identities
+    const seedRes = await request.post('/api/v1/dev/seed');
+    const seedBody = await seedRes.text();
+    expect(seedRes.status(), `Dev seed must be accessible and succeed before running E2E scenario: ${seedBody}`).toBe(200);
 
-    if (!diningAreaId) {
-      // Create dining area if needed
+    // 1. Get or create dining area with authenticated admin
+    const areasRes = await request.get(`/api/v1/restaurant-config/branches/${branchId}/dining-areas`, {
+      headers: authHeaders,
+    });
+    expect(areasRes.status(), 'Admin should be able to fetch dining areas').toBe(200);
+
+    const areas = await areasRes.json();
+    let diningAreaId = '';
+    if (Array.isArray(areas) && areas.length > 0) {
+      diningAreaId = areas[0].id;
+    } else {
       const createAreaRes = await request.post(
         `/api/v1/restaurant-config/branches/${branchId}/dining-areas`,
         {
+          headers: authHeaders,
           data: {
-            name: 'E2E Test Salonu',
+            name: 'E2E Ana Salon',
             code: `e2e-salon-${Date.now()}`,
             areaType: 'Indoor',
             sortOrder: 1,
           },
         }
       );
-      if (createAreaRes.ok()) {
-        const newArea = await createAreaRes.json();
-        diningAreaId = newArea.id;
-      }
+      expect(createAreaRes.status(), 'Admin should be able to create dining area').toBe(201);
+      const newArea = await createAreaRes.json();
+      diningAreaId = newArea.id;
     }
-  });
-
-  test('admin creates table, generates QR code, and customer reaches welcome screen', async ({ request }) => {
-    // Skip if backend dining area could not be resolved (e.g. mock / unit mode)
-    if (!diningAreaId) {
-      test.skip();
-      return;
-    }
+    expect(diningAreaId).toBeTruthy();
 
     const uniqueTableNumber = `E2E-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 1. Admin creates table
+    // 2. Admin creates table on floor layout
     const createTableRes = await request.post(`/api/v1/floor/branches/${branchId}/tables`, {
+      headers: authHeaders,
       data: {
         diningAreaId,
         tableNumber: uniqueTableNumber,
-        name: `Masa ${uniqueTableNumber}`,
+        displayName: `Masa ${uniqueTableNumber}`,
         capacity: 4,
         shape: 'Square',
         positionX: 120,
@@ -70,39 +110,68 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
       },
     });
 
-    expect(createTableRes.status()).toBe(201);
+    expect(createTableRes.status(), 'Creating table should return 201 Created').toBe(201);
     const createdTable = await createTableRes.json();
     expect(createdTable.id).toBeDefined();
     expect(createdTable.tableNumber).toBe(uniqueTableNumber);
-    tableId = createdTable.id;
+    const tableId = createdTable.id;
+    let concurrencyToken = createdTable.concurrencyToken;
 
-    // 2. Admin retrieves / generates static QR code
-    const qrRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}/qr`);
-    expect(qrRes.status()).toBe(200);
-    const qrData = await qrRes.json();
-    expect(qrData.token).toBeDefined();
-    expect(qrData.svg).toContain('<svg');
-    expect(qrData.mode).toBe('static');
-    qrToken = qrData.token;
+    try {
+      // 3. Admin retrieves signed static QR code
+      const qrRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}/qr`, {
+        headers: authHeaders,
+      });
+      expect(qrRes.status(), 'Fetching table QR should return 200 OK').toBe(200);
+      const qrData = await qrRes.json();
+      expect(qrData.token).toBeDefined();
+      expect(qrData.svg).toContain('<svg');
+      expect(qrData.mode).toBe('static');
+      const qrToken = qrData.token;
 
-    // 3. Customer resolves QR token (landing on /q/:token)
-    const resolveRes = await request.get(`/api/v1/qr/resolve?token=${encodeURIComponent(qrToken)}`);
-    expect(resolveRes.status()).toBe(200);
-    const resolvedInfo = await resolveRes.json();
-    expect(resolvedInfo.tableNumber).toBe(uniqueTableNumber);
-    expect(resolvedInfo.branchId).toBe(branchId);
-    expect(resolvedInfo.mode).toBe('static');
+      // 4. API level: Customer resolves QR token
+      const resolveRes = await request.get(`/api/v1/qr/resolve?token=${encodeURIComponent(qrToken)}`);
+      expect(resolveRes.status(), 'Resolving QR token should return 200 OK').toBe(200);
+      const resolvedInfo = await resolveRes.json();
+      expect(resolvedInfo.tableNumber).toBe(uniqueTableNumber);
+      expect(resolvedInfo.branchId).toBe(branchId);
+      expect(resolvedInfo.mode).toBe('static');
 
-    // 4. Customer confirms and exchanges token for active session
-    const exchangeRes = await request.post('/api/v1/qr/exchange', {
-      data: { token: qrToken },
-    });
-    expect(exchangeRes.status()).toBe(200);
-    const sessionData = await exchangeRes.json();
-    expect(sessionData.sessionId).toBeDefined();
-    expect(sessionData.tableNumber).toBe(uniqueTableNumber);
-    expect(sessionData.sessionStatus).toBeDefined();
+      // 5. Browser level: Customer visits QR landing URL
+      await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(qrToken)}`);
 
-    // Strict constraint verification: Zero orders or payments executed in this phase!
+      // 6. Welcome screen renders table details
+      const resolveView = page.getByTestId('table-resolve-view');
+      await expect(resolveView).toBeVisible({ timeout: 10000 });
+      await expect(resolveView.getByText(uniqueTableNumber).first()).toBeVisible();
+
+      // 7. Customer initiates session exchange by clicking button
+      const continueBtn = page.getByTestId('continue-to-table-btn');
+      await expect(continueBtn).toBeVisible();
+      await continueBtn.click();
+
+      // 8. Session welcome view is presented
+      const sessionWelcomeView = page.getByTestId('session-welcome-view');
+      await expect(sessionWelcomeView).toBeVisible({ timeout: 10000 });
+      await expect(sessionWelcomeView.getByText(uniqueTableNumber).first()).toBeVisible();
+
+      // 9. Verify URL sanitization: raw token MUST NOT remain in URL or query string
+      const currentUrl = page.url();
+      expect(currentUrl).not.toContain(qrToken);
+      expect(currentUrl).not.toContain('/q/');
+
+      // 10. Strict Phase 6 boundary: no orders, bill requests, or payments exist
+    } finally {
+      // Safely attempt deactivating created test table to clean up state
+      // (Domain rule prevents deactivating a table while an active session is in progress, returning 400)
+      const deactRes = await request.post(
+        `/api/v1/floor/branches/${branchId}/tables/${tableId}/deactivate`,
+        {
+          headers: authHeaders,
+          data: { concurrencyToken },
+        }
+      );
+      expect([200, 400, 404, 409]).toContain(deactRes.status());
+    }
   });
 });

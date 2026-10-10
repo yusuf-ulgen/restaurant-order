@@ -197,6 +197,8 @@ public class TenantContextMiddlewareIntegrationTests
             builder.UseSetting("NOTIFICATION_ENCRYPTION_KEY", TestHexKey());
             builder.UseSetting("WEBHOOK_NOTIFICATION_URL", "https://notifications.internal/webhook");
             builder.UseSetting("WEBHOOK_NOTIFICATION_SECRET", TestSecret("webhook"));
+            builder.UseSetting("QrSecurity:CurrentKeyId", "k1");
+            builder.UseSetting("QrSecurity:Keys:k1", "c2VjdXJlX3Ffc2lnbmluZ19rZXlfZm9yX3BoYXNlXzA2X3Rlc3RzXzMyIQ==");
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -212,7 +214,9 @@ public class TenantContextMiddlewareIntegrationTests
                     ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox",
                     ["NOTIFICATION_ENCRYPTION_KEY"] = TestHexKey(),
                     ["WEBHOOK_NOTIFICATION_URL"] = "https://notifications.internal/webhook",
-                    ["WEBHOOK_NOTIFICATION_SECRET"] = TestSecret("webhook")
+                    ["WEBHOOK_NOTIFICATION_SECRET"] = TestSecret("webhook"),
+                    ["QrSecurity:CurrentKeyId"] = "k1",
+                    ["QrSecurity:Keys:k1"] = "c2VjdXJlX3Ffc2lnbmluZ19rZXlfZm9yX3BoYXNlXzA2X3Rlc3RzXzMyIQ=="
                 });
             });
         });

@@ -256,6 +256,16 @@ public class RestaurantTable
             throw new DomainException($"Height must be between {MinDimension} and {MaxDimension}.");
         }
 
+        if (positionX + width > MaxCoordinate)
+        {
+            throw new DomainException($"Table exceeds canvas width boundary: PositionX ({positionX}) + Width ({width}) exceeds {MaxCoordinate}.");
+        }
+
+        if (positionY + height > MaxCoordinate)
+        {
+            throw new DomainException($"Table exceeds canvas height boundary: PositionY ({positionY}) + Height ({height}) exceeds {MaxCoordinate}.");
+        }
+
         if (rotationDegrees < MinRotation || rotationDegrees > MaxRotation)
         {
             throw new DomainException($"RotationDegrees must be between {MinRotation} and {MaxRotation}.");

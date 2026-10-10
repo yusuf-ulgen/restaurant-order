@@ -22,10 +22,23 @@ public class DiningSessionConfiguration : IEntityTypeConfiguration<DiningSession
 
             t.HasCheckConstraint(
                 "ck_dining_sessions_status_timestamps",
-                "((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL) " +
-                "OR (status = 2 AND activated_at_utc IS NOT NULL AND closed_at_utc IS NULL) " +
-                "OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL) " +
-                "OR (status = 4 AND closed_at_utc IS NOT NULL))");
+                "((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) " +
+                "OR (status = 2 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) " +
+                "OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) " +
+                "OR (status = 4 AND merged_into_session_id IS NULL AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NOT NULL) " +
+                "OR (status = 4 AND merged_into_session_id IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NOT NULL))");
+
+            t.HasCheckConstraint(
+                "ck_dining_sessions_chronology",
+                "((activated_at_utc IS NULL OR opened_at_utc <= activated_at_utc) " +
+                "AND (bill_requested_at_utc IS NULL OR (activated_at_utc IS NOT NULL AND activated_at_utc <= bill_requested_at_utc)) " +
+                "AND (closed_at_utc IS NULL OR (" +
+                "    (merged_into_session_id IS NULL AND bill_requested_at_utc IS NOT NULL AND bill_requested_at_utc <= closed_at_utc) " +
+                "    OR (merged_into_session_id IS NOT NULL AND (" +
+                "        (activated_at_utc IS NOT NULL AND activated_at_utc <= closed_at_utc) " +
+                "        OR (activated_at_utc IS NULL AND opened_at_utc <= closed_at_utc)" +
+                "    ))" +
+                ")))");
         });
 
         builder.HasKey(ds => ds.Id);

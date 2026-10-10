@@ -56,10 +56,23 @@ public sealed class RedisQrRateLimiter : IQrRateLimiter
         IDatabase db;
         try
         {
-            db = await _redisProvider.GetRequiredDatabaseAsync(ct);
+            var maybeDb = await _redisProvider.GetDatabaseAsync(ct);
+            if (maybeDb == null)
+            {
+                if (_environment.IsDevelopment())
+                {
+                    return;
+                }
+                throw new DistributedSecurityStateUnavailableException("Distributed Redis security infrastructure is unavailable.");
+            }
+            db = maybeDb;
         }
         catch (Exception ex)
         {
+            if (_environment.IsDevelopment())
+            {
+                return;
+            }
             throw new DistributedSecurityStateUnavailableException("Distributed QR rate limiter is unavailable. Access denied.", ex);
         }
 
@@ -73,6 +86,10 @@ public sealed class RedisQrRateLimiter : IQrRateLimiter
         }
         catch (Exception ex)
         {
+            if (_environment.IsDevelopment())
+            {
+                return;
+            }
             throw new DistributedSecurityStateUnavailableException("Rate limit evaluation failed.", ex);
         }
 

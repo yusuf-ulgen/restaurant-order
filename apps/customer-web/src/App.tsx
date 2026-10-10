@@ -35,6 +35,7 @@ export const CustomerContent: React.FC<CustomerAppProps> = ({
   const isQrRoute = Boolean(
     isQrLanding ||
     token ||
+    activeSession ||
     (typeof window !== 'undefined' &&
       (window.location.pathname.includes('/q/') ||
         window.location.hash.includes('/q/') ||

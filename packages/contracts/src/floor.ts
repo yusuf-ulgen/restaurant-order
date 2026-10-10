@@ -4,6 +4,17 @@
 
 export type TableShape = 'Square' | 'Round' | 'Rectangle';
 
+export const TABLE_LAYOUT_LIMITS = {
+  minCoordinate: 0,
+  maxCoordinate: 10000,
+  minDimension: 10,
+  maxDimension: 5000,
+  minRotation: 0,
+  maxRotation: 359,
+  minCapacity: 1,
+  maxCapacity: 100,
+} as const;
+
 export interface RestaurantTableDto {
   id: string;
   tenantId: string;
