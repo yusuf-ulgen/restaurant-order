@@ -44,27 +44,17 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
 
         var brandReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/brands", adminToken);
         brandReq.Content = JsonContent.Create(new CreateBrandApiRequest("Floor QR Brand", $"fqb-{Guid.NewGuid():N}"));
-        var brandResp = await client.SendAsync(brandReq);
-        Assert.True(brandResp.IsSuccessStatusCode, $"POST /brands failed ({(int)brandResp.StatusCode})");
-        var brand = await brandResp.Content.ReadFromJsonAsync<BrandDto>();
-        Assert.NotNull(brand);
+        var brand = await (await client.SendAsync(brandReq)).Content.ReadFromJsonAsync<BrandDto>();
 
         var branchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/branches", adminToken);
-        branchReq.Content = JsonContent.Create(new CreateBranchApiRequest(brand.Id, "Floor QR Branch", $"fqbr-{Guid.NewGuid():N}", "Europe/Istanbul", "TRY"));
-        var branchResp = await client.SendAsync(branchReq);
-        Assert.True(branchResp.IsSuccessStatusCode, $"POST /branches failed ({(int)branchResp.StatusCode})");
-        var branch = await branchResp.Content.ReadFromJsonAsync<BranchDto>();
-        Assert.NotNull(branch);
+        branchReq.Content = JsonContent.Create(new CreateBranchApiRequest(brand!.Id, "Floor QR Branch", $"fqbr-{Guid.NewGuid():N}", "Europe/Istanbul", "TRY"));
+        var branch = await (await client.SendAsync(branchReq)).Content.ReadFromJsonAsync<BranchDto>();
 
-        var areaReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Post, $"/api/v1/restaurant-config/branches/{branch.Id}/dining-areas", adminToken);
+        var areaReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/restaurant-config/branches/{branch!.Id}/dining-areas", adminToken);
         areaReq.Content = JsonContent.Create(new CreateDiningAreaApiRequest("Garden", $"gd-{Guid.NewGuid():N}", "Indoor", 0));
-        var areaResp = await client.SendAsync(areaReq);
-        Assert.True(areaResp.IsSuccessStatusCode, $"POST /dining-areas failed ({(int)areaResp.StatusCode})");
-        var area = await areaResp.Content.ReadFromJsonAsync<DiningAreaDto>(JsonOptions);
-        Assert.NotNull(area);
+        var area = await (await client.SendAsync(areaReq)).Content.ReadFromJsonAsync<DiningAreaDto>(JsonOptions);
 
-        return (tenantId, branch.Id, area.Id, adminToken);
+        return (tenantId, branch!.Id, area!.Id, adminToken);
     }
 
     [Fact]
@@ -77,27 +67,21 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
         var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
 
         // Create 2 tables
-        var create1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
-        create1.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-01", "Batch Table 1", 2, 0, 0, 100, 100, 0, "Square"));
-        var resp1 = await client.SendAsync(create1);
-        var table1 = await resp1.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
-        Assert.NotNull(table1);
+        var create1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        create1.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-01", "Batch 1", 2, 0, 0, 100, 100, 0, "Square"));
+        var table1 = await (await client.SendAsync(create1)).Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
 
-        var create2 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
-        create2.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-02", "Batch Table 2", 4, 100, 100, 120, 80, 0, "Rectangle"));
-        var resp2 = await client.SendAsync(create2);
-        var table2 = await resp2.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
-        Assert.NotNull(table2);
+        var create2 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        create2.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-02", "Batch 2", 4, 100, 100, 120, 80, 0, "Rectangle"));
+        var table2 = await (await client.SendAsync(create2)).Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
 
         // Batch update layout
         var batchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/batch-layout", adminToken);
         batchReq.Content = JsonContent.Create(new BatchUpdateTableLayoutApiRequest(new[]
         {
-            new TableLayoutBatchApiItem(table1.Id, 250, 350, 110, 110, 45, "Round", table1.ConcurrencyToken),
-            new TableLayoutBatchApiItem(table2.Id, 500, 600, 150, 90, 90, "Rectangle", table2.ConcurrencyToken)
+            new TableLayoutBatchApiItem(table1!.Id, 250, 350, 110, 110, 45, "Round", table1.ConcurrencyToken),
+            new TableLayoutBatchApiItem(table2!.Id, 500, 600, 150, 90, 90, "Rectangle", table2.ConcurrencyToken)
         }));
 
         var batchResp = await client.SendAsync(batchReq);
@@ -218,9 +202,11 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
 
         var token = qrSecurity.GenerateToken(payload);
 
-        // 1. Resolve QR token publicly
+        // 1. Resolve QR token publicly (GET & POST)
         var resolveResp = await client.GetAsync($"/api/v1/qr/resolve?token={token}");
         Assert.Equal(HttpStatusCode.OK, resolveResp.StatusCode);
+        var postResolveResp = await client.PostAsJsonAsync("/api/v1/qr/resolve", new QrExchangeRequest(token));
+        Assert.Equal(HttpStatusCode.OK, postResolveResp.StatusCode);
 
         var resolveData = await resolveResp.Content.ReadFromJsonAsync<QrResolveResponse>(JsonOptions);
         Assert.NotNull(resolveData);
@@ -348,6 +334,15 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
         Assert.Equal(HttpStatusCode.OK, actResp.StatusCode);
         var act = await actResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
         Assert.True(act!.IsActive);
+
+        // Update table basic information (PUT /tables/{tableId})
+        var updateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}", adminToken);
+        updateReq.Content = JsonContent.Create(new UpdateTableApiRequest(diningAreaId, "LC-01-U", "Updated", 6, act.ConcurrencyToken));
+        var updateResp = await client.SendAsync(updateReq);
+        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
+        var updated = await updateResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(updated);
 
         // Rotate without token => 412
         var rotateNoToken = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
