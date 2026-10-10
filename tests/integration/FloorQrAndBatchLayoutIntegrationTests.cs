@@ -58,7 +58,7 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
 
         var areaReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/restaurant-config/branches/{branch.Id}/dining-areas", adminToken);
-        areaReq.Content = JsonContent.Create(new CreateDiningAreaApiRequest("Garden", $"gd-{Guid.NewGuid():N}", "Outdoor", 0));
+        areaReq.Content = JsonContent.Create(new CreateDiningAreaApiRequest("Garden", $"gd-{Guid.NewGuid():N}", "Indoor", 0));
         var areaResp = await client.SendAsync(areaReq);
         Assert.True(areaResp.IsSuccessStatusCode, $"POST /dining-areas failed ({(int)areaResp.StatusCode})");
         var area = await areaResp.Content.ReadFromJsonAsync<DiningAreaDto>(JsonOptions);
