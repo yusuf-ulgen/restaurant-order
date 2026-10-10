@@ -1,88 +1,87 @@
-# Roles & Permissions Specification (`docs/ROLES-AND-PERMISSIONS.md`)
+# Roller ve İzinler Belirtimi (`docs/ROLES-AND-PERMISSIONS.md`)
 
-## 1. Role Definitions
+## 1. Rol Tanımları
 
-`restaurant-order` enforces strict Role-Based Access Control (RBAC) across 8 distinct roles operating within specific multi-tenant boundary scopes.
+`restaurant-order`, sekiz rol için işletme, şube ve oturum sınırlarını uygulayan Rol Tabanlı Erişim Denetimi (RBAC) kullanır.
 
-| Role | Scope | Primary Responsibility | Authentication Method [Proposed] |
+| Rol | Kapsam | Birincil Sorumluluk | Kimlik Doğrulama Yöntemi [Önerilen] |
 | :--- | :--- | :--- | :--- |
-| **1. Super Admin** | Platform-wide | System health, tenant onboarding, billing & plans. | Email + Password + MFA |
-| **2. Restoran Admini** | Tenant (Brand) | Organization settings, brand menus, branch rollout, financials. | Email + Password (+ MFA) |
-| **3. Şube Müdürü** | Branch | Floor layout, staff shifts, menu stockouts, daily reports. | Email + Password / 6-digit PIN |
-| **4. Operasyon/Kasa** | Branch | Cash drawer, POS payments, split bills, receipts, manual overrides.| 4-digit PIN |
-| **5. Mutfak** | Branch (Station) | Food preparation queue, mark ready, item 86ing. | Station Device Login / PIN |
-| **6. Bar** | Branch (Station) | Drink preparation queue, mark ready, beverage 86ing. | Station Device Login / PIN |
-| **7. Garson** | Branch (Floor) | Order taking, table moves, service calls, payment requests. | 4-digit PIN |
-| **8. Müşteri** | Table Session | QR menu browsing, order placement, service call, bill view. | Anonymous (QR Session Token) |
+| **1. Süper Yönetici** | Platform çapında | Sistem durumu, işletme katılımı, faturalandırma ve planlar. | E-posta + Şifre + MFA |
+| **2. Restoran Admini** | İşletme (Marka) | Organizasyon ayarları, marka menüleri, şube sunumu, finansal bilgiler. | E-posta + Şifre (+ MFA) |
+| **3. Şube Müdürü** | Şube | Kat düzeni, personel vardiyaları, menü stokları, günlük raporlar. | E-posta + Şifre / 6-hane PIN |
+| **4. Operasyon/Kasa** | Şube | Para çekmecesi, POS ödemeler, bölünmüş faturalar, makbuzlar, manuel geçersiz kılmalar.| 4-hane PIN |
+| **5. Mutfak** | Şube (İstasyon) | Yiyecek hazırlama kuyruğu, hazır işareti, ürünü tükendi işaretleme. | İstasyon Cihaz Girişi / PIN |
+| **6. Bar** | Şube (İstasyon) | İçecek hazırlama kuyruğu, hazır olarak işaretleme, içeceği tükendi işaretleme. | İstasyon Cihaz Girişi / PIN |
+| **7. Garson** | Şube (Kat) | Sipariş alma, masa hareketleri, servis çağrıları, ödeme talepleri. | 4-hane PIN |
+| **8. Müşteri** | Masa Oturumu | QR menüsüne göz atma, sipariş verme, servis çağrısı, fatura görüntüleme. | Anonim (QR Oturum Tokenı) |
 
 ---
 
-## 2. RBAC Permissions Matrix
+Kimlik doğrulama sütunu başlangıç önerisini korur; uygulanmış güvenilir terminal ve dört haneli PIN kuralları için ADR-0009 ile SECURITY.md esastır.
 
-Legend:
-- `✓`: Full Access / Permitted
-- `O`: Own / Assigned Scope Only (e.g., own tables, own station)
-- `✗`: Strictly Prohibited
+## 2. RBAC Yetki Matrisi
 
-| Permission / Resource | Machine-Readable Capability | Super Admin | Restoran Admini | Şube Müdürü | Operasyon / Kasa | Mutfak | Bar | Garson | Müşteri |
+İşaretler:
+- `✓`: Tam Erişim / İzinli
+- `O`: Yalnızca Sahip Olunan / Atanan Kapsam (örneğin kendi masaları, kendi istasyonu)
+- `✗`: Kesinlikle Yasaktır
+
+| İzin / Kaynak | Yetki Anahtarı | Süper Yönetici | Restoran Admini | Şube Müdürü | Operasyon / Kasa | Mutfak | Bar | Garson | Müşteri |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Platform Management** | | | | | | | | | |
-| Create / Suspend Tenant | `platform.tenants.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Configure Platform Fees | `platform.fees.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View System Audit Logs | `platform.audit.view` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Brand & Branch Config** | | | | | | | | | |
-| Create / Edit Brands | `tenant.brands.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Create / Edit Branches | `tenant.branches.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View Corporate Branding | `tenant.branding.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
-| Manage Branding & Themes | `tenant.branding.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View Branch Configuration | `branch.configuration.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
-| Manage Branch Configuration | `branch.configuration.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Configure Printers / Network | `branch.printers.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Edit Dining Area & Tables | `branch.tables.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Menu & Catalog** | | | | | | | | | |
-| Create / Edit Categories & Items | `menu.catalog.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Set Item Prices & Variants | `menu.pricing.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Quick 86 (Mark Out-of-Stock) | `menu.inventory.quick86` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✗` | `✗` |
-| View Menu & Availability | `menu.catalog.view` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
-| **Floor & Table Operations** | | | | | | | | | |
-| Open / Close Table Session | `floor.sessions.manage` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `O` |
-| Merge / Move Tables | `floor.tables.move` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| View Floor Status | `floor.status.view` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| **Order & Ticket Lifecycle** | | | | | | | | | |
-| Place Order via QR | `orders.qr.create` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` |
-| Place Order for Table (Staff) | `orders.staff.create` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Cancel Order Item (Pre-Prep) | `orders.items.cancel_pre_prep` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Void Order Item (In-Prep/Ready)| `orders.items.void_in_prep` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **KDS Preparation** | | | | | | | | | |
-| View Kitchen Food Queue | `kds.kitchen.view` | `✗` | `✓` | `✓` | `✗` | `✓` | `✗` | `✗` | `✗` |
-| View Bar Drink Queue | `kds.bar.view` | `✗` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` | `✗` |
-| Update Ticket State (Prep/Ready)| `kds.ticket.update` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
-| Recall Completed Ticket | `kds.ticket.recall` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
-| **Billing & Payments** | | | | | | | | | |
-| Request Bill from Table | `billing.bill.request` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` | `✓` |
-| Collect Cash Payment | `billing.payment.cash` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` |
-| Process External POS Card Pay | `billing.payment.pos_card` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `O` | `✗` |
-| Split Bill by Amount or Item | `billing.bill.split` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
-| Apply Order Discount | `billing.discount.apply` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| Authorize Refund | `billing.refund.authorize` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| **Staff & Analytics** | | | | | | | | | |
-| Manage Staff & Assign Roles | `branch.staff.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
-| View Daily Branch Revenue | `reports.branch.revenue` | `✗` | `✓` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` |
-| View Multi-Branch Reports | `reports.tenant.multi_branch` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Platform Yönetimi** | | | | | | | | | |
+| İşletme Oluştur / Askıya Al | `platform.tenants.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Platform Ücretlerini Yapılandırma | `platform.fees.manage` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Sistem Denetim Günlüklerini Görüntüle | `platform.audit.view` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Marka ve Şube Yapılandırması** | | | | | | | | | |
+| Marka Oluşturun / Düzenleyin | `tenant.brands.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Şube Oluştur / Düzenle | `tenant.branches.manage` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Kurumsal Markalamayı Görüntüleyin | `tenant.branding.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| Markalamayı ve Temaları Yönetin | `tenant.branding.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Şube Yapılandırmasını Görüntüle | `branch.configuration.view` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| Şube Yapılandırmasını Yönet | `branch.configuration.manage` | `✗` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Yazıcıları / Ağı Yapılandırma | `branch.printers.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Yemek Alanı ve Masaları Düzenle | `branch.tables.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Menü ve Katalog** | | | | | | | | | |
+| Kategoriler ve Öğeler Oluşturun / Düzenleyin | `menu.catalog.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Ürün Fiyatlarını ve Çeşitlerini Ayarlayın | `menu.pricing.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Hızlı 86 (Stokta Yok Olarak İşaretleyin) | `menu.inventory.quick86` | `✗` | `✓` | `✓` | `✓` | `✓` | `✓` | `✗` | `✗` |
+| Menüyü ve Uygunluğu Görüntüle | `menu.catalog.view` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` | `✓` |
+| **Salon ve Masa İşlemleri** | | | | | | | | | |
+| Masa Oturumunu Aç/Kapat | `floor.sessions.manage` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `O` |
+| Masaları Birleştir / Taşı | `floor.tables.move` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Salon Durumunu Görüntüle | `floor.status.view` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| **Sipariş ve Hazırlık Fişi Yaşam Döngüsü** | | | | | | | | | |
+| QR ile Sipariş Verin | `orders.qr.create` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` |
+| Masa Siparişi Ver (Personel) | `orders.staff.create` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Sipariş Öğesini İptal Et (Hazırlık Öncesi) | `orders.items.cancel_pre_prep` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Hazırlanan/Hazır Sipariş Kalemini İptal Et| `orders.items.void_in_prep` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **KDS Hazırlık** | | | | | | | | | |
+| Mutfak Yemek Sırasını Görüntüle | `kds.kitchen.view` | `✗` | `✓` | `✓` | `✗` | `✓` | `✗` | `✗` | `✗` |
+| Bar İçki Sırasını Görüntüle | `kds.bar.view` | `✗` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` | `✗` |
+| Hazırlık Fişi Durumunu Güncelle (Hazırlık/Hazır)| `kds.ticket.update` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
+| Tamamlanan Hazırlık Fişi Geri Çağırma | `kds.ticket.recall` | `✗` | `✗` | `✓` | `✗` | `O` | `O` | `✗` | `✗` |
+| **Faturalandırma ve Ödemeler** | | | | | | | | | |
+| Masadan Hesap İste | `billing.bill.request` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✓` | `✓` |
+| Nakit Ödeme Al | `billing.payment.cash` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` |
+| Harici POS Kart Ödemesi Kaydet | `billing.payment.pos_card` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `O` | `✗` |
+| Faturayı Tutar veya Öğeye Göre Böl | `billing.bill.split` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
+| Sipariş İndirimi Uygula | `billing.discount.apply` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Geri Ödemeye İzin Ver | `billing.refund.authorize` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Personel ve Analitik** | | | | | | | | | |
+| Personeli Yönetin ve Rolleri Atayın | `branch.staff.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| Günlük Şube Gelirlerini Görüntüle | `reports.branch.revenue` | `✗` | `✓` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` |
+| Çoklu Şube Raporlarını Görüntüle | `reports.tenant.multi_branch` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
 
 ---
 
-## 3. Security Invariants for Authorization
+## 3. Yetkilendirme Güvenlik Kuralları
 
-1. **Deny-by-Default:** Any unmapped action or missing permission claim must return `403 Forbidden`.
-2. **Strict Multi-Tenant Boundary:** A user with `Restoran Admini` in Tenant A can never query or manipulate data belonging to Tenant B under any circumstance.
-3. **Session Scoping for Customers:** A customer session token is cryptographically bound to a single `table_session_id`. It cannot view or place orders on another table.
-4. **Manager Override for Critical Actions:** Voids on items already in preparation, bill discounts, and payment refunds require supervisor PIN verification.
-5. **Central Registry Alignment:** All capability identifiers in code (`RestaurantOrder.Application.Auth.Permissions`) must match the machine-readable strings defined in Section 2 above with zero deviation.
-6. **User Membership Lifecycle & Tenant Isolation (`UserMembershipStatus`):** Staff status (`Active`, `Suspended`, `Disabled`) is scoped strictly per tenant membership. Suspending a user in Tenant A leaves any memberships in Tenant B unaffected. Transitioning to `Suspended` or `Disabled` instantly revokes all active sessions for that user across all instances. `Şube Müdürü` (Branch Manager) can only manage staff within their assigned branch; cross-branch actions return `403 Forbidden`.
-7. **Atomic Single-Statement Token Consumption:** Staff invitation and password reset tokens are consumed via atomic database functions (`UPDATE ... WHERE is_consumed = FALSE RETURNING ...`) guaranteeing exactly one concurrent redemption. Raw tokens are never returned in API payloads and are delivered strictly out-of-band.
-8. **Feature Flags are Not Authorization:** Feature flags toggle operational functionality (e.g., `order_acceptance`, `service_charge`) but never confer or bypass RBAC permissions. A user lacking `branch.configuration.manage` cannot update branch configuration or toggles, regardless of flag values.
-9. **Branch Scoping Invariant:** A Branch Manager (`Şube Müdürü`) possesses management permissions strictly scoped to their assigned branch (`O`). Any attempt to read or mutate another branch's configuration, dining areas, stations, or operating hours fails with `403 Forbidden`.
-## Phase 5 Catalog Authorization
-
-Catalog viewing uses the menu.catalog.view permission; structure changes use menu.catalog.manage; price and modifier price changes use menu.pricing.manage; stockout/restock uses menu.inventory.quick86. These API checks remain authoritative when the admin UI hides controls. BranchManager access is restricted to the assigned branch. Kitchen and Bar quick-86 operations are restricted to their respective preparation station assignments. Customer/runtime viewing does not grant catalog mutation rights.
+1. **Varsayılan ret:** Eşlenmemiş eylem veya eksik yetki claim'i `403 Forbidden` döndürür.
+2. **İşletme sınırı:** A işletmesinin Restoran Admini hiçbir koşulda B'nin verisini okuyamaz veya değiştiremez.
+3. **Müşteri oturumu:** Token tek `table_session_id` ile kriptografik bağlıdır; başka masanın verisini göremez veya siparişini veremez.
+4. **Yönetici onayı:** Hazırlıktaki ürün iptali, hesap indirimi ve iade yönetici PIN doğrulaması gerektirir.
+5. **Merkezi yetki kaydı:** `RestaurantOrder.Application.Auth.Permissions` içindeki anahtarlar yukarıdaki makine anahtarlarıyla birebir eşleşir.
+6. **Üyelik yaşam döngüsü:** `UserMembershipStatus` (`Active`, `Suspended`, `Disabled`) işletme üyeliği kapsamındadır. A'daki askıya alma B üyeliğini etkilemez. İlgili üyeliğin askıya alınması/devre dışı bırakılması, o kapsamın oturumlarını tüm örneklerde hemen iptal eder. Şube Müdürü yalnızca atanmış şubenin personelini yönetir; başka şube `403` döndürür.
+7. **Atomik token tüketimi:** Davet ve parola sıfırlama tokenları `UPDATE ... WHERE is_consumed = FALSE RETURNING ...` ile tek atomik adımda tüketilir; eşzamanlı kullanımda yalnızca biri başarılıdır. Ham tokenlar API yanıtına yazılmaz; ayrı güvenli kanaldan iletilir.
+8. **Özellik bayrağı yetki değildir:** `order_acceptance`, `service_charge` gibi bayraklar işlevi değiştirir; RBAC vermez veya aşmaz. `branch.configuration.manage` olmadan bayrak değeri ne olursa olsun yapılandırma değiştirilemez.
+9. **Şube kapsamı:** BranchManager'ın `O` yönetim yetkileri atanmış şubeyle sınırlıdır. Başka şubenin yapılandırması, alanları, istasyonları veya saatleri için okuma/değiştirme `403 Forbidden` döndürür.

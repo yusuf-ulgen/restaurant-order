@@ -1,106 +1,95 @@
-# Product Specification & Vision (`docs/PRODUCT.md`)
+# Ürün Spesifikasyonu ve Vizyonu (`docs/PRODUCT.md`)
 
-## 1. Executive Summary
+## 1. Yönetici Özeti
 
-`restaurant-order` is an integrated, multi-tenant digital dining and operational platform. It replaces legacy, fragmented POS terminals, paper tickets, and static PDF menus with a synchronized, real-time ecosystem connecting guests, waitstaff, kitchen personnel, and restaurant operators.
-
----
-
-## 2. Problem Statement & Value Proposition
-
-### 2.1. Problems Solved
-- **High Table Turnover Latency:** Guests waiting for menus, waitstaff attention, or bill delivery spend 15–20 minutes in non-dining idle time.
-- **Order Transcription Errors:** Verbal orders or handwritten paper tickets lead to misplaced modifiers, food waste, and customer dissatisfaction.
-- **Kitchen-Floor Disconnect:** Floor staff lack visibility into kitchen prep progress, leading to repeated trips to the kitchen pass.
-- **Multi-Branch Management Overhead:** Multi-location brands struggle with centralized menu rollouts, disparate pricing, and fragmented reporting.
-
-### 2.2. Core Value Proposition
-- **For Guests:** Instant menu access via QR, real-time item availability, visual modifier selection, and transparent bill tracking.
-- **For Waitstaff:** Handheld mobile ordering, instant table transfer, quick modifier selection, and automated service alerts.
-- **For Kitchen & Bar:** Digital KDS with intelligent station routing (food to kitchen, drinks to bar), prep timer color-coding, and one-tap item 86ing (marking out-of-stock).
-- **For Restaurant Operators:** Centralized menu and branch administration, live floor status, and detailed revenue analytics.
-- **For Platform Admins:** Full tenant lifecycle control, organization hierarchy management, and platform billing.
+`restaurant-order` entegre, çok işletmeli bir dijital yemek ve operasyonel platformdur. Parçalanmış mirasın yerini alıyor POS terminaller, kağıt hazırlık fişleri ve statik PDF misafirleri, garsonları, mutfak personelini ve restoran işletmecilerini birbirine bağlayan senkronize, gerçek zamanlı bir ekosisteme sahip menüler.
 
 ---
 
-## 3. The 5 Product Surfaces
+## 2. Sorun Açıklaması ve Değer Önerisi
 
-```
-+-------------------------------------------------------------------------+
-|                       PLATFORM SUPER ADMIN PANEL                        |
-|        (Multi-tenant onboarding, tenant billing, system health)         |
-+------------------------------------+------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                         RESTAURANT ADMIN PANEL                          |
-|         (Menu catalog, branch layout, staff RBAC, reports, printers)    |
-+------------------------------------+------------------------------------+
-                                     |
-          +--------------------------+--------------------------+
-          |                                                     |
-          v                                                     v
-+------------------------+  +------------------------+  +-----------------+
-|  QR CUSTOMER WEB APP   |  |   WAITER MOBILE APP    |  |  KITCHEN / BAR  |
-| (Table QR, Menu, Cart, |  | (Tables, Quick Order,  |  |       KDS       |
-|  Service Call, Bill)   |  |  Table Move, Payment)  |  |  (Station Queues|
-|                        |  |                        |  |   & Prep Timer) |
-+------------------------+  +------------------------+  +-----------------+
+### 2.1. Çözülen Sorunlar
+- **Masa Devir Süresi:** Menü, garson veya hesap bekleme nedeniyle yemek dışında geçen 15–20 dakikalık süreyi azaltmak hedeflenir.
+- **Sipariş Transkripsiyon Hataları:** Sözlü siparişler veya elle yazılan kağıt hazırlık fişleri, değiştiricilerin yanlış yerleştirilmesine, gıda israfına ve müşteri memnuniyetsizliğine yol açar.
+- **Mutfak ve Servis İletişiminin Kopması:** Kat personelinin mutfak hazırlığı sürecini görememesi, mutfak geçişine tekrar tekrar gitmesine neden oluyor.
+- **Çoklu Şube Yönetim Giderleri:** Çok lokasyonlu markalar, merkezi menü sunumları, farklı fiyatlandırma ve parçalı raporlamayla mücadele ediyor.
+
+### 2.2. Temel Değer Önerisi
+- **Misafirler için:** QR aracılığıyla anında menü erişimi, gerçek zamanlı ürün kullanılabilirliği, görsel değiştirici seçimi ve şeffaf fatura takibi.
+- **Garsonlar için:** Elde taşınır mobil sipariş, hızlı masa taşıma, hızlı değiştirici seçimi ve otomatik hizmet uyarıları.
+- **Mutfak ve Bar için:** Dijital KDS akıllı istasyon yönlendirme (yiyecekten mutfağa, içeceklerden bara), hazırlama zamanlayıcısı renk kodlaması ve tek dokunuşla öğe 86'yı işaretleme (stokta yok olarak işaretleme) ile.
+- **Restoran İşletmecileri için:** Merkezi menü ve şube yönetimi, canlı kat durumu ve ayrıntılı gelir analitiği.
+- **Platform Yöneticileri için:** Tam işletme yaşam döngüsü kontrolü, organizasyon hiyerarşisi yönetimi ve platform faturalandırması.
+
+---
+
+## 3. 5 Ürün Arayüzleri
+
+```text
+Platform Süper Yönetici Paneli
+  İşletme açılışı, abonelik/faturalandırma, sistem sağlığı
+        ↓
+Restoran Yönetim Paneli
+  Menü, şube düzeni, personel yetkileri, raporlar, yazıcılar
+        ↓
+QR Müşteri Web     Garson Mobil       Mutfak / Bar KDS
+Menü, sepet,       Masa, sipariş,     İstasyon kuyrukları,
+çağrı, hesap       taşıma, ödeme      hazırlık zamanlayıcıları
 ```
 
-### 3.1. Surface 1: QR Customer Web App
-- **Form Factor:** Mobile-first, highly responsive web application. No app store installation required.
-- **Activation:** Initiated by scanning a dynamic or static table QR code encoding `tenant_id`, `branch_id`, and `table_id`.
-- **Key Capabilities:**
-  - Dynamic digital menu with high-resolution imagery, allergen tags, and dietary badges.
-  - Interactive modifier configuration (e.g., meat doneness, extra sauces, removals).
-  - Cart management with live total and tax breakdown.
-  - Table-linked order submission into the branch's active order stream.
-  - Service requests ("Call Waiter", "Request Wet Wipes", "Request Bill").
-  - Live order tracking (Submitted -> Preparing -> Served).
+### 3.1. Arayüz 1: QR Müşteri Web Uygulaması
+- **Form Faktörü:** Mobil öncelikli, son derece duyarlı web uygulaması. Uygulama mağazası kurulumu gerekmez.
+- **Aktivasyon:** `tenant_id`, `branch_id` ve `table_id` içeren dinamik veya statik masa QR kodu taranır. Bu kimlikler tek başına yetki vermez; oturum yetkilendirmesi ayrıca doğrulanır.
+- **Temel Yetenekler:**
+  - Yüksek çözünürlüklü görüntüler, alerjen etiketleri ve diyet rozetleri içeren dinamik dijital menü.
+  - Etkileşimli değiştirici yapılandırması (örneğin et pişmesi, ekstra soslar, uzaklaştırmalar).
+  - Canlı toplam ve vergi dökümü ile sepet yönetimi.
+  - Şubenin sipariş akışına masaya bağlı sipariş gönderimi.
+  - Hizmet talepleri ("Garson Çağır", "Islak Mendil İste", "Fatura İste").
+  - Canlı sipariş takibi (Gönderildi -> Hazırlanıyor -> Sunuldu).
 
-### 3.2. Surface 2: Waiter & Operations Mobile App
-- **Form Factor:** Touch-optimized mobile web application designed for smartphones and handheld rugged POS devices.
-- **Key Capabilities:**
-  - Interactive floor plan with table statuses (Empty, Seated, Order Pending, Served, Bill Requested).
-  - Rapid order entry and modifier customization for walk-in guests or assisted ordering.
-  - Table management: merge tables, split tables, transfer orders between tables.
-  - Real-time waiter notifications (guest service calls, food ready at kitchen pass).
-  - POS payment collection integration (cash, external card terminal, or digital split).
+### 3.2. Arayüz 2: Garson & Operasyon Mobil Uygulaması
+- **Form Faktörü:** Akıllı telefonlar ve elde taşınır cihazlar için tasarlanmış, dokunmatik optimizasyonlu mobil web uygulaması POS devices.
+- **Temel Yetenekler:**
+  - Masa durumlarını (Boş, Oturmalı, Sipariş Beklemede, Sunuldu, Fatura İstendi) içeren etkileşimli kat planı.
+  - Gelen misafirler veya yardımlı sipariş için hızlı sipariş girişi ve değiştirici özelleştirmesi.
+  - Masa yönetimi: birleştirme, ayırma ve masalar arasında sipariş taşıma.
+  - Gerçek zamanlı garson bildirimleri (misafir servis çağrıları, mutfakta hazır yiyecekler).
+  - POS ödeme tahsilatı entegrasyonu (nakit, harici kart terminali veya dijital bölme).
 
-### 3.3. Surface 3: Kitchen & Bar KDS (Kitchen Display System)
-- **Form Factor:** Landscape tablet and commercial touchscreen display optimized for harsh kitchen environments.
-- **Key Capabilities:**
-  - Station-specific ticket filtering: Kitchen station displays culinary tickets; Bar station displays beverage tickets.
-  - Visual time tracking: Color-coded cards (Green: <10m, Amber: 10–20m, Red: >20m overdue).
-  - Ticket progression: "Mark In-Prep" -> "Mark Ready" -> "Recall Ticket".
-  - One-tap item 86ing (mark out-of-stock instantly across all customer menus and waiter apps).
-  - Audio chimes for new incoming orders and urgent waiter calls.
+### 3.3. Arayüz 3: Mutfak & Bar KDS (Mutfak Ekran Sistemi)
+- **Form Faktörü:** Zorlu mutfak ortamları için optimize edilmiş yatay tablet ve ticari dokunmatik ekran.
+- **Temel Yetenekler:**
+  - İstasyona özel hazırlık fişi filtreleme: Mutfak istasyonu mutfak hazırlık fişlerini görüntüler; Bar istasyonu içecek hazırlık fişlerini sergiliyor.
+  - Görsel zaman takibi: Renk kodlu kartlar (Yeşil: <10 m, Sarı: 10–20m, Kırmızı: >20m gecikmiş).
+  - Hazırlık Fişi ilerlemesi: "Hazırlık Halinde İşaretle" -> "Hazır Olarak İşaretle" -> "Hazırlık Fişi Geri Çağır".
+  - Tek dokunuşla öğe 86'lama (tüm müşteri menülerinde ve garson uygulamalarında stokta yok durumunu anında işaretleyin).
+  - Yeni gelen siparişler ve acil garson çağrıları için sesli uyarılar.
 
-### 3.4. Surface 4: Restaurant Admin Panel
-- **Form Factor:** Desktop and tablet web dashboard for Restaurant Admins and Branch Managers.
-- **Key Capabilities:**
-  - Menu engineering: categories, items, variant pricing, modifier groups, and combo meals.
-  - Branch layout editor: dining areas (Indoor, Terrace, Garden), table numbering, and QR code generation/export.
-  - Staff management: user invites, role assignment (RBAC), and PIN-code management for quick mobile login.
-  - Hardware configuration: network thermal printer setup (ESC/POS), station routing rules.
-  - Operations reporting: sales summaries, peak hour analysis, item popularity, and staff performance.
+### 3.4. Arayüz 4: Restoran Yönetim Paneli
+- **Form Faktörü:** Restoran Yöneticileri ve Şube Müdürleri için masaüstü ve tablet web kontrol paneli.
+- **Temel Yetenekler:**
+  - Menü mühendisliği: kategoriler, öğeler, değişken fiyatlandırma, değiştirici gruplar ve karma yemekler.
+  - Şube düzeni editörü: yemek alanları (İç Mekan, Teras, Bahçe), masa numaralandırma ve QR kod oluşturma/dışa aktarma.
+  - Personel yönetimi: kullanıcı davetleri, rol ataması (RBAC) ve PIN-hızlı mobil giriş için kod yönetimi.
+  - Donanım yapılandırması: ağ termal yazıcı kurulumu (ESC/POS), istasyon yönlendirme kuralları.
+  - Operasyon raporlaması: satış özetleri, yoğun saat analizi, ürün popülerliği ve personel performansı.
 
-### 3.5. Surface 5: Platform Super Admin Panel
-- **Form Factor:** Desktop web application for platform operators.
-- **Key Capabilities:**
-  - Tenant lifecycle: organization creation, suspension, custom domain binding.
-  - Subscription & billing: tier management, platform commission rate configuration, invoice generation.
-  - System-wide audit logging and operational health monitoring.
+### 3.5. Arayüz 5: Platform Süper Yönetici Paneli
+- **Form Faktörü:** Platform operatörleri için masaüstü web uygulaması.
+- **Temel Yetenekler:**
+  - İşletme yaşam döngüsü: organizasyon oluşturma, askıya alma, özel alan bağlama.
+  - Abonelik ve faturalandırma: katman yönetimi, platform komisyon oranı yapılandırması, fatura oluşturma.
+  - Sistem çapında denetim günlüğü ve operasyonel durum izleme.
 
 ---
 
-## 4. Architectural & Technology Status
+## 4. Mimari ve Teknoloji Durumu
 
-All architecture and technology choices remain **provisional** until validated through formal ADRs:
+Kabul edilmiş teknoloji ve kalıcılık kararları [ADR dizininde](./adr/README.md) bağlayıcıdır. Aşağıdaki erken ürün taslağı seçenekleri bu kararları geçersiz kılmaz; karara bağlanmamış konular `[Proposed / ADR Required]` olarak kalır:
 
-- **Frontend Technology:** Responsive Web SPA / PWA `[Proposed / ADR Required]`
-- **Backend Technology:** Modular Monolith or Microservices `[Proposed / ADR Required]`
-- **Realtime Transport:** WebSockets / Server-Sent Events (SSE) `[Proposed / ADR Required]`
-- **Database & Multitenancy:** PostgreSQL with row-level security or schema isolation `[Proposed / ADR Required]`
-- **Offline / Hardware Proxy:** Local printer bridge service for ESC/POS network printing `[Proposed / ADR Required]`
+- **Ön Uç:** React 19, Vite, TypeScript ve PWA yaklaşımı — ADR-0001.
+- **Arka Uç:** .NET 10 / ASP.NET Core modüler monolit — ADR-0001.
+- **Canlı Olay Taşıma:** SignalR ve Redis backplane — ADR-0001. Arka plan push sağlayıcısı ayrı karardır.
+- **Veritabanı:** PostgreSQL RLS ve EF Core — ADR-0001/0002.
+- **Çevrimdışı / Donanım Proxy'si:** Yerel yazıcı köprüsü hizmeti ESC/POS ağ yazdırma `[Proposed / ADR Required]`

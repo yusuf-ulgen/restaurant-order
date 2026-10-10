@@ -1,158 +1,159 @@
-# State Machines & Entity Lifecycles (`docs/STATE-MACHINES.md`)
+# Durum Makineleri ve Varlık Yaşam Döngüleri (`docs/STATE-MACHINES.md`)
 
-## 1. Overview
+## 1. Genel Bakış
 
-Deterministic state transitions prevent invalid business states (e.g., paying for an empty table, serving a cancelled item, or cancelling an already prepared dish without authorization). All state mutations must be validated against these state machines.
+Geçersiz durumları önlemek için tüm değişiklikler doğrulanmış geçişleri kullanır: boş masaya ödeme, iptal ürünü servis etme veya yetkisiz hazırlık iptali gibi durumlar engellenir.
 
----
+Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uçlar değildir. Yetkilerin kaynağı [rol matrisi](./ROLES-AND-PERMISSIONS.md) olup örnekler ek yetki vermez. Masa çizimi eski bir salon görünümü taslağıdır; karışık hazırlık, yeni sipariş turları ve kısmi ödemeleri tek kalıcı durumla temsil etmeye yeterli değildir. Doluluk, oturum, hazırlık ve ödeme ayrımı [R02](./REVIEW-BACKLOG.md) kapsamında Faz 6 öncesi ADR ile çözülmelidir. Sipariş yaşam döngüsü ve kısmi iadeler R11'de izlenir.
 
-## 2. Table State Machine
+## 2. Masa Durum Makinesi
 
 ```
    [ AVAILABLE ]  <----------------------------------------------------+
          |                                                             |
-         | (Guest arrives / QR scanned / Waiter seats)                 |
+         | (Misafir gelir / QR taranır / garson oturtur)                 |
          v                                                             |
     [ SEATED ]                                                         |
          |                                                             |
-         | (Order submitted)                                           |
+         | (Sipariş gönderilir)                                           |
          v                                                             |
 [ ORDER_PENDING ]                                                      |
          |                                                             |
-         | (KDS begins prep)                                           |
+         | (KDS hazırlığı başlatır)                                           |
          v                                                             |
   [ PREPARING ]                                                        |
          |                                                             |
-         | (All items served to table)                                 |
+         | (Tüm ürünler servis edilir)                                 |
          v                                                             |
    [ SERVED ]  <------------------+                                    |
-         |                        | (Subsequent order placed)          |
-         | (Guest requests bill)  |                                    |
+         |                        | (Yeni sipariş turu)          |
+         | (Müşteri hesabı ister)  |                                    |
          v                        |                                    |
 [ BILL_REQUESTED ] ---------------+                                    |
          |                                                             |
-         | (All payments settled)                                      |
+         | (Ödemeler tamamlanır)                                      |
          v                                                             |
      [ PAID ]                                                          |
          |                                                             |
-         | (Table cleared & sanitized)                                 |
+         | (Masa temizlenir)                                 |
          +-------------------------------------------------------------+
 ```
 
-| Current State | Event / Action | Next State | Authorized Roles | Invariants & Guards |
+| Mevcut Durum | Olay / Eylem | Sonraki Durum | Yetkili Roller | Değişmez Kurallar ve Koruma Koşulları |
 | :--- | :--- | :--- | :--- | :--- |
-| `AVAILABLE` | `SEAT_GUESTS` | `SEATED` | Garson, Kasa, Müdür, Müşteri | Table must have no active session. |
-| `SEATED` | `SUBMIT_ORDER` | `ORDER_PENDING` | Müşteri, Garson, Kasa | Order contains at least 1 valid item. |
-| `ORDER_PENDING`| `START_PREPARATION`| `PREPARING` | Mutfak, Bar, System | At least 1 station ticket marked in-prep. |
-| `PREPARING` | `MARK_ALL_SERVED` | `SERVED` | Garson, Mutfak, Bar | All station tickets marked `SERVED`. |
-| `SERVED` | `REQUEST_BILL` | `BILL_REQUESTED` | Müşteri, Garson, Kasa | Active session has open balance. |
-| `SERVED` | `SUBMIT_NEW_ORDER`| `PREPARING` | Müşteri, Garson | Adds new items to existing session. |
-| `BILL_REQUESTED`| `SETTLE_PAYMENT`| `PAID` | Kasa, Garson, Müdür | Remaining bill balance must equal `0.00`. |
-| `PAID` | `CLEAR_TABLE` | `AVAILABLE` | Garson, Kasa, Müdür | Session closed, table marked ready for guests. |
+| `AVAILABLE` | `SEAT_GUESTS` | `SEATED` | Garson, Kasa, Müdür, Müşteri | Masada başka etkin oturum bulunamaz. |
+| `SEATED` | `SUBMIT_ORDER` | `ORDER_PENDING` | Müşteri, Garson, Kasa | Sepet ve ürünler doğrulanır; fiyatlar dondurulur. Masa akışında en az bir geçerli kalem gerekir. |
+| `ORDER_PENDING`| `START_PREPARATION`| `PREPARING` | Mutfak, Bar, Sistem | En az bir istasyon fişi hazırlığa alınır. |
+| `PREPARING` | `MARK_ALL_SERVED` | `SERVED` | Garson | İptal edilmemiş tüm kalemler masaya teslim edilir; mutfak/bar yalnızca READY işaretler, servis teslimini yapmaz. |
+| `SERVED` | `REQUEST_BILL` | `BILL_REQUESTED` | Müşteri, Garson | billing.bill.request yetkisi ve geçerli oturum kapsamı gerekir. |
+| `SERVED` | `SUBMIT_NEW_ORDER`| `ORDER_PENDING` | Müşteri, Garson | Yeni kalemler gönderim/hazırlık korumalarından geçer; onay adımını atlayamaz. |
+| `BILL_REQUESTED`| `SETTLE_PAYMENT`| `PAID` | Ödeme yöntemi için izin verilen roller | Ödeme yönteminin billing.payment.cash veya billing.payment.pos_card yetkisi gerekir. Garsonun POS yetkisi kendi kapsamındadır; nakit yetkisi değildir. Kalan borç sıfır olmalıdır. |
+| `PAID` | `CLEAR_TABLE` | `AVAILABLE` | Garson, Kasa, Müdür | Oturum kapanmış ve masa yeni misafir için hazırlanmış olmalıdır. |
 
 ---
 
-## 3. Order & OrderItem State Machine
+## 3. Sipariş ve Sipariş Kalemi Durum Makinesi
 
 ```
    [ DRAFT ] ------------------------> [ CANCELLED ]
        |                                     ^
-       | (Submit order)                      |
+       | (Siparişi gönder)                      |
        v                                     |
-  [ SUBMITTED ] -----------------------------+ (Cancelled before prep)
+  [ SUBMITTED ] -----------------------------+ (Hazırlık öncesi iptal)
        |                                     |
-       | (Received by station)               |
+       | (İstasyon teslim alır)               |
        v                                     |
-[ IN_PREPARATION ] --------------------------+ (Voided with supervisor PIN)
+[ IN_PREPARATION ] --------------------------+ (Yönetici PIN onayıyla iptal)
        |                                     ^
-       | (Station marks ready)               |
+       | (İstasyon hazır işaretler)               |
        v                                     |
-    [ READY ] <--- (Recall Ticket)           |
+    [ READY ] <--- (Fişi geri çağır)           |
        |                                     |
-       | (Delivered to table)                |
+       | (Masaya servis edilir)                |
        v                                     |
-   [ SERVED ] -------------------------------+ (Comped / Voided by Admin)
+   [ SERVED ] -------------------------------+ (Yönetici ikramı / iptali)
 ```
 
-| Current State | Event / Trigger | Next State | Authorized Roles | Notes / Guards |
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Yetkili Roller | Notlar / Koruma Koşulları |
 | :--- | :--- | :--- | :--- | :--- |
-| `DRAFT` | `SUBMIT_ORDER` | `SUBMITTED` | Müşteri, Garson, Kasa | Cart validated, prices frozen. |
-| `SUBMITTED` | `ACKNOWLEDGE_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Appears on KDS; prep timer starts. |
-| `SUBMITTED` | `CANCEL_ITEM` | `CANCELLED` | Müşteri, Garson, Kasa | Safe cancellation before prep starts. |
-| `IN_PREPARATION`| `BUMP_READY` | `READY` | Mutfak, Bar | Waiter notified for floor delivery. |
-| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Requires supervisor PIN & reason. |
-| `READY` | `RECALL_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Accidentally bumped ticket restored. |
-| `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Waiter confirms delivery. |
-| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Requires formal audit log & reason. |
+| `DRAFT` | `SUBMIT_ORDER` | `SUBMITTED` | Müşteri, Garson, Kasa | Sepet ve ürünler doğrulanır; fiyatlar dondurulur. Masa akışında en az bir geçerli kalem gerekir. |
+| `SUBMITTED` | `ACKNOWLEDGE_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Fiş KDS üzerinde görünür; hazırlık sayacı başlar. |
+| `SUBMITTED` | `CANCEL_ITEM` | `CANCELLED` | Restoran Admini, Müdür, Garson, Kasa | orders.items.cancel_pre_prep gerekir; müşteri doğrudan iptal etmez, personelle iletişime geçer. |
+| `IN_PREPARATION`| `BUMP_READY` | `READY` | Mutfak, Bar | Garsona masaya servis için bildirilir. |
+| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Yönetici PIN doğrulaması ve gerekçe gerekir. |
+| `READY` | `RECALL_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Yanlışlıkla hazır işaretlenen fiş hazırlığa geri döner. |
+| `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Garson masaya teslimi doğrular. |
+| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Resmî denetim kaydı ve gerekçe gerekir. |
 
 ---
 
-## 4. Bill & Payment State Machine
+## 4. Hesap ve Ödeme Durum Makinesi
 
 ```
-   [ OPEN ] (New orders aggregate here)
+   [ OPEN ] (Yeni siparişler burada toplanır)
        |
-       | (Partial payment received)
+       | (Kısmi ödeme alınır)
        v
 [ PARTIALLY_PAID ] <-----+
-       |                 | (Additional partial payment)
+       |                 | (Ek kısmi ödeme)
        |                 +--+
-       | (Final balance settled)
+       | (Kalan borç ödenir)
        v
  [ FULLY_PAID ]
        |
-       | (Supervisor refund authorized)
+       | (Yönetici iadeyi onaylar)
        v
   [ REFUNDED ]
 ```
 
-| Current State | Event / Trigger | Next State | Guards & Rules |
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Koruma Koşulları ve Kurallar |
 | :--- | :--- | :--- | :--- |
-| `OPEN` | `RECEIVE_PARTIAL_PAYMENT`| `PARTIALLY_PAID` | Payment amount > 0 and < remaining balance. |
-| `OPEN` | `RECEIVE_FULL_PAYMENT` | `FULLY_PAID` | Payment amount equals remaining balance. |
-| `PARTIALLY_PAID`| `RECEIVE_REMAINING` | `FULLY_PAID` | Remaining balance reaches 0.00. |
-| `FULLY_PAID` | `AUTHORIZE_REFUND` | `REFUNDED` | Requires supervisor PIN, audit trail recorded. |
-| `OPEN` | `VOID_SESSION` | `VOIDED` | Only if all orders are cancelled; balance is 0.00. |
+| `OPEN` | `RECEIVE_PARTIAL_PAYMENT`| `PARTIALLY_PAID` | Ödeme sıfırdan büyük ve kalan borçtan küçüktür; yöntem yetkisi ve kapsam denetlenir. |
+| `OPEN` | `RECEIVE_FULL_PAYMENT` | `FULLY_PAID` | Ödeme kalan borca eşittir. |
+| `PARTIALLY_PAID` | `RECEIVE_PARTIAL_PAYMENT` | `PARTIALLY_PAID` | Ödeme sıfırdan büyük ve kalan borçtan küçüktür; yöntem yetkisi ve kapsam denetlenir. |
+| `PARTIALLY_PAID`| `RECEIVE_REMAINING` | `FULLY_PAID` | Kalan borç 0.00 olur. |
+| `FULLY_PAID` | `AUTHORIZE_REFUND` | `REFUNDED` | Yönetici PIN doğrulaması ve denetim izi gerekir. |
+| `OPEN` | `VOID_SESSION` | `VOIDED` | Yalnızca bütün siparişler iptal edilmişse ve borç 0.00 ise. |
 
 ---
 
-## 5. Concurrency & State Invariants
+## 5. Eşzamanlılık ve Değişmez Kurallar
 
-1. **Optimistic Locking:** Entity records (`orders`, `table_sessions`, `bills`) must carry a `version` column. State transitions must check `WHERE version = :expected_version`.
-2. **Atomic Payment Settlement:** When splitting bills across multiple cards/cash, each transaction is logged independently with a running balance check.
-3. **No Phantom Cancellations:** If a customer attempts to cancel an item via QR while the kitchen marks it `IN_PREPARATION`, the kitchen status wins and the customer cancellation is rejected with an explanatory message.
+1. `orders`, `table_sessions`, `bills` kayıtları `version` taşır; geçiş `WHERE version = :expected_version` ile sürümü denetler.
+2. Çoklu kart/nakit paylaşımında her ödeme ayrı kaydedilir; kalan borç atomik olarak kontrol edilir.
+3. Müşterinin doğrudan iptal yetkisi yoktur. Yetkili personelin iptali ile hazırlık yarışında yetki, sürüm ve mevcut durum atomik denetlenir; çelişen geçişlerden yalnızca biri başarılı olur. Hazırlık önce commit edilirse sıradan iptal reddedilir, yönetici iptali gerekir. Commit sırasından bağımsız koşulsuz öncelik verilemez.
+
+Teknik varlık adları: sipariş `Order`, sipariş kalemi `OrderItem`.
 
 ---
 
-## 6. DiningSession State Machine (Phase 6)
+## 6. DiningSession Durum Makinesi (Faz 6)
 
-```
-   [ OPEN ] (1) -------------------------------------------------+
-       |                                                         |
-       | (First order placed / Activate)                         | (Cancelled before order)
-       v                                                         v
-   [ ACTIVE ] (2) <-----------------+                       [ CLOSED ] (4)
-       |                            |                           ^
-       | (Request bill)             | (Retract / New order)     |
-       v                            |                           |
-[ BILL_REQUESTED ] (3) -------------+                           |
-       |                                                        |
-       | (Settled / Finalized)                                  |
-       +--------------------------------------------------------+
+```text
+   [ OPEN ] (1)
+       |
+       | (Aktive et / Activate)
+       v
+   [ ACTIVE ] (2)
+       |
+       | (Hesap iste / RequestBill)
+       v
+[ BILL_REQUESTED ] (3)
+       |
+       | (Kapat / Close)
+       v
+   [ CLOSED ] (4) [Son Durum / Terminal]
 ```
 
-| Current State | Event / Trigger | Next State | Authorized Roles | Invariants & Guards |
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Yetkili Roller | Değişmezler ve Koruma Koşulları |
 | :--- | :--- | :--- | :--- | :--- |
-| `OPEN` (1) | `ACTIVATE_SESSION` | `ACTIVE` (2) | System, Garson, Kasa | Initiated on first order or explicit activation. |
-| `OPEN` (1) | `CANCEL_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Only permitted if no orders exist. |
-| `ACTIVE` (2) | `REQUEST_BILL` | `BILL_REQUESTED` (3) | Müşteri, Garson, Kasa | Guest or staff requests bill settlement. |
-| `ACTIVE` (2) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Direct closure after full settlement. |
-| `BILL_REQUESTED` (3) | `REOPEN_SESSION` | `ACTIVE` (2) | Garson, Kasa, Müdür | Guest orders additional items. |
-| `BILL_REQUESTED` (3) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Payment finalized. Terminal state. |
+| `OPEN` (1) | `ACTIVATE_SESSION` | `ACTIVE` (2) | Sistem, Garson, Kasa | Yalnızca `Open` durumundaki oturumlar aktif edilebilir (`Activate()`). |
+| `ACTIVE` (2) | `REQUEST_BILL` | `BILL_REQUESTED` (3) | Müşteri, Garson, Kasa | Misafir veya personel hesap talebinde bulunur (`RequestBill()`). Yalnızca `Active` durumunda çağrılabilir. |
+| `BILL_REQUESTED` (3) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Hesap kapatma tamamlanır (`Close(reason)`). Son durumdur (terminal). |
 
-### DiningSession Invariants:
-1. **Single Non-Closed Session per Table:** Enforced by PostgreSQL partial unique index `ix_dining_sessions_tenant_branch_table_active` (`WHERE status <> 4`). Concurrent scans catch uniqueness violation and join existing session.
-2. **Terminal Closed State:** Once `Closed` (4), state mutations are strictly rejected (HTTP 409 Conflict).
-3. **Immediate Cache Invalidation:** Closing a session invokes `InvalidateSessionCacheAsync`, instantly terminating customer token validity.
-4. **Table Deactivation Guard:** Deactivating a table with an active non-closed session is blocked (HTTP 409 Conflict).
-5. **Transfer & Merge Deferral:** Table transfer and session merge operations operate on active orders and split bills; these mechanics are formally deferred to Phase 10 (Waiter & Operations). Note: Phase 7 (Customer Menu & Ordering), Phase 8 (Order Core), Phase 9 (Realtime & KDS), Phase 13 (Billing Engine), and Phase 16 (Payments) do not exist yet.
+### DiningSession Değişmezleri:
+1. **Masa Başına Tek Kapatılmamış Oturum:** PostgreSQL kısmi benzersiz indeksi `ix_dining_sessions_tenant_branch_table_active` (`WHERE status <> 4`) ile zorunlu kılınır. Eşzamanlı taramalar benzersizlik ihlalini yakalar ve mevcut oturuma bağlanır.
+2. **Kapatılmış (Closed) Son Durum:** `Closed` (4) durumuna geçtikten sonra durum değişiklikleri kesin olarak reddedilir (HTTP 409 Conflict).
+3. **Anında Önbellek Geçersiz Kılma:** Bir oturum kapatıldığında `InvalidateSessionCacheAsync` çağrılır ve müşteri JWT belirtecinin geçerliliği derhal sonlandırılır.
+4. **Masa Devre Dışı Bırakma Koruması:** Kapatılmamış aktif oturumu bulunan bir masanın devre dışı bırakılması engellenir (HTTP 409 Conflict).
+5. **Masa Taşıma ve Oturum Birleştirme:** Masa taşıma ve oturum birleştirme işlemleri doğrudan aktif siparişler, mutfak fişleri ve bölünmüş hesaplar üzerinde çalışır; bu mekanikler resmi olarak Aşama 10'a (Garson ve Operasyon) ertelenmiştir.

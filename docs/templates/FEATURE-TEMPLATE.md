@@ -1,57 +1,47 @@
-# FEAT-XXX: [Feature Name] (`docs/templates/FEATURE-TEMPLATE.md`)
+# FEAT-XXX: [Özellik Adı] (`docs/templates/FEATURE-TEMPLATE.md`)
 
-- **Status:** `[DRAFT | IN_REVIEW | APPROVED | IN_DEV | VERIFIED | RELEASED]`
-- **Author:** [Author Name / Agent]
-- **Target Surfaces:** `[QR Customer | Waiter Mobile | Kitchen/Bar KDS | Restaurant Admin | Super Admin]`
-- **Target Roles:** `[Super Admin | Restoran Admini | Şube Müdürü | Operasyon/Kasa | Mutfak | Bar | Garson | Müşteri]`
+- **Durum:** `[DRAFT | IN_REVIEW | APPROVED | IN_DEV | VERIFIED | RELEASED]`
+- **Yazar:** [Ad / AI ajanı]
+- **Hedef arayüzler:** `[QR Müşteri | Garson | Mutfak/Bar KDS | Restoran Yönetimi | Süper Yönetim]`
+- **Hedef roller:** `[Süper Yönetici | Restoran Admini | Şube Müdürü | Operasyon/Kasa | Mutfak | Bar | Garson | Müşteri]`
 
----
+## 1. Özet ve Kullanıcıya Değer
 
-## 1. Summary & User Value
+[Özelliği ve restoran işletmesi veya müşteri için çözdüğü sorunu kısaca açıklayın.]
 
-[Brief description of the feature and the problem it solves for restaurant operations or guests.]
+## 2. Kullanıcı Hikâyeleri ve Kabul Ölçütleri
 
----
+### Kullanıcı Hikâyesi 1: [Başlık]
 
-## 2. User Stories & Acceptance Criteria
+> Bir `[rol]` olarak `[fayda]` için `[eylemi]` gerçekleştirmek istiyorum.
 
-### User Story 1: [Title]
-> As a `[Role]`, I want to `[action]` so that `[benefit]`.
+**Kabul ölçütleri:**
 
-**Acceptance Criteria:**
-- [ ] Criterion 1: Happy path behavior.
-- [ ] Criterion 2: Error handling / negative path.
-- [ ] Criterion 3: RBAC permission enforcement.
+- [ ] Ölçüt 1: Başarılı akış davranışı.
+- [ ] Ölçüt 2: Hata yönetimi / başarısız akış.
+- [ ] Ölçüt 3: RBAC yetkilerinin uygulanması.
 
----
+## 3. Alan Modeli ve Şema Değişiklikleri
 
-## 3. Domain Model & Schema Changes
+- **Yeni / değişen varlıklar:** [`docs/DOMAIN.md` üzerindeki etkilenen varlıklar]
+- **Veritabanı geçişleri:** [Genişlet ve daralt yaklaşımıyla şema değişiklikleri]
+- **Çok işletmeli yapı:** [`tenant_id`, `branch_id` indeksleri ve RLS politikasını doğrulayın]
 
-- **New / Modified Entities:** [List entities affected in `docs/DOMAIN.md`]
-- **Database Migrations:** [Describe expand-and-contract schema alterations]
-- **Multi-Tenancy:** [Confirm `tenant_id` and `branch_id` indexing and RLS policy]
+## 4. Durum Makinesi ve Etkileşim Etkileri
 
----
+- [`docs/STATE-MACHINES.md` üzerindeki etkilenen makineler]
+- [Yeni durumlar, geçişler veya koruma koşulları]
 
-## 4. State Machine & Interaction Impacts
+## 5. Hata Akışları ve Sınır Durumları
 
-- [Identify affected state machines in `docs/STATE-MACHINES.md`]
-- [Detail any new states, transitions, or guards]
+- [Sınır durumu 1: Örneğin eşzamanlı değişiklikler]
+- [Sınır durumu 2: Donanım veya ağ bağlantısının kopması]
+- [Kullanıcıya gösterilen hata mesajları ve kurtarma adımları]
 
----
+## 6. Test ve Doğrulama Planı
 
-## 5. Negative Flows & Edge Cases
+- [ ] **Birim testleri:** [Alan mantığı, hesaplamalar, durum geçişleri]
+- [ ] **Entegrasyon testleri:** [API uçları, sorgular, RLS yalıtımı]
+- [ ] **Uçtan uca / elle doğrulama:** [Arayüzler arası iş akışları]
 
-- [Edge Case 1: e.g., Concurrent modifications]
-- [Edge Case 2: e.g., Hardware or network disconnection]
-- [User-facing error messages and recovery steps]
-
----
-
-## 6. Testing & Verification Plan
-
-- [ ] **Unit Tests:** [Domain logic, calculations, state transitions]
-- [ ] **Integration Tests:** [API endpoints, DB queries, RLS isolation]
-- [ ] **E2E / Manual Verification:** [Cross-surface workflow steps]
-
-> **Reminder:** In accordance with [AGENTS.md](../../AGENTS.md), this feature must not be reported as PASS without executing and validating automated tests.
+> **Hatırlatma:** [AGENTS.md](../../AGENTS.md) gereği otomatik testler çalıştırılıp doğrulanmadan başarı bildirilemez.

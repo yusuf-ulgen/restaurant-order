@@ -1,116 +1,95 @@
-# Domain Model & Bounded Contexts (`docs/DOMAIN.md`)
+# Alan Modeli ve Sınırları (`docs/DOMAIN.md`)
 
-## 1. Domain Overview
+## 1. Genel Bakış
 
-The `restaurant-order` platform operates in the restaurant hospitality and operations domain. The ubiquitous language is standardized across all product surfaces, API contracts, and database models.
+`restaurant-order`, restoran işletmesi ve servis süreçlerini kapsar. Arayüzlerde, API sözleşmelerinde ve veritabanında aynı alan terimleri kullanılır.
 
----
+## 2. Alan Sınırları
 
-## 2. Bounded Contexts
-
-```
-+-------------------------------------------------------------------------------+
-|                           MULTI-TENANT CONTROL PLANE                          |
-|             [Tenant / Organization] ---> [Brand] ---> [Branch]                |
-+---------------------------------------+---------------------------------------+
-                                        |
-        +-------------------------------+-------------------------------+
-        |                               |                               |
-        v                               v                               v
-+------------------+          +------------------+          +-------------------+
-|  CATALOG & MENU  |          |  TABLE & FLOOR   |          |    ORDER & KDS    |
-| - Menu           |          | - Dining Area    |          | - Order           |
-| - Category       |          | - Table          |          | - Order Item      |
-| - MenuItem       |          | - QR Code        |          | - Station Ticket  |
-| - Variant        |          | - Table Session  |          | - Ticket Item     |
-| - ModifierGroup  |          +------------------+          +---------+---------+
-+------------------+                                                  |
-                                                                      v
-                                                            +-------------------+
-                                                            | BILLING & PAYMENT |
-                                                            | - Bill / Receipt  |
-                                                            | - Payment / Split |
-                                                            | - Tip             |
-                                                            | - Refund          |
-                                                            | - Commission      |
-                                                            +-------------------+
+```text
+İşletme / kuruluş → Marka → Şube
+                         ├─ Menü/katalog: Menu, Category, MenuItem, Variant, ModifierGroup
+                         ├─ Masa/salon: DiningArea, Table, QRCode, TableSession
+                         └─ Sipariş/KDS: Order, OrderItem, StationTicket, TicketItem
+                                             ↓
+                              Hesap/ödeme: Bill, Payment, Split, Tip, Refund, Commission
 ```
 
----
+## 3. Temel Varlıklar ve İlişkiler
 
-## 3. Core Entities & Relationships
+### 3.1. İşletme Hiyerarşisi
 
-### 3.1. Tenant & Organization Hierarchy
-- **Tenant / Organization:** The top-level legal business entity (e.g., "Gourmet Group Inc."). Holds subscriptions, billing contracts, and platform settings.
-- **Brand:** A distinct restaurant concept under an organization (e.g., "Gourmet Burger", "Gourmet Pizza"). Menus can be scoped to a brand.
-- **Branch:** A physical restaurant location belonging to a brand (e.g., "Gourmet Burger - Kadıköy Branch"). Holds tables, printers, staff, and localized inventory.
+- **Tenant / Organization (İşletme / Kuruluş):** Üst düzey ticari tüzel yapı; örneğin sentetik Gourmet Group Inc. Abonelik, faturalandırma sözleşmesi ve platform ayarlarını taşır.
+- **Brand (Marka):** İşletme altındaki farklı restoran konsepti; örneğin Gourmet Burger veya Gourmet Pizza. Menü marka kapsamına alınabilir.
+- **Branch (Şube):** Markanın fiziksel restoranı; örneğin Kadıköy şubesi. Masaları, yazıcıları, personeli ve yerel stok durumunu içerir.
 
-### 3.2. Restaurant Configuration & Operations
-- **BrandAppearance:** Visual theme configuration for a brand, including primary/secondary/accent colors, border radius, logo URL, and active navigation items (`NavigationConfig`).
-- **BranchThemeOverride:** Optional branch-level theme customization overriding brand defaults.
-- **BranchSettings:** Branch-level financial and operational settings (timezone, currency, default/supported locales, tax inclusion, tax rates, service charges in basis points, order acceptance toggle, and contact fields).
-- **BranchOperatingHours:** Day-of-week operating hours and order acceptance schedules with cross-midnight support.
-- **DiningArea:** A physical zone within a branch (Indoor, Terrace, Garden, BarArea, Other) with code, sort order, and active/inactive lifecycle.
-- **PreparationStation:** Branch prep routing station (Kitchen, Bar, Other) with unique branch-scoped code, display name, and active/inactive lifecycle.
-- **BranchFeatureFlags:** Granular feature toggles per branch evaluated with strict authorization precedence.
+### 3.2. Restoran Yapılandırması
 
-### 3.3. Table & Floor Management
-- **RestaurantTable:** A dining table assigned to a specific `DiningArea` within a branch. Contains `table_number`, unique `code` per branch, seating `capacity`, shape (`Round`, `Square`, `Rectangle`), active status, `qr_version`, and opaque 128-bit `public_code` for QR payload resolution. Associated with optimistic concurrency token (`row_version`).
-- **TableLayout:** Physical coordinates (`x`, `y`, `width`, `height`, `rotation`) positioning a table on the 2D floor canvas grid. Validated against canvas boundary constraints and collision bounds.
-- **DiningSession:** A stateful dining session representing a party seated at a table. Follows state machine `Open -> Active -> BillRequested -> Closed`. Only one non-closed (`status <> 4`) session may exist per table at any time (`ix_dining_sessions_tenant_branch_table_active`).
+- **BrandAppearance:** Markanın ana/ikincil/vurgu renkleri, kenarlık yarıçapı, logo URL'si ve etkin gezinme öğeleri (`NavigationConfig`).
+- **BranchThemeOverride:** Marka varsayılanlarını değiştiren isteğe bağlı şube teması.
+- **BranchSettings:** Saat dilimi, para birimi, varsayılan/desteklenen diller, verginin fiyata dâhil olması, vergi ve servis ücreti baz puanları, sipariş kabulü ve iletişim alanları.
+- **BranchOperatingHours:** Gece yarısını aşan aralıkları destekleyen haftalık açılış ve sipariş kabul saatleri.
+- **DiningArea:** Şube içindeki Indoor, Terrace, Garden, BarArea veya Other alanı; kod, sıralama ve etkinlik durumu taşır.
+- **PreparationStation:** Kitchen, Bar veya Other hazırlık istasyonu; şube içinde benzersiz kod, görünen ad ve etkinlik durumu.
+- **BranchFeatureFlags:** Yetkilendirme önceliği korunarak değerlendirilen şube özellik bayrakları.
 
-### 3.4. Menu & Catalog Management
-- **Menu:** A curated collection of food and beverage offerings. Can be scoped to specific branches or time schedules (e.g., "Breakfast Menu", "All-Day Menu").
-- **MenuCategory:** A logical grouping of items (e.g., "Starters", "Main Courses", "Cocktails", "Desserts").
-- **MenuItem:** A specific culinary or beverage offering (e.g., "Cheeseburger", "Espresso").
-- **ItemVariant:** Size or portion options with distinct pricing (e.g., "Single (150g)", "Double (300g)", "Small", "Large").
-- **ModifierGroup:** A set of choices or customizations attached to an item (e.g., "Meat Doneness", "Choose Side", "Extra Toppings").
-  - `min_selections`: Minimum number of options required (e.g., 1 for meat doneness).
-  - `max_selections`: Maximum allowed choices.
-- **ModifierItem:** An individual customization option (e.g., "Well Done", "Truffle Fries", "Extra Cheddar +$1.50").
+### 3.3. Masa ve Salon Yönetimi
 
-### 3.5. Order & Ticket Lifecycle
-- **Order:** A dining order tied to a `branch_id`, `table_session_id`, and `order_source` (Customer QR, Waiter Mobile, or POS).
-- **OrderItem:** An instance of a `MenuItem` or `ItemVariant` within an order, with associated selected modifiers and special guest notes.
-- **StationTicket (KitchenTicket / BarTicket):** A sub-order routed to a specific preparation station (e.g., Kitchen or Bar). Contains items assigned to that station.
-- **TicketItem:** An item within a station ticket with its individual prep state (Queued, In-Prep, Ready, Served, Cancelled).
+- **RestaurantTable:** Şubeye ve `DiningArea` alanına bağlı masa. `table_number`, şube bazında benzersiz `code`, oturma kapasitesi `capacity`, şekil `shape` (`Round`, `Square`, `Rectangle`), etkinlik durumu `status`, `qr_version`, QR çözünürlüğü için 128-bit `public_code` ve iyimser eşzamanlılık tokenı (`row_version`) içerir.
+- **TableLayout:** Masanın 2D kat planı tuvali üzerindeki koordinatları (`x`, `y`, `width`, `height`, `rotation`). Tuval sınırlarına ve boyut kurallarına göre doğrulanır.
+- **DiningSession:** Masada oturan misafir grubunu temsil eden yemek oturumu. `Open -> Active -> BillRequested -> Closed` durum makinesini izler. Masada aynı anda yalnızca tek bir açık/kapanmamış (`status <> 4`) oturum bulunabilir (`ix_dining_sessions_tenant_branch_table_active`).
 
-### 3.6. Billing, Payments & Tips
-- **Bill:** The financial invoice for a `TableSession`, aggregating all non-cancelled order items, applied taxes, discounts, and service fees.
-- **Payment:** A financial transaction against a bill. Can be full or partial (split bill).
-  - `payment_method`: Cash, External POS Credit Card, Digital Online Gateway `[Proposed / ADR Required]`.
-- **Tip:** An optional gratuity added to a payment, allocated either to the specific waiter or pooled across staff.
-- **PlatformCommission:** The transaction fee retained by the platform provider based on the tenant's tier.
-- **Refund:** A full or partial reversal of a settled payment, requiring supervisor authorization and audit logging.
+### 3.4. Menü ve Katalog
 
-### 3.7. Identity & Access Control
-- **User:** A human actor authenticated to the system (staff member or platform operator).
-- **Role:** One of the 8 standard roles defined in [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md).
-- **UserBranchAssignment:** Maps staff members to specific branches with an optional quick-access PIN.
-- **AuditLog:** Immutable ledger recording critical actions (order cancellations, discounts, refunds, price overrides).
+- **Menu:** Şube veya zaman aralığına göre sunulabilen yiyecek/içecek koleksiyonu; kahvaltı veya tüm gün menüsü gibi.
+- **MenuCategory:** Başlangıç, ana yemek, kokteyl, tatlı gibi gruplar.
+- **MenuItem:** Cheeseburger veya espresso gibi ürün.
+- **ItemVariant:** Farklı fiyatlı boyut/porsiyon; tek 150 g, çift 300 g, küçük/büyük gibi.
+- **ModifierGroup:** Etin pişme derecesi, garnitür veya ek malzeme seçenekleri. `min_selections` zorunlu en az seçimi, `max_selections` izinli en fazla seçimi belirtir; pişme derecesinde en az bir seçim gibi.
+- **ModifierItem:** İyi pişmiş, trüflü patates veya +1.50 ek kaşar gibi tek seçenek.
 
----
+### 3.5. Sipariş ve Hazırlık Fişi
 
-## 4. Entity Cardinality Summary
+- **Order:** `branch_id`, `table_session_id`, `order_source` ile bağlı sipariş; kaynak müşteri QR, garson veya POS olabilir.
+- **OrderItem:** Siparişteki `MenuItem`/`ItemVariant` örneği; seçilen ekler ve müşteri notlarını içerir.
+- **StationTicket (KitchenTicket / BarTicket):** Siparişin belirli mutfak/bar istasyonuna yönlendirilen alt kümesi.
+- **TicketItem:** Hazırlık fişinin tek kalemi; sırada, hazırlanıyor, hazır, servis edildi veya iptal durumunu taşır.
 
-| Relationship | Cardinality | Description |
+### 3.6. Hesap, Ödeme ve Bahşiş
+
+- **Bill:** `TableSession` hesabı; iptal edilmemiş kalemler, vergiler, indirimler ve servis ücretlerini toplar.
+- **Payment:** Hesaba karşı tam veya kısmi ödeme. `payment_method`: nakit, harici POS kartı veya dijital ağ geçidi `[Proposed / ADR Required]`.
+- **Tip:** Belirli garsona veya ortak personel havuzuna ayrılan isteğe bağlı bahşiş.
+- **PlatformCommission:** İşletmenin planına göre platformun tuttuğu işlem ücreti.
+- **Refund:** Kesinleşmiş ödemenin tümünün/kısmının iadesi; yönetici onayı ve denetim izi gerektirir.
+
+### 3.7. Kimlik ve Erişim
+
+- **User:** Kimliği doğrulanmış personel veya platform görevlisi.
+- **Role:** [Rol belgesindeki](./ROLES-AND-PERMISSIONS.md) sekiz standart rol.
+- **UserBranchAssignment:** Personeli şubeye bağlar; isteğe bağlı hızlı PIN erişimiyle ilişkilidir.
+- **AuditLog:** İptal, indirim, iade ve fiyat müdahalesi gibi kritik eylemlerin değiştirilemez kaydı.
+
+## 4. İlişki Çoklukları
+
+| İlişki | Çokluk | Açıklama |
 | :--- | :--- | :--- |
-| Organization to Brand | 1 : N | One organization owns one or more restaurant brands. |
-| Brand to Branch | 1 : N | One brand operates one or more physical branches. |
-| Branch to DiningArea | 1 : N | A branch contains multiple dining areas. |
-| DiningArea to Table | 1 : N | An area contains multiple tables. |
-| Table to TableSession | 1 : N (1 active) | A table has at most one active session at any time. |
-| TableSession to Order | 1 : N | Multiple rounds of orders can be placed within one session. |
-| Order to OrderItem | 1 : N | An order contains multiple line items. |
-| OrderItem to Modifier | N : M | An order item can have multiple selected modifiers. |
-| Order to StationTicket | 1 : N | An order splits into station tickets (Kitchen, Bar). |
-| TableSession to Bill | 1 : 1 (active) | A session consolidates into a single bill. |
-| Bill to Payment | 1 : N | A bill can be settled via multiple split payments. |
+| Organization → Brand | 1 : N | Bir işletmenin birden fazla markası olabilir. |
+| Brand → Branch | 1 : N | Bir markanın birden fazla fiziksel şubesi olabilir. |
+| Branch → DiningArea | 1 : N | Şube birden fazla alan içerir. |
+| DiningArea → Table | 1 : N | Alan birden fazla masa içerir. |
+| Table → TableSession | 1 : N, aynı anda 1 etkin | Geçmiş oturumlar saklanır; yalnızca biri etkin olabilir. |
+| TableSession → Order | 1 : N | Bir oturumda birden fazla sipariş turu olabilir. |
+| Order → OrderItem | 1 : N | Sipariş birden fazla kalem içerir. |
+| OrderItem → Modifier | N : M | Kalem birden fazla ek seçeneği taşıyabilir. |
+| Order → StationTicket | 1 : N | Sipariş mutfak/bar fişlerine ayrılır. |
+| TableSession → Bill | 1 : 1, etkin | Oturum tek hesapta toplanır. |
+| Bill → Payment | 1 : N | Hesap birden fazla kısmi ödemeyle kapatılabilir. |
 
-## Phase 5 Catalog Integrity
+## Faz 5 Katalog Bütünlüğü
 
-Menus belong to a tenant and branch and move Draft -> Active -> Archived; Archived is terminal. Categories, items, variants, modifier groups and options use soft lifecycle state. Prices and modifier deltas use bounded non-negative integer minor units. Variant prices are absolute. Modifier bounds enforce 0 <= minimum <= maximum <= active option count, with active default count no greater than maximum. Dietary/allergen combinations are validated against the closed supported tag set. Availability is a branch override separate from item lifecycle; an item-level 86 makes its active variants unavailable in the runtime view.
+Menüler işletme ve şubeye aittir; `Draft -> Active -> Archived` geçişinde Archived son durumdur. Kategori, ürün, varyant, ek seçenek grubu ve seçenekler yumuşak yaşam döngüsü kullanır. Fiyat ve ek ücretler sınırlı, negatif olmayan tam sayı alt para birimleridir; varyant fiyatı mutlak tutardır. `0 <= min <= max <= etkin seçenek sayısı`; etkin varsayılan seçenek sayısı max'ı aşamaz. Diyet/alerjen birleşimleri kapalı desteklenen etiket kümesine göre doğrulanır. Bulunabilirlik, ürün yaşam döngüsünden ayrı şube ayarıdır; ürün düzeyindeki 86 işlemi, çalışma zamanı görünümünde etkin varyantları da kullanılamaz yapar.
 
-## Phase 6 Floor & Table Integrity
+## Faz 6 Masa, Kat Planı ve QR Bütünlüğü
 
-Tables belong to a tenant, branch, and dining area with composite foreign key integrity. Branch table code and number are validated for uniqueness per branch (`ix_restaurant_tables_tenant_branch_code`). Table layout coordinates must adhere to canvas boundary constraints (`x, y >= 0`, `width, height >= 30`, `rotation in [0, 360)`). Physical deletion is prohibited if table references dining sessions or historical audits; tables use soft-status deactivation. Deactivating a table with an active non-closed session is strictly blocked (returns 409 Conflict). QR code generation utilizes HMAC-SHA256 signatures with constant-time verification. Table rotation increments `qr_version` and regenerates `public_code`, immediately invalidating old physical QR prints. Table transfer and session merge operations operate on active orders and split bills; these mechanics are formally deferred to Phase 10 (Waiter & Operations) when active order aggregates exist. Note: Phase 7 (Customer Menu & Ordering), Phase 8 (Order Core), Phase 9 (Realtime & KDS), Phase 13 (Billing Engine), and Phase 16 (Payments) do not exist yet.
+Masalar, bileşik yabancı anahtar (composite foreign key) bütünlüğü ile işletme (tenant), şube ve servis alanına (dining area) aittir. Şube bazında masa kodu ve numarası benzersizlik kuralına tabidir (`ix_restaurant_tables_tenant_branch_code`). Masa yerleşim koordinatları kat planı sınır kısıtlamalarına uymalıdır (`x, y >= 0`, `width, height >= 30`, `rotation [0, 360)` aralığında). Masa yemek oturumlarına veya geçmiş denetim kayıtlarına bağlıysa fiziksel silme yasaktır; masalar yazılımsal durum (soft-status) devre dışı bırakma kullanır. Etkin, kapatılmamış bir oturumu olan bir masanın devre dışı bırakılması kesin olarak engellenir (409 Conflict döner). QR kod üretimi sabit zamanlı doğrulamaya (constant-time verification) sahip HMAC-SHA256 imzaları kullanır. Masa rotasyonu `qr_version` değerini artırır ve `public_code` değerini yeniden oluşturarak eski fiziksel QR baskılarını anında geçersiz kılar. Masa taşıma ve oturum birleştirme işlemleri etkin siparişler ve bölünmüş hesaplar üzerinde çalışır; bu mekanikler, etkin sipariş modelleri oluşturulduğunda Aşama 10'a (Garson ve Operasyon) ertelenmiştir.

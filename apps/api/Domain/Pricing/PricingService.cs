@@ -47,26 +47,26 @@ public class PricingService : IPricingService
             throw new ArgumentOutOfRangeException(nameof(guestCount), "Guest count must be greater than zero.");
         }
 
+        if (decimal.Round(totalAmount, 2) != totalAmount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalAmount), "Total amount must contain whole cents.");
+        }
+
         if (guestCount == 1)
         {
             return [totalAmount];
         }
 
-        // Base share rounded to 2 decimal places
-        var baseShare = Math.Round(totalAmount / guestCount, 2, MidpointRounding.AwayFromZero);
-
-        // Sum of all shares except the final guest
-        var allocatedSum = baseShare * (guestCount - 1);
-
-        // Discrepancy (e.g. +0.01 or -0.01) is allocated to the final guest
-        var finalGuestShare = totalAmount - allocatedSum;
+        // Round down so every share is nonnegative and the remainder is whole cents.
+        var baseShare = decimal.Round(totalAmount / guestCount, 2, MidpointRounding.ToZero);
+        var remainingCents = (int)((totalAmount - baseShare * guestCount) * 100m);
 
         var result = new List<decimal>(guestCount);
-        for (var i = 0; i < guestCount - 1; i++)
+        for (var i = 0; i < guestCount; i++)
         {
-            result.Add(baseShare);
+            // Assign one extra cent to each of the last remainingCents guests.
+            result.Add(baseShare + (i >= guestCount - remainingCents ? 0.01m : 0m));
         }
-        result.Add(finalGuestShare);
 
         return result;
     }

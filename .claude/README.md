@@ -1,10 +1,10 @@
-# Claude Configuration & Context (.claude/README.md)
+# AI Aracı Yönerge Uyarlayıcısı — .claude/README.md
 
-> **Binding Authority:** This file is a directory adapter for Claude tools. You **must** read and adhere to the master instructions in [AGENTS.md](../AGENTS.md) before performing any operation.
+> **Bağlayıcı kaynak:** Herhangi bir işlemden veya kod üretiminden önce [AGENTS.md](../AGENTS.md) okunmalı ve tüm kuralları uygulanmalıdır. Bu dosya bağımsız bir kural kaynağı değildir.
 
-## Operational Instructions
+## Çalışma Kuralları
 
-1. **Master Source of Truth:** All project conventions, quality gates, file size limits (450 warning / 600 strict ceiling), and architectural guidelines are defined exclusively in [AGENTS.md](../AGENTS.md).
-2. **Domain Documents:** Read relevant functional and architectural specifications in [docs/](../docs/) prior to beginning work.
-3. **No Redundant Overrides:** Do not duplicate or contradict rules defined in [AGENTS.md](../AGENTS.md).
-
+1. Kodlama, test, güvenlik, mimari, Blue/Green ve dosya sınırları (450 satır uyarı / 600 satır kesin üst sınır) AGENTS.md tarafından yönetilir.
+2. Görevle ilgili alan belgelerini [docs/](../docs/) altında okuyun; mimari, alan modeli, durum makineleri, hata akışları, roller, arayüzler, ortamlar ve donanım belgelerini görevin kapsamına göre seçin.
+3. İlgisiz dosyaları ve kullanıcı değişikliklerini koruyun. Gizli bilgi veya gerçek müşteri verisi eklemeyin. Çalıştırılmamış test ve işlemleri başarılı göstermeyin; açık mimari kararlarını öneri/ADR gerekli olarak işaretleyin.
+4. AGENTS.md içindeki Türkçe dil kuralını uygulayın: doküman, issue/PR, commit açıklaması ve devir notları Türkçe olmalıdır; teknik tanımlayıcıları ve komutları koruyun. Ana kuralları çoğaltmayın veya onlarla çelişmeyin.

@@ -12,8 +12,9 @@ public interface IPricingService
     decimal CalculateLineItemSubtotal(decimal basePrice, IEnumerable<decimal>? modifierPrices, int quantity);
 
     /// <summary>
-    /// Splits a total bill equally across N guests, distributing rounding penny discrepancies to the final guest.
-    /// Guaranteed invariant: Sum of all guest shares strictly equals totalAmount.
+    /// Splits a positive, whole-cent total across N guests, distributing remaining cents
+    /// one per guest from the end. Shares are nonnegative, differ by at most one cent,
+    /// and sum exactly to totalAmount. Shares may be zero when cents are fewer than guests.
     /// </summary>
     IReadOnlyList<decimal> SplitBillEqually(decimal totalAmount, int guestCount);
 

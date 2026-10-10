@@ -1,121 +1,63 @@
-# Restaurant Order Management System (`restaurant-order`)
+# Restoran Sipariş ve Operasyon Yönetimi (`restaurant-order`)
 
-A modern, multi-tenant restaurant ordering and operations management platform designed to streamline the dining experience from QR-based table ordering to kitchen preparation, service dispatch, and administrative analytics.
+QR ile masa siparişi, mutfak hazırlığı, servis ve restoran yönetimini bir araya getiren çok işletmeli platform.
 
----
+## 1. Genel Bakış
 
-## 1. Overview
+Tek restoranlardan çok şubeli zincirlere kadar müşteri, garson, mutfak ve yönetim arasındaki iletişimi ortak bir sistemde toplamak hedeflenir. Siparişlerin mutfak/bar istasyonlarına yönlendirilmesi, ESC/POS yazdırma, hesap takibi ve işletmeler arasında veri yalıtımı ürün kapsamındadır.
 
-`restaurant-order` is engineered to provide an integrated operational ecosystem for single-location restaurants and multi-branch restaurant chains. The platform bridges the gap between dining guests, floor staff, kitchen teams, and management through real-time communication, automated order routing, and robust multi-tenancy.
+**Mevcut durum:** Faz 0–5 tamamlandı; masa/QR oturumları ve uçtan uca restoran akışı sonraki aşamalardadır. Aşağıdaki ürün kapsamı, tüm özelliklerin uygulanmış olduğu anlamına gelmez. Güncel görev ve doğrulama kaydı [CURRENT-STATE.md](docs/CURRENT-STATE.md) dosyasındadır.
 
-### Core Objectives
-- **Frictionless Guest Experience:** QR-code menu browsing, order placement, service call, and bill viewing without app installation.
-- **Operational Speed:** Mobile-optimized order taking for waitstaff and instant kitchen/bar display queue updates.
-- **Reliable Kitchen Routing:** Automated ticket splitting across kitchen and bar stations with physical ESC/POS thermal printing failover.
-- **Enterprise Multi-Tenancy:** Secure data isolation across organizations, brands, and branches.
+## 2. Ürün Arayüzleri
 
----
+1. **QR Müşteri Web Uygulaması:** Uygulama mağazası kurulumu olmadan menü, sipariş, servis çağrısı ve hesap görüntüleme.
+2. **Garson ve Operasyon Mobil Uygulaması:** Dokunmatik kullanım, masa yönetimi, sipariş alma ve masa taşıma.
+3. **Mutfak / Bar KDS:** İstasyon filtreli hazırlık kuyruğu, durum renkleri ve sesli uyarılar.
+4. **Restoran Yönetim Paneli:** Menü, stok durumu, personel izinleri, masalar ve şube raporları.
+5. **Platform Süper Yönetici Paneli:** İşletme açılışı, abonelikler ve sistem sağlığı.
 
-## 2. Product Surfaces
+## 3. Kullanıcı Rolleri (RBAC)
 
-The platform encompasses 5 distinct user-facing surfaces:
+Sekiz rol tanımlıdır: Süper Yönetici, Restoran Yöneticisi, Şube Müdürü, Operasyon/Kasa, Mutfak, Bar, Garson ve Müşteri. Platform, işletme, şube ve masa oturumu kapsamları birbirinden ayrılır. Bir ürün ekranındaki eylem listesi yetki vermez; bağlayıcı izinler [rol ve izin matrisindedir](docs/ROLES-AND-PERMISSIONS.md).
 
-1. **QR Customer Web App:** Lightweight, responsive, mobile-first guest application accessible via table QR codes.
-2. **Waiter & Operations Mobile App:** Touch-first web interface for waitstaff to manage tables, modify orders, and handle table transfers.
-3. **Kitchen / Bar KDS (Kitchen Display System):** Large-format, color-coded preparation queue interface with audio alerts and station filters.
-4. **Restaurant Admin Panel:** Comprehensive management portal for menus, inventory stockouts, staff permissions, tables, and branch analytics.
-5. **Platform Super Admin Panel:** Multi-tenant control plane for platform administration, tenant onboarding, subscription management, and system health.
+## 4. Dokümantasyon Haritası
 
----
+Tüm belgelerin açıklamalı dizini [docs/README.md](docs/README.md) dosyasındadır.
 
-## 3. User Roles (RBAC)
+| Konu | Belgeler |
+| :--- | :--- |
+| Ürün ve alan | [Ürün](docs/PRODUCT.md), [Alan modeli](docs/DOMAIN.md), [Sözlük](docs/GLOSSARY.md), [Ekranlar](docs/SCREEN-INVENTORY.md) |
+| Mimari | [Mimari](docs/ARCHITECTURE.md), [Depo yapısı](docs/REPOSITORY-STRUCTURE.md), [Karar kayıtları](docs/adr/README.md) |
+| İş kuralları | [Durum makineleri](docs/STATE-MACHINES.md), [Negatif akışlar](docs/NEGATIVE-FLOWS.md), [Ödeme ve bahşiş](docs/PAYMENTS-TIPS-COMMISSIONS.md) |
+| Entegrasyonlar | [Yazdırma](docs/ORDER-ROUTING-AND-PRINTING.md), [Canlı olaylar ve bildirimler](docs/REALTIME-AND-NOTIFICATIONS.md) |
+| Güvenlik ve kalite | [Çok işletmeli yapı](docs/MULTI-TENANCY.md), [Güvenlik](docs/SECURITY.md), [Test](docs/TESTING.md) |
+| Operasyon | [Ortamlar](docs/ENVIRONMENTS.md), [Teslimat](docs/DELIVERY.md), [Blue/Green](docs/BLUE-GREEN-RUNBOOK.md), [Olay müdahalesi](docs/INCIDENT-RESPONSE.md), [Operasyon rehberleri](docs/runbooks/README.md) |
+| Planlama | [Yol haritası](docs/ROADMAP.md), [İnceleme iş listesi](docs/REVIEW-BACKLOG.md), [Şablonlar](docs/templates/TASK-TEMPLATE.md) |
 
-The system enforces strict Role-Based Access Control (RBAC) across 8 roles:
-
-- **Super Admin:** Platform owner; oversees all tenants and global platform configurations.
-- **Restoran Admini (Restaurant Admin):** Brand/tenant owner; manages brands, branches, financial reports, and organization settings.
-- **Şube Müdürü (Branch Manager):** Branch lead; manages physical layouts, staff shifts, menu availability, and daily branch performance.
-- **Operasyon/Kasa (Operations/Cashier):** POS operator; manages cash registers, split bill payments, manual receipts, and order overrides.
-- **Mutfak (Kitchen):** Kitchen display station; tracks food tickets, preparation stages, and food item stockouts.
-- **Bar (Bar):** Beverage station; tracks drink tickets, preparation stages, and beverage stockouts.
-- **Garson (Waiter):** Service staff; manages assigned dining tables, takes orders, calls service, and requests bills.
-- **Müşteri (Customer):** Dining guest; scans QR code, browses menu, places orders, and views bill.
-
-For the full permissions matrix, refer to [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md).
-
----
-
-## 4. Documentation Map
-
-Detailed technical and domain documentation is organized under the [`docs/`](docs/) directory:
-
-- **Product & Domain:**
-  - [docs/PRODUCT.md](docs/PRODUCT.md) — Product vision, user journeys, and feature scope.
-  - [docs/DOMAIN.md](docs/DOMAIN.md) — Domain entities, relationships, and ubiquitous language.
-  - [docs/GLOSSARY.md](docs/GLOSSARY.md) — Terminology dictionary (TR / EN).
-  - [docs/SCREEN-INVENTORY.md](docs/SCREEN-INVENTORY.md) — UI screen catalog across all 5 surfaces.
-- **Architecture & Technical Design:**
-  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System architecture, bounded contexts, and proposed technology stack.
-  - [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md) — Codebase structure and modularity rules.
-  - [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) — State lifecycles for tables, orders, tickets, and payments.
-  - [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md) — Failure scenarios, edge cases, and recovery strategies.
-  - [docs/MULTI-TENANCY.md](docs/MULTI-TENANCY.md) — Tenant isolation and data security.
-  - [docs/PAYMENTS-TIPS-COMMISSIONS.md](docs/PAYMENTS-TIPS-COMMISSIONS.md) — Payment workflows, tips, and platform fees.
-  - [docs/ORDER-ROUTING-AND-PRINTING.md](docs/ORDER-ROUTING-AND-PRINTING.md) — Station routing and ESC/POS thermal printing.
-  - [docs/REALTIME-AND-NOTIFICATIONS.md](docs/REALTIME-AND-NOTIFICATIONS.md) — Real-time event transport and notification dispatch.
-- **Engineering & Operations:**
-  - [docs/TESTING.md](docs/TESTING.md) — Testing requirements and verification protocols.
-  - [docs/SECURITY.md](docs/SECURITY.md) — Security policies, PII handling, and secret governance.
-  - [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) — Environment isolation (local, test, dev, staging, prod).
-  - [docs/DELIVERY.md](docs/DELIVERY.md) — Release process and migration safety.
-  - [docs/BLUE-GREEN-RUNBOOK.md](docs/BLUE-GREEN-RUNBOOK.md) — Zero-downtime blue/green deployment instructions.
-  - [docs/INCIDENT-RESPONSE.md](docs/INCIDENT-RESPONSE.md) — Incident severity classification and runbooks.
-  - [docs/ROADMAP.md](docs/ROADMAP.md) — Phased development milestones.
-  - [docs/adr/](docs/adr/) — Architecture Decision Records.
-  - [docs/runbooks/](docs/runbooks/) — Operational runbooks.
-  - [docs/templates/](docs/templates/) — ADR, feature, and incident templates.
-
----
-
-## 5. Automated Quality Gates & Verification Commands
-
-The repository enforces strict, non-negotiable automated quality gates before any code is merged:
+## 5. Kalite Kontrolleri ve Doğrulama Komutları
 
 ```bash
-# 1. Run all automated quality gates (file size, doc links, secret scanning, gate tests)
+# Dosya boyutu, belge bağlantıları, gizli değer taraması ve kontrol testleri
 pnpm verify:gates
-
-# 2. Run TypeScript strict typecheck across all workspace packages and apps
+# Çalışma alanında TypeScript tür denetimi
 pnpm typecheck
-
-# 3. Run ESLint across all frontend applications and packages
+# Ön uç ve ortak paketlerde kod kuralları
 pnpm lint
-
-# 4. Run all backend and frontend unit/integration tests
+# Arka uç ve ön uç testleri
 pnpm test
-
-# 5. Build all frontend packages and applications
+# Ön uç uygulama ve paketlerini derleme
 pnpm build
-
-# 6. Run full verification pipeline (gates + lint + typecheck + test + build)
+# Tam doğrulama akışı
 pnpm verify
-
-# 7. Validate local Docker Compose configuration
+# Yerel Docker Compose yapılandırmasını doğrulama
 docker compose -f deploy/docker-compose.yml config
-
-# 8. Database migration validation & idempotent script generation
+# Veritabanı geçişi denetimi ve tekrar çalıştırılması güvenli SQL üretimi
 pnpm migration:validate
 pnpm migration:script
 ```
 
----
+## 6. Katkı ve Yapay Zekâ Kuralları
 
-## 6. Contributor & Agent Guidelines
+İşe başlamadan [AGENTS.md](AGENTS.md), [katkı iş akışı](docs/CONTRIBUTING-WORKFLOW.md) ve [güncel durum](docs/CURRENT-STATE.md) okunmalıdır. Issue açılır, görev dalında çalışılır, doğrulama yapılır ve açıklamalı PR ile incelemeye sunulur; `main` dalına doğrudan commit yapılmaz.
 
-All AI agents and developers working on this project must strictly comply with [AGENTS.md](AGENTS.md). 
-
-Key mandatory guidelines:
-- **Line Count Limits:** Warning at 450 lines, strict hard ceiling at 600 lines for any human-authored file (verified via `node scripts/check-file-size.mjs`).
-- **Verification First:** Never report a task as PASS without executing and validating tests.
-- **Zero Secrets:** No secrets, credentials, or real customer data in code or logs (verified via `node scripts/check-secrets.mjs`).
-- **No Premature Assumptions:** Architectural and stack choices remain marked as `[Proposed / ADR Required]` until officially adopted.
+Belgeler, görev/devir kayıtları, issue ve PR açıklamaları Türkçe yazılır. Kod tanımlayıcıları, dosya yolları, komutlar ve makine tarafından okunan değerler korunur. İnsan tarafından yazılan dosyalarda 450 satır uyarı, 600 satır üst sınırdır. Çalıştırılmayan test başarılı gösterilemez. Gizli değerler ve gerçek müşteri verileri depoya veya günlüklere yazılamaz. Onaylanmamış mimari kararlar `[Proposed / ADR Required]` olarak kalır.

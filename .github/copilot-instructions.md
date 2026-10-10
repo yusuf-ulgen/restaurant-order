@@ -1,10 +1,10 @@
-# GitHub Copilot Instructions (.github/copilot-instructions.md)
+# AI Aracı Yönerge Uyarlayıcısı — .github/copilot-instructions.md
 
-> **Binding Authority:** This file is a lightweight adapter for GitHub Copilot. You **must** read and adhere to the master instructions in [AGENTS.md](../AGENTS.md) before performing any operation or code generation.
+> **Bağlayıcı kaynak:** Herhangi bir işlemden veya kod üretiminden önce [AGENTS.md](../AGENTS.md) okunmalı ve tüm kuralları uygulanmalıdır. Bu dosya bağımsız bir kural kaynağı değildir.
 
-## Operational Instructions
+## Çalışma Kuralları
 
-1. **Master Rules:** All coding rules, file line limits (450 lines warning, 600 lines strict ceiling), test verification policies, and security guardrails are governed by [AGENTS.md](../AGENTS.md).
-2. **Domain Documents:** Read relevant functional and architectural specifications in [docs/](../docs/) based on your assigned task scope.
-3. **Execution Guardrails:** Never introduce secrets or real customer data into the repo. Enforce zero-unverified-PASS policy. Mark open architectural decisions as `[Proposed / ADR Required]`.
-
+1. Kodlama, test, güvenlik, mimari, Blue/Green ve dosya sınırları (450 satır uyarı / 600 satır kesin üst sınır) AGENTS.md tarafından yönetilir.
+2. Görevle ilgili alan belgelerini [docs/](../docs/) altında okuyun; mimari, alan modeli, durum makineleri, hata akışları, roller, arayüzler, ortamlar ve donanım belgelerini görevin kapsamına göre seçin.
+3. İlgisiz dosyaları ve kullanıcı değişikliklerini koruyun. Gizli bilgi veya gerçek müşteri verisi eklemeyin. Çalıştırılmamış test ve işlemleri başarılı göstermeyin; açık mimari kararlarını öneri/ADR gerekli olarak işaretleyin.
+4. AGENTS.md içindeki Türkçe dil kuralını uygulayın: doküman, issue/PR, commit açıklaması ve devir notları Türkçe olmalıdır; teknik tanımlayıcıları ve komutları koruyun. Ana kuralları çoğaltmayın veya onlarla çelişmeyin.

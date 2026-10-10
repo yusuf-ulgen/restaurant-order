@@ -1,135 +1,134 @@
-# ADR-0009: Authentication, Session & Multi-Tenant Authorization Strategy (`docs/adr/0009-authentication-and-session-strategy.md`)
+# ADR-0009: Kimlik Doğrulama, Oturum ve Çok İşletmeli Yetkilendirme Stratejisi (`docs/adr/0009-authentication-and-session-strategy.md`)
 
-- **Status:** `ACCEPTED`
-- **Deciders:** Architecture Team, Yusuf Ülgen
-- **Date:** 2026-10-01
-- **Technical Story:** Phase 3 — Authentication & RBAC Foundation
-
----
-
-## 1. Context and Problem Statement
-
-`restaurant-order` is a multi-tenant restaurant management platform serving 5 user surfaces:
-1. QR Customer Web App
-2. Waiter & Operations Mobile App
-3. Kitchen & Bar KDS Stations
-4. Restaurant Admin Panel
-5. Platform Super Admin Control Plane
-
-The system requires an identity and access management (IAM) architecture that satisfies conflicting demands:
-- High-security administrative access (Super Admin, Restaurant Admin, Branch Manager) requiring credential complexity, password hashing, and session auditing.
-- Fast, high-frequency staff switching on the restaurant floor (Waiters, Cashiers, Line Cooks) requiring low-friction entry during busy service shifts.
-- Ephemeral, anonymous guest dining sessions (Customer QR) tied exclusively to a specific table session.
-- Strict multi-tenant isolation where tenant credentials and sessions can never cross organizational boundaries.
-- Distributed token security without committing secrets or private keys to source control.
+- **Durum:** `ACCEPTED`
+- **Karar Verenler:** Mimarlık Ekibi, Yusuf Ülgen
+- **Tarih:** 2026-10-01
+- **Teknik Hikaye:** Aşama 3 — Kimlik doğrulama ve RBAC Temeli
 
 ---
 
-## 2. Decision Drivers
+## 1. Bağlam ve Sorun Açıklaması
 
-- **Zero-Secret Compliance:** JWT signing keys, refresh tokens, and passwords must never be stored in source control or printed in logs.
-- **Fail-Closed Multi-Tenant Boundaries:** Cross-tenant token substitution or scope tampering must be impossible.
-- **Defense-in-Depth:** Tokens and sessions must carry verifiable tenant/branch scopes, and the database must enforce PostgreSQL Row-Level Security (RLS) as the boundary of last resort.
-- **Fast Floor Operations with High Security:** 4-digit PINs are convenient for waiters but dangerous on the public internet; they must be cryptographically bounded.
-- **Immediate Revocation:** Role alterations or security version bumps must immediately invalidate active sessions.
-- **Framework Independence & Clean Architecture:** Domain and Application layers must define contracts without coupling to external identity providers.
+`restaurant-order`, beş kullanıcı arayüzüne sahip çok işletmeli bir restoran yönetim platformudur:
+1. QR Müşteri Web Uygulaması
+2. Garson & Operasyon Mobil Uygulaması
+3. Mutfak ve Bar KDS İstasyonlar
+4. Restoran Yönetim Paneli
+5. Platform Süper Yönetici Kontrol Düzlemi
 
----
-
-## 3. Decision Outcome
-
-### 3.1. Separation of Identities: Staff Accounts vs. Ephemeral QR Sessions
-- **Staff Accounts (Identity & Membership):** Registered users with global accounts linked to tenant and branch memberships. Authenticated via Email + Password (management) or Staff PIN (floor staff within trusted terminals).
-- **Customer QR Sessions:** Completely separate anonymous principal type (`PrincipalType.Customer`). Bound strictly to a single `table_session_id`. Customer sessions cannot access staff endpoints. Full cryptographic QR session token generation belongs to Phase 6; in Phase 3, only the customer principal contract is established.
-
-### 3.2. Authentication Methods & Credentials
-1. **Email + Password:**
-   - Primary login for Super Admin, Restaurant Admin, and Branch Managers.
-   - Passwords hashed using battle-tested ASP.NET Core `PasswordHasher<T>` (PBKDF2 with HMAC-SHA512 / 100,000+ iterations). Custom cryptography is strictly forbidden.
-2. **Staff 4-Digit PIN within Trusted Terminal Context:**
-   - A 4-digit PIN alone is NEVER an internet-facing credential (vulnerable to trivial brute-force).
-   - PIN authentication is strictly permitted **only** from an enrolled, cryptographically authenticated **Trusted Terminal** bound to a specific Branch.
-   - PINs are hashed using salted slow hashing plus a server-side pepper injected from environment/secret manager. If the pepper is missing, production/staging fail-fast.
-
-### 3.3. Token & Session Architecture
-1. **Short-Lived JWT Access Tokens:**
-   - 10-minute lifetime (environment-configurable).
-   - Contains strictly validated claims: `sub`, `sid`, `jti`, `principal_type`, `role`, `tenant_id`, `branch_id`, `security_version`, `auth_method`, `iss`, `aud`, `iat`, `nbf`, `exp`.
-   - Signing keys (`HMAC-SHA256` or `RSA-SHA256`) injected from environment/secret manager; absent in source control.
-2. **Opaque Rotating Refresh Tokens:**
-   - 32-byte cryptographically secure random opaque strings.
-   - Raw refresh tokens are NEVER stored in the database. Only their SHA-256 hash is persisted.
-   - Stored in `HttpOnly`, `Secure`, `SameSite=Strict` cookies (never `localStorage` or `sessionStorage`).
-   - Every refresh operation rotates the token: the old token is marked revoked and replaced with a new one.
-   - **Reuse Detection:** If an already-consumed refresh token is presented, the entire session family is instantly revoked as a suspected compromise.
-3. **Session & Security Version Invalidation:**
-   - Each user membership maintains a `security_version`.
-   - Changing a user's role, password, or status increments `security_version`, causing immediate token rejection across all distributed nodes.
-
-### 3.4. Multi-Tenant Role & Scope Hierarchies
-The platform supports exactly 8 roles with strict scope constraints:
-1. `SuperAdmin`: Platform scope only. Cannot carry `tenant_id` or `branch_id`.
-2. `RestaurantAdmin`: Tenant scope. Bound to `tenant_id`; `branch_id` is null/optional.
-3. `BranchManager`: Branch scope. Bound to `(tenant_id, branch_id)`.
-4. `Cashier`: Branch scope. Bound to `(tenant_id, branch_id)`.
-5. `Kitchen`: Branch scope. Bound to `(tenant_id, branch_id)`.
-6. `Bar`: Branch scope. Bound to `(tenant_id, branch_id)`.
-7. `Waiter`: Branch scope. Bound to `(tenant_id, branch_id)`.
-8. `Customer`: Table session scope. Bound to `(tenant_id, branch_id, table_session_id)`.
-
-Cross-tenant combinations (e.g. Tenant A token with Tenant B branch) are rejected fail-closed at creation and parsing.
-
-### 3.5. Central Capability Registry (Deny-by-Default)
-- Authorization checks are driven by machine-readable capability strings (e.g., `menu.catalog.manage`, `orders.staff.create`), NEVER ad-hoc `if (role == "Waiter")` checks.
-- Roles map to permissions via `PermissionRegistry` based on `docs/ROLES-AND-PERMISSIONS.md`.
-- **Own / Assigned Scope (`O`):** Permissions marked as own-scope (e.g., Waiter card payments, Cashier daily revenue, KDS station tickets) do NOT grant full access. They require evaluation by an explicit `IResourceOwnershipRequirement`.
+Kimlik ve erişim yönetimi (IAM) şu gereksinimleri birlikte karşılamalıdır:
+- Kimlik bilgisi karmaşıklığı, şifre karma ve oturum denetimi gerektiren yüksek güvenlikli yönetim erişimi (Süper Yönetici, Restoran Yöneticisi, Şube Müdürü).
+- Yoğun servis vardiyaları sırasında düşük sürtünmeli giriş gerektiren restoran katında hızlı, yüksek frekanslı personel değişimi (Garsonlar, Kasiyerler, Aşçılar).
+- Yalnızca belirli bir masa oturumuna bağlı geçici, anonim misafir yemek oturumları (Müşteri QR'si).
+- İşletme kimlik bilgilerinin ve oturumlarının hiçbir zaman kurumsal sınırları aşamadığı çok işletmeli katı izolasyon.
+- Kaynak kontrolüne sırlar veya özel anahtarlar vermeden dağıtılmış token güvenliği.
 
 ---
 
-## 4. Consequences & Trade-offs
+## 2. Karar Etkenleri
 
-### Positive Consequences
-- **Elimination of Token Theft Vectors:** HttpOnly cookies prevent XSS theft; opaque hashed refresh tokens prevent database leakage from compromising sessions.
-- **Floor Staff Usability:** Waiters can switch on trusted terminals with fast PINs without exposing the restaurant to internet-wide brute force.
-- **Deterministic Multi-Tenancy:** Clear separation between platform, tenant, branch, and customer scopes prevents accidental cross-tenant data access.
-- **Immediate Role Revocation:** `security_version` prevents stale JWT access tokens from continuing after role removal.
-
-### Negative Consequences / Trade-offs
-- **Stateful Invalidation Check:** Validating `security_version` requires cached session lookups on high-risk operations.
-- **Terminal Management Overhead:** Branches must enroll terminals before staff can use PIN logins.
+- **Sıfır Gizli Uyumluluk:** JWT imzalama anahtarları, yenileme belirteçleri ve parolalar hiçbir zaman kaynak kontrolünde saklanmamalı veya günlüklerde yazdırılmamalıdır.
+- **Arıza Durumunda Çok İşletmeli Sınırlar:** İşletmeler arası belirteç değişimi veya kapsam üzerinde değişiklik yapılması imkansız olmalıdır.
+- **Derinlemesine Savunma:** Belirteçler ve oturumlar doğrulanabilir işletme/şube kapsamlarını taşımalı ve veritabanı PostgreSQL Satır Düzeyi Güvenliğini zorunlu kılmalıdır (RLS) son çare sınırı olarak.
+- **Yüksek Güvenlikle Hızlı Kat İşlemleri:** 4-haneli PIN'ler garsonlar için uygundur ancak halka açık internette tehlikelidir; kriptografik olarak sınırlandırılmış olmaları gerekir.
+- **Derhal İptal:** Rol değişiklikleri veya güvenlik sürümündeki değişiklikler, etkin oturumları derhal geçersiz kılmalıdır.
+- **Çerçeve Bağımsızlığı ve Temiz Mimari:** Alan ve Uygulama katmanları, sözleşmeleri harici kimlik sağlayıcılarıyla bağlantı kurmadan tanımlamalıdır.
 
 ---
 
-## 5. Verification & Test Plan
+## 3. Karar Sonucu
 
-- **Matrix Coverage Unit Tests:** 100% of the 31 permissions across all 8 roles verified.
-- **Negative Scope Tests:** SuperAdmin with tenant claim, Waiter without branch, and Tenant A/B cross-scoping must throw validation errors.
-- **Claim Parser Tests:** Malformed GUIDs, missing claims, duplicate claims, and expired tokens must fail-closed.
-- **Resource Ownership Tests:** Own-scope permissions must be rejected without valid ownership context.
+### 3.1. Kimliklerin Ayrılması: Personel Hesapları ve Geçici QR Oturumları
+- **Personel Hesapları (Kimlik ve Üyelik):** İşletme ve şube üyeliklerine bağlı küresel hesaplara sahip kayıtlı kullanıcılar. E-posta + Şifre (yönetim) veya Personel yoluyla doğrulandı PIN (güvenilir terminallerdeki kat personeli).
+- **Müşteri QR Oturumları:** Tamamen ayrı anonim asıl türü (`PrincipalType.Customer`). Yalnızca tek bir masa oturumuna (`table_session_id`) bağlıdır. Müşteri oturumları personel uç noktalarına erişemez. Tam kriptografik QR oturum belirteci üretimi Aşamaya aittir 6; Aşamada 3sadece müşteri asıl sözleşmesi kurulur.
+
+### 3.2. Kimlik Doğrulama Yöntemleri ve Kimlik Bilgileri
+1. **E-posta + Şifre:**
+   - Süper Yönetici, Restoran Yöneticisi ve Şube Yöneticileri için birincil giriş.
+   - Parolalar ASP.NET Core `PasswordHasher<T>` ile karma olarak saklanır (PBKDF2, HMAC-SHA512, 100.000+ yineleme). Özel şifreleme kesinlikle yasaktır.
+2. **Personel 4-Rakam PIN Güvenilir Terminal Bağlamında:**
+   - Dört haneli PIN tek başına internete açık bir kimlik doğrulama yöntemi olarak asla kullanılamaz; kaba kuvvet saldırılarına kolayca maruz kalır.
+   - PIN ile girişe yalnızca belirli bir şubeye bağlı, kayıtlı ve kriptografik olarak doğrulanmış **Güvenilir Terminal** üzerinden izin verilir.
+   - PIN karmasında salt, yavaş karma ve ortam/gizli değer yöneticisinden alınan sunucu tarafı pepper kullanılır. Pepper yoksa Staging/Production başlatması reddedilir.
+
+### 3.3. Token ve Oturum Mimarisi
+1. **Kısa Ömürlü JWT Erişim Jetonları:**
+   - 10-dakika ömrü (ortam tarafından yapılandırılabilir).
+   - Kesinlikle doğrulanmış iddialar içerir: `sub`, `sid`, `jti`, `principal_type`, `role`, `tenant_id`, `branch_id`, `security_version`, `auth_method`, `iss`, `aud`, `iat`, `nbf`, `exp`.
+   - İmzalama anahtarları (`HMAC-SHA256` veya `RSA-SHA256`) çevre/gizli yöneticiden enjekte edilmiş; kaynak kontrolünde yok.
+2. **Opak Dönen Yenileme Jetonları:**
+   - Kriptografik olarak güvenli, rastgele 32 baytlık opak dizelerdir.
+   - Ham yenileme belirteçleri veritabanında asla saklanmaz; yalnızca SHA-256 karmaları kalıcı olarak tutulur.
+   - `HttpOnly`, `Secure`, `SameSite=Strict` çerezlerde saklanır (asla `localStorage` veya `sessionStorage`).
+   - Her yenilemede belirteç değiştirilir: eski jeton iptal edilmiş olarak işaretlenir ve yenisiyle değiştirilir.
+   - **Yeniden Kullanım Tespiti:** Zaten tüketilen bir yenileme jetonu sunulursa, güvenlik ihlali şüphesiyle tüm oturum ailesi anında iptal edilir.
+3. **Oturum ve Güvenlik Sürümünün Geçersiz Kılması:**
+   - Her kullanıcı üyeliğinin bir `security_version` değeri vardır.
+   - Kullanıcının rolü, parolası veya durumu değiştiğinde `security_version` artırılır; önceki sürüme ait belirteçler tüm düğümlerde reddedilir.
+
+### 3.4. Çok İşletmeli Rol ve Kapsam Hiyerarşileri
+Sekiz rolün kapsam sınırları şöyledir:
+1. `SuperAdmin`: Yalnızca platform kapsamı. `tenant_id` veya `branch_id` taşıyamaz.
+2. `RestaurantAdmin`: İşletme kapsamı. bağlı `tenant_id`; `branch_id` boş/isteğe bağlı.
+3. `BranchManager`: Şube kapsamı. bağlı `(tenant_id, branch_id)`.
+4. `Cashier`: Şube kapsamı. bağlı `(tenant_id, branch_id)`.
+5. `Kitchen`: Şube kapsamı. bağlı `(tenant_id, branch_id)`.
+6. `Bar`: Şube kapsamı. bağlı `(tenant_id, branch_id)`.
+7. `Waiter`: Şube kapsamı. bağlı `(tenant_id, branch_id)`.
+8. `Customer`: Masa oturumu kapsamı. bağlı `(tenant_id, branch_id, table_session_id)`.
+
+Çapraz işletme kombinasyonları (örneğin İşletme B şubesine sahip İşletme A belirteci), oluşturma ve ayrıştırma sırasında başarısızlıkla kapatılarak reddedilir.
+
+### 3.5. Merkezi Yetenek Kaydı (Varsayılan Olarak Reddetme)
+- Yetkilendirme, makine tarafından okunan izin anahtarlarıyla yapılır (`menu.catalog.manage`, `orders.staff.create`). Dağınık `if (role == "Waiter")` kontrolleri kullanılmaz.
+- `PermissionRegistry`, rolleri `docs/ROLES-AND-PERMISSIONS.md` matrisine göre izinlerle eşler.
+- **Sahip olunan / Atanan Kapsam (`O`):** Kendi kapsamı olarak işaretlenen izinler (örneğin Garson kartı ödemeleri, Kasiyer günlük geliri, KDS istasyon hazırlık fişleri) tam erişim vermez. `IResourceOwnershipRequirement` ile açık kaynak sahipliği değerlendirmesi gerekir.
 
 ---
 
-## 6. Distributed Authentication State & Platform Persistence Addendum
+## 4. Sonuçlar ve Ödünleşimler
 
-### 6.1. Platform Sessions & SuperAdmin Persistence
-- SuperAdmin and platform-level credentials, sessions, and refresh tokens are persisted in dedicated global IAM tables (`iam.platform_sessions`, `iam.platform_refresh_tokens`) in PostgreSQL.
-- Under NO circumstances is `Guid.Empty` written into tenant-scoped tables (`iam.sessions`, `iam.refresh_tokens`). The multi-tenant boundary is strictly preserved.
-- Platform sessions persist across API instances, process restarts, and Blue/Green deployment slots.
-- SuperAdmin provisioning cannot be initiated through tenant staff invite endpoints (strictly rejected). SuperAdmin accounts are provisioned exclusively via secure out-of-band bootstrap scripts.
+### Olumlu Sonuçlar
+- **Token Hırsızlığı Vektörlerinin Ortadan Kaldırılması:** HttpOnly çerezler betiklerin belirteci doğrudan okumasını sınırlar. Yenileme belirtecinin yalnızca karmasının tutulması, veritabanı sızıntısında ham belirtecin kullanılmasını önler.
+- **Kat Personelinin Kullanılabilirliği:** Garsonlar, restoranı internet çapında kaba kuvvete maruz bırakmadan güvenilir terminalleri hızlı PIN'lerle açabilirler.
+- **Deterministik Çok İşletmeli Yapı:** Platform, işletme, şube ve müşteri kapsamları arasındaki net ayrım, yanlışlıkla işletmeler arası veri erişimini önler.
+- **Derhal Rol İptali:** `security_version`, rol kaldırıldıktan sonra eski JWT ile erişimin sürmesini engeller.
 
-### 6.2. Atomic Distributed Token Rotation (FOR UPDATE)
-- Distributed refresh token rotation executes inside an explicit PostgreSQL transaction using row-level locks (`SELECT ... FOR UPDATE`).
-- If multiple requests race with the same refresh token across distinct API instances, exactly one request acquires the row lock and succeeds with atomic rotation; all concurrent or subsequent attempts detect token reuse and trigger immediate token family revocation.
+### Olumsuz Sonuçlar / Ödünleşimler
+- **Durum Bilgili Geçersiz Kılma Kontrolü:** Doğrulanıyor `security_version` yüksek riskli işlemlerde önbelleğe alınmış oturum aramaları gerektirir.
+- **Terminal Yönetim Giderleri:** Şubelerin personelin kullanabilmesi için terminalleri kaydettirmesi gerekiyor PIN ile giriş yapabilmesi için.
 
-### 6.3. Ephemeral State & Redis Fail-Closed Strategy
-- Ephemeral, cross-instance state is managed via Redis:
-  - **Login Rate Limiter:** Atomic `INCR` + `EXPIRE` implemented via Lua scripts.
-  - **Terminal PIN Brute-Force:** Distributed progressive delays (1s, 2s, 4s, 8s) and lockout thresholds shared across instances.
-  - **Terminal Enrollment:** Single-use cryptographic enrollment codes consumed atomically via `GETDEL`.
-- **Fail-Closed Policy:** If Redis becomes unavailable, rate limiting and security gates do not degrade to open access. Operations fail closed, throwing `DistributedSecurityStateUnavailableException` and returning HTTP 503 (Service Unavailable).
+---
 
-### 6.4. Distributed Revocation & Multi-Level Invalidation
-- Access token validity is checked during `OnTokenValidated` against the distributed state source of truth (`iam.validate_token_session`).
-- To minimize database query volume, positive validation results are cached in Redis with a 60-second TTL.
-- When `LogoutAll` or user security version increment occurs, the user's active session keys and security version entry in Redis are immediately invalidated across all API instances, guaranteeing instant token revocation without waiting for token expiration.
+## 5. Doğrulama ve Test Planı
 
+- **Matris Kapsama Birimi Testleri:** 100%'si 31 tümünde izinler 8 roller doğrulandı.
+- **Negatif Kapsam Testleri:** İşletme talebi olan SuperAdmin, şubesiz Garson ve İşletme A/B çapraz kapsamı doğrulama hataları oluşturmalıdır.
+- **Talep Ayrıştırıcı Testleri:** Hatalı biçimlendirilmiş GUID'ler, eksik talepler, yinelenen talepler ve süresi dolmuş belirteçler başarısız bir şekilde kapatılmalıdır.
+- **Kaynak Sahipliği Testleri:** Kendi kapsamındaki izinler, geçerli sahiplik bağlamı olmadan reddedilmelidir.
+
+---
+
+## 6. Dağıtılmış Kimlik Doğrulama Durumu ve Platform Kalıcılık Eki
+
+### 6.1. Platform Oturumları ve Süper Yönetici Kalıcılığı
+- SuperAdmin ve platform düzeyindeki kimlik bilgileri, oturumlar ve yenileme belirteçleri, özel küresel IAM tablolar (`iam.platform_sessions`, `iam.platform_refresh_tokens`) PostgreSQL'de.
+- Hiçbir koşulda `Guid.Empty` işletme kapsamlı tablolara yazılmaz (`iam.sessions`, `iam.refresh_tokens`). Çok işletmeli sınır kesinlikle korunur.
+- Platform oturumları API örnekleri, süreç yeniden başlatmaları ve Blue/Green yuvaları arasında korunur.
+- SuperAdmin sağlama, işletme personeli davet uç noktaları aracılığıyla başlatılamaz (kesinlikle reddedilir). SuperAdmin hesapları yalnızca güvenli bant dışı önyükleme komut dosyaları aracılığıyla sağlanır.
+
+### 6.2. Atomik Dağıtılmış Token Rotasyonu (FOR UPDATE)
+- Dağıtılmış yenileme belirteci rotasyonu, satır düzeyinde kilitler (`SELECT ... FOR UPDATE`).
+- Birden fazla istek farklı sunucularda aynı yenileme belirteciyle yarışıyorsa API Örneklerde tam olarak bir istek satır kilidini alır ve atomik dönüşle başarılı olur; tüm eşzamanlı veya sonraki girişimler, belirtecin yeniden kullanımını tespit eder ve belirteç ailesinin anında iptalini tetikler.
+
+### 6.3. Geçici Durum ve Redis Arıza-Kapalı Stratejisi
+- Geçici, çapraz örnek durumu Redis aracılığıyla yönetilir:
+  - **Giriş Hızı Sınırlayıcı:** atomik `INCR` + `EXPIRE` Lua komut dosyaları aracılığıyla uygulanır.
+  - **terminali PIN Kaba Kuvvet:** Bulut sunucuları arasında paylaşılan dağıtılmış aşamalı gecikmeler (1, 2, 4 ve 8 saniye) ve kilitleme eşikleri.
+  - **Terminal Kaydı:** Atomik olarak tüketilen tek kullanımlık kriptografik kayıt kodları `GETDEL`.
+- **Arıza Kapatma Politikası:** Redis kullanılamaz hale gelirse hız sınırlama ve güvenlik kapıları açık erişime dönüşmez. İşlem reddedilir, `DistributedSecurityStateUnavailableException` fırlatılır ve HTTP 503 (Hizmet Kullanılamıyor) döndürülür.
+
+### 6.4. Dağıtılmış İptal ve Çok Düzeyli Geçersiz Kılma
+- Erişim belirtecinin geçerliliği şu sırada kontrol edilir: `OnTokenValidated` dağıtılmış yetkili durum kaynağına göre (`iam.validate_token_session`).
+- Veritabanı sorgu hacmini en aza indirmek için pozitif doğrulama sonuçları Redis'te önbelleğe alınır. 60 saniyelik TTL.
+- `LogoutAll` veya güvenlik sürümü artışında Redis etkin oturum anahtarları ve sürüm girdisi tüm API örnekleri için geçersiz kılınır; belirtecin süresinin dolması beklenmez.

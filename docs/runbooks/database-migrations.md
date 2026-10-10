@@ -1,44 +1,44 @@
-# Database Migrations & Zero-Downtime Schema Evolution (`docs/runbooks/database-migrations.md`)
+# Veritabanı Geçişleri ve Sıfır Kesinti Süreli Şema Gelişimi (`docs/runbooks/database-migrations.md`)
 
-## 1. Purpose & Scope
+## 1. Amaç ve Kapsam
 
-This runbook establishes operational procedures, safety guardrails, and rollback workflows for evolving the PostgreSQL 16 database schema in `restaurant-order`. It governs both CI/CD automated validation and production manual execution under the Blue/Green deployment model.
-
----
-
-## 2. Core Invariants & Safety Guardrails
-
-1. **Out-of-Process Execution:**
-   - Production and staging web applications (`apps/api`) MUST NOT automatically run migrations on startup.
-   - Migrations are executed as a distinct, tracked pre-cutover operational step using idempotent SQL scripts or CLI migration runners.
-2. **Expand-Migrate-Contract Compliance:**
-   - All schema changes must support concurrent execution of both active (Blue) and candidate (Green) slots against the shared database.
-   - Phase 1 (Expand): Add new nullable columns, tables, or non-breaking constraints.
-   - Phase 2 (Migrate): Dual-write or backfill data without breaking the older application version.
-   - Phase 3 (Contract): Deprecate and safely remove obsolete columns only after the old slot is completely drained and retired.
-3. **No Destructive DDL Pre-Cutover:**
-   - `DROP TABLE`, `DROP COLUMN`, `RENAME COLUMN`, `ALTER TABLE ... DROP`, and `TRUNCATE` are strictly forbidden before cutover.
-4. **Idempotency Guarantee:**
-   - All migration scripts must check `__EFMigrationsHistory` and existence guards (`CREATE SCHEMA IF NOT EXISTS`, `IF NOT EXISTS`) to ensure repeat execution does not corrupt state or abort.
-5. **Verified Backup Prerequisite:**
-   - Before executing migrations in production, backup/snapshot readiness must be verified (`BACKUP_VERIFIED=true`).
+Bu belge, `restaurant-order` PostgreSQL 16 veritabanı şemasının geliştirilmesi için operasyon adımlarını, güvenlik kurallarını ve geri alma akışlarını tanımlar. Blue/Green dağıtım modeli kapsamında hem CI/CD otomatik doğrulamasını hem de üretim manuel yürütmesini yönetir.
 
 ---
 
-## 3. Step-by-Step Execution Workflow
+## 2. Temel Değişmezler ve Güvenlik Kuralları
 
-### 3.1. Pre-Deployment Validation (Dry-Run)
+1. **Süreç Dışı Yürütme:**
+   - Staging ve Production ortamlarında web uygulaması (`apps/api`) başlangıcında otomatik geçiş çalıştırmak kesinlikle yasaktır.
+   - Geçişler, idempotent kullanılarak ayrı, izlenen bir kesme öncesi operasyonel adım olarak yürütülür SQL komut dosyaları veya CLI veritabanı geçişi koşucuları.
+2. **Genişlet–Taşı–Daralt Uyumluluğu:**
+   - Tüm şema değişiklikleri, paylaşılan veritabanında hem aktif (Mavi) hem de aday (Yeşil) slotların eşzamanlı olarak yürütülmesini desteklemelidir.
+   - Aşama 1 (Genişlet): Yeni null yapılabilir sütunlar, tablolar veya mevcut davranışı bozmayan kısıtlamalar ekleyin.
+   - Aşama 2 (Taşıma): Eski uygulama sürümünü bozmadan verileri çift yazma veya doldurma.
+   - Aşama 3 (Daralt): Eski sütunları yalnızca eski yuva tamamen boşaltılıp kullanımdan kaldırıldıktan sonra kullanımdan kaldırın ve güvenli bir şekilde kaldırın.
+3. **Yıkıcı Değil DDL Kesim Öncesi:**
+   - `DROP TABLE`, `DROP COLUMN`, `RENAME COLUMN`, `ALTER TABLE ... DROP`ve `TRUNCATE` kesimden önce kesinlikle yasaktır.
+4. **İdempotans Garantisi:**
+   - Tüm geçiş komut dosyalarının kontrol edilmesi gerekir `__EFMigrationsHistory` ve varoluş muhafızları (`CREATE SCHEMA IF NOT EXISTS`, `IF NOT EXISTS`) tekrar yürütmenin durumu bozmamasını veya iptal etmemesini sağlamak için.
+5. **Doğrulanmış Yedekleme Önkoşulu:**
+   - Üretimde geçişleri gerçekleştirmeden önce yedekleme/anlık görüntü hazırlığının doğrulanması gerekir (`BACKUP_VERIFIED=true`).
 
-Validate that all migration files and scripts are non-destructive and backward-compatible:
+---
+
+## 3. Adım Adım Yürütme İş Akışı
+
+### 3.1. Dağıtım Öncesi Doğrulama (Prova Çalıştırma)
+
+Tüm geçiş dosyalarının ve komut dosyalarının zararsız ve geriye dönük uyumlu olduğunu doğrulayın:
 
 ```bash
-# Run migration safety check
+# Veritabanı geçişi güvenlik denetimi
 node scripts/blue-green/migration-check.mjs
 ```
 
-### 3.2. Script Generation
+### 3.2. Komut Dosyası Oluşturma
 
-Generate an idempotent SQL script for review and audit:
+İnceleme ve denetim için tekrar çalıştırılması güvenli SQL betiği oluşturun:
 
 ```bash
 dotnet ef migrations script \
@@ -48,25 +48,25 @@ dotnet ef migrations script \
   --output deploy/migrations/001_initial_tenancy_schema.sql
 ```
 
-### 3.3. Staging / Production Deployment Sequence
+### 3.3. Aşama / Üretim Dağıtım Sırası
 
-All staging and production deployments follow this strictly ordered, zero-downtime 6-step procedure:
+Staging ve Production dağıtımlarında aşağıdaki altı adım izlenir:
 
-1. **Step 1: Privileged Role & Bootstrap Preparation (DBA / Operator)**
-   Execute `deploy/bootstrap/001_create_runtime_login_role.sql` as a privileged user (`postgres` / DBA) with secure environment secret injection. The script idempotently provisions:
-   - `restaurant_app_runtime` group role (`NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
-   - `restaurant_app_user` login role (`LOGIN`, `PASSWORD`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
-   - Grants membership of `restaurant_app_runtime` to `restaurant_app_user`.
+1. **Adım 1: Ayrıcalıklı Rol ve Bootstrap Hazırlığı (DBA / Operatör)**
+   Yürüt `deploy/bootstrap/001_create_runtime_login_role.sql` ayrıcalıklı bir kullanıcı olarak (`postgres` / DBA) güvenli ortam gizli enjeksiyonu ile. Komut dosyası tam olarak şunları sağlar:
+   - `restaurant_app_runtime` grup rolü (`NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
+   - `restaurant_app_user` oturum açma rolü (`LOGIN`, `PASSWORD`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS`).
+   - `restaurant_app_user` rolünü `restaurant_app_runtime` grubuna üye yapar.
 
-   The script securely ingests credentials via `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` and `format(%L)` to prevent plaintext secrets from appearing in process listings or logs:
+   Betik, kimlik bilgilerini güvenli bir şekilde alır `psql \getenv app_runtime_password APP_RUNTIME_PASSWORD` ve `format(%L)` düz metin sırlarının süreç listelerinde veya günlüklerinde görünmesini önlemek için:
    ```bash
    export APP_RUNTIME_PASSWORD="<STRONG_CRYPTOGRAPHIC_PASSWORD>"
    psql -v ON_ERROR_STOP=1 "$DBA_CONNECTION_URL" -f deploy/bootstrap/001_create_runtime_login_role.sql
    unset APP_RUNTIME_PASSWORD
    ```
 
-2. **Step 2: Pre-Cutover Schema Migration (Migration Owner / CI)**
-   Apply EF Core migrations as the privileged migration owner role before warming the candidate slot. The migration enforces a fail-fast prerequisite check ensuring `restaurant_app_runtime` exists, creates RLS helper functions, policies, and grants DML/sequence permissions on schema `tenancy`:
+2. **Adım 2: Kesim Öncesi Şema Geçişi (Geçiş Sahibi / CI)**
+   Aday yuvasını ısıtmadan önce EF Core geçişlerini ayrıcalıklı geçiş sahibi rolü olarak uygulayın. Geçiş, hızlı bir önkoşul kontrolünü zorunlu kılarak `restaurant_app_runtime` var, yaratır RLS Yardımcı işlevler, politikalar ve hibeler DML/sequence şema izinleri `tenancy`:
    ```bash
    export DATABASE_URL="postgresql://${MIGRATION_USER}:${MIGRATION_PASSWORD}@${DB_HOST}:5432/restaurant_order_prod"
    export BACKUP_VERIFIED="true"
@@ -76,43 +76,43 @@ All staging and production deployments follow this strictly ordered, zero-downti
      --startup-project apps/api/RestaurantOrder.Api.csproj
    ```
 
-3. **Step 3: Runtime Credential Secret Injection (Candidate Slot)**
-   Inject the runtime connection string (using `restaurant_app_user` and the provisioned password) into the candidate slot (`Green`) container environment via the deployment secret manager / vault (e.g. AWS Secrets Manager, HashiCorp Vault, Kubernetes Secret).
+3. **Adım 3: Çalışma Zamanı Kimlik Bilgisi Gizli Ekleme (Aday Yuvası)**
+   Çalışma zamanı bağlantı dizesini enjekte edin (kullanarak `restaurant_app_user` ve sağlanan şifreyi) aday yuvasına (`Green`) dağıtım gizli yöneticisi/kasa aracılığıyla konteyner ortamı (örneğin AWS Sırlar Yöneticisi, HashiCorp Vault, Kubernetes Sırrı).
 
-4. **Step 4: Runtime Connection & RLS Smoke Verification**
-   Verify the unprivileged runtime role connects cleanly and that Row-Level Security fail-closed protections are enforced:
-   - Unauthenticated / missing tenant context: Queries return 0 rows (`SELECT COUNT(*) FROM tenancy.tenants` yields 0).
-   - Authenticated tenant context: Queries return only records belonging to `app.current_tenant_id`.
+4. **Adım 4: Çalışma Zamanı Bağlantısı & RLS Temel İşlev Doğrulaması**
+   Ayrıcalıksız çalışma zamanı rolünün temiz bir şekilde bağlandığını ve Satır Düzeyinde Güvenlik arıza kapatma korumalarının uygulandığını doğrulayın:
+   - Kimliği doğrulanmamış/eksik işletme bağlamı: Sorgular sıfır satır döndürür (`SELECT COUNT(*) FROM tenancy.tenants` sonucu sıfırdır).
+   - Kimliği doğrulanmış işletme bağlamı: Sorgular yalnızca işletme bağlamına ait kayıtları döndürür `app.current_tenant_id`.
 
-5. **Step 5: Green Application Slot Startup**
-   Launch candidate slot containers (`apps/api`), warming up EF Core connection pools and background workers against the migrated database.
+5. **Adım 5: Yeşil Uygulama Yuvası Başlatma**
+   Aday slot kapsayıcılarını başlatın (`apps/api`), EF Core bağlantı havuzlarının ve arka plan çalışanlarının geçirilen veritabanına karşı ısınması.
 
-6. **Step 6: Health Verification & Blue/Green Cutover**
-   Execute synthetic health checks (`/health/live`, `/health/ready`), verify error rates, and perform traffic cutover via the Nginx ingress router (`node scripts/blue-green/cutover.mjs --execute`).
+6. **Adım 6: Sağlık Doğrulaması ve Blue/Green Geçiş**
+   Sentetik durum kontrollerini yürütün (`/health/live`, `/health/ready`), hata oranlarını doğrulayın ve Nginx giriş yönlendiricisi (`node scripts/blue-green/cutover.mjs --execute`).
 
-### 3.4. Idempotent Credential Rotation
-If runtime credentials are ever suspected compromised or due for routine rotation:
-1. Generate new high-entropy credentials in the deployment secret manager / vault.
-2. Re-run `deploy/bootstrap/001_create_runtime_login_role.sql` with the new `APP_RUNTIME_PASSWORD` exported in the DBA environment. The script idempotently updates the password via `ALTER ROLE restaurant_app_user WITH PASSWORD %L` without altering existing schema privileges or group memberships.
-3. Update connection strings across deployment slots and perform rolling container restarts.
-4. Review PostgreSQL audit logs for unauthorized queries during the incident window.
+### 3.4. Idempotent Kimlik Bilgisi Rotasyonu
+Çalışma zamanı kimlik bilgilerinin tehlikeye girdiğinden veya rutin rotasyona tabi olduğundan şüpheleniliyorsa:
+1. Dağıtım gizli yöneticisinde/kasasında yeni yüksek entropili kimlik bilgileri oluşturun.
+2. DBA ortamında yeni `APP_RUNTIME_PASSWORD` değerini ayarlayıp `deploy/bootstrap/001_create_runtime_login_role.sql` betiğini yeniden çalıştırın. Betik, `ALTER ROLE restaurant_app_user WITH PASSWORD %L` ile parolayı günceller; şema ayrıcalıkları ve grup üyelikleri korunur.
+3. Dağıtım yuvalarındaki bağlantı dizelerini güncelleyin ve hareketli konteyner yeniden başlatmaları gerçekleştirin.
+4. Olay penceresi sırasında yetkisiz sorgular için PostgreSQL denetim günlüklerini inceleyin.
 
 ---
 
-## 4. Rollback & Down-Migration Strategy
+## 4. Geri Alma ve Aşağı Geçiş Stratejisi
 
-1. **Non-Destructive Safety Window:**
-   - Because expand-stage migrations add only additive, non-breaking elements (new tables, new nullable columns, composite foreign keys), the previous application slot continues functioning uninterrupted even if the new release is aborted.
-2. **Aborted Deployment (Prior to Cutover):**
-   - If health probes or smoke tests fail on the inactive slot, traffic remains on the active slot.
-   - Additive schema changes remain dormant and do not need to be rolled back immediately.
-3. **Emergency Rollback (Post-Cutover):**
-   - Traffic is shifted back to the safe slot via Nginx ingress within 60 seconds (`node scripts/blue-green/rollback.mjs --execute --confirm-rollback`).
-   - If schema rollback is strictly required after incident stabilization:
+1. **Tahribatsız Güvenlik Penceresi:**
+   - Genişletme aşaması geçişleri yalnızca eklemeli, mevcut davranışı bozmayan öğeler (yeni tablolar, yeni null yapılabilir sütunlar, bileşik yabancı anahtarlar) eklediğinden, önceki uygulama yuvası, yeni sürüm iptal edilse bile kesintisiz olarak çalışmaya devam eder.
+2. **Durdurulan Dağıtım (Kesintiden Önce):**
+   - Etkin olmayan yuvada sağlık araştırmaları veya temel işlev testleri başarısız olursa trafik etkin yuvada kalır.
+   - Ek şema değişiklikleri uykuda kalır ve hemen geri alınmasına gerek yoktur.
+3. **Acil Durum Geri Alma (Kesim Sonrası):**
+   - Trafik, Nginx girişi yoluyla güvenli yuvaya geri kaydırılır. 60 saniye (`node scripts/blue-green/rollback.mjs --execute --confirm-rollback`).
+   - Olay stabilizasyonundan sonra şemanın geri alınması kesinlikle gerekiyorsa:
      ```bash
      dotnet ef database update <PreviousMigrationName> \
        --project packages/infrastructure/RestaurantOrder.Infrastructure.csproj \
        --startup-project apps/api/RestaurantOrder.Api.csproj
      ```
-4. **Forensic Preservation:**
-   - Never run destructive down-migrations while investigating an ongoing incident.
+4. **Adli Koruma:**
+   - Devam eden bir olayı araştırırken asla yıkıcı aşağı geçişler gerçekleştirmeyin.

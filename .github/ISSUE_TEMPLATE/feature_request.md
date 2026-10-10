@@ -1,24 +1,26 @@
 ---
-name: Feature Request
-about: Propose a new capability or architectural enhancement
+name: Özellik Önerisi
+about: Yeni bir yetenek veya mimari iyileştirme önerin
 title: "[FEAT] "
 labels: ["enhancement"]
 assignees: ""
 ---
 
-## Summary & Value Proposition
-<!-- Brief description of the feature and how it improves restaurant operations or guest experience. -->
+## Özet ve Sağlanan Değer
+<!-- Özelliği ve restoran işletmesi veya müşteri deneyimine katkısını kısaca açıklayın. -->
 
-## Target Surface(s)
-- [ ] QR Customer Web App
-- [ ] Waiter & Operations Mobile App
-- [ ] Kitchen / Bar KDS
-- [ ] Restaurant Admin Panel
-- [ ] Platform Super Admin Panel
-- [ ] Backend API / Background Worker
+## Hedef Arayüzler
 
-## Target Role(s)
-- [ ] Super Admin
+- [ ] QR müşteri uygulaması
+- [ ] Garson ve operasyon uygulaması
+- [ ] Mutfak / bar KDS
+- [ ] Restoran yönetim paneli
+- [ ] Platform süper yönetim paneli
+- [ ] Backend API / arka plan çalışanı
+
+## Hedef Roller
+
+- [ ] Süper Yönetici
 - [ ] Restoran Admini
 - [ ] Şube Müdürü
 - [ ] Operasyon / Kasa
@@ -27,19 +29,22 @@ assignees: ""
 - [ ] Garson
 - [ ] Müşteri
 
-## User Story & Acceptance Criteria
+## Kullanıcı Hikâyesi ve Kabul Ölçütleri
+
 ```text
-As a [Role],
-I want to [Action],
-So that [Benefit].
+Bir [rol] olarak,
+[fayda] için
+[eylemi] gerçekleştirmek istiyorum.
 ```
 
-**Acceptance Criteria:**
-- [ ] Criterion 1 (Happy path)
-- [ ] Criterion 2 (Negative / Error path)
-- [ ] Criterion 3 (RBAC permission enforcement)
+**Kabul ölçütleri:**
 
-## Architectural & Governance Impacts
-- [ ] Does this feature require an Architecture Decision Record (ADR)?
-- [ ] Does this feature introduce database schema changes? (Must follow Expand-and-Contract)
-- [ ] Does this feature affect state machines defined in `docs/STATE-MACHINES.md`?
+- [ ] Ölçüt 1 (Başarılı akış)
+- [ ] Ölçüt 2 (Hata / başarısız akış)
+- [ ] Ölçüt 3 (RBAC yetkilerinin uygulanması)
+
+## Mimari ve Yönetişim Etkileri
+
+- [ ] Mimari karar kaydı (ADR) gerekli mi?
+- [ ] Veritabanı şeması değişiyor mu? (Genişlet ve daralt yaklaşımı zorunludur.)
+- [ ] `docs/STATE-MACHINES.md` üzerindeki durum makineleri etkileniyor mu?

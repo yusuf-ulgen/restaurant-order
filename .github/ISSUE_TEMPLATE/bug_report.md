@@ -1,43 +1,47 @@
 ---
-name: Bug Report
-about: Create a report to help reproduce and resolve a defect
+name: Hata Bildirimi
+about: Bir hatayı yeniden üretmek ve çözmek için bildirim oluşturun
 title: "[BUG] "
 labels: ["bug"]
 assignees: ""
 ---
 
-## Description
-<!-- A clear and concise description of what the bug is. -->
+## Açıklama
+<!-- Hatayı açık ve kısa biçimde açıklayın. -->
 
-## Affected Surface(s)
-- [ ] QR Customer Web App
-- [ ] Waiter & Operations Mobile App
-- [ ] Kitchen / Bar KDS
-- [ ] Restaurant Admin Panel
-- [ ] Platform Super Admin Panel
-- [ ] Backend API / Background Worker
+## Etkilenen Arayüzler
 
-## Severity Classification
-<!-- Refer to docs/INCIDENT-RESPONSE.md -->
-- [ ] **Sev-1 (Critical):** Outage, data leak, total ordering/payment failure
-- [ ] **Sev-2 (Major):** Single branch down, KDS frozen, printers offline
-- [ ] **Sev-3 (Moderate):** Non-blocking functional defect, reporting timeout
-- [ ] **Sev-4 (Minor):** Cosmetic / UI styling glitch, minor typo
+- [ ] QR müşteri uygulaması
+- [ ] Garson ve operasyon uygulaması
+- [ ] Mutfak / bar KDS
+- [ ] Restoran yönetim paneli
+- [ ] Platform süper yönetim paneli
+- [ ] Backend API / arka plan çalışanı
 
-## Steps to Reproduce
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Önem Düzeyi
+<!-- docs/INCIDENT-RESPONSE.md belgesini esas alın. -->
 
-## Expected Behavior
-<!-- What should have happened. -->
+- [ ] **Sev-1 (Kritik):** Kesinti, veri sızıntısı, tüm sipariş/ödeme akışının çökmesi
+- [ ] **Sev-2 (Büyük):** Bir şubenin çalışamaması, KDS'nin donması, yazıcıların çevrimdışı olması
+- [ ] **Sev-3 (Orta):** İşletimi durdurmayan işlev hatası, raporlama zaman aşımı
+- [ ] **Sev-4 (Küçük):** Görsel/biçim hatası veya yazım yanlışı
 
-## Actual Behavior
-<!-- What actually happened. -->
+## Yeniden Üretme Adımları
 
-## Relevant Logs & Diagnostics
-<!-- Paste sanitized logs here. NEVER INCLUDE REAL CREDENTIALS OR CUSTOMER PII. -->
+1. '...' sayfasını açın.
+2. '...' öğesine tıklayın.
+3. '...' bölümüne ilerleyin.
+4. Hatayı gözleyin.
+
+## Beklenen Davranış
+<!-- Ne olmalıydı? -->
+
+## Gerçekleşen Davranış
+<!-- Gerçekte ne oldu? -->
+
+## İlgili Günlükler ve Tanılama
+<!-- Temizlenmiş günlükleri ekleyin. GERÇEK KİMLİK BİLGİLERİ VEYA MÜŞTERİ VERİSİ EKLEMEYİN. -->
+
 ```text
 
 ```

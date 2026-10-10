@@ -1,46 +1,46 @@
-# ADR-0007: Infrastructure Health Checks & Dependency Verification (`docs/adr/0007-health-checks-and-dependency-verification.md`)
+# ADR-0007: Altyapı Durum Denetimleri ve Bağımlılık Doğrulaması (`docs/adr/0007-health-checks-and-dependency-verification.md`)
 
-- **Status:** `ACCEPTED`
-- **Deciders:** Architecture Team, Yusuf Ülgen
-- **Date:** 2026-09-19
-- **Technical Story:** Production Liveness & Readiness Separation and Dependency Verification
-
----
-
-## 1. Context and Problem Statement
-
-A resilient containerized application requires clear separation between process liveness (is the application running) and traffic readiness (can the application serve traffic). 
-
-Previously, `/health/ready` returned an unverified `Healthy` status without validating PostgreSQL or Redis connectivity. This created risks of routing customer traffic to unhealthy instances during database or cache outages. Additionally, health responses must never leak sensitive connection details, credentials, or host topologies.
+- **Durum:** `ACCEPTED`
+- **Karar Verenler:** Mimarlık Ekibi, Yusuf Ülgen
+- **Tarih:** 2026-09-19
+- **Teknik Hikaye:** Üretim Canlılığı ve Hazırlığı Ayırma ve Bağımlılık Doğrulaması
 
 ---
 
-## 2. Decision
+## 1. Bağlam ve Sorun Açıklaması
 
-We adopt a decoupled, fail-closed health check architecture:
+Esnek konteynerleştirilmiş bir uygulama, süreç canlılığı (uygulama çalışıyor mu) ile trafiğe hazır olma (uygulama trafiğe hizmet edebiliyor mu) arasında net bir ayrım gerektirir.
 
-1. **Liveness Probe (`/health/live`):**
-   - Strictly monitors the internal ASP.NET Core process state.
-   - Never depends on external infrastructure (PostgreSQL, Redis).
-   - Always returns HTTP 200 OK as long as the HTTP pipeline functions.
-
-2. **Readiness Probe (`/health/ready`):**
-   - Validates live connectivity to PostgreSQL (via `NpgsqlDatabaseHealthCheck` executing `SELECT 1;`) and Redis (via `StackExchangeRedisHealthCheck` issuing a ping).
-   - Enforces **fail-closed** behavior: in Staging and Production, any connection failure or missing configuration returns HTTP 503 Service Unavailable.
-   - Enforces strict data masking: responses return generic status indicators (`Healthy` / `Unhealthy`) with zero exposure of connection strings, passwords, or host names.
-
-3. **Package Selection & .NET 10 Compatibility:**
-   - Core drivers `Npgsql` (v9.0+) and `StackExchange.Redis` (v2.8+) are used directly with timeouts (3s).
-   - Avoids third-party community wrapper packages that may lag behind .NET 10 preview/release channels.
+Önceden `/health/ready`, PostgreSQL veya Redis bağlantısını doğrulamadan `Healthy` döndürüyordu. Bu, veritabanı veya önbellek kesintileri sırasında müşteri trafiğinin sağlıksız örneklere yönlendirilme riskini yarattı. Ayrıca sistem durumu yanıtları hiçbir zaman hassas bağlantı ayrıntılarını, kimlik bilgilerini veya ana bilgisayar topolojilerini sızdırmamalıdır.
 
 ---
 
-## 3. Consequences
+## 2. Karar
 
-### Positive
-- Prevents Kubernetes / Docker reverse proxies from routing traffic to broken nodes.
-- High availability during database restarts (containers are not killed by liveness probes, only taken out of rotation by readiness probes).
-- Zero secret leakage in health responses or error logs.
+Ayrılmış, arıza durumunda kapatılmış bir durum denetimi mimarisini benimsiyoruz:
 
-### Negative / Trade-offs
-- Readiness probes execute network calls (mitigated by 3-second timeouts and lightweight ping queries).
+1. **Canlılık Probu (`/health/live`):**
+   - Yalnızca ASP.NET Core süreç durumunu denetler.
+   - Hiçbir zaman dış altyapıya (PostgreSQL, Redis) bağımlı olmaz.
+   - HTTP işlem hattı çalıştığı sürece HTTP 200 döndürür.
+
+2. **Hazırlık Probu (`/health/ready`):**
+   - PostgreSQL bağlantısını `NpgsqlDatabaseHealthCheck` ile `SELECT 1;` çalıştırarak, Redis bağlantısını `StackExchangeRedisHealthCheck` ile ping göndererek doğrular.
+   - Zorlar **arızalı kapalı** davranış: Hazırlama ve Üretimde herhangi bir bağlantı hatası veya eksik yapılandırma geri döner HTTP 503 Hizmet Kullanılamıyor.
+   - Sıkı veri maskelemeyi zorunlu kılar: yanıtlar genel durum göstergelerini döndürür (`Healthy` / `Unhealthy`) bağlantı dizelerinin, parolaların veya ana bilgisayar adlarının sıfır açığa çıkmasıyla.
+
+3. **Paket Seçimi & .NET 10 Uyumluluk:**
+   - Çekirdek sürücüler `Npgsql` (v9.0+) ve `StackExchange.Redis` (v2.8+) doğrudan zaman aşımlarıyla (3s) kullanılır.
+   - .NET 10 sürümlerinin gerisinde kalabilecek üçüncü taraf sarmalayıcı paketlerinden kaçınılır.
+
+---
+
+## 3. Sonuçlar
+
+### Olumlu
+- Kubernetes/Docker ters proxy'lerinin trafiği bozuk düğümlere yönlendirmesini önler.
+- Veritabanının yeniden başlatılması sırasında yüksek kullanılabilirlik (kapsayıcılar canlılık araştırmaları tarafından öldürülmez, yalnızca hazırlık araştırmaları tarafından rotasyondan çıkarılır).
+- Sistem durumu yanıtlarında veya hata günlüklerinde sıfır gizli sızıntı.
+
+### Olumsuz / Takaslar
+- Hazırlık araştırmaları ağ çağrılarını yürütür (aşağıdakilerle azaltılır) üç saniyelik zaman aşımları ve hafif ping sorguları).

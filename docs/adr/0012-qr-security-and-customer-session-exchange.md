@@ -1,4 +1,4 @@
-# ADR-0011: Static/Dynamic QR Security, Cryptographic Signatures, and Customer Session Exchange
+# ADR-0012: Static/Dynamic QR Security, Cryptographic Signatures, and Customer Session Exchange
 
 - **Status:** `ACCEPTED`
 - **Date:** 2026-10-06

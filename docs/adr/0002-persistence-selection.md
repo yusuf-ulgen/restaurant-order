@@ -1,66 +1,66 @@
-# ADR-0002: Data Persistence Library Selection (`docs/adr/0002-persistence-selection.md`)
+# ADR-0002: Veri Kalıcılığı Kitaplığı Seçimi (`docs/adr/0002-persistence-selection.md`)
 
-- **Status:** `ACCEPTED`
-- **Deciders:** Architecture Team, Yusuf Ülgen
-- **Date:** 2026-09-20
-- **Technical Story:** Data Access & Persistence Strategy Evaluation (Phase 2)
-
----
-
-## 1. Context and Problem Statement
-
-`restaurant-order` relies on PostgreSQL as its primary transactional database. The system requires strong relational consistency for financial ledgers, billing calculations, deterministic state transitions for orders and tickets, and strict row-level tenant isolation across organizations, brands, and branches.
-
-A persistence library must bridge the domain model with PostgreSQL while satisfying the following requirements:
-1. Strict domain model encapsulation (Rich Domain Entities, Value Objects, private setters).
-2. Automated schema migration lifecycle integrated into CI/CD.
-3. Multi-tenancy isolation boundary backed by PostgreSQL Row-Level Security (RLS).
-4. Predictable performance and resource utilization during peak dining periods.
+- **Durum:** `ACCEPTED`
+- **Karar Verenler:** Mimarlık Ekibi, Yusuf Ülgen
+- **Tarih:** 2026-09-20
+- **Teknik Hikaye:** Veri Erişimi ve Kalıcılık Stratejisi Değerlendirmesi (Faz 2)
 
 ---
 
-## 2. Decision Drivers
+## 1. Bağlam ve Sorun Açıklaması
 
-- **Domain Model Integrity:** Rich domain entities with encapsulated state machines and private setters without leaking ORM attributes into the domain.
-- **Migration & Schema Safety:** Robust schema evolution supporting zero-downtime expand-and-contract deployments.
-- **Multi-Tenancy & Row-Level Security (RLS):** Compatibility with PostgreSQL session variables (`SET LOCAL app.current_tenant_id`) and connection pooling.
-- **Developer Productivity & Maintainability:** Type-safe query abstractions, compile-time query verification, and maintainable unit/integration testing.
-- **Performance & Extensibility:** High throughput for standard CRUD/aggregates, with escape hatches for high-performance raw SQL when measured and justified.
+`restaurant-order` Birincil işlem veritabanı olarak PostgreSQL'e güvenir. Sistem, finansal defterler, fatura hesaplamaları, siparişler ve hazırlık fişleri için belirleyici durum geçişleri ve kuruluşlar, markalar ve şubeler arasında satır düzeyinde katı işletme izolasyonu için güçlü ilişkisel tutarlılık gerektirir.
 
----
-
-## 3. Decision
-
-We accept **Entity Framework Core 10 (EF Core 10)** with the **Npgsql EF Core Provider (`Npgsql.EntityFrameworkCore.PostgreSQL`)** as the primary ORM and schema migration tool for `restaurant-order`.
-
-### Key Tenets of this Decision:
-1. **Primary ORM & Migrations:** EF Core 10 is the single source of truth for schema migrations and relational mapping.
-2. **Security Boundary — PostgreSQL Row-Level Security (RLS):** The definitive multi-tenant security boundary is PostgreSQL RLS. Every database connection sets `app.current_tenant_id` at the connection/transaction level.
-3. **Defense-in-Depth Query Filters:** EF Core Global Query Filters will be applied to all tenant-scoped entities as a secondary defense-in-depth layer, not as a replacement for PostgreSQL RLS.
-4. **Controlled Raw SQL Escape Hatch:** For complex analytical or high-throughput queries where LINQ translation introduces measurable overhead, controlled raw SQL (via `FromSqlInterpolated` or `ExecuteSqlInterpolatedAsync`) may be used following documented profiling.
-5. **Rejection of Marten / Event Sourcing for MVP:** Marten and full event sourcing are rejected for the MVP. The business domain (restaurant dining, table turns, split billing) requires immediate relational consistency and straightforward reporting across aggregates. Event sourcing adds operational and projection complexity that is disproportionate for the current phase.
-6. **Rejection of Dapper as Primary Persistence Layer:** Dapper is rejected as the primary persistence layer due to the absence of automated change tracking, lack of native schema migration tooling, and increased boilerplate for mapping rich domain aggregates. Dapper may be considered in future phases solely for specialized, performance-measured read projections if needed.
+Bir kalıcılık kitaplığı, aşağıdaki gereksinimleri karşılarken alan modeli ile PostgreSQL arasında köprü kurmalıdır:
+1. Sıkı alan modeli kapsülleme (Zengin Alan Varlıkları, Değer Nesneleri, özel ayarlayıcılar).
+2. CI/CD'ye entegre edilmiş otomatik şema taşıma yaşam döngüsü.
+3. PostgreSQL Satır Düzeyi Güvenliği (RLS).
+4. Yoğun yemek dönemlerinde öngörülebilir performans ve kaynak kullanımı.
 
 ---
 
-## 4. Consequences and Trade-offs
+## 2. Karar Etkenleri
 
-### Positive Consequences
-- **Robust Domain Mapping:** EF Core 10 supports private constructors, backing fields, owned entities (Value Objects), and complex property conversions without polluting domain models with framework attributes.
-- **Zero-Downtime Migration Tooling:** Native EF Core migrations provide deterministic SQL generation, rollbacks, and idempotency scripts for Blue/Green deployment pipelines.
-- **Multi-Tenant Safety:** Global Query Filters combined with database RLS provide dual-layer defense against cross-tenant data leakage.
-- **Rich Ecosystem & Testcontainers Support:** First-class compatibility with Npgsql, PostgreSQL 16, and Testcontainers for integration testing.
-
-### Negative Consequences / Trade-offs & Mitigations
-- **Allocation Overhead:** EF Core change tracking incurs higher memory overhead than micro-ORMs.  
-  *Mitigation:* Use `.AsNoTracking()` for all read-only queries.
-- **LINQ Translation Traps:** Complex multi-join queries can generate suboptimal SQL if unmonitored.  
-  *Mitigation:* Enable `ThrowIdentityMappingWarning` / `QuerySplittingBehavior`, log slow queries, and utilize controlled raw SQL when justified by profiling.
+- **Alan Modeli Bütünlüğü:** Kapsüllenmiş durum makinelerine ve sızıntı olmadan özel ayarlayıcılara sahip zengin alan varlıkları ORM alanına öznitelikler.
+- **Taşıma ve Şema Güvenliği:** Sıfır kesinti süreli genişletme ve daraltma dağıtımlarını destekleyen sağlam şema gelişimi.
+- **Çok İşletmeli Yapı ve Satır Düzeyinde Güvenlik (RLS):** PostgreSQL oturum değişkenleriyle uyumluluk (`SET LOCAL app.current_tenant_id`) ve bağlantı havuzu oluşturma.
+- **Geliştirici Üretkenliği ve Sürdürülebilirliği:** Tür açısından güvenli sorgu soyutlamaları, derleme zamanı sorgu doğrulaması ve bakımı yapılabilir birim/entegrasyon testleri.
+- **Performans ve Genişletilebilirlik:** Standart CRUD/aggregate işlemlerinde yüksek verim; ölçümle gerekçelendirildiğinde kontrollü ham SQL kullanımı.
 
 ---
 
-## 5. References
+## 3. Karar
 
-- [ADR-0001: Technology Stack](./0001-technology-stack.md)
-- [docs/ARCHITECTURE.md](../ARCHITECTURE.md)
-- [docs/MULTI-TENANCY.md](../MULTI-TENANCY.md)
+`restaurant-order` için birincil ORM ve şema geçişi aracı olarak **Entity Framework Core 10 (EF Core 10)** ve **Npgsql sağlayıcısı (`Npgsql.EntityFrameworkCore.PostgreSQL`)** seçilmiştir.
+
+### Bu Kararın Temel İlkeleri:
+1. **Birincil ORM ve Taşımalar:** EF Core 10 şema geçişleri ve ilişkisel haritalama için tek doğruluk kaynağıdır.
+2. **Güvenlik Sınırı — PostgreSQL Satır Düzeyinde Güvenlik (RLS):** Kesin çok işletmeli güvenlik sınırı PostgreSQL'dir RLS. Her veritabanı bağlantısında `app.current_tenant_id` bağlantı/işlem kapsamında ayarlanır.
+3. **Derinlemesine Savunma Sorgu Filtreleri:** EF Core genel sorgu filtreleri işletme kapsamlı varlıklarda ikinci savunma katmanıdır; PostgreSQL RLS sınırının yerini almaz.
+4. **Kontrollü Ham SQL Kullanımı:** Karmaşık analitik/yüksek hacimli sorgularda LINQ dönüşümünün maliyeti ölçülüp belgelendirilirse `FromSqlInterpolated` veya `ExecuteSqlInterpolatedAsync` ile kontrollü ham SQL kullanılabilir.
+5. **MVP İçin Marten ve Event Sourcing Seçeneğinin Reddi:** Marten ve tam event sourcing reddedildi MVP. İş alanı (restoran yemekleri, masa değişimleri, bölünmüş faturalandırma), toplu olarak anında ilişkisel tutarlılık ve basit raporlama gerektirir. Olay kaynağı kullanımı, mevcut aşama için orantısız olan operasyonel ve projeksiyon karmaşıklığını artırıyor.
+6. **Dapper'ın Birincil Kalıcılık Katmanı Olarak Reddedilmesi:** Dapper, otomatik değişiklik izlemenin bulunmaması, yerel şema taşıma araçlarının bulunmaması ve zengin alan adı kümelerini haritalamak için artan ortak metin nedeniyle birincil kalıcılık katmanı olarak reddedilir. Dapper, ihtiyaç duyulması halinde gelecek aşamalarda yalnızca özelleştirilmiş, performans ölçümlü okuma projeksiyonları için düşünülebilir.
+
+---
+
+## 4. Sonuçlar ve Ödünleşimler
+
+### Olumlu Sonuçlar
+- **Sağlam Alan Eşlemesi:** EF Core 10 özel kurucuları, alanları, sahip olunan varlıkları (Değer Nesneleri) ve alan modellerini çerçeve nitelikleriyle kirletmeden karmaşık özellik dönüşümlerini destekler.
+- **Sıfır Kesinti Süreli Geçiş Araçları:** EF Core geçişleri Blue/Green akışı için belirlenebilir SQL üretimi, geri alma ve tekrar çalıştırılması güvenli betikler sağlar.
+- **Çok İşletmeli Güvenlik:** Veritabanıyla birleştirilmiş Küresel Sorgu Filtreleri RLS işletmeler arası veri sızıntısına karşı çift katmanlı savunma sağlar.
+- **Zengin Ekosistem ve Test Konteynerleri Desteği:** Npgsql, PostgreSQL ile birinci sınıf uyumluluk 16ve entegrasyon testi için Test kapsayıcıları.
+
+### Olumsuz Sonuçlar / Takaslar ve Azaltmalar
+- **Tahsis Giderleri:** EF Core değişiklik takibi, mikro ORM'lerden daha yüksek bellek yüküne neden olur.
+  *Azaltma:* Kullanım `.AsNoTracking()` tüm salt okunur sorgular için.
+- **LINQ Çeviri Tuzakları:** Karmaşık çoklu birleştirme sorguları optimumun altında sonuçlar üretebilir SQL izlenmiyorsa.
+  *Azaltma:* Etkinleştir `ThrowIdentityMappingWarning` / `QuerySplittingBehavior`, yavaş sorguları günlüğe kaydedin ve kontrollü hamdan yararlanın SQL profil oluşturmayla gerekçelendirildiğinde.
+
+---
+
+## 5. Referanslar
+
+- [ADR-0001: Teknoloji Yığını](./0001-technology-stack.md)
+- [ARCHITECTURE.md](../ARCHITECTURE.md)
+- [MULTI-TENANCY.md](../MULTI-TENANCY.md)

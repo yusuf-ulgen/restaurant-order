@@ -1,14 +1,10 @@
-# Claude Instructions Adapter (CLAUDE.md)
+# AI Aracı Yönerge Uyarlayıcısı — CLAUDE.md
 
-> **Binding Authority:** This file is a lightweight adapter for Claude. You **must** read and adhere to the master instructions in [AGENTS.md](AGENTS.md) before performing any operation.
+> **Bağlayıcı kaynak:** Herhangi bir işlemden veya kod üretiminden önce [AGENTS.md](AGENTS.md) okunmalı ve tüm kuralları uygulanmalıdır. Bu dosya bağımsız bir kural kaynağı değildir.
 
-## Operational Instructions
+## Çalışma Kuralları
 
-1. **Read Master Rules:** Review [AGENTS.md](AGENTS.md) for mandatory rules including file size limits (450 lines warning, 600 lines strict ceiling), test verification policy, security standards, and blue-green deployment principles.
-2. **Consult Domain Docs:** Before implementing any feature or modifying architecture, read the relevant documents in [docs/](docs/):
-   - Architecture & Structure: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/REPOSITORY-STRUCTURE.md](docs/REPOSITORY-STRUCTURE.md)
-   - Business Logic & States: [docs/DOMAIN.md](docs/DOMAIN.md), [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md), [docs/NEGATIVE-FLOWS.md](docs/NEGATIVE-FLOWS.md)
-   - Roles & Permissions: [docs/ROLES-AND-PERMISSIONS.md](docs/ROLES-AND-PERMISSIONS.md)
-   - Integration & Hardware: [docs/ORDER-ROUTING-AND-PRINTING.md](docs/ORDER-ROUTING-AND-PRINTING.md), [docs/PAYMENTS-TIPS-COMMISSIONS.md](docs/PAYMENTS-TIPS-COMMISSIONS.md)
-3. **Execution Standards:** Never report unexecuted actions or tests as PASS. Never introduce secrets, real customer data, or breaking changes without authorization.
-
+1. Kodlama, test, güvenlik, mimari, Blue/Green ve dosya sınırları (450 satır uyarı / 600 satır kesin üst sınır) AGENTS.md tarafından yönetilir.
+2. Görevle ilgili alan belgelerini [docs/](docs/) altında okuyun; mimari, alan modeli, durum makineleri, hata akışları, roller, arayüzler, ortamlar ve donanım belgelerini görevin kapsamına göre seçin.
+3. İlgisiz dosyaları ve kullanıcı değişikliklerini koruyun. Gizli bilgi veya gerçek müşteri verisi eklemeyin. Çalıştırılmamış test ve işlemleri başarılı göstermeyin; açık mimari kararlarını öneri/ADR gerekli olarak işaretleyin.
+4. AGENTS.md içindeki Türkçe dil kuralını uygulayın: doküman, issue/PR, commit açıklaması ve devir notları Türkçe olmalıdır; teknik tanımlayıcıları ve komutları koruyun. Ana kuralları çoğaltmayın veya onlarla çelişmeyin.

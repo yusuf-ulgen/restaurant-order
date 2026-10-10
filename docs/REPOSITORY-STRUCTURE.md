@@ -1,81 +1,81 @@
-# Repository Structure & Coding Standards (`docs/REPOSITORY-STRUCTURE.md`)
+# Depo Yapısı ve Kodlama Standartları (`docs/REPOSITORY-STRUCTURE.md`)
 
-## 1. Planned Repository Layout (Monorepo Architecture)
+## 1. Planlanan Depo Düzeni (Monorepo Mimarisi)
 
-The repository will be structured as a modular workspace cleanly separating core domain packages, backend services, and frontend applications across the 5 surfaces:
+Depo, çekirdek alan paketlerini, arka uç hizmetlerini ve ön uç uygulamalarını net bir şekilde ayıran modüler bir çalışma alanı olarak yapılandırılmıştır. Beş ürün arayüzü üç web uygulamasında gruplanır:
 
 ```
 restaurant-order/
-├── AGENTS.md                          # Master binding agent & contributor instructions
-├── README.md                          # Repository overview & quick start
-├── pnpm-workspace.yaml                # Monorepo workspace configuration
-├── package.json                       # Root scripts and dev tooling
-├── pnpm-lock.yaml                     # Single unified lockfile
-├── RestaurantOrder.sln                # .NET 10 unified solution
-├── global.json                        # .NET 10 SDK pin
-├── .editorconfig                      # Multi-language formatting standards
-├── .gitignore                         # Git exclusion rules
-├── .env.example                       # Local environment variables template
-├── docs/                              # Architecture, domain, product & operations docs
-│   ├── adr/                           # Architecture Decision Records (ADR-0001, ADR-0002)
-│   ├── runbooks/                      # Operations & deployment runbooks
-│   └── templates/                     # ADR, feature, and incident templates
-├── apps/                              # Surface applications & backend hosts
-│   ├── customer-web/                  # Surface 1: Responsive PWA QR guest web app (React 19 + Vite)
-│   ├── operations-web/                # Surface 2: Waiter & operations web app (React 19 + Vite)
-│   ├── admin-web/                     # Surface 4 & 5: Restaurant & Super Admin portal (React 19 + Vite)
-│   ├── api/                           # ASP.NET Core 10 Modular Monolith REST API
-│   └── worker/                        # .NET 10 Background Worker Host
-├── packages/                          # Shared monorepo packages
-│   ├── ui/                            # Design tokens & core shared UI components (React 19)
-│   ├── contracts/                     # OpenAPI contract boundary & shared DTO types
-│   └── config/                        # Shared TypeScript, ESLint & toolchain configurations
-├── tests/                             # Quality & verification suites
-│   ├── architecture/                  # .NET architecture boundary tests
-│   ├── integration/                   # ASP.NET Core integration tests (/health endpoints)
-│   └── e2e/                           # Playwright end-to-end test suite
-├── deploy/                            # Containerization & local infrastructure
-│   ├── docker-compose.yml             # Local PostgreSQL 16 & Redis 7 services
-│   └── docker/                        # Multi-stage Dockerfiles (api, worker, web)
-└── scripts/                           # Tooling & verification scripts
-    ├── verify.ps1                     # Full monorepo verification pipeline
-    └── dev.ps1                        # Local development environment launcher
+├── AGENTS.md                          # Ana katkı ve yapay zekâ kuralları
+├── README.md                          # Depo özeti ve başlangıç
+├── pnpm-workspace.yaml                # Monorepo çalışma alanı ayarı
+├── package.json                       # Kök betikler ve geliştirme araçları
+├── pnpm-lock.yaml                     # Ortak kilit dosyası
+├── RestaurantOrder.sln                # .NET 10 çözümü
+├── global.json                        # .NET 10 SDK sürümü
+├── .editorconfig                      # Diller arası biçim kuralları
+├── .gitignore                         # Git dışlama kuralları
+├── .env.example                       # Yerel ortam değişkeni şablonu
+├── docs/                              # Mimari, alan, ürün ve operasyon belgeleri
+│   ├── adr/                           # Mimari karar kayıtları
+│   ├── runbooks/                      # Operasyon ve dağıtım rehberleri
+│   └── templates/                     # ADR, özellik ve olay şablonları
+├── apps/                              # Web uygulamaları ve arka uç süreçleri
+│   ├── customer-web/                  # Arayüz 1: QR müşteri PWA uygulaması (React 19 + Vite)
+│   ├── operations-web/                # Arayüz 2: Garson ve operasyon uygulaması (React 19 + Vite)
+│   ├── admin-web/                     # Arayüz 4–5: Restoran ve süper yönetim (React 19 + Vite)
+│   ├── api/                           # ASP.NET Core 10 modüler monolit REST API
+│   └── worker/                        # .NET 10 arka plan worker süreci
+├── packages/                          # Ortak monorepo paketleri
+│   ├── ui/                            # Ortak tasarım değişkenleri ve UI bileşenleri (React 19)
+│   ├── contracts/                     # OpenAPI sözleşme sınırı ve ortak DTO türleri
+│   └── config/                        # Ortak TypeScript, ESLint ve araç ayarları
+├── tests/                             # Test ve doğrulama paketleri
+│   ├── architecture/                  # .NET mimari sınır testleri
+│   ├── integration/                   # ASP.NET Core entegrasyon testleri
+│   └── e2e/                           # Playwright uçtan uca test paketi
+├── deploy/                            # Konteyner ve yerel altyapı
+│   ├── docker-compose.yml             # Yerel PostgreSQL 16 ve Redis 7
+│   └── docker/                        # Çok aşamalı Dockerfile dosyaları (api, worker, web)
+└── scripts/                           # Araç ve doğrulama betikleri
+    ├── verify.ps1                     # Tam monorepo doğrulama akışı
+    └── dev.ps1                        # Yerel geliştirme başlatıcısı
 ```
 
-> **Foundation Status:** The monorepo technical foundation is scaffolded with React 19 frontend shells, ASP.NET Core 10 API starter endpoints (`/health/live`, `/health/ready`), .NET 10 background worker host, and shared TypeScript configuration and UI packages. No business domain logic or premature database schema has been added yet.
+> **Kuruluş Durumu:** Monorepo'nun teknik temeli React ile destekleniyor 19 ön uç kabukları, ASP.NET Core 10 API başlangıç uç noktaları (`/health/live`, `/health/ready`), .NET 10 arka plan çalışan ana bilgisayarı ve paylaşılan TypeScript yapılandırması ve kullanıcı arayüzü paketleri. Bu kuruluş aşamasına ait tarihsel açıklamadır; güncel IAM, yapılandırma ve katalog kapsamı CURRENT-STATE.md içinde izlenir.
 
 ---
 
-## 2. File Size & Decomposition Rules
+## 2. Dosya Boyutu ve Ayrıştırma Kuralları
 
-To prevent unmaintainable monolithic files, the following boundaries are strictly enforced across all human-authored source, test, and documentation files:
+Bakımı mümkün olmayan monolitik dosyaları önlemek için, insan tarafından yazılan tüm kaynak, test ve belge dosyalarında aşağıdaki sınırlar sıkı bir şekilde uygulanır:
 
-### 2.1. Thresholds
-- **450 Lines (Warning):** When any file approaches 450 lines, authors must plan decomposition.
-- **600 Lines (Strict Maximum Ceiling):** No human-authored file may exceed 600 lines under any circumstances. CI gates and automated pre-commit scripts will reject commits violating this rule.
+### 2.1. Eşikler
+- **450 Satır (Uyarı):** Herhangi bir dosya yaklaştığında 450 satırlar, yazarların ayrıştırmayı planlaması gerekir.
+- **600 Satır (Katı Maksimum Tavan):** İnsan tarafından yazılan hiçbir dosya aşağıdaki değerleri aşamaz: 600 Her koşulda çizgiler. CI geçitleri ve otomatik ön işleme komut dosyaları, bu kuralı ihlal eden işlemeleri reddeder.
 
-### 2.2. Allowlist Policy (Exceptions)
-The 600-line ceiling applies strictly to human-authored code. The only permitted exceptions are:
-1. **Package Lockfiles:** `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`.
-2. **Generated Database Artifacts:** Auto-generated database schema dumps or migration snapshots (if machine-generated).
-3. **API Documentation Outputs:** OpenAPI/Swagger JSON/YAML generated files.
-4. **Third-Party Vendor Bundles:** Third-party libraries checked into vendor directories.
-5. **Snapshot Test Files:** Machine-generated Jest/Vitest snapshot files.
+### 2.2. İzin Verilenler Listesi Politikası (İstisnalar)
+ 600-satır tavanı kesinlikle insan tarafından yazılan kod için geçerlidir. İzin verilen tek istisnalar şunlardır:
+1. **Paket Kilit Dosyaları:** `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`.
+2. **Oluşturulan Veritabanı Yapıları:** Otomatik olarak oluşturulan veritabanı şeması dökümleri veya geçiş anlık görüntüleri (makine tarafından oluşturulmuşsa).
+3. **API Dokümantasyon Çıktıları:** OpenAPI/Swagger JSON/YAML oluşturulan dosyalar.
+4. **Üçüncü Taraf Satıcı Paketleri:** Üçüncü taraf kitaplıklar satıcı dizinlerine eklendi.
+5. **Anlık Görüntü Test Dosyaları:** Makine tarafından oluşturulan Jest/Vitest anlık görüntü dosyaları.
 
-Any file exceeding 600 lines that is not on an explicit allowlist is considered a critical defect.
+Şunu aşan herhangi bir dosya: 600 Açık bir izin verilenler listesinde yer almayan satırlar kritik bir kusur olarak kabul edilir.
 
-### 2.3. Decomposition Guidelines
-Files must **never** be split arbitrarily (e.g., `file_part1.ts`, `file_part2.ts`). Instead, split by:
-- **Feature / Sub-Domain:** Group related domain logic together (e.g., `order-lifecycle.ts`, `order-pricing.ts`).
-- **Use-Case / Interactor:** Separate application use-cases into individual handlers (e.g., `PlaceOrderHandler.ts`, `CancelOrderItemHandler.ts`).
-- **Port / Adapter:** Separate business logic from external protocols (e.g., `EscPosPrinterAdapter.ts`, `StripePaymentAdapter.ts`).
-- **Component Responsibility:** Break UI screens into atomic, focused components (e.g., `KdsTicketCard.tsx`, `KdsTimerBadge.tsx`).
+### 2.3. Ayrıştırma Yönergeleri
+Dosyalar **asla** keyfi olarak bölünemez (örneğin `file_part1.ts`, `file_part2.ts`). Bunun yerine şuna bölün:
+- **Özellik / Alt Alan:** İlgili alan mantığını birlikte gruplayın (örneğin `order-lifecycle.ts`, `order-pricing.ts`).
+- **Kullanım Örneği / Etkileşimci:** Uygulama kullanım durumlarını bireysel işleyicilere ayırın (örneğin `PlaceOrderHandler.ts`, `CancelOrderItemHandler.ts`).
+- **Bağlantı Noktası / Adaptör:** İş mantığını harici protokollerden ayırın (örneğin `EscPosPrinterAdapter.ts`, `StripePaymentAdapter.ts`).
+- **Bileşen Sorumluluğu:** Kullanıcı arayüzü ekranlarını atomik, odaklanmış bileşenlere bölün (örneğin `KdsTicketCard.tsx`, `KdsTimerBadge.tsx`).
 
 ---
 
-## 3. Modular Boundary Rules
+## 3. Modüler Sınır Kuralları
 
-1. **Unidirectional Dependencies:** Shared packages (`packages/domain`) must never import from application surfaces (`apps/*`).
-2. **Domain Purity:** The domain package must remain free of framework dependencies (React, Express, NestJS, etc.) and ORM annotations.
-3. **No Cross-Surface Imports:** Applications (e.g., `apps/kitchen-kds`) cannot directly import files from sibling applications (e.g., `apps/waiter-mobile`). Shared code must reside in `packages/*`.
-4. **Tenant Context Encasement:** All database access layer functions must mandate `tenant_id` and `branch_id` arguments.
+1. **Tek Yönlü Bağımlılıklar:** Paylaşılan paketler (`packages/domain`) uygulamalara (`apps/*`) bağımlı olamaz; uygulamalardan kod içe aktaramaz.
+2. **Alan Saflığı:** Alan paketi çerçeve bağımlılıkları (React, Express, NestJS vb.) ve ORM öznitelikleri içermemelidir.
+3. **Arayüzler Arası İçe Aktarma Yok:** Uygulamalar (örneğin `apps/kitchen-kds`) kardeş uygulamalardan dosyaları doğrudan içe aktaramaz (örneğin `apps/waiter-mobile`). Paylaşılan kod şu adreste bulunmalıdır: `packages/*`.
+4. **İşletme Bağlamı Kapsamı:** Tüm veritabanı erişim katmanı işlevlerinin zorunlu kılınması gerekir `tenant_id` ve `branch_id` arguments.

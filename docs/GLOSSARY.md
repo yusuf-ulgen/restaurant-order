@@ -1,90 +1,90 @@
-# Terminology Glossary (`docs/GLOSSARY.md`)
+# Terminoloji Sözlüğü (`docs/GLOSSARY.md`)
 
-This document establishes the standardized bilingual (Turkish & English) vocabulary used across code, database schemas, UI labels, and documentation for `restaurant-order`.
-
----
-
-## 1. Domain & Organizational Concepts
-
-| English Term | Türkçe Karşılığı | Definition & Context |
-| :--- | :--- | :--- |
-| **Tenant / Organization** | Organizasyon / Kiracı | The top-level legal entity subscribing to the platform. |
-| **Brand** | Marka | A distinct culinary concept or trade name under an organization. |
-| **Branch** | Şube | A physical restaurant location operating under a brand. |
-| **Dining Area** | Salon / Alan / Bölüm | A physical zone within a branch (e.g., Salon, Teras, Bahçe, Bar). |
-| **Table** | Masa | A designated physical dining table with a unique identifier per branch. |
-| **Table Session** | Masa Oturumu | The temporal dining lifecycle of a table from first seated/order to bill payment. |
-| **Table QR Code** | Masa QR Kodu | A unique scannable matrix barcode linked to a specific table in a branch. |
+Bu belge, kod, veritabanı şemaları, kullanıcı arayüzü etiketleri ve belgelerde kullanılan standartlaştırılmış iki dilli (Türkçe ve İngilizce) sözcükleri oluşturur. `restaurant-order`.
 
 ---
 
-## 2. Catalog & Menu Concepts
+## 1. Alan ve Organizasyonel Kavramlar
 
-| English Term | Türkçe Karşılığı | Definition & Context |
+| İngilizce Terim | Türkçe Karşılığı | Tanım ve Bağlam |
 | :--- | :--- | :--- |
-| **Menu** | Menü | A catalog of food and beverage offerings for a branch or service period. |
-| **Category** | Kategori | A group of related menu items (e.g., Başlangıçlar, Ana Yemekler, İçecekler). |
-| **Menu Item** | Menü Ürünü / Yemek | An individual sellable product on the menu. |
-| **Variant** | Varyant / Porsiyon | A specific portion or size of a menu item with its own price (e.g., 200g vs 300g). |
-| **Modifier Group** | Seçenek Grubu / Opsiyon | A collection of customizations (e.g., Pişme Derecesi, Yan Ürün Seçimi). |
-| **Modifier Item** | Seçenek / Ekstra | An individual customization choice within a group (e.g., Az Pişmiş, Ekstra Peynir). |
-| **86ed / Out of Stock** | Tükendi / Stokta Yok | An item temporarily marked unavailable across all customer and staff screens. |
+| **Tenant / Organization** | Organizasyon / İşletme | Platforma abone olan üst düzey tüzel kişilik. |
+| **Brand** | marka | Bir kuruluşa ait farklı bir mutfak konsepti veya ticari adı. |
+| **Branch** | Şube | Bir marka altında faaliyet gösteren fiziksel bir restoran lokasyonu. |
+| **Dining Area** | Salon / Alan / Bölüm | Bir şube içindeki fiziksel bölge (örneğin Salon, Teras, Bahçe, Bar). |
+| **Table** | Masa | Şube başına benzersiz bir tanımlayıcıya sahip, belirlenmiş bir fiziksel yemek masası. |
+| **Table Session** | Masa Oturumu | Bir masanın ilk oturma/siparişten fatura ödemesine kadar olan zamansal yemek yaşam döngüsü. |
+| **Table QR Code** | Masa QR Kodu | Bir şubedeki belirli bir masaya bağlı benzersiz bir taranabilir matris barkodu. |
 
 ---
 
-## 3. Order & Kitchen Operations
+## 2. Katalog ve Menü Konseptleri
 
-| English Term | Türkçe Karşılığı | Definition & Context |
+| İngilizce Terim | Türkçe Karşılığı | Tanım ve Bağlam |
 | :--- | :--- | :--- |
-| **Order** | Sipariş | A customer's or waiter's request for food/beverage items. |
-| **Order Item** | Sipariş Kalemi | A single item line within an order, including its modifiers and notes. |
-| **KDS** | Mutfak Ekranı (KDS) | Kitchen Display System; digital screen displaying tickets to prep staff. |
-| **Station Ticket** | İstasyon Fişi | A sub-ticket routed to a specific preparation station (Kitchen or Bar). |
-| **Kitchen Ticket** | Mutfak Fişi | A ticket containing hot/cold food items routed to the kitchen line. |
-| **Bar Ticket** | Bar Fişi | A ticket containing beverages routed to the bar preparation counter. |
-| **Station Routing** | İstasyon Yönlendirme | Logic that automatically dispatches order items to designated KDS/printers. |
-| **Prep Time / Timer** | Hazırlık Süresi | The elapsed time since a ticket was received by the preparation station. |
-| **Recall Ticket** | Fişi Geri Çağır | Reopening a ticket that was accidentally marked complete in KDS. |
+| **Menu** | Menü | Bir şube veya hizmet dönemine ilişkin yiyecek ve içecek tekliflerinin kataloğu. |
+| **Category** | Kategori | Bir grup ilgili menü öğesi (örneğin Başlangıçlar, Ana Yemekler, İçecekler). |
+| **Menu Item** | Menü Ürünü / Yemek | Menüde ayrı ayrı satılabilen bir ürün. |
+| **Variant** | Varyant / Porsiyon | Bir menü öğesinin kendi fiyatıyla birlikte belirli bir kısmı veya boyutu (örneğin 200g vs 300g). |
+| **Modifier Group** | Seçenek Grubu / Opsiyon | Bir özelleştirme koleksiyonu (örneğin Pişme Derecesi, Yan Ürün Seçimi). |
+| **Modifier Item** | Seçenek / Ekstra | Bir grup içinde bireysel kişiselleştirme seçeneği (örneğin Az Pişmiş, Ekstra Peynir). |
+| **86ed / Out of Stock** | Tükendi / Stokta Yok | Tüm müşteri ve personel ekranlarında geçici olarak kullanılamaz olarak işaretlenen bir öğe. |
 
 ---
 
-## 4. Billing, Payments & Finance
+## 3. Sipariş ve Mutfak Operasyonları
 
-| English Term | Türkçe Karşılığı | Definition & Context |
+| İngilizce Terim | Türkçe Karşılığı | Tanım ve Bağlam |
 | :--- | :--- | :--- |
-| **Bill / Check** | Hesap / Adisyon | The total invoice for a table session detailing items, taxes, and discounts. |
-| **Split Bill** | Hesabı Bölme | Dividing a bill into multiple partial payments (by amount or by specific items). |
-| **Payment** | Ödeme | A financial transaction settling part or all of an active bill. |
-| **Tip / Gratuity** | Bahşiş | An optional monetary gift added by a customer for service staff. |
-| **Platform Commission** | Platform Komisyonu | The platform fee deducted from processed tenant transactions. |
-| **Refund** | İade | Reversing a previously settled payment back to the customer. |
-| **Void / Cancellation** | İptal | Cancelling an unpaid item or order prior to settlement (requires authorization). |
+| **Order** | Sipariş | Bir müşterinin veya garsonun yiyecek/içecek ürünlerine ilişkin talebi. |
+| **Order Item** | Sipariş Kalemi | Değiştiriciler ve notlar da dahil olmak üzere bir sipariş içindeki tek bir öğe satırı. |
+| **KDS** | Mutfak Ekranı (KDS) | Mutfak Ekran Sistemi; Hazırlık personeline hazırlık fişleri gösteren dijital ekran. |
+| **Station Ticket** | İstasyon Fişi | Belirli bir hazırlık istasyonuna (Mutfak veya Bar) yönlendirilen bir alt hazırlık fişi. |
+| **Kitchen Ticket** | Mutfak Fişi | Sıcak/soğuk yiyecek içeren bir hazırlık fişi mutfak hattına yönlendirilir. |
+| **Bar Ticket** | Bar Fişi | Bar hazırlama tezgahına yönlendirilen, içecekleri içeren bir hazırlık fişi. |
+| **Station Routing** | İstasyon Yönlendirme | Sipariş öğelerini otomatik olarak belirlenen yerlere gönderen mantık KDS ve yazıcılar. |
+| **Prep Time / Timer** | Hazırlık Süresi | Hazırlık Fişin hazırlık istasyonu tarafından alınmasından bu yana geçen süre. |
+| **Recall Ticket** | Fişi Geri Çağır | Yanlışlıkla tamamlandı olarak işaretlenen bir hazırlık fişin yeniden açılması KDS. |
 
 ---
 
-## 5. Hardware & Realtime Terms
+## 4. Faturalandırma, Ödemeler ve Finans
 
-| English Term | Türkçe Karşılığı | Definition & Context |
+| İngilizce Terim | Türkçe Karşılığı | Tanım ve Bağlam |
 | :--- | :--- | :--- |
-| **ESC/POS** | ESC/POS Protokolü | The industry-standard command protocol for thermal receipt printers. |
-| **Network Printer** | Ağ / Termal Yazıcı | Thermal printer connected via Ethernet/Wi-Fi to the local branch network. |
-| **Chime / Buzzer** | Uyarı Zili / Bildirim Sesi | Audio notification emitted on KDS or mobile app for new orders or calls. |
-| **Waiter Call** | Garson Çağırma | A customer action from the QR app requesting waitstaff assistance. |
-| **Realtime Channel** | Gerçek Zamanlı Kanal | A WebSocket or SSE connection streaming live state updates. |
+| **Bill / Check** | Hesap / Adisyon | Bir masa oturumuna ilişkin öğelerin, vergilerin ve indirimlerin ayrıntılarını içeren toplam fatura. |
+| **Split Bill** | Hesabı Bölme | Bir faturayı birden fazla kısmi ödemeye bölmek (tutar veya belirli kalemlere göre). |
+| **Payment** | Ödeme | Aktif bir faturanın bir kısmını veya tamamını kapatan bir finansal işlem. |
+| **Tip / Gratuity** | Bahşiş | Müşteri tarafından servis personeli için eklenen isteğe bağlı bir parasal hediye. |
+| **Platform Commission** | Platform Komisyonu | İşlenen işletme işlemlerinden kesilen platform ücreti. |
+| **Refund** | İade | Daha önce yapılmış bir ödemenin müşteriye geri döndürülmesi. |
+| **Void / Cancellation** | İptal | Ödeme yapılmadan önce ödenmemiş bir ürünü veya siparişi iptal etmek (yetki gerektirir). |
 
 ---
 
-## 6. Roles & Operational Terms
+## 5. Donanım ve Gerçek Zamanlı Şartlar
 
-| Role / Term | Türkçe Karşılığı | Scope |
+| İngilizce Terim | Türkçe Karşılığı | Tanım ve Bağlam |
 | :--- | :--- | :--- |
-| **Super Admin** | Süper Yönetici | Platform-wide administration and tenant management. |
-| **Restaurant Admin** | Restoran Yöneticisi | Brand/organization administration and financial reporting. |
-| **Branch Manager** | Şube Müdürü | Daily branch operations, shift management, and table layouts. |
-| **Operations / Cashier** | Operasyon / Kasa | Cash register, bill settlement, and POS payment collection. |
-| **Kitchen** | Mutfak | Food preparation line and KDS queue management. |
-| **Bar** | Bar | Beverage preparation line and bar KDS queue management. |
-| **Waiter** | Garson | Table service, order taking, and guest assistance. |
-| **Customer** | Müşteri | Dining guest accessing QR menu and ordering. |
-| **Blue/Green Deployment** | Mavi/Yeşil Dağıtım | Zero-downtime release method utilizing two identical production slots. |
-| **Incident (Sev-1 to Sev-4)** | Olay / Kesinti Seviyeleri | Production incident classifications from critical outage to minor defect. |
+| **ESC/POS** | ESC/POS Protokolü | Termal makbuz yazıcıları için endüstri standardı komut protokolü. |
+| **Network Printer** | Ağ / Termal Yazıcı | Yerel şube ağına Ethernet/Wi-Fi aracılığıyla bağlanan termal yazıcı. |
+| **Chime / Buzzer** | Uyarı Zili / Bildirim Sesi | Yeni sipariş veya çağrı geldiğinde KDS ya da mobil uygulamada çalınan uyarı. |
+| **Waiter Call** | Garson Çağırma | QR uygulamasından garson yardımı talep eden bir müşteri işlemi. |
+| **Realtime Channel** | Gerçek Zamanlı Kanal | Bir WebSocket veya SSE bağlantı akışı canlı durum güncellemeleri. |
+
+---
+
+## 6. Roller ve Operasyonel Koşullar
+
+| Rol / Terim | Türkçe Karşılığı | Kapsam |
+| :--- | :--- | :--- |
+| **Super Admin** | Süper Yönetici | Platform çapında yönetim ve işletme yönetimi. |
+| **Restaurant Admin** | Restoran Yöneticisi | Marka/kuruluş yönetimi ve finansal raporlama. |
+| **Branch Manager** | Şube Müdürü | Günlük şube operasyonları, vardiya yönetimi ve masa düzenleri. |
+| **Operations / Cashier** | Operasyon / Kasa | Yazar kasa, fatura kesme ve POS ödeme tahsilatı. |
+| **Kitchen** | mutfak | Yiyecek hazırlama hattı ve KDS kuyruk yönetimi. |
+| **Bar** | Bar | İçecek hazırlama hattı ve bar KDS kuyruk yönetimi. |
+| **Waiter** | Garson | Masa servisi, sipariş alma ve misafir asistanlığı. |
+| **Customer** | Müşteri | Yemek konuğu QR menüsüne erişiyor ve sipariş veriyor. |
+| **Blue/Green Deployment** | Blue/Green Dağıtım | İki özdeş üretim yuvasını kullanan sıfır kesinti süreli sürüm yöntemi. |
+| **Incident (Sev-1 to Sev-4)** | Olay / Kesinti Seviyeleri | Kritik kesintiden küçük kusura kadar üretim olayı sınıflandırmaları. |

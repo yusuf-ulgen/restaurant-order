@@ -1,16 +1,11 @@
 # @restaurant-order/contracts
 
-## 1. Purpose & Boundary
+## Amaç ve Sınır
 
-This package defines the contract boundary between backend APIs (`apps/api`) and frontend client applications (`apps/*-web`).
+Bu paket, `apps/api` ile `apps/*-web` istemcileri arasındaki sözleşme sınırıdır. Mimari politika, istemci türlerinin ASP.NET Core OpenAPI belgesinden otomatik üretilmesini gerektirir; yetkili sözleşme kaynağı sunucunun OpenAPI meta verileridir.
 
-In accordance with project architecture guidelines:
-- **No Manually Fabricated API Types:** All client contract types must be automatically generated from the ASP.NET Core OpenAPI JSON specification.
-- **Single Source of Truth:** The backend OpenAPI metadata is the authoritative contract schema.
-- **Generation Workflow:** Once domain endpoints are added to `apps/api`, a code generation script (e.g., `openapi-typescript`) will populate this package directly from the running or compiled OpenAPI document.
+**Mevcut açık:** Üretim akışı henüz bağlanmamıştır; TypeScript sözleşmeleri elle tutulmaktadır. Bu durum politikanın yerine getirildiği anlamına gelmez. Tekrarlanabilir üretim ve CI sapma denetimi [R06 bulgusunda](../../docs/REVIEW-BACKLOG.md) izlenir. Alan uç noktaları için örneğin `openapi-typescript` kullanan üretim betiği, çalışan veya derlenmiş OpenAPI belgesini girdi olarak almalıdır.
 
----
+## Sağlık Sözleşmesi ve Kapsam
 
-## 2. Starter Health Contract
-
-During this foundation phase, the only active endpoints are `/health/live` and `/health/ready`.
+Kuruluş aşamasının ilk uç noktaları `/health/live` ve `/health/ready` idi. Sonraki fazlarda IAM, restoran yapılandırması ve katalog sözleşmeleri eklendi. Güncel faz ve doğrulama kapsamı [CURRENT-STATE.md](../../docs/CURRENT-STATE.md) dosyasındadır.

@@ -1,95 +1,96 @@
-# Phase 3 Implementation Tracker (`docs/PHASE-3-TRACKER.md`)
+# Aşama 3 Uygulama İzleyici (`docs/PHASE-3-TRACKER.md`)
 
-This document tracks implementation progress across all 6 sub-phases of **Phase 3: Authentication & RBAC** in `restaurant-order`.
+> **Tarihsel kayıt:** Buradaki test sayıları ve commit referansları ilgili fazın kapanışına aittir. Güncel görev kanıtları [CURRENT-STATE.md](./CURRENT-STATE.md) dosyasındadır.
+
+Bu belge, `restaurant-order` Faz 3 Kimlik Doğrulama ve RBAC çalışmasının yedi alt aşamasını izler.
 
 ---
 
-## Sub-Phase Status Overview
+## Alt Faz Durumuna Genel Bakış
 
-| Sub-Phase | Title | Status | Primary Output |
+| Alt Faz | Başlık | Durum | Birincil Çıkış |
 | :--- | :--- | :--- | :--- |
-| **Phase 3.1** | IAM Architecture & Authorization Contracts | **COMPLETED** | ADR-0009, 8 Roles, Scope Models, Permission Registry, JWT Claim Models, Unit Tests |
-| **Phase 3.2** | IAM Persistence, Sessions & Tenant Isolation | **COMPLETED** | EF Core IAM entities, PostgreSQL `iam` schema, RLS policies, audit logs, Hasher contracts |
-| **Phase 3.3** | Password Authentication, JWT & Refresh Session Flow | **COMPLETED** | Login, refresh, logout endpoints, HttpOnly cookies, token rotation, reuse detection |
-| **Phase 3.4** | Central Authorization, RBAC & Authenticated Tenant Context | **COMPLETED** | ASP.NET Core authorization handler, `RequirePermission`, resource ownership enforcement |
-| **Phase 3.5** | Secure Staff PIN & Trusted Terminal Authentication | **COMPLETED** | Enrolled trusted terminal model, 4-digit peppered PIN login, brute-force backoff & lockout |
-| **Phase 3.6** | Staff Identity Management & Frontend Authentication Integration | **COMPLETED** | Staff invitation, role assignment, Admin & Operations Web auth integration |
-| **Phase 3.7** | Authentication & RBAC Security Hardening and Final Closure | **COMPLETED** | Security verification, distributed auth fixes, coverage closure, audit remediation |
+| **Aşama 3.1** | IAM Mimarlık ve Yetki Sözleşmeleri | **COMPLETED** | ADR-0009, 8 Roller, Kapsam Modelleri, İzin Tescili, JWT Talep Modelleri, Birim Testleri |
+| **Aşama 3.2** | IAM Kalıcılık, Oturumlar ve İşletme İzolasyonu | **COMPLETED** | EF Core IAM varlıklar, PostgreSQL `iam` şema, RLS politikalar, denetim günlükleri, Hasher sözleşmeleri |
+| **Aşama 3.3** | Şifre Doğrulama, JWT & Oturum Akışını Yenile | **COMPLETED** | Oturum açma, yenileme, oturum kapatma uç noktaları, HttpOnly çerezleri, belirteç rotasyonu, yeniden kullanım tespiti |
+| **Aşama 3.4** | Merkezi Yetkilendirme, RBAC & Doğrulanmış İşletme Bağlamı | **COMPLETED** | ASP.NET Core yetkilendirme işleyicisi, `RequirePermission`, kaynak sahipliğinin uygulanması |
+| **Aşama 3.5** | Güvenli Personel PIN ve Güvenilir Terminal Kimlik Doğrulaması | **COMPLETED** | Kayıtlı güvenilir terminal modeli, 4-haneli pepper ile korunan PIN oturum açma, kaba kuvvetle geri çekilme ve kilitleme |
+| **Aşama 3.6** | Personel Kimlik Yönetimi ve Ön Uç Kimlik Doğrulama Entegrasyonu | **COMPLETED** | Personel daveti, rol ataması, Yönetici ve Operasyonlar Web kimlik doğrulama entegrasyonu |
+| **Aşama 3.7** | Kimlik Doğrulama ve RBAC Güvenlik Sağlamlaştırma ve Son Kapatma | **COMPLETED** | Güvenlik doğrulaması, dağıtılmış kimlik doğrulama düzeltmeleri, kapsamın kapatılması, denetim iyileştirmesi |
 
 ---
 
-## Detailed Milestone Checklist
+## Ayrıntılı Kilometre Taşı Kontrol Listesi
 
-### Phase 3.1: IAM Architecture & Authorization Contracts
-- [x] **ADR-0009 Accepted:** [docs/adr/0009-authentication-and-session-strategy.md](adr/0009-authentication-and-session-strategy.md)
-- [x] **8 Roles Defined:** `SuperAdmin`, `RestaurantAdmin`, `BranchManager`, `Cashier`, `Kitchen`, `Bar`, `Waiter`, `Customer`
-- [x] **Principal & Scope Contracts:** `PrincipalType`, `AuthenticationMethod`, `AuthorizationScopeType`, `AuthorizationScope`, `AuthenticatedPrincipal`
-- [x] **Permission Registry:** Machine-readable constants for all 31 permissions in [docs/ROLES-AND-PERMISSIONS.md](ROLES-AND-PERMISSIONS.md) with 100% matrix coverage
-- [x] **Deny-by-Default Enforcement:** Unknown roles, unknown permissions, and missing scopes strictly denied
-- [x] **Resource Ownership Abstraction:** `IResourceOwnershipRequirement` preventing automatic full access for `OwnOrAssigned` (`O`) permissions
-- [x] **JWT Claim Contracts:** `JwtClaimNames`, `JwtClaimModel`, and `JwtClaimPrincipalParser` with fail-closed validation
-- [x] **Matrix & Scope Tests:** Unit tests covering all 31 permissions across all 8 roles and negative scope/claim scenarios
+### Aşama 3.1: IAM Mimarlık ve Yetki Sözleşmeleri
+- [x] **ADR-0009 Kabul edildi:** [docs/adr/0009-kimlik doğrulama-ve-oturum-strategy.md](adr/0009-authentication-and-session-strategy.md)
+- [x] **8 Tanımlanan Roller:** `SuperAdmin`, `RestaurantAdmin`, `BranchManager`, `Cashier`, `Kitchen`, `Bar`, `Waiter`, `Customer`
+- [x] **Ana ve Kapsam Sözleşmeleri:** `PrincipalType`, `AuthenticationMethod`, `AuthorizationScopeType`, `AuthorizationScope`, `AuthenticatedPrincipal`
+- [x] **İzin Kaydı:** Herkes için makine tarafından okunabilen sabitler 31 [docs/'deki izinlerROLES-AND-PERMISSIONS.md](ROLES-AND-PERMISSIONS.md) ile 100% matris kapsamı
+- [x] **Varsayılan Olarak Reddetme Uygulaması:** Bilinmeyen roller, bilinmeyen izinler ve eksik kapsamlar kesinlikle reddedildi
+- [x] **Kaynak Sahipliği Soyutlaması:** `IResourceOwnershipRequirement` için otomatik tam erişimin engellenmesi `OwnOrAssigned` (`O`) izinler
+- [x] **JWT Talep Sözleşmeleri:** `JwtClaimNames`, `JwtClaimModel`ve `JwtClaimPrincipalParser` başarısızlıkla kapatılmış doğrulama ile
+- [x] **Matris ve Kapsam Testleri:** Hepsini kapsayan birim testleri 31 tümünde izinler 8 roller ve olumsuz kapsam/talep senaryoları
 
-### Phase 3.2: IAM Persistence, Sessions & Tenant Isolation
-- [x] User/Account entity (`iam.users`)
-- [x] Tenant/Branch Membership entity (`iam.memberships`)
-- [x] Auth Session entity (`iam.sessions`)
-- [x] Refresh Token state with family tracking (`iam.refresh_tokens`)
-- [x] Trusted Terminal entity (`iam.trusted_terminals`)
-- [x] Append-Only Security Audit Log (`iam.audit_events`)
-- [x] PostgreSQL Row-Level Security for `iam.*` tables
-- [x] Password and peppered PIN hasher contracts
+### Aşama 3.2: IAM Kalıcılık, Oturumlar ve İşletme İzolasyonu
+- [x] Kullanıcı/Hesap varlığı (`iam.users`)
+- [x] İşletme/Şube Üyeliği varlığı (`iam.memberships`)
+- [x] Yetkilendirme Oturumu varlığı (`iam.sessions`)
+- [x] Aile takibi ile Token durumunu yenileyin (`iam.refresh_tokens`)
+- [x] Güvenilir Terminal varlığı (`iam.trusted_terminals`)
+- [x] Yalnızca Ekleme Güvenlik Denetim Günlüğü (`iam.audit_events`)
+- [x] PostgreSQL Satır Düzeyinde Güvenlik `iam.*` tablolar
+- [x] Şifre ve pepper ile korunan PIN karma sözleşmeleri
 
-### Phase 3.3: Password Authentication, JWT & Refresh Session Flow
-- [x] `POST /api/v1/auth/login` (Email + Password)
-- [x] `POST /api/v1/auth/refresh` (Rotating refresh tokens)
+### Aşama 3.3: Şifre Doğrulama, JWT & Oturum Akışını Yenile
+- [x] `POST /api/v1/auth/login` (E-posta + Şifre)
+- [x] `POST /api/v1/auth/refresh` (Dönen yenileme belirteçleri)
 - [x] `POST /api/v1/auth/logout` & `POST /api/v1/auth/logout-all`
 - [x] `GET /api/v1/auth/session` & `GET /api/v1/auth/sessions`
-- [x] HttpOnly, Secure, SameSite=Strict cookies
-- [x] Token reuse detection and session family revocation
+- [x] HttpOnly, Güvenli, SameSite=Katı çerezler
+- [x] Belirtecin yeniden kullanımının tespiti ve oturum ailesinin iptali
 
-### Phase 3.4: Central Authorization, RBAC & Authenticated Tenant Context
+### Aşama 3.4: Merkezi Yetkilendirme, RBAC & Doğrulanmış İşletme Bağlamı
 - [x] `PermissionRequirement` & `PermissionAuthorizationHandler`
-- [x] `[RequirePermission(...)]` attribute and policy provider
-- [x] Authenticated tenant context resolver (from verified JWT claims only)
-- [x] Resource ownership and station assignment validators
+- [x] `[RequirePermission(...)]` özellik ve politika sağlayıcısı
+- [x] Kimliği doğrulanmış işletme bağlam çözümleyicisi (doğrulanmış JWT yalnızca iddialar)
+- [x] Kaynak sahipliği ve istasyon atama doğrulayıcıları
 
-### Phase 3.5: Secure Staff PIN & Trusted Terminal Authentication
-- [x] Terminal enrollment code generation and activation
-- [x] 4-digit PIN authentication with server-side pepper and slow hashing
-- [x] Terminal-scoped brute-force backoff and lockout protection
-- [x] Terminal revocation cascade
+### Aşama 3.5: Güvenli Personel PIN ve Güvenilir Terminal Kimlik Doğrulaması
+- [x] Terminal kayıt kodu oluşturma ve etkinleştirme
+- [x] 4-hane PIN sunucu tarafı pepper değeri ve yavaş karma ile kimlik doğrulama
+- [x] Terminal kapsamlı kaba kuvvet geri tepmesi ve kilitleme koruması
+- [x] Terminal iptal kademesi
 
-### Phase 3.6: Staff Identity Management & Frontend Integration
-- [x] Staff invitation, activation, suspension API
-- [x] Admin Web login, protected routes, session restoration
-- [x] Operations Web terminal activation and PIN entry bottom sheet
-- [x] Single-flight refresh token queue in frontend HTTP client
+### Aşama 3.6: Personel Kimlik Yönetimi ve Ön Uç Entegrasyonu
+- [x] Personel daveti, aktivasyonu, askıya alınması API
+- [x] Yönetici Web girişi, korumalı rotalar, oturumu geri yükleme
+- [x] Operasyonlar Web terminalinin etkinleştirilmesi ve PIN giriş alt sayfası
+- [x] Ön uçta tek uçuşlu yenileme belirteci kuyruğu HTTP müşteri
 
-### Phase 3.7: Security Hardening & Final Verification
-- [x] Full RBAC matrix verification (all 31 permissions × 8 roles)
-- [x] Denial-by-default and fail-closed authorization verification
-- [x] RFC 7807 ProblemDetails compliance on 401 Unauthorized and 403 Forbidden
-- [x] Password hasher and peppered PIN hasher security properties verified
-- [x] Terminal progressive delay and brute-force lockout verified
-- [x] Single-flight concurrent token refresh queue verified
-- [x] Deterministic migration lifecycle and pre-auth bootstrap SECURITY DEFINER gateway
-- [x] Tenant transaction fail-closed boundary and connection pool context isolation verified
-- [x] Platform session and refresh token persistence in dedicated global tables (`iam.platform_sessions`, `iam.platform_refresh_tokens`), fully isolating tenant data
-- [x] Distributed atomic token rotation using PostgreSQL row locks (`FOR UPDATE`) with immediate family revocation on reuse race
-- [x] Distributed ephemeral auth state in Redis (login rate limiting Lua scripts, progressive terminal PIN backoff/lockout, single-use enrollment `GETDEL`)
-- [x] Fail-closed Redis architecture: returns HTTP 503 rather than bypassing security gates if Redis is unavailable
-- [x] Multi-instance distributed integration test suite (`PostgreSqlDistributedAuthIntegrationTests`) passing across simulated API instances
-- [x] Backend combined test coverage >= 80% threshold closure (Line: 94.16%, Branch: 83.02%, Method: 96.00%)
-- [x] Frontend test coverage >= 80% threshold closure across all apps and packages
-- [x] Platform refresh token reuse SQL column fix and verification
-- [x] Session revoke IDOR vulnerability closure and tenant/platform ownership integration tests
-- [x] Atomic account lockout counter in PostgreSQL
-- [x] PIN rate-limit email/userId key consistency across distributed instances
-- [x] JWT session-user binding verification in iam.validate_token_session (forward migration)
-- [x] Platform session least-privilege direct table access revocation
-- [x] Zero files exceeding 600 lines strict ceiling
-- [x] Zero secrets and clean documentation integrity verified
+### Aşama 3.7: Güvenlik Sağlamlaştırma ve Son Doğrulama
+- [x] Tam RBAC matris doğrulaması (tümü 31 izinler × 8 roller)
+- [x] Varsayılan olarak reddetme ve başarısız şekilde kapatılan yetkilendirme doğrulaması
+- [x] RFC 7807 Sorun Ayrıntıları uyumluluğu 401 Yetkisiz ve 403 Yasak
+- [x] Şifre karma ve pepper ile korunan PIN hasher güvenlik özellikleri doğrulandı
+- [x] Terminal aşamalı gecikme ve kaba kuvvet kilitleme doğrulandı
+- [x] Tek uçuşlu eşzamanlı token yenileme kuyruğu doğrulandı
+- [x] Deterministik geçiş yaşam döngüsü ve kimlik doğrulama öncesi önyükleme SECURITY DEFINER ağ geçidi
+- [x] İşletme işlemi hatasıyla kapatılan sınır ve bağlantı havuzu bağlam yalıtımı doğrulandı
+- [x] Özel global tablolarda platform oturumu ve belirteç kalıcılığını yenileme (`iam.platform_sessions`, `iam.platform_refresh_tokens`), işletme verilerini tamamen izole etme
+- [x] PostgreSQL satır kilitlerini kullanarak dağıtılmış atomik jeton rotasyonu (`FOR UPDATE`) yeniden kullanım yarışında derhal aile iptali ile
+- [x] Redis'te dağıtılmış geçici kimlik doğrulama durumu (oturum açma hızını sınırlayan Lua komut dosyaları, aşamalı terminal PIN deneme gecikmesi/kilitleme, tek kullanımlık kayıt `GETDEL`)
+- [x] Arıza durumunda kapatılan Redis mimarisi: geri dönüşler HTTP 503 Redis kullanılamıyorsa güvenlik kapılarını atlamak yerine
+- [x] Çok örnekli dağıtılmış entegrasyon test paketi (`PostgreSqlDistributedAuthIntegrationTests`) simüle edilmiş geçiş API örnekler
+- [x] Arka uç birleştirilmiş test kapsamı >= 80% eşik kapanması (Satır: 94.16%, Dal: 83.02%, Yöntem: 96.00%)
+- [x] Ön uç test kapsamı >= 80Tüm uygulama ve paketlerde eşik kapanma yüzdesi
+- [x] Platform yenileme jetonunun yeniden kullanımı SQL sütun düzeltmesi ve doğrulama
+- [x] Oturum iptali IDOR güvenlik açığı kapatma ve işletme/platform sahipliği entegrasyon testleri
+- [x] PostgreSQL'de atomik hesap kilitleme sayacı
+- [x] PIN dağıtılmış örneklerde hız sınırı e-postası/kullanıcı kimliği anahtarı tutarlılığı
+- [x] JWT oturum-kullanıcı bağlama doğrulaması iam.validate_token_session (ileriye geçiş)
+- [x] Platform oturumunda en az ayrıcalıklı doğrudan tablo erişiminin iptali
+- [x] Sıfır dosya aşıldı 600 satır katı tavan
+- [x] Sıfır sır ve temiz belge bütünlüğü doğrulandı
 
-
-
+RFC 7807 yanıt türü `ProblemDetails` olarak korunur.

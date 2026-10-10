@@ -63,7 +63,7 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
   - Public endpoints: `GET/POST /api/v1/qr/resolve`, `POST /api/v1/qr/exchange`.
   - Issued customer JWT stored in `HttpOnly`, `Secure`, `SameSite=Lax` cookie.
   - Rate limiting via Redis (`IQrRateLimiter`) with fail-closed behavior.
-  - Published [ADR-0011: Static/Dynamic QR Security & Customer Session Exchange](adr/0011-qr-security-and-customer-session-exchange.md) (`ACCEPTED`).
+  - Published [ADR-0012: Static/Dynamic QR Security & Customer Session Exchange](adr/0012-qr-security-and-customer-session-exchange.md) (`ACCEPTED`).
 
 ### Phase 6.4: Table transfer and merge (Deferred)
 - **Architectural Scope Decision:** Table transfer and session merge operations operate directly upon active orders, unserved kitchen tickets, and split bills. Implementing table transfer in Phase 6 without order and billing aggregates would result in a throwaway stub. Transfer and merge mechanics are formally deferred to **Phase 10: Waiter & Operations** as documented in [docs/ROADMAP.md](ROADMAP.md).
