@@ -55,10 +55,11 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 - **BranchFeatureFlags:** Granular feature toggles per branch evaluated with strict authorization precedence.
 
 ### 3.3. Table & Floor Management
-- **Table:** A numbered dining table or seat with a unique identifier within the branch. Associated with a persistent QR code.
-- **TableSession:** An active dining session created when guests are seated or place their first order. Closed upon bill settlement.
+- **RestaurantTable:** A dining table assigned to a specific `DiningArea` within a branch. Contains `table_number`, unique `code` per branch, seating `capacity`, shape (`Round`, `Square`, `Rectangle`), active status, `qr_version`, and opaque 128-bit `public_code` for QR payload resolution. Associated with optimistic concurrency token (`row_version`).
+- **TableLayout:** Physical coordinates (`x`, `y`, `width`, `height`, `rotation`) positioning a table on the 2D floor canvas grid. Validated against canvas boundary constraints and collision bounds.
+- **DiningSession:** A stateful dining session representing a party seated at a table. Follows state machine `Open -> Active -> BillRequested -> Closed`. Only one non-closed (`status <> 4`) session may exist per table at any time (`ix_dining_sessions_tenant_branch_table_active`).
 
-### 3.3. Menu & Catalog Management
+### 3.4. Menu & Catalog Management
 - **Menu:** A curated collection of food and beverage offerings. Can be scoped to specific branches or time schedules (e.g., "Breakfast Menu", "All-Day Menu").
 - **MenuCategory:** A logical grouping of items (e.g., "Starters", "Main Courses", "Cocktails", "Desserts").
 - **MenuItem:** A specific culinary or beverage offering (e.g., "Cheeseburger", "Espresso").
@@ -68,13 +69,13 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
   - `max_selections`: Maximum allowed choices.
 - **ModifierItem:** An individual customization option (e.g., "Well Done", "Truffle Fries", "Extra Cheddar +$1.50").
 
-### 3.4. Order & Ticket Lifecycle
+### 3.5. Order & Ticket Lifecycle
 - **Order:** A dining order tied to a `branch_id`, `table_session_id`, and `order_source` (Customer QR, Waiter Mobile, or POS).
 - **OrderItem:** An instance of a `MenuItem` or `ItemVariant` within an order, with associated selected modifiers and special guest notes.
 - **StationTicket (KitchenTicket / BarTicket):** A sub-order routed to a specific preparation station (e.g., Kitchen or Bar). Contains items assigned to that station.
 - **TicketItem:** An item within a station ticket with its individual prep state (Queued, In-Prep, Ready, Served, Cancelled).
 
-### 3.5. Billing, Payments & Tips
+### 3.6. Billing, Payments & Tips
 - **Bill:** The financial invoice for a `TableSession`, aggregating all non-cancelled order items, applied taxes, discounts, and service fees.
 - **Payment:** A financial transaction against a bill. Can be full or partial (split bill).
   - `payment_method`: Cash, External POS Credit Card, Digital Online Gateway `[Proposed / ADR Required]`.
@@ -82,7 +83,7 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 - **PlatformCommission:** The transaction fee retained by the platform provider based on the tenant's tier.
 - **Refund:** A full or partial reversal of a settled payment, requiring supervisor authorization and audit logging.
 
-### 3.6. Identity & Access Control
+### 3.7. Identity & Access Control
 - **User:** A human actor authenticated to the system (staff member or platform operator).
 - **Role:** One of the 8 standard roles defined in [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md).
 - **UserBranchAssignment:** Maps staff members to specific branches with an optional quick-access PIN.
@@ -98,13 +99,18 @@ The `restaurant-order` platform operates in the restaurant hospitality and opera
 | Brand to Branch | 1 : N | One brand operates one or more physical branches. |
 | Branch to DiningArea | 1 : N | A branch contains multiple dining areas. |
 | DiningArea to Table | 1 : N | An area contains multiple tables. |
-| Table to TableSession | 1 : N (1 active) | A table has one active session at any time. |
+| Table to TableSession | 1 : N (1 active) | A table has at most one active session at any time. |
 | TableSession to Order | 1 : N | Multiple rounds of orders can be placed within one session. |
 | Order to OrderItem | 1 : N | An order contains multiple line items. |
 | OrderItem to Modifier | N : M | An order item can have multiple selected modifiers. |
 | Order to StationTicket | 1 : N | An order splits into station tickets (Kitchen, Bar). |
 | TableSession to Bill | 1 : 1 (active) | A session consolidates into a single bill. |
 | Bill to Payment | 1 : N | A bill can be settled via multiple split payments. |
+
 ## Phase 5 Catalog Integrity
 
 Menus belong to a tenant and branch and move Draft -> Active -> Archived; Archived is terminal. Categories, items, variants, modifier groups and options use soft lifecycle state. Prices and modifier deltas use bounded non-negative integer minor units. Variant prices are absolute. Modifier bounds enforce 0 <= minimum <= maximum <= active option count, with active default count no greater than maximum. Dietary/allergen combinations are validated against the closed supported tag set. Availability is a branch override separate from item lifecycle; an item-level 86 makes its active variants unavailable in the runtime view.
+
+## Phase 6 Floor & Table Integrity
+
+Tables belong to a tenant, branch, and dining area with composite foreign key integrity. Branch table code and number are validated for uniqueness per branch (`ix_restaurant_tables_tenant_branch_code`). Table layout coordinates must adhere to canvas boundary constraints (`x, y >= 0`, `width, height >= 30`, `rotation in [0, 360)`). Physical deletion is prohibited if table references dining sessions or historical audits; tables use soft-status deactivation. Deactivating a table with an active non-closed session is strictly blocked (returns 409 Conflict). QR code generation utilizes HMAC-SHA256 signatures with constant-time verification. Table rotation increments `qr_version` and regenerates `public_code`, immediately invalidating old physical QR prints. Table transfer and session merge operations operate on active orders and split bills; these mechanics are formally deferred to Phase 10 (Waiter & Operations) when active order aggregates exist. Note: Phase 7 (Customer Menu & Ordering), Phase 8 (Order Core), Phase 9 (Realtime & KDS), Phase 13 (Billing Engine), and Phase 16 (Payments) do not exist yet.

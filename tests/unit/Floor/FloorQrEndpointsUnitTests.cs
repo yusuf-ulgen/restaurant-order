@@ -122,4 +122,3 @@ public class FloorQrEndpointsUnitTests
         Assert.NotNull(genericRes);
     }
 }
-

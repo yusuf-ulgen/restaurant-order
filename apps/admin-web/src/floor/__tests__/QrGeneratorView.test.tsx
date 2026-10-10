@@ -89,7 +89,7 @@ describe('QrGeneratorView Component', () => {
         branchId="br-1"
         branchName="Kadıköy Şubesi"
         tables={mockTables}
-        statuses={mockStatuses as any}
+        statuses={mockStatuses}
         onTableRotated={handleRotated}
       />
     );
@@ -160,7 +160,7 @@ describe('QrGeneratorView Component', () => {
         branchId="br-1"
         branchName="Kadıköy Şubesi"
         tables={mockTables}
-        statuses={mockStatuses as any}
+        statuses={mockStatuses}
         onTableRotated={handleRotated}
       />
     );
@@ -175,20 +175,94 @@ describe('QrGeneratorView Component', () => {
     expect(screen.getByText(/mevcut QR kodunu geçersiz kılmak üzeresiniz/i)).toBeDefined();
   });
 
-  it('renders batch print section with explicit print instruction (no fake download PDF)', () => {
+  it('renders batch print section and toggles print mode', async () => {
     const handleRotated = vi.fn();
+    vi.spyOn(floorApi, 'getTableStaticQrSvg').mockResolvedValue('<svg><rect /></svg>');
 
     render(
       <QrGeneratorView
         branchId="br-1"
         branchName="Kadıköy Şubesi"
         tables={mockTables}
-        statuses={mockStatuses as any}
+        statuses={mockStatuses}
         onTableRotated={handleRotated}
       />
     );
 
-    // Look for print preview button
-    expect(screen.getByTestId('batch-print-btn')).toBeDefined();
+    // Look for print preview button and click it
+    const batchBtn = screen.getByTestId('batch-print-btn');
+    fireEvent.click(batchBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tüm Masalar İçin Baskı Önizlemesi')).toBeDefined();
+    });
+
+    // Close preview
+    const closeBtn = screen.getByText('Önizlemeyi Kapat');
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByText('Tüm Masalar İçin Baskı Önizlemesi')).toBeNull();
+  });
+
+  it('confirms rotation and invokes onTableRotated callback', async () => {
+    const handleRotated = vi.fn();
+    vi.spyOn(floorApi, 'rotateTableQr').mockResolvedValue({
+      ...mockTables[0]!,
+      qrVersion: 2,
+    });
+
+    render(
+      <QrGeneratorView
+        branchId="br-1"
+        branchName="Kadıköy Şubesi"
+        tables={mockTables}
+        statuses={mockStatuses}
+        onTableRotated={handleRotated}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rotate-qr-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('rotate-qr-btn'));
+
+    const confirmBtn = screen.getByRole('button', { name: /Evet, İptal Et & Yenile/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(floorApi.rotateTableQr).toHaveBeenCalledWith('br-1', 'tbl-1', 'ct-1');
+      expect(handleRotated).toHaveBeenCalled();
+    });
+  });
+
+  it('triggers SVG download and print handlers without errors', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+    const origCreateObjectURL = window.URL.createObjectURL;
+    const origRevokeObjectURL = window.URL.revokeObjectURL;
+    window.URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/dummy');
+    window.URL.revokeObjectURL = vi.fn();
+
+    render(
+      <QrGeneratorView
+        branchId="br-1"
+        branchName="Kadıköy Şubesi"
+        tables={mockTables}
+        statuses={mockStatuses}
+        onTableRotated={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('download-svg-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('download-svg-btn'));
+    fireEvent.click(screen.getByTestId('print-qr-btn'));
+
+    expect(printSpy).toHaveBeenCalled();
+    printSpy.mockRestore();
+    window.URL.createObjectURL = origCreateObjectURL;
+    window.URL.revokeObjectURL = origRevokeObjectURL;
   });
 });

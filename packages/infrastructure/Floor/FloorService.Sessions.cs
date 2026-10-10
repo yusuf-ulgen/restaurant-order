@@ -328,6 +328,11 @@ public partial class FloorService
             await _dbContext.SaveChangesAsync(ct);
         }, ct);
 
+        if (_customerSessionValidator != null)
+        {
+            await _customerSessionValidator.InvalidateSessionCacheAsync(session.Id.Value, ct);
+        }
+
         return MapSession(session);
     }
 

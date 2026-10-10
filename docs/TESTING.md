@@ -108,3 +108,7 @@ pnpm verify
 ## Phase 5 Catalog Verification
 
 Catalog verification spans domain/unit tests, API handler and permission tests, PostgreSQL/Redis Testcontainers integration tests, admin frontend tests, E2E probes, and coverage gates. Integration tests exercise runtime-role tenant isolation, branch/station scope, lifecycle visibility, pricing validation, duplicate constraints, ETag preconditions/conflicts, availability concurrency, and rollback paths. Testcontainers must fail closed when Docker is unavailable; do not skip integration tests. Record test and coverage totals only from the CI run for the exact commit.
+
+## Phase 6 Floor & QR Verification
+
+Floor & QR verification spans backend domain/unit tests (1366 tests), architecture boundary tests (10 tests), frontend component/unit tests (359 tests across ui, admin-web, customer-web, operations-web), frontend coverage gates (>80%), E2E user journeys, and PostgreSQL 16 Testcontainers integration tests. Integration tests execute against real PostgreSQL with unprivileged runtime role (`restaurant_app_user` with `NOSUPERUSER NOBYPASSRLS`), verifying RLS policies, composite FK matrix, partial unique active session constraints, static QR concurrent exchange, dynamic QR expiry, and session closure token invalidation. Docker Testcontainers fail-closed when Docker is unavailable; integration tests are executed in CI environments with Docker. All counts and metrics must reflect exact executed runs for the commit.

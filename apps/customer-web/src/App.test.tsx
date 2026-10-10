@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { App } from './App';
+import { customerQrApi } from './customerQrApi';
 
 describe('Customer Web App', () => {
   describe('Initial Render', () => {
@@ -99,6 +100,42 @@ describe('Customer Web App', () => {
       const closeBtn = screen.getByRole('button', { name: 'Kapat' });
       fireEvent.click(closeBtn);
       expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('renders TableWelcomeView when isQrLanding is true or token prop is passed', () => {
+      render(<App isQrLanding={true} token="test-qr-landing-token" />);
+      expect(screen.getByTestId('table-welcome-container')).toBeDefined();
+    });
+
+    it('updates header subtitle and badge when session becomes ready', async () => {
+      vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue({
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        brandName: 'Gurme Restoran',
+        branchName: 'Kadıköy',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+        mode: 'static',
+        hasActiveSession: false,
+        activeSessionStatus: null,
+      });
+      vi.spyOn(customerQrApi, 'exchangeQr').mockResolvedValue({
+        sessionId: 'sess-1',
+        sessionStatus: 'Active',
+        accessTokenExpiresAt: '2026-10-10T16:00:00Z',
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+      });
+
+      render(<App token="landing-token" />);
+
+      const btn = await screen.findByTestId('continue-to-table-btn');
+      fireEvent.click(btn);
+
+      expect(await screen.findByText('Masa T-07 • Teras 7')).toBeDefined();
+      expect(screen.getByText('Oturum Açık')).toBeDefined();
     });
   });
 });

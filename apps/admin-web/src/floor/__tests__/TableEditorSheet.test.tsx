@@ -167,4 +167,62 @@ describe('TableEditorSheet Component', () => {
       );
     });
   });
+
+  it('updates capacity, shape, and handles cancellation', () => {
+    const handleClose = vi.fn();
+    const handleSaveCreate = vi.fn();
+    const handleSaveUpdate = vi.fn();
+
+    render(
+      <TableEditorSheet
+        isOpen={true}
+        onClose={handleClose}
+        diningAreas={mockDiningAreas}
+        initialDiningAreaId="area-1"
+        tableToEdit={null}
+        onSaveCreate={handleSaveCreate}
+        onSaveUpdate={handleSaveUpdate}
+        isSaving={false}
+      />
+    );
+
+    const capacityInput = screen.getByLabelText(/Kapasite/i);
+    fireEvent.change(capacityInput, { target: { value: '8' } });
+
+    const shapeSelect = screen.getByLabelText(/Masa Şekli/i);
+    fireEvent.change(shapeSelect, { target: { value: 'Round' } });
+
+    const cancelBtn = screen.getByText('İptal');
+    fireEvent.click(cancelBtn);
+    expect(handleClose).toHaveBeenCalled();
+  });
+
+  it('displays error message when save fails', async () => {
+    const handleClose = vi.fn();
+    const handleSaveCreate = vi.fn().mockRejectedValue(new Error('Kayıt başarısız oldu.'));
+    const handleSaveUpdate = vi.fn();
+
+    render(
+      <TableEditorSheet
+        isOpen={true}
+        onClose={handleClose}
+        diningAreas={mockDiningAreas}
+        initialDiningAreaId="area-1"
+        tableToEdit={null}
+        onSaveCreate={handleSaveCreate}
+        onSaveUpdate={handleSaveUpdate}
+        isSaving={false}
+      />
+    );
+
+    const numberInput = screen.getByLabelText(/Masa Kodu \/ Numarası/i);
+    const nameInput = screen.getByLabelText(/Masa Görünen Adı/i);
+    fireEvent.change(numberInput, { target: { value: 'T-99' } });
+    fireEvent.change(nameInput, { target: { value: 'Hata Masası' } });
+
+    const submitBtn = screen.getByText('Masa Oluştur');
+    fireEvent.click(submitBtn);
+
+    expect(await screen.findByText('Kayıt başarısız oldu.')).toBeDefined();
+  });
 });

@@ -176,4 +176,148 @@ describe('TableWelcomeView Component', () => {
     expect(screen.getByText('<b id="injected-html">Kadıköy</b>')).toBeDefined();
     expect(screen.getByText('<img src="x" onerror="alert(1)" />')).toBeDefined();
   });
+
+  it('displays invalid QR error screen for 400 invalid error code', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockRejectedValue(
+      new CustomerQrApiError(400, 'invalid', 'Geçersiz QR kod formatı.')
+    );
+
+    render(<TableWelcomeView qrToken="invalid-token-123" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+
+    expect(screen.getByText('Geçersiz QR Kod')).toBeDefined();
+    expect(screen.getByText('Geçersiz QR kod formatı.')).toBeDefined();
+  });
+
+  it('displays inactive table error screen for inactive_table error code', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockRejectedValue(
+      new CustomerQrApiError(400, 'inactive_table', 'Bu masa şu anda hizmete kapalıdır.')
+    );
+
+    render(<TableWelcomeView qrToken="inactive-token-123" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+
+    expect(screen.getByText('Masa Kapalı')).toBeDefined();
+    expect(screen.getByText('Bu masa şu anda hizmete kapalıdır.')).toBeDefined();
+  });
+
+  it('handles retry action upon error and reloads table information', async () => {
+    const resolveSpy = vi.spyOn(customerQrApi, 'resolveQr')
+      .mockRejectedValueOnce(new CustomerQrApiError(500, 'generic', 'Sunucu hatası'))
+      .mockResolvedValueOnce(mockResolveData);
+
+    render(<TableWelcomeView qrToken="retry-token-123" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+
+    const retryBtn = screen.getByTestId('qr-retry-btn');
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-resolve-view')).toBeDefined();
+    });
+
+    expect(resolveSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('extracts token from window.location.hash when not passed as prop', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue(mockResolveData);
+    window.location.hash = '#/q/hash-token-xyz';
+
+    render(<TableWelcomeView />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-resolve-view')).toBeDefined();
+    });
+
+    expect(customerQrApi.resolveQr).toHaveBeenCalledWith('hash-token-xyz');
+    window.location.hash = '';
+  });
+
+  it('displays error message when token exchange fails', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue(mockResolveData);
+    vi.spyOn(customerQrApi, 'exchangeQr').mockRejectedValue(
+      new CustomerQrApiError(500, 'generic', 'Oturum açılamadı.')
+    );
+
+    render(<TableWelcomeView qrToken="test-exchange-fail-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('continue-to-table-btn')).toBeDefined();
+    });
+
+    const confirmBtn = screen.getByTestId('continue-to-table-btn');
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Oturum açılamadı.')).toBeDefined();
+    });
+  });
+
+  it('allows leaving active session to scan or switch table', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue(mockResolveData);
+    vi.spyOn(customerQrApi, 'exchangeQr').mockResolvedValue(mockExchangeData);
+
+    render(<TableWelcomeView qrToken="test-leave-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('continue-to-table-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('continue-to-table-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('session-welcome-view')).toBeDefined();
+    });
+
+    const leaveBtn = screen.getByTestId('leave-session-btn');
+    fireEvent.click(leaveBtn);
+
+    expect(getCustomerSession()).toBeNull();
+  });
+
+  it('handles empty token gracefully by showing invalid QR error', async () => {
+    render(<TableWelcomeView qrToken="" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+
+    expect(screen.getByText('Geçersiz QR Kod')).toBeDefined();
+  });
+
+  it('handles non-api generic errors during resolve and exchange', async () => {
+    vi.spyOn(customerQrApi, 'resolveQr').mockRejectedValueOnce(new Error('Network dropped'));
+
+    render(<TableWelcomeView qrToken="generic-err-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+
+    // Test generic error on exchange
+    vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValueOnce(mockResolveData);
+    vi.spyOn(customerQrApi, 'exchangeQr').mockRejectedValueOnce(new Error('Exchange dropped'));
+
+    const retryBtn = screen.getByTestId('qr-retry-btn');
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('continue-to-table-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('continue-to-table-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-error-view')).toBeDefined();
+    });
+  });
 });

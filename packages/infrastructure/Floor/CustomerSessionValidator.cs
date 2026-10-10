@@ -92,4 +92,26 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
 
         return isActive;
     }
+
+    public async Task InvalidateSessionCacheAsync(Guid tableSessionId, CancellationToken ct = default)
+    {
+        if (tableSessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tableSessionId:D}";
+        try
+        {
+            var db = await _redisProvider.GetDatabaseAsync(ct);
+            if (db != null)
+            {
+                await db.KeyDeleteAsync(cacheKey);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Failed to invalidate Redis session cache in CustomerSessionValidator: {Message}", ex.Message);
+        }
+    }
 }

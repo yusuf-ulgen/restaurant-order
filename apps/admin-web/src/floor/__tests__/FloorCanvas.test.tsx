@@ -216,4 +216,49 @@ describe('FloorCanvas Component', () => {
       }),
     ]);
   });
+
+  it('supports pointer drag and drop to reposition table', () => {
+    const handleSelect = vi.fn();
+    render(
+      <FloorCanvas
+        tables={mockTables}
+        statuses={mockStatuses}
+        selectedTableId="tbl-1"
+        onSelectTable={handleSelect}
+        onSaveBatchLayout={vi.fn()}
+        isSaving={false}
+        onEditTableDetails={vi.fn()}
+      />
+    );
+
+    const table1 = screen.getByTestId('floor-table-tbl-1');
+    const svg = screen.getByTestId('floor-canvas-svg');
+
+    fireEvent.pointerDown(table1, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(svg, { clientX: 150, clientY: 140, pointerId: 1 });
+    fireEvent.pointerUp(svg, { pointerId: 1 });
+
+    expect(screen.getByText(/kaydedilmemiş değişiklikler var/i)).toBeDefined();
+  });
+
+  it('supports ArrowLeft, ArrowUp, and ArrowDown navigation', () => {
+    render(
+      <FloorCanvas
+        tables={mockTables}
+        statuses={mockStatuses}
+        selectedTableId="tbl-1"
+        onSelectTable={vi.fn()}
+        onSaveBatchLayout={vi.fn()}
+        isSaving={false}
+        onEditTableDetails={vi.fn()}
+      />
+    );
+
+    const table1 = screen.getByTestId('floor-table-tbl-1');
+    fireEvent.keyDown(table1, { key: 'ArrowLeft' });
+    fireEvent.keyDown(table1, { key: 'ArrowUp' });
+    fireEvent.keyDown(table1, { key: 'ArrowDown' });
+
+    expect(screen.getByText(/kaydedilmemiş değişiklikler var/i)).toBeDefined();
+  });
 });

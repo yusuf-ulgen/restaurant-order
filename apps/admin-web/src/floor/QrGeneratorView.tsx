@@ -45,7 +45,7 @@ export const QrGeneratorView: React.FC<QrGeneratorViewProps> = ({
   const [isLoadingBatch, setIsLoadingBatch] = useState(false);
 
   const selectedTable = tables.find((t) => t.id === selectedTableId) || null;
-  const statusEntry = statuses.find((s) => (s.table?.id ?? (s as any).tableId) === selectedTableId);
+  const statusEntry = statuses.find((s) => s.table?.id === selectedTableId);
   const activeSession = statusEntry?.activeSession;
   const hasActiveSession = Boolean(activeSession && activeSession.status !== 'Closed');
 

@@ -103,6 +103,18 @@ describe('customerQrApi & In-Memory Session Store', () => {
       );
     });
 
+    it('handles 503 Service Unavailable error', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ detail: 'Hizmet şu anda kullanılamıyor.' }),
+      } as Response);
+
+      await expect(customerQrApi.resolveQr('token-503')).rejects.toThrow(
+        /Hizmet şu anda kullanılamıyor/i
+      );
+    });
+
     it('sanitizes 500 error to prevent leaking backend database details', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: false,
@@ -142,6 +154,51 @@ describe('customerQrApi & In-Memory Session Store', () => {
           method: 'POST',
           body: JSON.stringify({ token: 'exchange-token-xyz' }),
         })
+      );
+    });
+
+    it('handles 400 Inactive Table response code', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          title: 'Inactive Table',
+          detail: 'Table is currently inactive.',
+        }),
+      } as Response);
+
+      await expect(customerQrApi.exchangeQr('inactive-table-token')).rejects.toThrow(
+        /Table is currently inactive/i
+      );
+    });
+
+    it('handles 400 Invalid QR response code', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          title: 'Bad Request',
+          detail: 'Invalid QR signature or payload.',
+        }),
+      } as Response);
+
+      await expect(customerQrApi.exchangeQr('invalid-token')).rejects.toThrow(
+        /Invalid QR signature or payload/i
+      );
+    });
+
+    it('handles 410 session closed response code without revoked keyword', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 410,
+        json: async () => ({
+          title: 'Dining Session Ended',
+          detail: 'The dining session has already ended.',
+        }),
+      } as Response);
+
+      await expect(customerQrApi.exchangeQr('closed-session-token')).rejects.toThrow(
+        /The dining session has already ended/i
       );
     });
   });

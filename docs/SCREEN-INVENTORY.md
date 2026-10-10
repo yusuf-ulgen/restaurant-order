@@ -71,3 +71,9 @@
 ## Phase 5 Admin Catalog
 
 The admin menu screen manages branch menus, categories, items, variants, modifier groups/options, dietary/allergen metadata, and quick-86/restock. It uses the existing admin shell and design system, responsive editor sheets, safe text preview, and permission-aware controls. It is catalog administration only; customer ordering remains a later phase.
+
+## Phase 6 Floor & Table UI Implementation
+
+- **ADM-04 / ADM-05 (Floor Layout & QR Management):** Implemented in `apps/admin-web` under the existing design system and admin shell. Provides branch-scoped dining area tabs, interactive 2D floor canvas grid, table positioning, shape rendering (Round, Square, Rectangle), responsive inspector drawer/modal, table code/capacity editor, high-resolution SVG QR code generation, table QR rotation, and print-ready card layouts.
+- **CUST-01 (Table Welcome & Landing):** Implemented in `apps/customer-web` as a responsive mobile-first landing view. Validates cryptographic QR tokens, displays branch/table metadata and dining area name, checks active session presence, and executes customer session exchange.
+- **Scope Boundaries:** Customer catalog browsing, carts, and order submission (CUST-02 to CUST-06) belong to Phase 7. Staff table operations, transfers, and billing (WAIT-01 to WAIT-07) belong to Phase 10. Realtime KDS (Phase 9/11) and payment settlement (Phase 13/16) are not part of Phase 6.

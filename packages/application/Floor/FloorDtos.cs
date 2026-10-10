@@ -209,4 +209,3 @@ public record QrExchangeResult(
     Guid BranchId,
     string TableNumber,
     string TableName);
-

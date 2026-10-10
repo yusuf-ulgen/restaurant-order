@@ -48,6 +48,15 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 |  PHASE 5: MENU & CATALOG [COMPLETED]                                         |
 |  - Menu categories, items, and variant pricing models                         |
 |  - Modifier groups (required single-select, optional multi-select, free/paid) |
++---------------------------------------+---------------------------------------+
+                                        |
+                                        v
++-------------------------------------------------------------------------------+
+|  PHASE 6: TABLES, QR & SESSIONS [COMPLETED]                                   |
+|  - Table layout positioning, capacity, shapes, ETag concurrency & audit trail |
+|  - Cryptographic HMAC-SHA256 static & dynamic QR generation & rotation        |
+|  - Dining session state machine (Open -> Active -> BillRequested -> Closed)  |
+|  - ADM-04 Floor Layout UI & CUST-01 Customer Table Welcome landing            |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -108,12 +117,13 @@ The `restaurant-order` platform is developed in 18 structured, sequential phases
 - [x] Admin catalog editor and filtered runtime catalog read model with quick-86/restock controls.
 - [x] Final hardening and closure; push and pull_request CI green (218/218 integration tests).
 
-### Phase 6: Tables, QR & Sessions (Status: IN PROGRESS)
-- Phase 6 establishes tables, physical floor layout, QR identity, and dining session infrastructure. Orders, KDS, payments, and service calls belong to subsequent phases.
-- [ ] Table numbering, capacity, and physical layout positioning.
-- [ ] Dynamic and static QR code generation with cryptographic signature.
-- [ ] Dining session lifecycle state machine (Open -> Active -> Bill Requested -> Closed).
-- [ ] Table transfer and table merge mechanics.
+### Phase 6: Tables, QR & Sessions (Status: COMPLETED — CI verified)
+- Phase 6 establishes tables, physical floor layout, QR identity, and dining session infrastructure. Customer menus/ordering (Phase 7), order core (Phase 8), realtime (Phase 9), billing (Phase 13), and payments (Phase 16) remain subsequent phases.
+- [x] Table numbering, capacity, shapes, physical floor layout canvas/grid positioning, and ETag optimistic concurrency.
+- [x] Dynamic and static QR code generation with HMAC-SHA256 signature, canonical payload, version revocation, and constant-time verification.
+- [x] Dining session lifecycle state machine (`Open` -> `Active` -> `BillRequested` -> `Closed`) with single active session constraint, immediate cache invalidation, and secure customer session cookies.
+- [x] Admin floor & QR management panel (ADM-04) and customer table welcome landing interface (CUST-01).
+- [x] Table transfer and session merge mechanics are formally deferred to Phase 10 (Waiter & Operations) when active orders, kitchen tickets, and split bills exist.
 
 ### Phase 7: Customer Experience (Status: Planlandı / Planned)
 - [ ] Surface 1: QR Customer Web App full implementation.

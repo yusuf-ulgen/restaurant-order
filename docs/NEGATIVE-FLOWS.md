@@ -125,3 +125,18 @@ Reliable restaurant operations depend on graceful failure recovery. This documen
 - Archived menu mutations are rejected. Inactive menus/categories/items/variants/groups/options are excluded from runtime menu.
 - Database SaveChanges writes catalog changes and audit records in one EF unit of work; failed saves do not dispatch availability events. Unexpected API failures return generic RFC 7807 500 content with correlation ID.
 - Admin network failures retain retry; 409 offers reload/retry and 412 explains refreshing the concurrency token.
+
+## Phase 6 Floor & QR Negative Flows
+
+- **Deactivating Table with Active Session:** Blocked with HTTP 409 Conflict. Tables with non-closed dining sessions cannot be marked inactive until the active session reaches `Closed`.
+- **Duplicate Table Code / Number:** Rejected by branch-scoped unique index `ix_restaurant_tables_tenant_branch_code` and validator (HTTP 400 / 409).
+- **Out-of-Bounds Layout Coordinates:** Layout updates with negative coordinates, dimensions smaller than 30px, or invalid rotation angles are rejected with HTTP 400 ValidationProblemDetails.
+- **Stale Concurrency Token (ETag):** Updates without `If-Match` return 412 Precondition Failed. Concurrent updates with mismatched tokens return 409 Conflict.
+- **QR Signature Tampering & Forgery:** Tokens with altered payload fields, modified signatures, or unknown key IDs (`kid`) are rejected via constant-time comparison (`CryptographicOperations.FixedTimeEquals`) with HTTP 400 Bad Request.
+- **Revoked QR Scans (Rotated Version):** Static or dynamic QR tokens containing `qv < table.qr_version` are rejected with HTTP 400 Bad Request, ensuring rotated tables immediately invalidate old printed codes.
+- **Expired Dynamic QR Tokens:** Tokens evaluated beyond their expiry timestamp return HTTP 400 Bad Request.
+- **Dynamic QR on Closed Session:** Dynamic QR exchange referencing a closed dining session (`status == 4`) fails closed with HTTP 409 Conflict.
+- **Session Closure Token Invalidation:** When staff closes a dining session, `InvalidateSessionCacheAsync` purges the Redis cache entry immediately. Subsequent requests using the customer JWT cookie fail validation (HTTP 401 Unauthorized).
+- **Weak / Missing Signing Secret:** Service startup fails fast with an explicit exception in production/staging if `QR_SECURITY_KEYS_*` is unset or shorter than 256 bits (32 bytes).
+- **Rate-Limiting Fail-Closed:** Distributed sliding-window rate-limiting rejects excessive scan attempts (HTTP 429). If Redis is unreachable, it fails closed to protect upstream services.
+- **Transfer & Merge Mechanics:** Table transfer and session merge operations operate directly upon active orders, kitchen tickets, and split bills; these mechanics are formally deferred to Phase 10 (Waiter & Operations). Note: Phase 7 (Customer Menu & Ordering), Phase 8 (Order Core), Phase 9 (Realtime & KDS), Phase 13 (Billing Engine), and Phase 16 (Payments) do not exist yet.

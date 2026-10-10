@@ -121,3 +121,38 @@ Deterministic state transitions prevent invalid business states (e.g., paying fo
 1. **Optimistic Locking:** Entity records (`orders`, `table_sessions`, `bills`) must carry a `version` column. State transitions must check `WHERE version = :expected_version`.
 2. **Atomic Payment Settlement:** When splitting bills across multiple cards/cash, each transaction is logged independently with a running balance check.
 3. **No Phantom Cancellations:** If a customer attempts to cancel an item via QR while the kitchen marks it `IN_PREPARATION`, the kitchen status wins and the customer cancellation is rejected with an explanatory message.
+
+---
+
+## 6. DiningSession State Machine (Phase 6)
+
+```
+   [ OPEN ] (1) -------------------------------------------------+
+       |                                                         |
+       | (First order placed / Activate)                         | (Cancelled before order)
+       v                                                         v
+   [ ACTIVE ] (2) <-----------------+                       [ CLOSED ] (4)
+       |                            |                           ^
+       | (Request bill)             | (Retract / New order)     |
+       v                            |                           |
+[ BILL_REQUESTED ] (3) -------------+                           |
+       |                                                        |
+       | (Settled / Finalized)                                  |
+       +--------------------------------------------------------+
+```
+
+| Current State | Event / Trigger | Next State | Authorized Roles | Invariants & Guards |
+| :--- | :--- | :--- | :--- | :--- |
+| `OPEN` (1) | `ACTIVATE_SESSION` | `ACTIVE` (2) | System, Garson, Kasa | Initiated on first order or explicit activation. |
+| `OPEN` (1) | `CANCEL_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Only permitted if no orders exist. |
+| `ACTIVE` (2) | `REQUEST_BILL` | `BILL_REQUESTED` (3) | Müşteri, Garson, Kasa | Guest or staff requests bill settlement. |
+| `ACTIVE` (2) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Direct closure after full settlement. |
+| `BILL_REQUESTED` (3) | `REOPEN_SESSION` | `ACTIVE` (2) | Garson, Kasa, Müdür | Guest orders additional items. |
+| `BILL_REQUESTED` (3) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Payment finalized. Terminal state. |
+
+### DiningSession Invariants:
+1. **Single Non-Closed Session per Table:** Enforced by PostgreSQL partial unique index `ix_dining_sessions_tenant_branch_table_active` (`WHERE status <> 4`). Concurrent scans catch uniqueness violation and join existing session.
+2. **Terminal Closed State:** Once `Closed` (4), state mutations are strictly rejected (HTTP 409 Conflict).
+3. **Immediate Cache Invalidation:** Closing a session invokes `InvalidateSessionCacheAsync`, instantly terminating customer token validity.
+4. **Table Deactivation Guard:** Deactivating a table with an active non-closed session is blocked (HTTP 409 Conflict).
+5. **Transfer & Merge Deferral:** Table transfer and session merge operations operate on active orders and split bills; these mechanics are formally deferred to Phase 10 (Waiter & Operations). Note: Phase 7 (Customer Menu & Ordering), Phase 8 (Order Core), Phase 9 (Realtime & KDS), Phase 13 (Billing Engine), and Phase 16 (Payments) do not exist yet.

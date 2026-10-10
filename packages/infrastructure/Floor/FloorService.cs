@@ -21,19 +21,22 @@ public partial class FloorService : IFloorService
     private readonly IPermissionRegistry _permissionRegistry;
     private readonly IQrSecurityService _qrSecurity;
     private readonly QrSecurityOptions _qrOptions;
+    private readonly ICustomerSessionValidator? _customerSessionValidator;
 
     public FloorService(
         RestaurantOrderDbContext dbContext,
         ILogger<FloorService> logger,
         IPermissionRegistry? permissionRegistry = null,
         IQrSecurityService? qrSecurity = null,
-        Microsoft.Extensions.Options.IOptions<QrSecurityOptions>? qrOptions = null)
+        Microsoft.Extensions.Options.IOptions<QrSecurityOptions>? qrOptions = null,
+        ICustomerSessionValidator? customerSessionValidator = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
         _qrSecurity = qrSecurity!;
         _qrOptions = qrOptions?.Value ?? new QrSecurityOptions();
+        _customerSessionValidator = customerSessionValidator;
     }
 
     public async Task<IReadOnlyList<RestaurantTableDto>> ListTablesAsync(

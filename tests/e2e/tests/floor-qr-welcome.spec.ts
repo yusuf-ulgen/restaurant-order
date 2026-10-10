@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * 2. Admin retrieves / generates the table QR code.
  * 3. Customer accesses the QR landing flow (/q/:token), resolves the table information,
  *    and exchanges the token to enter the welcome screen.
- * 
+ *
  * Strict Constraint: This test MUST NOT place orders, call waitstaff, or execute payments.
  */
 test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', () => {

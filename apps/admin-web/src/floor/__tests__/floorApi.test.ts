@@ -147,4 +147,60 @@ describe('floorApi client', () => {
       'Sunucuda beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar deneyin.'
     );
   });
+
+  it('calls updateTableLayout, activateTable, and deactivateTable with etag', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'tbl-1' }),
+    } as Response);
+
+    await floorApi.updateTableLayout('br-1', 'tbl-1', {
+      positionX: 10,
+      positionY: 20,
+      width: 80,
+      height: 80,
+      rotationDegrees: 0,
+      shape: 'Square',
+    }, 'ct-1');
+
+    await floorApi.activateTable('br-1', 'tbl-1', 'ct-1');
+    await floorApi.deactivateTable('br-1', 'tbl-1', 'ct-1');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls getFloorStatus, getTableStaticQr, getTableQrMetadata, and rotateTableQr', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    } as Response);
+
+    await floorApi.getFloorStatus('br-1');
+    await floorApi.getTableStaticQr('br-1', 'tbl-1');
+    await floorApi.getTableQrMetadata('br-1', 'tbl-1');
+    await floorApi.rotateTableQr('br-1', 'tbl-1', 'ct-1');
+    await floorApi.getSessionDynamicQr('br-1', 'sess-1');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('fetches table static QR as raw SVG', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '<svg><rect /></svg>',
+    } as Response);
+
+    const svg = await floorApi.getTableStaticQrSvg('br-1', 'tbl-1');
+    expect(svg).toContain('<svg>');
+  });
+
+  it('throws FloorApiError when getTableStaticQrSvg fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as Response);
+
+    await expect(floorApi.getTableStaticQrSvg('br-1', 'tbl-1')).rejects.toThrow(/QR SVG verisi alınamadı/);
+  });
 });

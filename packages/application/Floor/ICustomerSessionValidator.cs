@@ -7,4 +7,5 @@ namespace RestaurantOrder.Application.Floor;
 public interface ICustomerSessionValidator
 {
     Task<bool> ValidateSessionActiveAsync(Guid tableSessionId, CancellationToken ct = default);
+    Task InvalidateSessionCacheAsync(Guid tableSessionId, CancellationToken ct = default);
 }

@@ -243,7 +243,7 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
           {tables.map((table) => {
             const layout = getTableLayout(table);
             const isSelected = table.id === selectedTableId;
-            const statusEntry = statuses.find((s) => (s.table?.id ?? (s as any).tableId) === table.id);
+            const statusEntry = statuses.find((s) => s.table?.id === table.id);
             const activeSession = statusEntry?.activeSession;
             const sessionStatus = activeSession?.status;
 

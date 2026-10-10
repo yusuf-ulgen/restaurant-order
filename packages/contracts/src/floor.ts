@@ -178,4 +178,3 @@ export interface QrExchangeResponse {
   tableNumber: string;
   tableName: string;
 }
-

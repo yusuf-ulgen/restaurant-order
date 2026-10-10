@@ -69,10 +69,10 @@ const mockTables = [
 describe('FloorLayoutAndQrView Component', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    (AdminConfigContext.useAdminConfig as any).mockReturnValue({
+    vi.mocked(AdminConfigContext.useAdminConfig).mockReturnValue({
       selectedBranchId: 'branch-1',
       selectedBranch: mockBranch,
-    });
+    } as unknown as ReturnType<typeof AdminConfigContext.useAdminConfig>);
     vi.spyOn(floorApi, 'getDiningAreas').mockResolvedValue(mockAreas);
     vi.spyOn(floorApi, 'getTables').mockResolvedValue(mockTables);
     vi.spyOn(floorApi, 'getFloorStatus').mockResolvedValue({ branchId: 'branch-1', tables: [] });
@@ -119,13 +119,112 @@ describe('FloorLayoutAndQrView Component', () => {
   });
 
   it('handles empty branch selection state cleanly', () => {
-    (AdminConfigContext.useAdminConfig as any).mockReturnValue({
+    vi.mocked(AdminConfigContext.useAdminConfig).mockReturnValue({
       selectedBranchId: null,
       selectedBranch: null,
-    });
+    } as unknown as ReturnType<typeof AdminConfigContext.useAdminConfig>);
 
     render(<FloorLayoutAndQrView />);
 
     expect(screen.getByText('Şube Seçilmedi')).toBeDefined();
+  });
+
+  it('switches dining area tabs and triggers table creation save', async () => {
+    vi.spyOn(floorApi, 'createTable').mockResolvedValue({
+      id: 'tbl-new',
+      tenantId: 'tenant-1',
+      branchId: 'branch-1',
+      diningAreaId: 'area-2',
+      tableNumber: 'T-99',
+      name: 'Yeni Masa',
+      capacity: 4,
+      shape: 'Square',
+      positionX: 50,
+      positionY: 50,
+      width: 80,
+      height: 80,
+      rotationDegrees: 0,
+      isActive: true,
+      qrVersion: 1,
+      publicCode: 'code-99',
+      createdAtUtc: '2026-10-10T00:00:00Z',
+      concurrencyToken: 'ct-new',
+    });
+
+    render(<FloorLayoutAndQrView />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('area-tab-area-2')).toBeDefined();
+    });
+
+    // Switch area tab
+    fireEvent.click(screen.getByTestId('area-tab-area-2'));
+
+    // Open create sheet
+    fireEvent.click(screen.getByTestId('create-table-btn'));
+
+    const numInput = screen.getByLabelText(/Masa Kodu \/ Numarası/i);
+    const nameInput = screen.getByLabelText(/Masa Görünen Adı/i);
+    fireEvent.change(numInput, { target: { value: 'T-99' } });
+    fireEvent.change(nameInput, { target: { value: 'Yeni Masa' } });
+
+    fireEvent.click(screen.getByText('Masa Oluştur'));
+
+    await waitFor(() => {
+      expect(floorApi.createTable).toHaveBeenCalledWith(
+        'branch-1',
+        expect.objectContaining({ tableNumber: 'T-99', name: 'Yeni Masa' })
+      );
+    });
+  });
+
+  it('selects table on canvas, opens editor, saves update and toggles active status', async () => {
+    vi.spyOn(floorApi, 'updateTable').mockResolvedValue({
+      ...mockTables[0]!,
+      name: 'Güncel Masa 1',
+    });
+    vi.spyOn(floorApi, 'deactivateTable').mockResolvedValue({
+      ...mockTables[0]!,
+      isActive: false,
+    });
+
+    render(<FloorLayoutAndQrView />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('floor-table-tbl-1')).toBeDefined();
+    });
+
+    // Click table on canvas to select
+    fireEvent.click(screen.getByTestId('floor-table-tbl-1'));
+
+    // Open table inspector edit details button
+    await waitFor(() => {
+      expect(screen.getByTestId('edit-table-details-btn')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId('edit-table-details-btn'));
+
+    // Modify name and save
+    const nameInput = screen.getByLabelText(/Masa Görünen Adı/i);
+    fireEvent.change(nameInput, { target: { value: 'Güncel Masa 1' } });
+    fireEvent.click(screen.getByText('Değişiklikleri Kaydet'));
+
+    await waitFor(() => {
+      expect(floorApi.updateTable).toHaveBeenCalledWith(
+        'branch-1',
+        'tbl-1',
+        expect.objectContaining({ name: 'Güncel Masa 1' }),
+        'ct-t1'
+      );
+    });
+
+    // Re-open editor to toggle active status
+    fireEvent.click(screen.getByTestId('edit-table-details-btn'));
+    const toggleBtn = screen.getByRole('button', { name: /Pasife Al/i });
+    fireEvent.click(toggleBtn);
+
+    await waitFor(() => {
+      expect(floorApi.deactivateTable).toHaveBeenCalledWith('branch-1', 'tbl-1', 'ct-t1');
+    });
   });
 });
