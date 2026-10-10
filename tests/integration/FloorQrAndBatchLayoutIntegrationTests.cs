@@ -356,4 +356,62 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
         var rotateNoTokenResp = await client.SendAsync(rotateNoToken);
         Assert.Equal(HttpStatusCode.PreconditionFailed, rotateNoTokenResp.StatusCode);
     }
+
+    [Fact]
+    public async Task Floor_Status_ActiveSession_DynamicQr_And_SingleTableLayout_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "DYN-01", "Dynamic QR Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+
+        // 1. Single table layout update (UpdateTableLayout endpoint)
+        var layoutReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/layout", adminToken);
+        layoutReq.Content = JsonContent.Create(new UpdateTableLayoutApiRequest(200, 300, 140, 100, 45, "Rectangle", table.ConcurrencyToken));
+        var layoutResp = await client.SendAsync(layoutReq);
+        Assert.Equal(HttpStatusCode.OK, layoutResp.StatusCode);
+
+        // 2. Open dining session
+        var openReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/sessions", adminToken);
+        openReq.Content = JsonContent.Create(new OpenDiningSessionRequest(3));
+        var openResp = await client.SendAsync(openReq);
+        Assert.Equal(HttpStatusCode.Created, openResp.StatusCode);
+        var session = await openResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
+        Assert.NotNull(session);
+
+        // 3. GET /tables/{tableId}/session
+        var sessionReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/session", adminToken);
+        var sessionResp = await client.SendAsync(sessionReq);
+        Assert.Equal(HttpStatusCode.OK, sessionResp.StatusCode);
+
+        // 4. GET /status (branch status)
+        var statusReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/status", adminToken);
+        var statusResp = await client.SendAsync(statusReq);
+        Assert.Equal(HttpStatusCode.OK, statusResp.StatusCode);
+
+        // 5. POST /sessions/{sessionId}/qr?format=svg
+        var dynSvgReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/qr?format=svg", adminToken);
+        var dynSvgResp = await client.SendAsync(dynSvgReq);
+        Assert.Equal(HttpStatusCode.OK, dynSvgResp.StatusCode);
+        Assert.Equal("image/svg+xml", dynSvgResp.Content.Headers.ContentType?.MediaType);
+
+        // 6. POST /sessions/{sessionId}/qr (json)
+        var dynJsonReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/qr", adminToken);
+        var dynJsonResp = await client.SendAsync(dynJsonReq);
+        Assert.Equal(HttpStatusCode.OK, dynJsonResp.StatusCode);
+    }
 }
