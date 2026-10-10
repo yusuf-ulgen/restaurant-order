@@ -110,7 +110,7 @@ public static class QrCustomerEndpoints
         return app;
     }
 
-    private static IResult HandleCustomerException(Exception ex, HttpContext context)
+    internal static IResult HandleCustomerException(Exception ex, HttpContext context)
     {
         return ex switch
         {
