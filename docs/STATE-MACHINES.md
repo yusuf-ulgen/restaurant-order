@@ -156,4 +156,4 @@ Teknik varlık adları: sipariş `Order`, sipariş kalemi `OrderItem`.
 2. **Kapatılmış (Closed) Son Durum:** `Closed` (4) durumuna geçtikten sonra durum değişiklikleri kesin olarak reddedilir (HTTP 409 Conflict).
 3. **Anında Önbellek Geçersiz Kılma:** Bir oturum kapatıldığında `InvalidateSessionCacheAsync` çağrılır ve müşteri JWT belirtecinin geçerliliği derhal sonlandırılır.
 4. **Masa Devre Dışı Bırakma Koruması:** Kapatılmamış aktif oturumu bulunan bir masanın devre dışı bırakılması engellenir (HTTP 409 Conflict).
-5. **Masa Taşıma ve Oturum Birleştirme:** Masa taşıma ve oturum birleştirme işlemleri doğrudan aktif siparişler, mutfak fişleri ve bölünmüş hesaplar üzerinde çalışır; bu mekanikler resmi olarak Aşama 10'a (Garson ve Operasyon) ertelenmiştir.
+5. **Masa Taşıma ve Oturum Birleştirme Mekanikleri (Faz 6.4):** Oturum transferi boş masalara atomik yönlendirme sağlar; oturum birleştirme iki masanın oturumunu hedefte birleştirerek kaynağı terminalize eder. Her hareket `tenancy.dining_session_movements` tablosunda değişmez biçimde saklanır. Deterministik UUID kilitleme sırasıyla deadlock riski önlenir.

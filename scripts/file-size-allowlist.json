@@ -107,6 +107,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for table public code CSPRNG and constraint hardening (Phase 6.6)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011140000_AddDiningSessionMovementsAndMechanics.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining session movements and transfer/merge mechanics (Phase 6.4)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

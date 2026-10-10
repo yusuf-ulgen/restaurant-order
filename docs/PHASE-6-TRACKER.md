@@ -21,7 +21,7 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 | **Phase 6.1** | Tables and physical layout | **Completed** | `RestaurantTable` aggregate, composite FKs, RLS, REST APIs, Testcontainers tests | `48cfae6` |
 | **Phase 6.2** | Dining session lifecycle | **Completed** | `DiningSession` aggregate, PostgreSQL partial unique index, state machine, RBAC & REST APIs | `b875eeb` |
 | **Phase 6.3** | Static/dynamic QR security | **Completed** | Signed QR payloads, HMAC-SHA256, SVG rendering, customer session exchange, ADR-0011 | `f1d152a` |
-| **Phase 6.4** | Table transfer and merge | **Deferred** | Deferred to Phase 10 (Waiter & Operations) where order and bill settlement lifecycles are integrated | `[Deferred to Phase 10]` |
+| **Phase 6.4** | Table transfer and merge | **Completed** | `DiningSessionMovement` immutable history aggregate, row locking, deterministic concurrency, transfer and merge REST endpoints, Testcontainers and unit tests | HEAD |
 | **Phase 6.5** | Admin and customer UI | **Completed** | Visual floor layout canvas, TableInspector, TableEditorSheet, QR generator, customer welcome screen | `bc62766` |
 | **Phase 6.6** | Hardening and closure | **Completed** | Cache invalidation on session close, comprehensive unit/coverage suites, gates verification | HEAD |
 
@@ -65,8 +65,14 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
   - Rate limiting via Redis (`IQrRateLimiter`) with fail-closed behavior.
   - Published [ADR-0012: Static/Dynamic QR Security & Customer Session Exchange](adr/0012-qr-security-and-customer-session-exchange.md) (`ACCEPTED`).
 
-### Phase 6.4: Table transfer and merge (Deferred)
-- **Architectural Scope Decision:** Table transfer and session merge operations operate directly upon active orders, unserved kitchen tickets, and split bills. Implementing table transfer in Phase 6 without order and billing aggregates would result in a throwaway stub. Transfer and merge mechanics are formally deferred to **Phase 10: Waiter & Operations** as documented in [docs/ROADMAP.md](ROADMAP.md).
+### Phase 6.4: Table transfer and merge
+- [x] **Table Transfer and Session Merge Mechanics:**
+  - Created immutable `DiningSessionMovement` aggregate and table `tenancy.dining_session_movements` with database trigger `trg_dining_session_movements_immutable` preventing updates/deletes, RLS enforcement, and tenant/branch composite foreign keys.
+  - Table transfer: Active or open session can be transferred to an empty, active target table atomically. Capacity check, same-table rejection, occupied target table rejection, BillRequested/Closed session rejection.
+  - Session merge: Merges source session into target session. Source session terminalized (`Closed`, `MergedIntoSessionId`), guests safely merged to target (capacity respected), source customer session cache invalidated immediately, idempotent replays supported.
+  - Concurrency & Deadlock Prevention: Deterministic ascending UUID row locking (`SELECT ... FOR UPDATE`) within single PostgreSQL tenant transaction, ETag / concurrency token validation.
+  - REST endpoints: `POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/transfer` and `POST /api/v1/floor/branches/{branchId}/sessions/{sourceSessionId}/merge`. Customers strictly forbidden; only authorized staff roles allowed.
+  - Additive EF Core migration: `20261011140000_AddDiningSessionMovementsAndMechanics`.
 
 ### Phase 6.5: Admin and customer UI
 - [x] **ADM-04 Floor & Table Layout (Admin Web):**

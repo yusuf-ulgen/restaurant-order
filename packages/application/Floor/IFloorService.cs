@@ -162,4 +162,22 @@ public interface IFloorService
         RestaurantTableId tableId,
         AuthenticatedPrincipal actor,
         CancellationToken ct = default);
+
+    Task<DiningSessionDto> TransferSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sessionId,
+        TransferSessionRequest request,
+        Guid? concurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
+    Task<DiningSessionDto> MergeSessionAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId sourceSessionId,
+        MergeSessionRequest request,
+        Guid? sourceConcurrencyToken,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
 }

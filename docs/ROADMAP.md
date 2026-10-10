@@ -100,7 +100,7 @@ Faz 6: Masalar, QR ve Oturumlar [Devam Ediyor / Doğrulanıyor]
 - [x] HMAC-SHA256 imzası, kanonik veri yükü, sürüm iptali ve sabit zamanlı doğrulama ile dinamik ve statik QR kod üretimi.
 - [x] Masa başına tek aktif oturum kısıtlaması, anında önbellek geçersiz kılma ve güvenli müşteri oturum çerezleri ile yemek oturumu yaşam döngüsü durum makinesi (`Open` -> `Active` -> `BillRequested` -> `Closed`).
 - [x] Yönetici kat ve QR yönetim paneli (ADM-04) ve müşteri masa karşılama açılış arayüzü (CUST-01).
-- [ ] Masa taşıma ve oturum birleştirme mekanikleri; aktif siparişler, mutfak fişleri ve bölünmüş hesaplar oluşturulduğunda uygulanmak üzere resmi olarak Aşama 10'a (Garson ve Operasyon) ertelenmiştir.
+- [x] Masa taşıma ve oturum birleştirme mekanikleri (Faz 6.4): Değişmez hareket geçmişi (`DiningSessionMovement`), deterministik satır kilitleme (deadlock önleme), kapasite ve durum kontrolleri, idempotency desteği ve kaynak oturum önbellek geçersiz kılma tamamlandı.
 
 ### Aşama 7: Müşteri Deneyimi (Durum: Planlandı)
 - [ ] Arayüz 1: QR Müşteri Web Uygulamasının tam uygulaması.

@@ -195,4 +195,146 @@ public class DiningSession
         UpdatedAtUtc = DateTimeOffset.UtcNow;
         ConcurrencyToken = Guid.NewGuid();
     }
+
+    /// <summary>
+    /// Transfers an open or active dining session to another active table.
+    /// Rejects closed sessions, sessions with bills requested, and target tables exceeding guest capacity.
+    /// </summary>
+    public void TransferToTable(RestaurantTable newTable)
+    {
+        if (Status == DiningSessionStatus.Closed)
+        {
+            throw new DomainException("Cannot transfer a closed dining session.");
+        }
+
+        if (Status == DiningSessionStatus.BillRequested)
+        {
+            throw new DomainException(
+                "Cannot transfer dining session with bill requested. Bill requested sessions cannot be transferred.");
+        }
+
+        if (newTable.TenantId != TenantId)
+        {
+            throw new DomainException("Table does not belong to the specified tenant.");
+        }
+
+        if (newTable.BranchId != BranchId)
+        {
+            throw new DomainException("Table does not belong to the specified branch.");
+        }
+
+        if (newTable.Id == TableId)
+        {
+            throw new DomainException("Cannot transfer session to the same table.");
+        }
+
+        if (!newTable.IsActive)
+        {
+            throw new DomainException("Cannot transfer session to an inactive table.");
+        }
+
+        if (GuestCount > newTable.Capacity)
+        {
+            throw new DomainException(
+                $"Guest count ({GuestCount}) exceeds target table capacity ({newTable.Capacity}).");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        TableId = newTable.Id;
+        UpdatedAtUtc = now;
+        ConcurrencyToken = Guid.NewGuid();
+    }
+
+    /// <summary>
+    /// Accepts merged guests into this target session from another session.
+    /// Validates that combined guest count does not exceed target table capacity.
+    /// </summary>
+    public void AcceptMergedGuests(int additionalGuestCount, RestaurantTable targetTable)
+    {
+        if (Status == DiningSessionStatus.Closed)
+        {
+            throw new DomainException("Cannot merge into a closed dining session.");
+        }
+
+        if (Status == DiningSessionStatus.BillRequested)
+        {
+            throw new DomainException("Cannot merge into a dining session with bill requested.");
+        }
+
+        if (additionalGuestCount <= 0)
+        {
+            throw new DomainException("Additional guest count must be greater than zero.");
+        }
+
+        var combinedGuests = GuestCount + additionalGuestCount;
+        if (combinedGuests > targetTable.Capacity)
+        {
+            throw new DomainException(
+                $"Combined guest count ({combinedGuests}) exceeds target table capacity ({targetTable.Capacity}).");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        GuestCount = combinedGuests;
+        UpdatedAtUtc = now;
+        ConcurrencyToken = Guid.NewGuid();
+    }
+
+    /// <summary>
+    /// Merges this source session into a target session.
+    /// Transitions this session to terminal Closed state with MergedIntoSessionId pointer.
+    /// </summary>
+    public void MergeInto(DiningSession targetSession, string? reason = null)
+    {
+        if (Status == DiningSessionStatus.Closed)
+        {
+            throw new DomainException("Dining session is already closed.");
+        }
+
+        if (Status == DiningSessionStatus.BillRequested)
+        {
+            throw new DomainException("Cannot merge a dining session with bill requested.");
+        }
+
+        if (targetSession.Id == Id)
+        {
+            throw new DomainException("Cannot merge dining session into itself.");
+        }
+
+        if (targetSession.TenantId != TenantId)
+        {
+            throw new DomainException("Target session belongs to a different tenant.");
+        }
+
+        if (targetSession.BranchId != BranchId)
+        {
+            throw new DomainException("Target session belongs to a different branch.");
+        }
+
+        if (targetSession.Status == DiningSessionStatus.Closed)
+        {
+            throw new DomainException("Target session is already closed.");
+        }
+
+        if (targetSession.Status == DiningSessionStatus.BillRequested)
+        {
+            throw new DomainException("Cannot merge into a target session with bill requested.");
+        }
+
+        var sanitizedReason = string.IsNullOrWhiteSpace(reason)
+            ? $"Merged into session {targetSession.Id.Value}"
+            : reason.Trim();
+
+        if (sanitizedReason.Length > MaxCloseReasonLength)
+        {
+            throw new DomainException($"Close reason cannot exceed {MaxCloseReasonLength} characters.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        Status = DiningSessionStatus.Closed;
+        ClosedAtUtc = now;
+        CloseReason = sanitizedReason;
+        MergedIntoSessionId = targetSession.Id;
+        UpdatedAtUtc = now;
+        ConcurrencyToken = Guid.NewGuid();
+    }
 }

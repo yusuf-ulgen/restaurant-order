@@ -77,4 +77,14 @@ Müşteri URL veya istek gövdesini değiştirerek başka masanın hesabına ya 
 - **Oturum Kapanmasında Belirteç İptali:** Personel bir yemek oturumunu kapattığında, `InvalidateSessionCacheAsync` Redis önbellek kaydını derhal temizler. Müşteri JWT çereziyle yapılan sonraki istekler doğrulamayı geçemez (HTTP 401 Unauthorized).
 - **Zayıf veya Eksik İmzalama Anahtarı:** Staging ve Production ortamlarında `QrSecurity:Keys` tanımlanmamışsa veya 256 bitten (32 bayt) kısaysa uygulama başlangıcı açık bir özel durumla (fail-fast) durdurulur.
 - **Hız Sınırlama (Rate Limiting) Fail-Closed:** Dağıtık kayan pencere (sliding-window) hız sınırlaması aşırı tarama girişimlerini reddeder (HTTP 429). Redis'e ulaşılamazsa yukarı akış hizmetlerini korumak için güvenli tarafta kalarak istekleri reddeder (fail-closed).
-- **Masa Taşıma ve Oturum Birleştirme Mekanikleri:** Masa taşıma ve oturum birleştirme işlemleri doğrudan aktif siparişler, mutfak fişleri ve bölünmüş hesaplar üzerinde çalışır; bu mekanikler, aktif sipariş aggregate'leri oluşturulduğunda Aşama 10'a (Garson ve Operasyon) ertelenmiştir.
+- **Masa Taşıma ve Oturum Birleştirme Olumsuz Akışları (Faz 6.4):**
+  - Aynı masaya transfer girişimi: HTTP 400 Bad Request.
+  - Dolu veya pasif hedef masaya transfer: HTTP 400 Bad Request (dolu masalar için merge uç noktası kullanılmalıdır).
+  - Hedef masa kapasitesini aşan misafir sayısı: HTTP 400 Bad Request.
+  - `Closed` veya `BillRequested` oturumu transfer etme veya birleştirme girişimi: HTTP 400 Bad Request.
+  - Şubeler veya işletmeler arası transfer/birleştirme denemeleri: Bilgi sızdırmadan HTTP 404 Not Found / HTTP 403 Forbidden.
+  - Müşteri rolünün transfer/birleştirme uçlarını çağırması: HTTP 403 Forbidden.
+  - Eski ETag / eşzamanlılık belirteci: HTTP 409 Conflict veya 412 Precondition Failed.
+  - Karşılıklı transfer / merge yarışında deadlock: Deterministik artan UUID sıralı `FOR UPDATE` satır kilitleme ile deadlock önlenir; kaybeden yarışçı hedef masa doluluğu nedeniyle temiz hata alır.
+  - Değişmez hareket tablosunda güncelleme veya silme: Veritabanı tetikleyicisi `trg_dining_session_movements_immutable` ile engellenir.
+  - Birleştirilen kaynak oturumun müşteri belirteci: Kaynak oturum önbelleği anında geçersiz kılınır; eski müşteri tokenı ile istekler reddedilir.

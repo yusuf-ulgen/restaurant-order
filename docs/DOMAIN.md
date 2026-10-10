@@ -38,6 +38,7 @@
 - **RestaurantTable:** Şubeye ve `DiningArea` alanına bağlı masa. `table_number`, şube bazında benzersiz `code`, oturma kapasitesi `capacity`, şekil `shape` (`Round`, `Square`, `Rectangle`), etkinlik durumu `status`, `qr_version`, QR çözünürlüğü için 128-bit `public_code` ve iyimser eşzamanlılık tokenı (`row_version`) içerir.
 - **TableLayout:** Masanın 2D kat planı tuvali üzerindeki koordinatları (`x`, `y`, `width`, `height`, `rotation`). Tuval sınırlarına ve boyut kurallarına göre doğrulanır.
 - **DiningSession:** Masada oturan misafir grubunu temsil eden yemek oturumu. `Open -> Active -> BillRequested -> Closed` durum makinesini izler. Masada aynı anda yalnızca tek bir açık/kapanmamış (`status <> 4`) oturum bulunabilir (`ix_dining_sessions_tenant_branch_table_active`).
+- **DiningSessionMovement:** Oturumun başka bir masaya taşınmasını (`Transfer`) veya iki oturumun birleştirilmesini (`Merge`) kaydeden değişmez hareket ve denetim tablosudur. Veritabanı tetikleyicisiyle güncelleme ve silmeye kapatılmıştır; işletme ve şube izolasyonunu RLS ile korur. Masalar arası transferde hedef masa boş ve aktif olmalıdır; kapasite aşımı yapılamaz. Birleştirmede kaynak oturum `Closed` ve `MergedIntoSessionId` durumuna geçirilerek terminalize edilir, misafir sayısı hedef oturuma aktarılır ve kaynak oturumun müşteri belirteçleri anında geçersiz kılınır.
 
 ### 3.4. Menü ve Katalog
 

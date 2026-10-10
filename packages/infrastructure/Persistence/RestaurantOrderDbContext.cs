@@ -40,6 +40,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage> CatalogAvailabilityOutbox => Set<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>();
     public DbSet<RestaurantOrder.Domain.Floor.RestaurantTable> RestaurantTables => Set<RestaurantOrder.Domain.Floor.RestaurantTable>();
     public DbSet<RestaurantOrder.Domain.Floor.DiningSession> DiningSessions => Set<RestaurantOrder.Domain.Floor.DiningSession>();
+    public DbSet<RestaurantOrder.Domain.Floor.DiningSessionMovement> DiningSessionMovements => Set<RestaurantOrder.Domain.Floor.DiningSessionMovement>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();

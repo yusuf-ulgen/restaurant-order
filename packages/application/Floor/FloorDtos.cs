@@ -209,3 +209,41 @@ public record QrExchangeResult(
     Guid BranchId,
     string TableNumber,
     string TableName);
+
+/// <summary>
+/// Request payload to transfer a dining session to another active table.
+/// </summary>
+public record TransferSessionRequest(
+    Guid TargetTableId,
+    Guid? ConcurrencyToken = null,
+    string? IdempotencyKey = null,
+    string? Reason = null);
+
+/// <summary>
+/// Request payload to merge a source dining session into a target session.
+/// </summary>
+public record MergeSessionRequest(
+    Guid TargetSessionId,
+    Guid? SourceConcurrencyToken = null,
+    Guid? TargetConcurrencyToken = null,
+    string? IdempotencyKey = null,
+    string? Reason = null);
+
+/// <summary>
+/// DTO representing an immutable dining session table transfer or session merge audit event.
+/// </summary>
+public record DiningSessionMovementDto(
+    Guid Id,
+    Guid TenantId,
+    Guid BranchId,
+    Guid SourceSessionId,
+    Guid SourceTableId,
+    Guid? TargetSessionId,
+    Guid TargetTableId,
+    string MovementType,
+    Guid ActorId,
+    string ActorRole,
+    string? Reason,
+    string IdempotencyKey,
+    int GuestsMoved,
+    DateTimeOffset CreatedAtUtc);
