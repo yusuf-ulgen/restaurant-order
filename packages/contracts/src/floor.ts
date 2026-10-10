@@ -58,6 +58,21 @@ export interface UpdateTableLayoutRequest {
   concurrencyToken?: string;
 }
 
+export interface TableLayoutBatchItem {
+  tableId: string;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  rotationDegrees: number;
+  shape: TableShape;
+  concurrencyToken: string;
+}
+
+export interface BatchUpdateTableLayoutRequest {
+  items: TableLayoutBatchItem[];
+}
+
 export type DiningSessionStatus = 'Open' | 'Active' | 'BillRequested' | 'Closed';
 
 export interface DiningSessionDto {

@@ -8,37 +8,68 @@ import {
   AppShell,
   BottomSheet,
 } from '@restaurant-order/ui';
+import { TableWelcomeView } from './TableWelcomeView';
+import type { QrExchangeResponse } from '@restaurant-order/contracts';
 
 export interface CustomerAppProps {
   hasActiveSession?: boolean;
   initialError?: boolean;
+  token?: string;
+  isQrLanding?: boolean;
 }
 
 export const CustomerContent: React.FC<CustomerAppProps> = ({
   hasActiveSession = true,
   initialError = false,
+  token,
+  isQrLanding,
 }) => {
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+  const [activeSession, setActiveSession] = useState<QrExchangeResponse | null>(null);
   const handleCloseServiceSheet = () => setIsServiceSheetOpen(false);
 
   if (initialError) {
     throw new Error('Aktif oturum yüklenemedi.');
   }
 
+  const isQrRoute = Boolean(
+    isQrLanding ||
+    token ||
+    (typeof window !== 'undefined' &&
+      (window.location.pathname.includes('/q/') ||
+        window.location.hash.includes('/q/') ||
+        new URLSearchParams(window.location.search).has('token')))
+  );
+
   return (
     <AppShell
       variant="customer"
       header={{
         title: <h1 className="title">Restoran Sipariş</h1>,
-        subtitle: <p className="subtitle">Masa 04 • Giriş Salonu</p>,
-        actions: <Badge variant="success">Açık Oturum</Badge>,
+        subtitle: (
+          <p className="subtitle">
+            {activeSession
+              ? `Masa ${activeSession.tableNumber} • ${activeSession.tableName}`
+              : 'Masa 04 • Giriş Salonu'}
+          </p>
+        ),
+        actions: (
+          <Badge variant={activeSession ? 'success' : 'neutral'}>
+            {activeSession ? 'Oturum Açık' : 'Açık Oturum'}
+          </Badge>
+        ),
       }}
       footer={{
         copyright: '© 2026 Restaurant Order',
-        businessText: 'Giriş Salonu',
+        businessText: activeSession?.tableName || 'Giriş Salonu',
       }}
     >
-      {!hasActiveSession ? (
+      {isQrRoute ? (
+        <TableWelcomeView
+          initialToken={token}
+          onSessionReady={(session) => setActiveSession(session)}
+        />
+      ) : !hasActiveSession ? (
         <Card padding="md">
           <EmptyState
             title="Aktif Sipariş Bulunmuyor"
