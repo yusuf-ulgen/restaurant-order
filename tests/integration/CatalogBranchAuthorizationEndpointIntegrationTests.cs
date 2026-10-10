@@ -89,6 +89,53 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
         await cmd.ExecuteNonQueryAsync();
     }
 
+    private async Task SeedDiningSessionAsync(Guid tenantId, Guid branchId, Guid tableSessionId)
+    {
+        var diningAreaId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
+        await conn.OpenAsync();
+
+        var sqlArea = @"
+            INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
+            VALUES (@areaId, @tenantId, @branchId, 'Test Area', @code, 1, 1, true, NOW(), gen_random_uuid())
+            ON CONFLICT (id) DO NOTHING;";
+        await using (var cmdArea = new NpgsqlCommand(sqlArea, conn))
+        {
+            cmdArea.Parameters.AddWithValue("areaId", diningAreaId);
+            cmdArea.Parameters.AddWithValue("tenantId", tenantId);
+            cmdArea.Parameters.AddWithValue("branchId", branchId);
+            cmdArea.Parameters.AddWithValue("code", $"da-{diningAreaId:N}"[..10]);
+            await cmdArea.ExecuteNonQueryAsync();
+        }
+
+        var sqlTable = @"
+            INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+            VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW())
+            ON CONFLICT (id) DO NOTHING;";
+        await using (var cmdTable = new NpgsqlCommand(sqlTable, conn))
+        {
+            cmdTable.Parameters.AddWithValue("tableId", tableId);
+            cmdTable.Parameters.AddWithValue("tenantId", tenantId);
+            cmdTable.Parameters.AddWithValue("branchId", branchId);
+            cmdTable.Parameters.AddWithValue("areaId", diningAreaId);
+            await cmdTable.ExecuteNonQueryAsync();
+        }
+
+        var sqlSession = @"
+            INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, concurrency_token, created_at_utc)
+            VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), gen_random_uuid(), NOW())
+            ON CONFLICT (id) DO NOTHING;";
+        await using (var cmdSession = new NpgsqlCommand(sqlSession, conn))
+        {
+            cmdSession.Parameters.AddWithValue("sessionId", tableSessionId);
+            cmdSession.Parameters.AddWithValue("tenantId", tenantId);
+            cmdSession.Parameters.AddWithValue("branchId", branchId);
+            cmdSession.Parameters.AddWithValue("tableId", tableId);
+            await cmdSession.ExecuteNonQueryAsync();
+        }
+    }
+
     [Fact]
     public async Task Kitchen_CanQuick86_InOwnBranch_Returns200()
     {
@@ -169,6 +216,7 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
         var cashierTokenA = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "Cashier", branchId: branchA);
         var waiterTokenA = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "Waiter", branchId: branchA);
         var tableSessionIdA = Guid.NewGuid();
+        await SeedDiningSessionAsync(tenantId, branchA, tableSessionIdA);
         var customerTokenA = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchA, tableSessionIdA);
 
         // 1. Kitchen A -> Quick86 in Branch B -> 403 Forbidden
@@ -218,6 +266,7 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var tableSessionId = Guid.NewGuid();
+        await SeedDiningSessionAsync(tenantId, branchId, tableSessionId);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, tableSessionId);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(

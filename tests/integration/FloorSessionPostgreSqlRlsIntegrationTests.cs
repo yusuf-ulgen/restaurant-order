@@ -77,25 +77,25 @@ public class FloorSessionPostgreSqlRlsIntegrationTests : IClassFixture<Testconta
             var brandB = Guid.NewGuid();
 
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO tenancy.brands (id, tenant_id, name, code, is_active, created_at_utc, concurrency_token)
-                VALUES ({0}, {1}, 'Brand A', {2}, true, NOW(), gen_random_uuid()),
-                       ({3}, {4}, 'Brand B', {5}, true, NOW(), gen_random_uuid());
+                INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+                VALUES ({0}, {1}, 'Brand A', {2}, 'Active', NOW(), gen_random_uuid()),
+                       ({3}, {4}, 'Brand B', {5}, 'Active', NOW(), gen_random_uuid());
             ", brandA, tenantA, $"ba-{Guid.NewGuid():N}", brandB, tenantB, $"bb-{Guid.NewGuid():N}");
 
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, code, city, timezone, currency, status, created_at_utc, concurrency_token)
-                VALUES ({0}, {1}, {2}, 'Branch A', {3}, 'Istanbul', 'Europe/Istanbul', 'TRY', 1, NOW(), gen_random_uuid()),
-                       ({4}, {5}, {6}, 'Branch B', {7}, 'Ankara', 'Europe/Istanbul', 'TRY', 1, NOW(), gen_random_uuid());
+                INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
+                VALUES ({0}, {1}, {2}, 'Branch A', {3}, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid()),
+                       ({4}, {5}, {6}, 'Branch B', {7}, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid());
             ", branchA, tenantA, brandA, $"bra-{Guid.NewGuid():N}", branchB, tenantB, brandB, $"brb-{Guid.NewGuid():N}");
 
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, display_order, is_active, created_at_utc, concurrency_token)
+                INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
                 VALUES ({0}, {1}, {2}, 'Main Hall A', {3}, 1, 0, true, NOW(), gen_random_uuid()),
                        ({4}, {5}, {6}, 'Main Hall B', {7}, 1, 0, true, NOW(), gen_random_uuid());
             ", areaA, tenantA, branchA, $"daa-{Guid.NewGuid():N}", areaB, tenantB, branchB, $"dab-{Guid.NewGuid():N}");
 
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at_utc)
+                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
                 VALUES ({0}, {1}, {2}, {3}, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW()),
                        ({4}, {5}, {6}, {7}, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
             ", tableA, tenantA, branchA, areaA, tableB, tenantB, branchB, areaB);
