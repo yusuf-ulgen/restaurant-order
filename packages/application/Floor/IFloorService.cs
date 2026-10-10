@@ -51,6 +51,13 @@ public interface IFloorService
         AuthenticatedPrincipal actor,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<RestaurantTableDto>> UpdateTableLayoutBatchAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        BatchUpdateTableLayoutRequest request,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default);
+
     Task<RestaurantTableDto> ActivateTableAsync(
         TenantId tenantId,
         BranchId branchId,

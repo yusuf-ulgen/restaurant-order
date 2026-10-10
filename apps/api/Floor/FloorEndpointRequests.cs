@@ -31,3 +31,16 @@ public sealed record UpdateTableLayoutApiRequest(
     Guid? ConcurrencyToken = null);
 
 public sealed record TableStateApiRequest(Guid? ConcurrencyToken = null);
+
+public sealed record TableLayoutBatchApiItem(
+    Guid TableId,
+    int PositionX,
+    int PositionY,
+    int Width,
+    int Height,
+    int RotationDegrees,
+    string Shape = "Square",
+    Guid? ConcurrencyToken = null);
+
+public sealed record BatchUpdateTableLayoutApiRequest(
+    IReadOnlyList<TableLayoutBatchApiItem> Items);

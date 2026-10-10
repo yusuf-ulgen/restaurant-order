@@ -183,6 +183,102 @@ public class FloorEndpointsUnitTests
         Assert.True(Guid.TryParse(corr, out _));
     }
 
+    [Fact]
+    public void GetActor_ParsesPrincipalFromHttpContextClaims()
+    {
+        var httpContext = new DefaultHttpContext();
+        var claims = new[]
+        {
+            new System.Security.Claims.Claim("sub", "user-123"),
+            new System.Security.Claims.Claim("email", "staff@test.com"),
+            new System.Security.Claims.Claim("role", "BranchManager")
+        };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "TestAuth");
+        httpContext.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        var parserMock = new Moq.Mock<RestaurantOrder.Application.Auth.IJwtClaimPrincipalParser>();
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var expectedPrincipal = new AuthenticatedPrincipal(
+            Guid.NewGuid(),
+            PrincipalType.Staff,
+            AuthRole.BranchManager,
+            AuthorizationScope.ForBranch(new RestaurantOrder.Domain.Tenants.TenantId(tenantId), new RestaurantOrder.Domain.Branches.BranchId(branchId)),
+            Guid.NewGuid(),
+            AuthenticationMethod.Password,
+            1);
+
+        parserMock.Setup(p => p.ParsePrincipal(Moq.It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Returns(expectedPrincipal);
+
+        var actor = FloorEndpointHelpers.GetActor(httpContext, parserMock.Object);
+
+        Assert.NotNull(actor);
+        Assert.Equal(expectedPrincipal.SubjectId, actor.SubjectId);
+        Assert.Equal(AuthRole.BranchManager, actor.Role);
+    }
+
+    [Fact]
+    public void ResolveTenantId_ResolvesFromTenantContextOrActorScopeOrThrows()
+    {
+        var tenantId = Guid.NewGuid();
+        var actor = new AuthenticatedPrincipal(
+            Guid.NewGuid(),
+            PrincipalType.Staff,
+            AuthRole.RestaurantAdmin,
+            AuthorizationScope.ForTenant(new RestaurantOrder.Domain.Tenants.TenantId(tenantId)),
+            Guid.NewGuid(),
+            AuthenticationMethod.Password,
+            1);
+
+        // 1. From ITenantContext
+        var mockContext = new Moq.Mock<RestaurantOrder.Application.Tenancy.ITenantContext>();
+        mockContext.Setup(c => c.HasTenant).Returns(true);
+        mockContext.Setup(c => c.TenantId).Returns(tenantId);
+
+        var res1 = FloorEndpointHelpers.ResolveTenantId(mockContext.Object, actor);
+        Assert.Equal(tenantId, res1.Value);
+
+        // 2. Fallback to actor scope when tenant context empty
+        var emptyContext = new Moq.Mock<RestaurantOrder.Application.Tenancy.ITenantContext>();
+        emptyContext.Setup(c => c.HasTenant).Returns(false);
+        emptyContext.Setup(c => c.TenantId).Returns((Guid?)null);
+
+        var res2 = FloorEndpointHelpers.ResolveTenantId(emptyContext.Object, actor);
+        Assert.Equal(tenantId, res2.Value);
+
+        // 3. Throws when both are missing
+        var noScopeActor = new AuthenticatedPrincipal(
+            Guid.NewGuid(),
+            PrincipalType.Staff,
+            AuthRole.SuperAdmin,
+            AuthorizationScope.Platform(),
+            Guid.NewGuid(),
+            AuthenticationMethod.Password,
+            1);
+
+        Assert.Throws<InvalidAuthorizationScopeException>(() =>
+            FloorEndpointHelpers.ResolveTenantId(emptyContext.Object, noScopeActor));
+    }
+
+    [Fact]
+    public void HandleException_WithLoggerFactory_LogsHandledAndUnhandledExceptions()
+    {
+        var serviceProvider = new Moq.Mock<IServiceProvider>();
+        var loggerFactory = new Moq.Mock<Microsoft.Extensions.Logging.ILoggerFactory>();
+        var logger = new Moq.Mock<Microsoft.Extensions.Logging.ILogger>();
+        loggerFactory.Setup(f => f.CreateLogger(Moq.It.IsAny<string>())).Returns(logger.Object);
+        serviceProvider.Setup(sp => sp.GetService(typeof(Microsoft.Extensions.Logging.ILoggerFactory))).Returns(loggerFactory.Object);
+
+        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider.Object };
+
+        var notFoundResult = FloorEndpointHelpers.HandleException(new ResourceNotFoundException("Not found test"), httpContext);
+        AssertProblem(notFoundResult, StatusCodes.Status404NotFound);
+
+        var unhandledResult = FloorEndpointHelpers.HandleException(new InvalidOperationException("Fatal error test"), httpContext);
+        AssertProblem(unhandledResult, StatusCodes.Status500InternalServerError);
+    }
+
     private static ProblemHttpResult AssertProblem(IResult result, int expectedStatusCode)
     {
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);

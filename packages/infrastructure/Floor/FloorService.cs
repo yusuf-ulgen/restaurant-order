@@ -267,6 +267,70 @@ public partial class FloorService : IFloorService
         return MapTable(table);
     }
 
+    public async Task<IReadOnlyList<RestaurantTableDto>> UpdateTableLayoutBatchAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        BatchUpdateTableLayoutRequest request,
+        AuthenticatedPrincipal actor,
+        CancellationToken ct = default)
+    {
+        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
+        EnsureTablesManagePermission(actor);
+        EnsureBranchAllowsFloorMutation(branch);
+
+        if (request.Items == null || request.Items.Count == 0)
+        {
+            return Array.Empty<RestaurantTableDto>();
+        }
+
+        var tableIds = request.Items.Select(i => new RestaurantTableId(i.TableId)).ToList();
+        var tables = await _dbContext.RestaurantTables
+            .Where(t => t.TenantId == tenantId && t.BranchId == branchId && tableIds.Contains(t.Id))
+            .ToListAsync(ct);
+
+        var tableMap = tables.ToDictionary(t => t.Id.Value);
+
+        foreach (var item in request.Items)
+        {
+            if (!tableMap.TryGetValue(item.TableId, out var table))
+            {
+                throw new ResourceNotFoundException($"Table '{item.TableId}' was not found in branch '{branchId.Value}'.");
+            }
+
+            VerifyConcurrencyToken(table.ConcurrencyToken, item.ConcurrencyToken);
+
+            if (!Enum.TryParse<TableShape>(item.Shape, true, out var shape))
+            {
+                throw new DomainException($"Invalid TableShape value: '{item.Shape}'.");
+            }
+
+            table.UpdateLayout(item.PositionX, item.PositionY, item.Width, item.Height, item.RotationDegrees, shape);
+        }
+
+        await ExecuteInTenantTransactionAsync(tenantId, async () =>
+        {
+            foreach (var item in request.Items)
+            {
+                var table = tableMap[item.TableId];
+                AddAuditEvent(tenantId, SecurityAuditEventType.RestaurantTableLayoutUpdated, actor, branchId, new
+                {
+                    tableId = table.Id.Value,
+                    positionX = table.PositionX,
+                    positionY = table.PositionY,
+                    width = table.Width,
+                    height = table.Height,
+                    rotation = table.RotationDegrees,
+                    shape = table.Shape.ToString(),
+                    isBatch = true
+                });
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+        }, ct);
+
+        return tables.Select(MapTable).ToList();
+    }
+
     public async Task<RestaurantTableDto> ActivateTableAsync(
         TenantId tenantId,
         BranchId branchId,

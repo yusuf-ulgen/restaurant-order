@@ -63,6 +63,25 @@ public record UpdateTableLayoutRequest(
     Guid? ConcurrencyToken = null);
 
 /// <summary>
+/// Individual table layout item for atomic batch update.
+/// </summary>
+public record TableLayoutBatchItem(
+    Guid TableId,
+    int PositionX,
+    int PositionY,
+    int Width,
+    int Height,
+    int RotationDegrees,
+    string Shape,
+    Guid? ConcurrencyToken = null);
+
+/// <summary>
+/// Request payload to atomically update spatial canvas coordinates for multiple tables in a branch.
+/// </summary>
+public record BatchUpdateTableLayoutRequest(
+    IReadOnlyList<TableLayoutBatchItem> Items);
+
+/// <summary>
 /// Data transfer object representing a dining session at a table.
 /// </summary>
 public record DiningSessionDto(

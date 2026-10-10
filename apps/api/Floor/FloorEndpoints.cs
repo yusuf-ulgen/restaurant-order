@@ -221,6 +221,49 @@ public static class FloorEndpoints
         .WithName("UpdateTableLayout")
         .WithSummary("Update table physical layout");
 
+        branchGroup.MapPut("/tables/batch-layout", async (
+            Guid branchId,
+            [FromBody] BatchUpdateTableLayoutApiRequest request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var appItems = (request.Items ?? Array.Empty<TableLayoutBatchApiItem>())
+                    .Select(i => new TableLayoutBatchItem(
+                        i.TableId,
+                        i.PositionX,
+                        i.PositionY,
+                        i.Width,
+                        i.Height,
+                        i.RotationDegrees,
+                        i.Shape,
+                        i.ConcurrencyToken))
+                    .ToList();
+
+                var appRequest = new BatchUpdateTableLayoutRequest(appItems);
+                var tables = await floorService.UpdateTableLayoutBatchAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    appRequest,
+                    actor,
+                    ct);
+
+                return Results.Ok(tables);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("BatchUpdateTableLayout")
+        .WithSummary("Atomically update physical layout for multiple tables");
+
         branchGroup.MapPost("/tables/{tableId:guid}/activate", async (
             Guid branchId,
             Guid tableId,
