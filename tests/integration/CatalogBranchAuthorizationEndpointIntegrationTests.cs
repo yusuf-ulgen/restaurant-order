@@ -123,8 +123,8 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
         }
 
         var sqlSession = @"
-            INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, concurrency_token, created_at_utc)
-            VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), gen_random_uuid(), NOW())
+            INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, concurrency_token, created_at_utc)
+            VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), gen_random_uuid(), NOW())
             ON CONFLICT (id) DO NOTHING;";
         await using (var cmdSession = new NpgsqlCommand(sqlSession, conn))
         {
