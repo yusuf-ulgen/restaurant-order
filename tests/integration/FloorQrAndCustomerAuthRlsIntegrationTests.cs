@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -74,7 +75,7 @@ public class FloorQrAndCustomerAuthRlsIntegrationTests : IClassFixture<Testconta
         var qrOpts = Microsoft.Extensions.Options.Options.Create(new QrSecurityOptions
         {
             CurrentKeyId = "k1",
-            Keys = new Dictionary<string, string> { ["k1"] = "c2VjdXJlX3Ffc2lnbmluZ19rZXlfZm9yX3BoYXNlXzA2X3Rlc3RzXzMyIQ==" }
+            Keys = new Dictionary<string, string> { ["k1"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }
         });
         var envMock = new Mock<IHostEnvironment>();
         envMock.Setup(e => e.EnvironmentName).Returns("Testing");
@@ -87,7 +88,7 @@ public class FloorQrAndCustomerAuthRlsIntegrationTests : IClassFixture<Testconta
 
         var jwtOpts = Microsoft.Extensions.Options.Options.Create(new JwtSettings
         {
-            Secret = RestaurantOrder.Api.ConfigurationValidator.InsecureDevJwtSecret,
+            Secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
             Issuer = "RestaurantOrder.Api",
             Audience = "RestaurantOrder.Client",
             AccessTokenLifetimeMinutes = 15
@@ -108,7 +109,7 @@ public class FloorQrAndCustomerAuthRlsIntegrationTests : IClassFixture<Testconta
         var brandId = Guid.NewGuid();
         var areaId = Guid.NewGuid();
         var tableId = Guid.NewGuid();
-        var publicCode = $"TC-{Guid.NewGuid():N}"[..8];
+        var publicCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
         // 1. Seed tenant, branch, dining area and table using owner connection
         await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantId, "RLS Test Tenant", $"rtt-{Guid.NewGuid():N}");
@@ -224,10 +225,11 @@ public class FloorQrAndCustomerAuthRlsIntegrationTests : IClassFixture<Testconta
                        ({4}, {5}, {6}, 'Area B', {7}, 1, 0, true, NOW(), gen_random_uuid());
             ", areaA, tenantA, branchA, $"daa-{Guid.NewGuid():N}", areaB, tenantB, branchB, $"dab-{Guid.NewGuid():N}");
 
+            var publicCodeA = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
             await adminCtx.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-                VALUES ({0}, {1}, {2}, {3}, 'T-A', 'Table A', 'codeA', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
-            ", tableA, tenantA, branchA, areaA);
+                VALUES ({0}, {1}, {2}, {3}, 'T-A', 'Table A', {4}, 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
+            ", tableA, tenantA, branchA, areaA, publicCodeA);
 
             await adminCtx.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, concurrency_token, created_at_utc)
@@ -264,7 +266,7 @@ public class FloorQrAndCustomerAuthRlsIntegrationTests : IClassFixture<Testconta
             new DbContextOptionsBuilder<RestaurantOrderDbContext>().UseNpgsql(_fixture.DatabaseConnectionString).Options))
         {
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                UPDATE tenancy.dining_sessions SET status = 4, closed_at_utc = NOW() WHERE id = {0};
+                UPDATE tenancy.dining_sessions SET status = 4, activated_at_utc = NOW(), bill_requested_at_utc = NOW(), closed_at_utc = NOW() WHERE id = {0};
             ", sessionAId);
         }
 

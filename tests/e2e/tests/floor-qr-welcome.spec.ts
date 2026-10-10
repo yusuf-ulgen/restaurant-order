@@ -5,7 +5,10 @@ import crypto from 'node:crypto';
  * Mints a synthetic development RestaurantAdmin JWT token adhering to ADR-0009 and API claim invariants.
  */
 function mintDevAdminToken(tenantId: string): string {
-  const secret = 'dev-only-insecure-jwt-secret-min-32-chars-long!';
+  const secret = process.env.E2E_JWT_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('E2E_JWT_SECRET or JWT_SECRET environment variable is required');
+  }
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: 'k1' })).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 3600;
@@ -70,6 +73,8 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
 
     const areas = await areasRes.json();
     let diningAreaId = '';
+    let createdAreaConcurrencyToken: string | null = null;
+    let createdAreaId: string | null = null;
     if (Array.isArray(areas) && areas.length > 0) {
       diningAreaId = areas[0].id;
     } else {
@@ -88,6 +93,8 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
       expect(createAreaRes.status(), 'Admin should be able to create dining area').toBe(201);
       const newArea = await createAreaRes.json();
       diningAreaId = newArea.id;
+      createdAreaId = newArea.id;
+      createdAreaConcurrencyToken = newArea.concurrencyToken;
     }
     expect(diningAreaId).toBeTruthy();
 
@@ -99,7 +106,7 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
       data: {
         diningAreaId,
         tableNumber: uniqueTableNumber,
-        displayName: `Masa ${uniqueTableNumber}`,
+        name: `Masa ${uniqueTableNumber}`,
         capacity: 4,
         shape: 'Square',
         positionX: 120,
@@ -162,8 +169,63 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
 
       // 10. Strict Phase 6 boundary: no orders, bill requests, or payments exist
     } finally {
-      // Safely attempt deactivating created test table to clean up state
-      // (Domain rule prevents deactivating a table while an active session is in progress, returning 400)
+      // 1. Cleanly close any open dining sessions for the table
+      try {
+        const sessionsRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}/sessions`, {
+          headers: authHeaders,
+        });
+        if (sessionsRes.ok()) {
+          const sessions = await sessionsRes.json();
+          for (const session of sessions) {
+            if (session.status !== 'Closed') {
+              let currentToken = session.concurrencyToken;
+              if (session.status === 'Open') {
+                const actRes = await request.post(
+                  `/api/v1/floor/branches/${branchId}/sessions/${session.id}/activate`,
+                  {
+                    headers: authHeaders,
+                    data: { concurrencyToken: currentToken },
+                  }
+                );
+                if (actRes.ok()) {
+                  const actData = await actRes.json();
+                  currentToken = actData.concurrencyToken;
+                }
+              }
+              const billRes = await request.post(
+                `/api/v1/floor/branches/${branchId}/sessions/${session.id}/request-bill`,
+                {
+                  headers: authHeaders,
+                  data: { concurrencyToken: currentToken },
+                }
+              );
+              if (billRes.ok()) {
+                const billData = await billRes.json();
+                currentToken = billData.concurrencyToken;
+              }
+              await request.post(
+                `/api/v1/floor/branches/${branchId}/sessions/${session.id}/close`,
+                {
+                  headers: authHeaders,
+                  data: { concurrencyToken: currentToken, reason: 'E2E Cleanup' },
+                }
+              );
+            }
+          }
+        }
+      } catch {
+        // Proceed with table deactivation
+      }
+
+      // 2. Fetch fresh concurrency token and deactivate table
+      const tableGetRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}`, {
+        headers: authHeaders,
+      });
+      if (tableGetRes.ok()) {
+        const tableData = await tableGetRes.json();
+        concurrencyToken = tableData.concurrencyToken;
+      }
+
       const deactRes = await request.post(
         `/api/v1/floor/branches/${branchId}/tables/${tableId}/deactivate`,
         {
@@ -171,7 +233,18 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
           data: { concurrencyToken },
         }
       );
-      expect([200, 400, 404, 409]).toContain(deactRes.status());
+      expect(deactRes.status(), 'Table must be deactivated successfully after sessions closed').toBe(200);
+
+      // 3. If test created its own dining area, deactivate it
+      if (createdAreaId && createdAreaConcurrencyToken) {
+        await request.post(
+          `/api/v1/restaurant-config/branches/${branchId}/dining-areas/${createdAreaId}/deactivate`,
+          {
+            headers: authHeaders,
+            data: { concurrencyToken: createdAreaConcurrencyToken },
+          }
+        );
+      }
     }
   });
 });

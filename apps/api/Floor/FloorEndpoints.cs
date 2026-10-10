@@ -96,10 +96,11 @@ public static class FloorEndpoints
 
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var tableName = request.Name ?? request.DisplayName ?? request.TableNumber;
                 var appRequest = new CreateTableRequest(
                     request.DiningAreaId,
                     request.TableNumber,
-                    request.DisplayName,
+                    tableName,
                     request.Capacity,
                     request.PositionX,
                     request.PositionY,
@@ -149,10 +150,11 @@ public static class FloorEndpoints
 
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var updateName = request.Name ?? request.DisplayName ?? request.TableNumber;
                 var appRequest = new UpdateTableRequest(
                     request.DiningAreaId,
                     request.TableNumber,
-                    request.DisplayName,
+                    updateName,
                     request.Capacity,
                     token.Value);
 

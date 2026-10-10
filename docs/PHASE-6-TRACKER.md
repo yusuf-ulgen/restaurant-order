@@ -96,13 +96,15 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 - [x] **Token Invalidation & Security Hardening:**
   - Implemented `ICustomerSessionValidator.InvalidateSessionCacheAsync` and wired into `FloorService.CloseSessionAsync` to immediately purge Redis customer session cache upon session closure.
   - Unit tested cache hit, cache miss, database fallback, Redis failure resilience, and key deletion.
+  - Replaced all static test keys and secrets with CSPRNG generators (`RandomNumberGenerator.GetBytes(32)` in .NET, `crypto.randomBytes(32)` in Node) across unit, integration, and E2E tests, resolving Gitleaks findings at root cause without disabling gates or using broad allowlists.
 - [x] **Database Integrity Constraints & Migrations:**
   - Enforced table shape constraint (`shape IN (1, 2, 3)`) and canvas boundary constraint (`position_x + width <= 10000 AND position_y + height <= 10000`) via `ck_restaurant_tables_shape` and `ck_restaurant_tables_canvas_bounds`.
+  - Enforced exact 32-character lowercase hex public code contract (`length(public_code) = 32 AND public_code ~ '^[0-9a-f]{32}$'`) via additive corrective migration `20261011180000_HardenTablePublicCodeExactHex32Contract`, updating non-compliant codes via `encode(gen_random_bytes(16), 'hex')` and incrementing `qr_version`.
   - Enforced dining session linear lifecycle timestamps (`ck_dining_sessions_status_timestamps`) and chronological sequence (`ck_dining_sessions_chronology`) ensuring `opened_at <= activated_at <= bill_requested_at <= closed_at` (veya birleştirme kapanışında `opened_at <= closed_at`).
-  - Generated and applied additive migration: `20261011160000_HardenTableAndDiningSessionIntegrityConstraints`.
-  - Added dedicated SQL check constraint integration tests in `FloorAndSessionIntegrityConstraintIntegrationTests.cs`.
+  - Added dedicated SQL check constraint integration tests in `FloorAndSessionIntegrityConstraintIntegrationTests.cs`, `FloorQrConcurrencyAndMigrationIntegrationTests.cs`, and `FloorQrAndCustomerAuthRlsIntegrationTests.cs`.
 - [x] **End-to-End Testing (Playwright):**
-  - Updated `tests/e2e/tests/floor-qr-welcome.spec.ts` with deterministic dev seeding and tenant-scoped auth token. 100% passing without skips (3 passed, 0 failed, 0 skipped).
+  - Updated `tests/e2e/playwright.config.ts` to share runtime CSPRNG JWT secret between webServer and test worker, and removed `channel: 'msedge'`.
+  - Updated `tests/e2e/tests/floor-qr-welcome.spec.ts` with backend `name` payload contract, deterministic cleanup of active dining sessions, and table deactivation.
 - [x] **Zero Warnings & Quality Gates:**
   - Cleaned all TypeScript ESLint warnings (`@typescript-eslint/no-explicit-any`).
   - Clean build in Release mode: 0 Warnings, 0 Errors across backend and frontend.

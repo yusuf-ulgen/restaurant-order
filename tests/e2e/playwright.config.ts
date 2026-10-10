@@ -1,6 +1,10 @@
+import crypto from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 
 const API_BASE_URL = process.env.VITE_API_URL || 'http://127.0.0.1:5000';
+const SHARED_JWT_SECRET = process.env.E2E_JWT_SECRET || process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+process.env.E2E_JWT_SECRET = SHARED_JWT_SECRET;
+process.env.JWT_SECRET = SHARED_JWT_SECRET;
 
 export default defineConfig({
   testDir: './tests',
@@ -23,6 +27,7 @@ export default defineConfig({
         ASPNETCORE_URLS: API_BASE_URL,
         ASPNETCORE_ENVIRONMENT: 'Development',
         DEPLOYMENT_COLOR: 'blue',
+        JWT_SECRET: SHARED_JWT_SECRET,
       },
     },
     {
@@ -35,7 +40,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'msedge' },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });

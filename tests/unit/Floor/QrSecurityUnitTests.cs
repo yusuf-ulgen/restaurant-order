@@ -19,15 +19,12 @@ namespace RestaurantOrder.UnitTests.Floor;
 public class QrSecurityUnitTests
 {
     // Valid Base64 key that decodes to 32 random bytes (256 bits entropy)
-    private static readonly string ValidBase64Key32Bytes = Convert.ToBase64String(
-        Encoding.UTF8.GetBytes("01234567890123456789012345678901")); // exactly 32 bytes
-
-    private static readonly string ValidBase64KeyRotated = Convert.ToBase64String(
-        Encoding.UTF8.GetBytes("abcdefghijklmnopqrstuvwxyz123456")); // exactly 32 bytes
+    private static readonly string ValidBase64Key32Bytes = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    private static readonly string ValidBase64KeyRotated = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
     private readonly TenantId _tenantId = TenantId.New();
     private readonly BranchId _branchId = BranchId.New();
-    private readonly string _tableCode = "tbl_pub_code_001";
+    private readonly string _tableCode = RestaurantTable.GeneratePublicCode();
 
     private QrSecurityService CreateService(string environmentName = "Development", Dictionary<string, string>? keys = null, string currentKeyId = "k1", int maxTokenLength = 2048)
     {

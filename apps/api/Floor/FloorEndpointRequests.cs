@@ -3,23 +3,25 @@ namespace RestaurantOrder.Api.Floor;
 public sealed record CreateTableApiRequest(
     Guid DiningAreaId,
     string TableNumber,
-    string DisplayName,
-    int Capacity,
+    string? Name = null,
+    int Capacity = 4,
     int PositionX = 0,
     int PositionY = 0,
     int Width = 100,
     int Height = 100,
     int RotationDegrees = 0,
     string Shape = "Square",
-    Guid? BranchId = null);
+    Guid? BranchId = null,
+    string? DisplayName = null);
 
 public sealed record UpdateTableApiRequest(
     Guid DiningAreaId,
     string TableNumber,
-    string DisplayName,
-    int Capacity,
+    string? Name = null,
+    int Capacity = 4,
     Guid? ConcurrencyToken = null,
-    Guid? BranchId = null);
+    Guid? BranchId = null,
+    string? DisplayName = null);
 
 public sealed record UpdateTableLayoutApiRequest(
     int PositionX,

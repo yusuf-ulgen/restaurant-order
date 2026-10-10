@@ -115,6 +115,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for table and dining session integrity constraint hardening (Phase 6 closing)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011180000_HardenTablePublicCodeExactHex32Contract.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table public code hex 32 contract hardening (Phase 6 closing)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

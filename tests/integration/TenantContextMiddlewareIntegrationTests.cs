@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -16,8 +17,9 @@ namespace RestaurantOrder.IntegrationTests;
 /// </summary>
 public class TenantContextMiddlewareIntegrationTests
 {
-    private static string TestHexKey() => Convert.ToHexString(new byte[32]);
-    private static string TestSecret(string name) => $"test_{name}_{new string('x', 32)}";
+    private static string TestHexKey() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+    private static string TestSecret(string name) => $"test_{name}_{Convert.ToHexString(RandomNumberGenerator.GetBytes(16))}";
+    private static string TestBase64Key() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
     [Fact]
     public async Task Missing_TenantContext_On_Protected_Endpoint_Returns_ProblemDetails_With_CorrelationId()
@@ -183,22 +185,29 @@ public class TenantContextMiddlewareIntegrationTests
         string environment,
         bool allowDevHeaderOverride)
     {
+        var dbPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+        var jwtSecret = TestSecret("jwt");
+        var pinPepperSecret = TestSecret("pin_pepper");
+        var notifKey = TestHexKey();
+        var webhookSecret = TestSecret("webhook");
+        var qrKey = TestBase64Key();
+
         return new WebApplicationFactory<RestaurantOrder.Api.Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment(environment);
             builder.UseSetting("Tenancy:AllowDevHeaderOverride", allowDevHeaderOverride ? "true" : "false");
             builder.UseSetting("DEPLOYMENT_COLOR", "blue");
-            builder.UseSetting("DATABASE_URL", "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass");
+            builder.UseSetting("DATABASE_URL", $"Host=localhost;Database=test;Username=test_app;Password={dbPassword}");
             builder.UseSetting("REDIS_URL", "localhost:6379");
-            builder.UseSetting("JWT_SECRET", TestSecret("jwt"));
-            builder.UseSetting("PIN_PEPPER_SECRET", TestSecret("pin_pepper"));
+            builder.UseSetting("JWT_SECRET", jwtSecret);
+            builder.UseSetting("PIN_PEPPER_SECRET", pinPepperSecret);
             builder.UseSetting("Cors:AllowedOrigins:0", "https://admin.restaurantorder.app");
             builder.UseSetting("NOTIFICATION_PROVIDER", "TransactionalOutbox");
-            builder.UseSetting("NOTIFICATION_ENCRYPTION_KEY", TestHexKey());
+            builder.UseSetting("NOTIFICATION_ENCRYPTION_KEY", notifKey);
             builder.UseSetting("WEBHOOK_NOTIFICATION_URL", "https://notifications.internal/webhook");
-            builder.UseSetting("WEBHOOK_NOTIFICATION_SECRET", TestSecret("webhook"));
+            builder.UseSetting("WEBHOOK_NOTIFICATION_SECRET", webhookSecret);
             builder.UseSetting("QrSecurity:CurrentKeyId", "k1");
-            builder.UseSetting("QrSecurity:Keys:k1", "c2VjdXJlX3Ffc2lnbmluZ19rZXlfZm9yX3BoYXNlXzA2X3Rlc3RzXzMyIQ==");
+            builder.UseSetting("QrSecurity:Keys:k1", qrKey);
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -206,17 +215,17 @@ public class TenantContextMiddlewareIntegrationTests
                 {
                     ["Tenancy:AllowDevHeaderOverride"] = allowDevHeaderOverride ? "true" : "false",
                     ["DEPLOYMENT_COLOR"] = "blue",
-                    ["DATABASE_URL"] = "Host=localhost;Database=test;Username=test_app;Password=secret_app_pass",
+                    ["DATABASE_URL"] = $"Host=localhost;Database=test;Username=test_app;Password={dbPassword}",
                     ["REDIS_URL"] = "localhost:6379",
-                    ["JWT_SECRET"] = TestSecret("jwt"),
-                    ["PIN_PEPPER_SECRET"] = TestSecret("pin_pepper"),
+                    ["JWT_SECRET"] = jwtSecret,
+                    ["PIN_PEPPER_SECRET"] = pinPepperSecret,
                     ["Cors:AllowedOrigins:0"] = "https://admin.restaurantorder.app",
                     ["NOTIFICATION_PROVIDER"] = "TransactionalOutbox",
-                    ["NOTIFICATION_ENCRYPTION_KEY"] = TestHexKey(),
+                    ["NOTIFICATION_ENCRYPTION_KEY"] = notifKey,
                     ["WEBHOOK_NOTIFICATION_URL"] = "https://notifications.internal/webhook",
-                    ["WEBHOOK_NOTIFICATION_SECRET"] = TestSecret("webhook"),
+                    ["WEBHOOK_NOTIFICATION_SECRET"] = webhookSecret,
                     ["QrSecurity:CurrentKeyId"] = "k1",
-                    ["QrSecurity:Keys:k1"] = "c2VjdXJlX3Ffc2lnbmluZ19rZXlfZm9yX3BoYXNlXzA2X3Rlc3RzXzMyIQ=="
+                    ["QrSecurity:Keys:k1"] = qrKey
                 });
             });
         });

@@ -20,9 +20,6 @@ namespace RestaurantOrder.Infrastructure.Floor;
 /// </summary>
 public sealed class QrSecurityService : IQrSecurityService
 {
-    // Valid Base64-encoded synthetic key decoding to 45 random/synthetic bytes for Development/Testing only
-    private const string SyntheticDevKey = "c3ludGhldGljLWRldi10ZXN0LXFyLXNpZ25pbmcta2V5LTMyYi1lbnRyb3B5IQ==";
-
     private readonly QrSecurityOptions _options;
     private readonly Dictionary<string, byte[]> _keyBytes = new(StringComparer.Ordinal);
 
@@ -46,7 +43,7 @@ public sealed class QrSecurityService : IQrSecurityService
                     "FATAL CONFIGURATION ERROR: QR signing key is missing or CurrentKeyId is not registered in Staging/Production.");
             }
 
-            _options.Keys[_options.CurrentKeyId] = SyntheticDevKey;
+            _options.Keys[_options.CurrentKeyId] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         }
 
         foreach (var (keyId, base64Secret) in _options.Keys)

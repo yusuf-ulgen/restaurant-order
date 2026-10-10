@@ -153,10 +153,33 @@ public class FloorQrConcurrencyAndMigrationIntegrationTests : IClassFixture<Test
             Assert.Equal("NO", isNullable);
         }
 
-        // 3. Verify check constraint ck_restaurant_tables_public_code rejects empty string or invalid chars
+        // 3. Verify check constraint ck_restaurant_tables_public_code rejects invalid length or format and accepts valid 32-hex
         var tenantId = Guid.NewGuid();
+        var brandId = Guid.NewGuid();
         var branchId = Guid.NewGuid();
         var areaId = Guid.NewGuid();
+
+        await using (var seedCmd = conn.CreateCommand())
+        {
+            seedCmd.CommandText = @"
+                INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
+                VALUES (@tid, 'Migr Tenant', @tslug, 'Active', clock_timestamp(), gen_random_uuid());
+                INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+                VALUES (@bndId, @tid, 'Migr Brand', @bndslug, 'Active', clock_timestamp(), gen_random_uuid());
+                INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
+                VALUES (@bid, @tid, @bndId, 'Migr Branch', @brslug, 'Europe/Istanbul', 'TRY', 'Active', clock_timestamp(), gen_random_uuid());
+                INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
+                VALUES (@aid, @tid, @bid, 'Migr Area', @daslug, 1, 1, true, clock_timestamp(), gen_random_uuid());";
+            seedCmd.Parameters.AddWithValue("tid", tenantId);
+            seedCmd.Parameters.AddWithValue("tslug", $"mt-{Guid.NewGuid():N}");
+            seedCmd.Parameters.AddWithValue("bndId", brandId);
+            seedCmd.Parameters.AddWithValue("bndslug", $"mb-{Guid.NewGuid():N}");
+            seedCmd.Parameters.AddWithValue("bid", branchId);
+            seedCmd.Parameters.AddWithValue("brslug", $"mbr-{Guid.NewGuid():N}");
+            seedCmd.Parameters.AddWithValue("aid", areaId);
+            seedCmd.Parameters.AddWithValue("daslug", $"ma-{Guid.NewGuid():N}");
+            await seedCmd.ExecuteNonQueryAsync();
+        }
 
         // Inserting invalid short public_code must fail check constraint
         await using (var cmd = conn.CreateCommand())
@@ -168,7 +191,7 @@ public class FloorQrConcurrencyAndMigrationIntegrationTests : IClassFixture<Test
                     shape, is_active, qr_version, public_code, concurrency_token, created_at
                 ) VALUES (
                     @id, @tid, @bid, @aid, 'INV-01', 'Inv Table',
-                    4, 0, 0, 100, 100, 0, 0, true, 1, 'short', @token, clock_timestamp()
+                    4, 0, 0, 100, 100, 0, 1, true, 1, 'short', @token, clock_timestamp()
                 );";
             cmd.Parameters.AddWithValue("id", Guid.NewGuid());
             cmd.Parameters.AddWithValue("tid", tenantId);
@@ -179,6 +202,30 @@ public class FloorQrConcurrencyAndMigrationIntegrationTests : IClassFixture<Test
             var pgEx = await Assert.ThrowsAsync<PostgresException>(() => cmd.ExecuteNonQueryAsync());
             Assert.Equal(PostgresErrorCodes.CheckViolation, pgEx.SqlState);
             Assert.Contains("ck_restaurant_tables_public_code", pgEx.ConstraintName);
+        }
+
+        // Inserting valid 32-char lowercase hex public_code must succeed
+        var validHex32 = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        await using (var cmdValid = conn.CreateCommand())
+        {
+            cmdValid.CommandText = @"
+                INSERT INTO tenancy.restaurant_tables (
+                    id, tenant_id, branch_id, dining_area_id, table_number, name,
+                    capacity, position_x, position_y, width, height, rotation_degrees,
+                    shape, is_active, qr_version, public_code, concurrency_token, created_at
+                ) VALUES (
+                    @id, @tid, @bid, @aid, 'VAL-01', 'Val Table',
+                    4, 0, 0, 100, 100, 0, 1, true, 1, @pcode, @token, clock_timestamp()
+                );";
+            cmdValid.Parameters.AddWithValue("id", Guid.NewGuid());
+            cmdValid.Parameters.AddWithValue("tid", tenantId);
+            cmdValid.Parameters.AddWithValue("bid", branchId);
+            cmdValid.Parameters.AddWithValue("aid", areaId);
+            cmdValid.Parameters.AddWithValue("pcode", validHex32);
+            cmdValid.Parameters.AddWithValue("token", Guid.NewGuid());
+
+            var inserted = await cmdValid.ExecuteNonQueryAsync();
+            Assert.Equal(1, inserted);
         }
     }
 }

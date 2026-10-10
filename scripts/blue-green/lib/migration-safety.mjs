@@ -27,6 +27,7 @@ export const ALLOWED_CONSTRAINT_REPLACEMENTS = [
   { droppedConstraint: 'AK_menus_tenant_id_id', replacementConstraint: 'AK_menus_tenant_id_branch_id_id', table: 'menus', type: 'unique', allowedFile: '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox', reason: 'Branch-scoped menu AK (Phase 5.5)' },
   { droppedConstraint: 'fk_menu_items_prep_stations_tenant_branch_station', replacementConstraint: 'fk_menu_items_prep_stations_tenant_branch_station', table: 'menu_items', reason: 'Restrict delete behavior hardening (Phase 5 closing)' },
   { droppedConstraint: 'ck_dining_sessions_status_timestamps', replacementConstraint: 'ck_dining_sessions_status_timestamps', table: 'dining_sessions', type: 'check', allowedFile: '20261011160000_HardenTableAndDiningSessionIntegrityConstraints', reason: 'Harden dining session lifecycle status timestamps and chronology (Phase 6 closing)' },
+  { droppedConstraint: 'ck_restaurant_tables_public_code', replacementConstraint: 'ck_restaurant_tables_public_code', table: 'restaurant_tables', type: 'check', allowedFile: '20261011180000_HardenTablePublicCodeExactHex32Contract', reason: 'Harden public_code to exact 32-character lowercase hex format (Phase 6 closing)' },
 ];
 
 export const ALLOWED_FK_REPLACEMENTS = ALLOWED_CONSTRAINT_REPLACEMENTS;

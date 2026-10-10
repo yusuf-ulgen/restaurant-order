@@ -34,6 +34,8 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
         await context.Database.MigrateAsync();
     }
 
+    private static string ValidPublicCode() => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+
     private static async Task<(Guid tenantId, Guid branchId, Guid diningAreaId)> SeedAreaAsync(NpgsqlConnection conn)
     {
         var tenantId = Guid.NewGuid();
@@ -43,14 +45,14 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO tenancy.tenants (id, name, identifier, is_active, created_at)
-            VALUES (@tId, 'Test Tenant', @tIdent, true, clock_timestamp());
-            INSERT INTO tenancy.brands (id, tenant_id, name, identifier, is_active, created_at)
-            VALUES (@bndId, @tId, 'Test Brand', @bndIdent, true, clock_timestamp());
-            INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, identifier, timezone, currency, is_active, created_at)
-            VALUES (@brId, @tId, @bndId, 'Test Branch', @brIdent, 'Europe/Istanbul', 'TRY', true, clock_timestamp());
-            INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at)
-            VALUES (@daId, @tId, @brId, 'Salon', @daCode, 'Indoor', 1, true, clock_timestamp());";
+            INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
+            VALUES (@tId, 'Test Tenant', @tIdent, 'Active', clock_timestamp(), gen_random_uuid());
+            INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+            VALUES (@bndId, @tId, 'Test Brand', @bndIdent, 'Active', clock_timestamp(), gen_random_uuid());
+            INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
+            VALUES (@brId, @tId, @bndId, 'Test Branch', @brIdent, 'Europe/Istanbul', 'TRY', 'Active', clock_timestamp(), gen_random_uuid());
+            INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
+            VALUES (@daId, @tId, @brId, 'Salon', @daCode, 1, 1, true, clock_timestamp(), gen_random_uuid());";
         cmd.Parameters.AddWithValue("tId", tenantId);
         cmd.Parameters.AddWithValue("tIdent", $"t-{Guid.NewGuid():N}");
         cmd.Parameters.AddWithValue("bndId", brandId);
@@ -66,8 +68,9 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
 
     private static async Task<int> InsertTableSqlAsync(
         NpgsqlConnection conn, Guid id, Guid tid, Guid bid, Guid aid,
-        string tnum, int x, int y, int w, int h, int shape, string pcode)
+        string tnum, int x, int y, int w, int h, int shape, string? pcode = null)
     {
+        pcode ??= ValidPublicCode();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO tenancy.restaurant_tables (
@@ -134,14 +137,14 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
 
         // 1. Invalid shape 0 must fail
         var ex = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "SHP-0", 0, 0, 100, 100, 0, "PUBCODE0001"));
+            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "SHP-0", 0, 0, 100, 100, 0));
         Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
         Assert.Contains("ck_restaurant_tables_shape", ex.ConstraintName);
 
         // 2. Valid shape 1, 2, 3 must succeed
         foreach (var shp in new[] { 1, 2, 3 })
         {
-            var rows = await InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, $"SHP-{shp}", 0, 0, 100, 100, shp, $"PCODE000{shp}01");
+            var rows = await InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, $"SHP-{shp}", 0, 0, 100, 100, shp);
             Assert.Equal(1, rows);
         }
     }
@@ -158,18 +161,18 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
 
         // 1. position_x + width = 9950 + 100 = 10050 > 10000 must fail
         var exX = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-X", 9950, 0, 100, 100, 1, "BNDX0000001"));
+            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-X", 9950, 0, 100, 100, 1));
         Assert.Equal(PostgresErrorCodes.CheckViolation, exX.SqlState);
         Assert.Contains("ck_restaurant_tables_canvas_bounds", exX.ConstraintName);
 
         // 2. position_y + height = 9950 + 100 = 10050 > 10000 must fail
         var exY = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-Y", 0, 9950, 100, 100, 1, "BNDY0000001"));
+            InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-Y", 0, 9950, 100, 100, 1));
         Assert.Equal(PostgresErrorCodes.CheckViolation, exY.SqlState);
         Assert.Contains("ck_restaurant_tables_canvas_bounds", exY.ConstraintName);
 
         // 3. Exactly on border (9900 + 100 = 10000) must succeed
-        var rows = await InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-OK", 9900, 9900, 100, 100, 1, "BNDOK000001");
+        var rows = await InsertTableSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, diningAreaId, "BND-OK", 9900, 9900, 100, 100, 1);
         Assert.Equal(1, rows);
     }
 
@@ -184,7 +187,7 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
         var (tenantId, branchId, diningAreaId) = await SeedAreaAsync(conn);
 
         var tableId = Guid.NewGuid();
-        await InsertTableSqlAsync(conn, tableId, tenantId, branchId, diningAreaId, "SES-01", 0, 0, 100, 100, 1, "SES01PCODE1");
+        await InsertTableSqlAsync(conn, tableId, tenantId, branchId, diningAreaId, "SES-01", 0, 0, 100, 100, 1);
 
         var now = DateTimeOffset.UtcNow;
 
@@ -206,9 +209,9 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
         Assert.Equal(PostgresErrorCodes.CheckViolation, ex3.SqlState);
         Assert.Contains("ck_dining_sessions_status_timestamps", ex3.ConstraintName);
 
-        // 4. Status 4 (Closed unmerged) with null bill_requested_at_utc must fail
+        // 4. Status 4 (Closed unmerged) with null closed_at_utc must fail status_timestamps constraint (while satisfying chronology)
         var ex4 = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertSessionSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, tableId, 4, now, now.AddMinutes(1), null, now.AddMinutes(5)));
+            InsertSessionSqlAsync(conn, Guid.NewGuid(), tenantId, branchId, tableId, 4, now, now.AddMinutes(1), now.AddMinutes(2), null));
         Assert.Equal(PostgresErrorCodes.CheckViolation, ex4.SqlState);
         Assert.Contains("ck_dining_sessions_status_timestamps", ex4.ConstraintName);
 
@@ -229,7 +232,7 @@ public class FloorAndSessionIntegrityConstraintIntegrationTests : IClassFixture<
         var (tenantId, branchId, diningAreaId) = await SeedAreaAsync(conn);
 
         var tableId = Guid.NewGuid();
-        await InsertTableSqlAsync(conn, tableId, tenantId, branchId, diningAreaId, "SES-02", 0, 0, 100, 100, 1, "SES02PCODE1");
+        await InsertTableSqlAsync(conn, tableId, tenantId, branchId, diningAreaId, "SES-02", 0, 0, 100, 100, 1);
 
         var now = DateTimeOffset.UtcNow;
 

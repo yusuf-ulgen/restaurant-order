@@ -42,7 +42,7 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
 
             t.HasCheckConstraint(
                 "ck_restaurant_tables_public_code",
-                "length(public_code) >= 16 AND length(public_code) <= 64 AND public_code ~ '^[0-9a-zA-Z_-]+$'");
+                "length(public_code) = 32 AND public_code ~ '^[0-9a-f]{32}$'");
         });
 
         builder.HasKey(rt => rt.Id);
