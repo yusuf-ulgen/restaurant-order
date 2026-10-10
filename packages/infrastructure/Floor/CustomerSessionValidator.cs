@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Floor;
+using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Floor;
+using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure.Persistence;
 using RestaurantOrder.Infrastructure.Redis;
 
@@ -10,7 +12,7 @@ namespace RestaurantOrder.Infrastructure.Floor;
 
 /// <summary>
 /// Validates whether a dining session is active (not closed) for customer JWT access tokens.
-/// Employs fail-closed semantics: any closed session, missing session, or database/cache fault rejects access.
+/// Employs fail-closed semantics: any closed session, missing session, claim mismatch, or database/cache fault rejects access.
 /// </summary>
 public sealed class CustomerSessionValidator : ICustomerSessionValidator
 {
@@ -33,14 +35,14 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<bool> ValidateSessionActiveAsync(Guid tableSessionId, CancellationToken ct = default)
+    public async Task<bool> ValidateSessionActiveAsync(Guid tenantId, Guid branchId, Guid tableSessionId, CancellationToken ct = default)
     {
-        if (tableSessionId == Guid.Empty)
+        if (tenantId == Guid.Empty || branchId == Guid.Empty || tableSessionId == Guid.Empty)
         {
             return false;
         }
 
-        var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tableSessionId:D}";
+        var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tenantId:D}:{branchId:D}:{tableSessionId:D}";
 
         // 1. Try fast Redis cache
         try
@@ -60,21 +62,35 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
             _logger.LogWarning("Redis cache check failed in CustomerSessionValidator: {Message}", ex.Message);
         }
 
-        // 2. Query PostgreSQL database source-of-truth
-        // IgnoreQueryFilters is required because tenant context is not yet resolved during OnTokenValidated
-        var session = await _dbContext.DiningSessions
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(s => s.Id == DiningSessionId.From(tableSessionId))
-            .Select(s => new { s.Status })
-            .FirstOrDefaultAsync(ct);
-
-        if (session == null)
+        // 2. Query PostgreSQL database source-of-truth inside tenant transaction
+        // Enforces PostgreSQL forced Row-Level Security (RLS) under runtime roles.
+        bool isActive;
+        try
         {
+            await using var tx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+            var session = await _dbContext.DiningSessions
+                .AsNoTracking()
+                .Where(s => s.TenantId == new TenantId(tenantId) &&
+                            s.BranchId == new BranchId(branchId) &&
+                            s.Id == DiningSessionId.From(tableSessionId))
+                .Select(s => new { s.Status })
+                .FirstOrDefaultAsync(ct);
+
+            if (session == null)
+            {
+                return false;
+            }
+
+            isActive = session.Status != DiningSessionStatus.Closed;
+            await tx.CommitAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Database query failed during customer session validation for tenant {TenantId}, session {SessionId}",
+                tenantId, tableSessionId);
+            // Fail-closed: database or security infrastructure error rejects the token
             return false;
         }
-
-        var isActive = session.Status != DiningSessionStatus.Closed;
 
         // Cache result with short TTL
         try
@@ -93,14 +109,14 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
         return isActive;
     }
 
-    public async Task InvalidateSessionCacheAsync(Guid tableSessionId, CancellationToken ct = default)
+    public async Task InvalidateSessionCacheAsync(Guid tenantId, Guid branchId, Guid tableSessionId, CancellationToken ct = default)
     {
-        if (tableSessionId == Guid.Empty)
+        if (tenantId == Guid.Empty || branchId == Guid.Empty || tableSessionId == Guid.Empty)
         {
             return;
         }
 
-        var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tableSessionId:D}";
+        var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tenantId:D}:{branchId:D}:{tableSessionId:D}";
         try
         {
             var db = await _redisProvider.GetDatabaseAsync(ct);

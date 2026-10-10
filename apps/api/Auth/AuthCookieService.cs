@@ -143,6 +143,9 @@ public sealed class AuthCookieService : IAuthCookieService
             Path = "/",
             Expires = accessExpiresAt
         });
+
+        // Concurrently issue double-submit CSRF cookie for subsequent mutation requests
+        SetCsrfCookie(response, isHttps, accessExpiresAt);
     }
 
     public void ClearCustomerSessionCookie(HttpResponse response, bool isHttps)
@@ -156,6 +159,8 @@ public sealed class AuthCookieService : IAuthCookieService
             SameSite = SameSiteMode.Lax,
             Path = "/"
         });
+
+        ClearCsrfCookie(response, isHttps);
     }
 
     public void SetCsrfCookie(HttpResponse response, bool isHttps, DateTimeOffset? expires = null)

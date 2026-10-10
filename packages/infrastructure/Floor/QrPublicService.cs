@@ -45,75 +45,80 @@ public sealed class QrPublicService : IQrPublicService
         _logger.LogInformation("Resolving QR code with fingerprint {Fingerprint} for table code {TableCode}",
             fingerprint, payload.PublicTableCode);
 
-        // Load table using IgnoreQueryFilters since public endpoints operate pre-auth
-        var table = await _dbContext.RestaurantTables
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TenantId == payload.TenantId &&
-                                      t.BranchId == payload.BranchId &&
-                                      t.PublicCode == payload.PublicTableCode, ct)
-            ?? throw new QrTableInactiveException($"Table with code '{payload.PublicTableCode}' was not found.");
-
-        if (!table.IsActive)
+        // Open verified tenant transaction context so PostgreSQL Row-Level Security (RLS) is satisfied for runtime users without IgnoreQueryFilters()
+        var tx = await _dbContext.BeginTenantTransactionAsync(payload.TenantId.Value, cancellationToken: ct);
+        try
         {
-            throw new QrTableInactiveException($"Table '{table.TableNumber}' is currently inactive.");
-        }
+            var table = await _dbContext.RestaurantTables
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TenantId == payload.TenantId &&
+                                          t.BranchId == payload.BranchId &&
+                                          t.PublicCode == payload.PublicTableCode, ct)
+                ?? throw new QrTableInactiveException($"Table with code '{payload.PublicTableCode}' was not found.");
 
-        if (table.QrVersion != payload.QrVersion)
-        {
-            throw new QrRevokedException(
-                $"Table QR code has been revoked. Current version is {table.QrVersion}, token has {payload.QrVersion}.");
-        }
+            if (!table.IsActive)
+            {
+                throw new QrTableInactiveException($"Table '{table.TableNumber}' is currently inactive.");
+            }
 
-        if (payload.Mode == QrMode.Dynamic)
-        {
-            var dynamicSession = await _dbContext.DiningSessions
-                .IgnoreQueryFilters()
+            if (table.QrVersion != payload.QrVersion)
+            {
+                throw new QrRevokedException(
+                    $"Table QR code has been revoked. Current version is {table.QrVersion}, token has {payload.QrVersion}.");
+            }
+
+            if (payload.Mode == QrMode.Dynamic)
+            {
+                var dynamicSession = await _dbContext.DiningSessions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
+                                              s.BranchId == payload.BranchId &&
+                                              s.Id == payload.TableSessionId!.Value, ct)
+                    ?? throw new QrSessionClosedException("Dining session referenced by dynamic QR does not exist.");
+
+                if (dynamicSession.TableId != table.Id)
+                {
+                    throw new QrSecurityException("Dynamic QR token table does not match session table.");
+                }
+
+                if (dynamicSession.Status == DiningSessionStatus.Closed)
+                {
+                    throw new QrSessionClosedException("Dining session is closed.");
+                }
+            }
+
+            var branch = await _dbContext.Branches
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.TenantId == payload.TenantId && b.Id == payload.BranchId, ct);
+
+            var tenant = await _dbContext.Tenants
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == payload.TenantId, ct);
+
+            var activeSession = await _dbContext.DiningSessions
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
                                           s.BranchId == payload.BranchId &&
-                                          s.Id == payload.TableSessionId!.Value, ct)
-                ?? throw new QrSessionClosedException("Dining session referenced by dynamic QR does not exist.");
+                                          s.TableId == table.Id &&
+                                          s.Status != DiningSessionStatus.Closed, ct);
 
-            if (dynamicSession.TableId != table.Id)
-            {
-                throw new QrSecurityException("Dynamic QR token table does not match session table.");
-            }
+            await tx.CommitAsync(ct);
 
-            if (dynamicSession.Status == DiningSessionStatus.Closed)
-            {
-                throw new QrSessionClosedException("Dining session is closed.");
-            }
+            return new QrResolveResponse(
+                TenantId: payload.TenantId.Value,
+                BranchId: payload.BranchId.Value,
+                BrandName: tenant?.Name ?? "Restaurant",
+                BranchName: branch?.Name ?? "Branch",
+                TableNumber: table.TableNumber,
+                TableName: table.Name,
+                Mode: payload.Mode == QrMode.Static ? "static" : "dynamic",
+                HasActiveSession: activeSession != null,
+                ActiveSessionStatus: activeSession?.Status.ToString());
         }
-
-        var branch = await _dbContext.Branches
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.TenantId == payload.TenantId && b.Id == payload.BranchId, ct);
-
-        var tenant = await _dbContext.Tenants
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == payload.TenantId, ct);
-
-        var activeSession = await _dbContext.DiningSessions
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TenantId == payload.TenantId &&
-                                      s.BranchId == payload.BranchId &&
-                                      s.TableId == table.Id &&
-                                      s.Status != DiningSessionStatus.Closed, ct);
-
-        return new QrResolveResponse(
-            TenantId: payload.TenantId.Value,
-            BranchId: payload.BranchId.Value,
-            BrandName: tenant?.Name ?? "Restaurant",
-            BranchName: branch?.Name ?? "Branch",
-            TableNumber: table.TableNumber,
-            TableName: table.Name,
-            Mode: payload.Mode == QrMode.Static ? "static" : "dynamic",
-            HasActiveSession: activeSession != null,
-            ActiveSessionStatus: activeSession?.Status.ToString());
+        finally
+        {
+            await tx.DisposeAsync();
+        }
     }
 
     public async Task<QrExchangeResult> ExchangeQrAsync(string token, string clientIp, CancellationToken ct = default)

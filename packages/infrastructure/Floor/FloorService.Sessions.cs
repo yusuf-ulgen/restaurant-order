@@ -330,7 +330,7 @@ public partial class FloorService
 
         if (_customerSessionValidator != null)
         {
-            await _customerSessionValidator.InvalidateSessionCacheAsync(session.Id.Value, ct);
+            await _customerSessionValidator.InvalidateSessionCacheAsync(session.TenantId.Value, session.BranchId.Value, session.Id.Value, ct);
         }
 
         return MapSession(session);

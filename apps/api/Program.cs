@@ -129,30 +129,48 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
 
                 if (string.Equals(principalTypeClaim, "customer", StringComparison.OrdinalIgnoreCase))
                 {
+                    var tenantClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId)?.Value
+                        ?? context.Principal?.FindFirst("tenant_id")?.Value;
+
+                    var branchClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.BranchId)?.Value
+                        ?? context.Principal?.FindFirst("branch_id")?.Value;
+
                     var tableSessionClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TableSessionId)?.Value
-                        ?? context.Principal?.FindFirst("table_session_id")?.Value
-                        ?? context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.Subject)?.Value
+                        ?? context.Principal?.FindFirst("table_session_id")?.Value;
+
+                    var customerSubClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.Subject)?.Value
                         ?? context.Principal?.FindFirst("sub")?.Value;
 
-                    if (Guid.TryParse(tableSessionClaim, out var tableSessionId))
+                    if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty ||
+                        !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty ||
+                        !Guid.TryParse(tableSessionClaim, out var tableSessionId) || tableSessionId == Guid.Empty)
                     {
-                        try
+                        context.Fail("Customer token is missing or has invalid required claims.");
+                        return;
+                    }
+
+                    // If subject claim is also present, it must match table_session_id for customer tokens
+                    if (!string.IsNullOrWhiteSpace(customerSubClaim) &&
+                        Guid.TryParse(customerSubClaim, out var parsedSub) &&
+                        parsedSub != tableSessionId)
+                    {
+                        context.Fail("Customer token claims mismatch.");
+                        return;
+                    }
+
+                    try
+                    {
+                        var customerValidator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Floor.ICustomerSessionValidator>();
+                        var isValid = await customerValidator.ValidateSessionActiveAsync(tenantId, branchId, tableSessionId, context.HttpContext.RequestAborted);
+                        if (!isValid)
                         {
-                            var customerValidator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Floor.ICustomerSessionValidator>();
-                            var isValid = await customerValidator.ValidateSessionActiveAsync(tableSessionId, context.HttpContext.RequestAborted);
-                            if (!isValid)
-                            {
-                                context.Fail("Customer dining session is closed or invalid.");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            context.Fail($"Customer token validation failed closed: {ex.Message}");
+                            context.Fail("Customer dining session is closed or invalid.");
                         }
                     }
-                    else
+                    catch (Exception)
                     {
-                        context.Fail("Customer token is missing valid table_session_id.");
+                        // Fail-closed without leaking internal exception details
+                        context.Fail("Customer token validation failed.");
                     }
 
                     return;

@@ -34,6 +34,8 @@ public class CsrfValidationMiddlewareTests
     [InlineData("/api/v1/auth/login")]
     [InlineData("/api/v1/dev/seed")]
     [InlineData("/health/ready")]
+    [InlineData("/api/v1/qr/exchange")]
+    [InlineData("/api/v1/qr/resolve")]
     public async Task ExemptEndpoints_BypassCsrfValidation_EvenOnPost(string path)
     {
         var nextCalled = false;
@@ -244,6 +246,76 @@ public class CsrfValidationMiddlewareTests
         await middleware.InvokeAsync(context);
 
         Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task CustomerSessionMutation_WithValidCsrfHeader_PassesThrough()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var csrfToken = "valid_customer_csrf_token_abcdef123";
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/customer/call-waiter";
+        context.Request.Headers.Cookie = $"{AuthCookieService.AccessTokenCookieName}=customer_jwt_token; {AuthCookieService.CsrfTokenCookieName}={csrfToken}";
+        context.Request.Headers[AuthCookieService.CsrfHeaderName] = csrfToken;
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task CustomerSessionMutation_MissingCsrfHeader_Returns403()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/customer/call-waiter";
+        context.Request.Headers.Cookie = $"{AuthCookieService.AccessTokenCookieName}=customer_jwt_token; {AuthCookieService.CsrfTokenCookieName}=customer_csrf_token";
+        context.Response.Body = new MemoryStream();
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CustomerSessionMutation_MismatchedCsrfHeader_Returns403()
+    {
+        var nextCalled = false;
+        RequestDelegate next = ctx =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new CsrfValidationMiddleware(next);
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/customer/call-waiter";
+        context.Request.Headers.Cookie = $"{AuthCookieService.AccessTokenCookieName}=customer_jwt_token; {AuthCookieService.CsrfTokenCookieName}=customer_csrf_token";
+        context.Request.Headers[AuthCookieService.CsrfHeaderName] = "wrong_csrf_token";
+        context.Response.Body = new MemoryStream();
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
     }
 }
 
