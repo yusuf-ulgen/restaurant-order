@@ -16,6 +16,9 @@ namespace RestaurantOrder.IntegrationTests;
 
 public static class RestaurantConfigTestHelpers
 {
+    public static readonly string SharedTestQrKeyBase64 = Convert.ToBase64String(
+        System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
     public static HttpClient CreateTestClient(TestcontainersFixture fixture)
     {
         var factory = new WebApplicationFactory<RestaurantOrder.Api.Program>().WithWebHostBuilder(builder =>
@@ -26,6 +29,8 @@ public static class RestaurantConfigTestHelpers
             builder.UseSetting("REDIS_URL", fixture.RedisEndpoint);
             builder.UseSetting("JWT_SECRET", RestaurantOrder.Api.ConfigurationValidator.InsecureDevJwtSecret);
             builder.UseSetting("DEPLOYMENT_COLOR", "blue");
+            builder.UseSetting("QrSecurity:CurrentKeyId", "k1");
+            builder.UseSetting("QrSecurity:Keys:k1", SharedTestQrKeyBase64);
             builder.ConfigureServices(services =>
             {
                 var mockValidator = new Mock<ITokenRevocationValidator>();

@@ -238,6 +238,7 @@ describe('QrGeneratorView Component', () => {
 
   it('triggers SVG download and print handlers without errors', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     const origCreateObjectURL = window.URL.createObjectURL;
     const origRevokeObjectURL = window.URL.revokeObjectURL;
     window.URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/dummy');
@@ -260,7 +261,9 @@ describe('QrGeneratorView Component', () => {
     fireEvent.click(screen.getByTestId('download-svg-btn'));
     fireEvent.click(screen.getByTestId('print-qr-btn'));
 
+    expect(clickSpy).toHaveBeenCalled();
     expect(printSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
     printSpy.mockRestore();
     window.URL.createObjectURL = origCreateObjectURL;
     window.URL.revokeObjectURL = origRevokeObjectURL;

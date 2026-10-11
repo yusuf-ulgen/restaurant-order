@@ -23,6 +23,7 @@ const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 700;
 
 function snap(val: number): number {
+  if (typeof val !== 'number' || Number.isNaN(val)) return 0;
   return Math.round(val / GRID_SNAP) * GRID_SNAP;
 }
 
@@ -98,10 +99,12 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
     }
     onSelectTable(table);
     const current = getTableLayout(table);
+    const startX = typeof e.clientX === 'number' && !Number.isNaN(e.clientX) ? e.clientX : 0;
+    const startY = typeof e.clientY === 'number' && !Number.isNaN(e.clientY) ? e.clientY : 0;
     setDragState({
       tableId: table.id,
-      startX: e.clientX,
-      startY: e.clientY,
+      startX,
+      startY,
       origX: current.positionX,
       origY: current.positionY,
     });
@@ -109,10 +112,14 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragState) return;
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    const newX = Math.max(0, Math.min(CANVAS_WIDTH - 80, snap(dragState.origX + dx)));
-    const newY = Math.max(0, Math.min(CANVAS_HEIGHT - 80, snap(dragState.origY + dy)));
+    const clientX = typeof e.clientX === 'number' && !Number.isNaN(e.clientX) ? e.clientX : dragState.startX;
+    const clientY = typeof e.clientY === 'number' && !Number.isNaN(e.clientY) ? e.clientY : dragState.startY;
+    const dx = clientX - dragState.startX;
+    const dy = clientY - dragState.startY;
+    const rawX = dragState.origX + dx;
+    const rawY = dragState.origY + dy;
+    const newX = Math.max(0, Math.min(CANVAS_WIDTH - 80, snap(Number.isNaN(rawX) ? dragState.origX : rawX)));
+    const newY = Math.max(0, Math.min(CANVAS_HEIGHT - 80, snap(Number.isNaN(rawY) ? dragState.origY : rawY)));
     updateTableLayoutField(dragState.tableId, { positionX: newX, positionY: newY });
   };
 

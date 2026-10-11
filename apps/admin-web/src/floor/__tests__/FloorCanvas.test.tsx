@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FloorCanvas } from '../FloorCanvas';
 import type { RestaurantTableDto, TableFloorStatusDto } from '@restaurant-order/contracts';
 
@@ -207,14 +207,20 @@ describe('FloorCanvas Component', () => {
     const saveButton = screen.getByTestId('save-batch-layout-btn');
     fireEvent.click(saveButton);
 
-    expect(handleSaveBatch).toHaveBeenCalledWith([
-      expect.objectContaining({
-        tableId: 'tbl-1',
-        positionX: 110,
-        positionY: 100,
-        concurrencyToken: 'ct-1',
-      }),
-    ]);
+    await waitFor(() => {
+      expect(handleSaveBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          tableId: 'tbl-1',
+          positionX: 110,
+          positionY: 100,
+          concurrencyToken: 'ct-1',
+        }),
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('save-batch-layout-btn')).toBeNull();
+    });
   });
 
   it('supports pointer drag and drop to reposition table', () => {
@@ -234,9 +240,9 @@ describe('FloorCanvas Component', () => {
     const table1 = screen.getByTestId('floor-table-tbl-1');
     const svg = screen.getByTestId('floor-canvas-svg');
 
-    fireEvent.pointerDown(table1, { clientX: 100, clientY: 100, pointerId: 1 });
-    fireEvent.pointerMove(svg, { clientX: 150, clientY: 140, pointerId: 1 });
-    fireEvent.pointerUp(svg, { pointerId: 1 });
+    fireEvent(table1, new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+    fireEvent(svg, new MouseEvent('pointermove', { bubbles: true, clientX: 150, clientY: 140 }));
+    fireEvent(svg, new MouseEvent('pointerup', { bubbles: true }));
 
     expect(screen.getByText(/kaydedilmemiş değişiklikler var/i)).toBeDefined();
   });

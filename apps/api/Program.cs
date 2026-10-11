@@ -116,63 +116,48 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
         {
             OnMessageReceived = context =>
             {
-                if (string.IsNullOrEmpty(context.Token))
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 {
-                    context.Token = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
+                    var token = authHeader["Bearer ".Length..].Trim();
+                    if (token.Length > 4096)
+                    {
+                        context.Fail("Token exceeds maximum allowed length.");
+                        return Task.CompletedTask;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(context.Token) &&
+                    context.Request.Cookies.ContainsKey(RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName))
+                {
+                    var cookieToken = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
+                    if (cookieToken != null && cookieToken.Length > 4096)
+                    {
+                        context.Fail("Token exceeds maximum allowed length.");
+                        return Task.CompletedTask;
+                    }
+                    context.Token = cookieToken;
                 }
                 return Task.CompletedTask;
             },
             OnTokenValidated = async context =>
             {
+                var iatClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Iat)?.Value
+                    ?? context.Principal?.FindFirst("iat")?.Value;
+                if (!string.IsNullOrWhiteSpace(iatClaim) &&
+                    long.TryParse(iatClaim, out var iatSeconds) &&
+                    iatSeconds > DateTimeOffset.UtcNow.AddSeconds(5).ToUnixTimeSeconds())
+                {
+                    context.Fail("Token has future issued-at timestamp.");
+                    return;
+                }
+
                 var principalTypeClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.PrincipalType)?.Value
                     ?? context.Principal?.FindFirst("principal_type")?.Value;
 
                 if (string.Equals(principalTypeClaim, "customer", StringComparison.OrdinalIgnoreCase))
                 {
-                    var tenantClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TenantId)?.Value
-                        ?? context.Principal?.FindFirst("tenant_id")?.Value;
-
-                    var branchClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.BranchId)?.Value
-                        ?? context.Principal?.FindFirst("branch_id")?.Value;
-
-                    var tableSessionClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.TableSessionId)?.Value
-                        ?? context.Principal?.FindFirst("table_session_id")?.Value;
-
-                    var customerSubClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.Subject)?.Value
-                        ?? context.Principal?.FindFirst("sub")?.Value;
-
-                    if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty ||
-                        !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty ||
-                        !Guid.TryParse(tableSessionClaim, out var tableSessionId) || tableSessionId == Guid.Empty)
-                    {
-                        context.Fail("Customer token is missing or has invalid required claims.");
-                        return;
-                    }
-
-                    // If subject claim is also present, it must match table_session_id for customer tokens
-                    if (!string.IsNullOrWhiteSpace(customerSubClaim) &&
-                        Guid.TryParse(customerSubClaim, out var parsedSub) &&
-                        parsedSub != tableSessionId)
-                    {
-                        context.Fail("Customer token claims mismatch.");
-                        return;
-                    }
-
-                    try
-                    {
-                        var customerValidator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Floor.ICustomerSessionValidator>();
-                        var isValid = await customerValidator.ValidateSessionActiveAsync(tenantId, branchId, tableSessionId, context.HttpContext.RequestAborted);
-                        if (!isValid)
-                        {
-                            context.Fail("Customer dining session is closed or invalid.");
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Fail-closed without leaking internal exception details
-                        context.Fail("Customer token validation failed.");
-                    }
-
+                    await RestaurantOrder.Api.Auth.CustomerTokenValidationHelper.ValidateCustomerTokenAsync(context);
                     return;
                 }
 

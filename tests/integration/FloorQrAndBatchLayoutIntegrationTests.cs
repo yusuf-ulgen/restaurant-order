@@ -189,7 +189,7 @@ public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<Testcontainer
             Microsoft.Extensions.Options.Options.Create(new QrSecurityOptions
             {
                 CurrentKeyId = "k1",
-                Keys = new Dictionary<string, string> { ["k1"] = "synthetic-dev-qr-key-32chars-minimum-entropy!!" }
+                Keys = new Dictionary<string, string> { ["k1"] = RestaurantConfigTestHelpers.SharedTestQrKeyBase64 }
             }),
             new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Development" });
 

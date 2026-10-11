@@ -89,9 +89,9 @@ public class FloorTablePostgreSqlRlsIntegrationTests : IClassFixture<Testcontain
                 VALUES (@daA, @tA, @bA, 'Area A', 'area-a', 1, 1, TRUE, NOW(), gen_random_uuid()),
                        (@daB, @tB, @bB, 'Area B', 'area-b', 1, 1, TRUE, NOW(), gen_random_uuid());
 
-                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-                VALUES (@tabA, @tA, @bA, @daA, 'T-01', 'Table 1', 4, 10, 10, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW()),
-                       (@tabB, @tB, @bB, @daB, 'T-02', 'Table 2', 4, 20, 20, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW());";
+                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+                VALUES (@tabA, @tA, @bA, @daA, 'T-01', 'Table 1', @codeA, 4, 10, 10, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW()),
+                       (@tabB, @tB, @bB, @daB, 'T-02', 'Table 2', @codeB, 4, 20, 20, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW());";
 
             cmd.Parameters.AddWithValue("tA", tenantAId);
             cmd.Parameters.AddWithValue("tB", tenantBId);
@@ -101,6 +101,8 @@ public class FloorTablePostgreSqlRlsIntegrationTests : IClassFixture<Testcontain
             cmd.Parameters.AddWithValue("daB", diningAreaBId);
             cmd.Parameters.AddWithValue("tabA", tableAId);
             cmd.Parameters.AddWithValue("tabB", tableBId);
+            cmd.Parameters.AddWithValue("codeA", Guid.NewGuid().ToString("N"));
+            cmd.Parameters.AddWithValue("codeB", Guid.NewGuid().ToString("N"));
             cmd.Parameters.AddWithValue("slugA", $"ta-{Guid.NewGuid():N}");
             cmd.Parameters.AddWithValue("slugB", $"tb-{Guid.NewGuid():N}");
             await cmd.ExecuteNonQueryAsync();
@@ -183,11 +185,12 @@ public class FloorTablePostgreSqlRlsIntegrationTests : IClassFixture<Testcontain
             // Attempt to insert table in Branch A pointing to DiningArea in Branch B
             await using var invalidInsertCmd = ownerConn.CreateCommand();
             invalidInsertCmd.CommandText = @"
-                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-                VALUES (gen_random_uuid(), @tId, @bA, @daB, 'T-CROSS-FK', 'Cross Table', 4, 0, 0, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW());";
+                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+                VALUES (gen_random_uuid(), @tId, @bA, @daB, 'T-CROSS-FK', 'Cross Table', @code, 4, 0, 0, 100, 100, 0, 1, TRUE, 1, gen_random_uuid(), NOW());";
             invalidInsertCmd.Parameters.AddWithValue("tId", tenantId);
             invalidInsertCmd.Parameters.AddWithValue("bA", branchAId);
             invalidInsertCmd.Parameters.AddWithValue("daB", diningAreaBId);
+            invalidInsertCmd.Parameters.AddWithValue("code", Guid.NewGuid().ToString("N"));
 
             var ex = await Assert.ThrowsAsync<PostgresException>(() => invalidInsertCmd.ExecuteNonQueryAsync());
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, ex.SqlState);

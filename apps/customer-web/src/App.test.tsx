@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from './App';
 import { customerQrApi } from './customerQrApi';
 
@@ -102,9 +102,24 @@ describe('Customer Web App', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('renders TableWelcomeView when isQrLanding is true or token prop is passed', () => {
+    it('renders TableWelcomeView when isQrLanding is true or token prop is passed', async () => {
+      vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue({
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        brandName: 'Gurme Restoran',
+        branchName: 'Kadıköy',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+        mode: 'static',
+        hasActiveSession: false,
+        activeSessionStatus: null,
+      });
+
       render(<App isQrLanding={true} token="test-qr-landing-token" />);
       expect(screen.getByTestId('table-welcome-container')).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByText('Teras 7')).toBeDefined();
+      });
     });
 
     it('updates header subtitle and badge when session becomes ready', async () => {

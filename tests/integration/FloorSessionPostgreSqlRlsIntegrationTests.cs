@@ -94,11 +94,14 @@ public class FloorSessionPostgreSqlRlsIntegrationTests : IClassFixture<Testconta
                        ({4}, {5}, {6}, 'Main Hall B', {7}, 1, 0, true, NOW(), gen_random_uuid());
             ", areaA, tenantA, branchA, $"daa-{Guid.NewGuid():N}", areaB, tenantB, branchB, $"dab-{Guid.NewGuid():N}");
 
+            var codeA = Guid.NewGuid().ToString("N");
+            var codeB = Guid.NewGuid().ToString("N");
+
             await adminCtx.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-                VALUES ({0}, {1}, {2}, {3}, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW()),
-                       ({4}, {5}, {6}, {7}, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
-            ", tableA, tenantA, branchA, areaA, tableB, tenantB, branchB, areaB);
+                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+                VALUES ({0}, {1}, {2}, {3}, 'T-1', 'Table 1', {4}, 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW()),
+                       ({5}, {6}, {7}, {8}, 'T-1', 'Table 1', {9}, 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
+            ", tableA, tenantA, branchA, areaA, codeA, tableB, tenantB, branchB, areaB, codeB);
         }
 
         var sessionAId = Guid.NewGuid();

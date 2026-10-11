@@ -281,6 +281,10 @@ describe('TableWelcomeView Component', () => {
     const leaveBtn = screen.getByTestId('leave-session-btn');
     fireEvent.click(leaveBtn);
 
+    await waitFor(() => {
+      expect(screen.getByTestId('table-resolve-view')).toBeDefined();
+    });
+
     expect(getCustomerSession()).toBeNull();
   });
 

@@ -110,8 +110,8 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
         }
 
         var sqlTable = @"
-            INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-            VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-1', 'Table 1', 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW())
+            INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+            VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-1', 'Table 1', @publicCode, 4, 0, 0, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW())
             ON CONFLICT (id) DO NOTHING;";
         await using (var cmdTable = new NpgsqlCommand(sqlTable, conn))
         {
@@ -119,6 +119,7 @@ public class CatalogBranchAuthorizationEndpointIntegrationTests : IClassFixture<
             cmdTable.Parameters.AddWithValue("tenantId", tenantId);
             cmdTable.Parameters.AddWithValue("branchId", branchId);
             cmdTable.Parameters.AddWithValue("areaId", diningAreaId);
+            cmdTable.Parameters.AddWithValue("publicCode", Guid.NewGuid().ToString("N"));
             await cmdTable.ExecuteNonQueryAsync();
         }
 

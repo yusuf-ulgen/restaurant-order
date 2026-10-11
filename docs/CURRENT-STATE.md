@@ -42,6 +42,28 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - Mevcut uyarılar: bir geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
 - E2E süiti yalnızca iki HTTP sağlık sorgusudur; tam tarayıcı iş akışı kapsamı R08 olarak açıktır.
 
+## Faz 6: Masalar, QR ve Oturumlar — Kapanış Denetimi ve Güvenlik Sertleştirmesi
+
+- Dal: `feat/phase-06-tables-qr-sessions`.
+- Faz 6.0 - 6.6 tamamlandı.
+- Müşteri JWT Bearer doğrulama boru hattı (`OnTokenValidated` ve `OnMessageReceived`) güçlendirildi:
+  - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde reddedilir.
+  - `sub` ile `table_session_id` uyuşmazlığı kesin olarak 401 ile reddedilir.
+  - Gelecek tarihli `iat` (>5 saniye saat kayması) ve 4096 bayttan uzun token'lar reddedilir.
+  - Farklı tenant/branch veya kapalı/birleştirilmiş oturum token'ları reddedilir.
+- QR yarış koşulları ve güvenlik doğrulandı:
+  - Paralel statik QR takasında tekil oturum oluşturulması / tekilleştirme.
+  - QR döndürme (rotation) sonrası eski QR sürümünün geçersiz kılınması (409).
+  - Pasif masa takasının engellenmesi (400).
+  - Çapraz tenant/branch veri sızıntısının engellenmesi.
+  - Generic RFC 7807 hata yanıtlarının iç DB/istisna ayrıntılarını sızdırmaması.
+- Veritabanı ve migrasyon sözleşmesi:
+  - `public_code` için tam 32 karakter küçük harf onaltılık (hex) sözleşmesi (`20261011180000_HardenTablePublicCodeExactHex32Contract`).
+  - `ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`, `ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds` kısıtları.
+- Frontend testleri: JSDOM navigasyon mock'u, SVG koordinat NaN koruması ve `act(...)` sarmalamalarıyla 0 uyarı, 0 hata seviyesine getirildi (359/359 test başarılı).
+- Backend birim testleri: 1.403/1.403 test başarılı (0 hata, 0 atlanan).
+- Mimari testleri: 10/10 test başarılı.
+
 ## Sonraki Somut Adım
 
-Çeviri PR incelemesini ve CI sonucunu izleyin. Bildirim sağlayıcısı için kullanıcı yanıtını alın; ADR-0011 onaylanmadan sağlayıcı entegrasyonunu kesinleştirmeyin. Sonrasında planın kayıt/iptal, taşıma ve gerçek olay entegrasyonu adımlarıyla ilerleyin. Faz 6 öncesi açık iş kurallarını çözün. [Katkı akışını](./CONTRIBUTING-WORKFLOW.md) izleyin; onaysız birleştirme/yayın yapmayın.
+`feat/phase-06-tables-qr-sessions` dalındaki tüm değişiklikleri doğrulanmış biçimde commit edin ve origin'e push edin. PR oluşturulup CI kontrolleri doğrulandıktan sonra Faz 7 (Müşteri Deneyimi) hazırlıklarına geçilebilir. Katkı akışını izleyin; ana dala (main) doğrudan birleştirme veya force-push yapmayın.

@@ -115,7 +115,9 @@ describe('FloorLayoutAndQrView Component', () => {
     const addBtn = screen.getByTestId('create-table-btn');
     fireEvent.click(addBtn);
 
-    expect(screen.getByText('Yeni Masa Ekle')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Yeni Masa Ekle')).toBeDefined();
+    });
   });
 
   it('handles empty branch selection state cleanly', () => {
