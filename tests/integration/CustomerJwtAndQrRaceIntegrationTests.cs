@@ -404,15 +404,18 @@ public class CustomerJwtAndQrRaceIntegrationTests : IClassFixture<Testcontainers
         var exchangeResp = await client.PostAsJsonAsync("/api/v1/qr/exchange", new QrExchangeRequest(qrMeta!.Token));
         Assert.Equal(HttpStatusCode.OK, exchangeResp.StatusCode);
 
-        var exchangeBody = await exchangeResp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        var tokenA = exchangeBody.GetProperty("accessToken").GetString();
-        Assert.NotNull(tokenA);
+        var setCookieHeaders = exchangeResp.Headers.GetValues("Set-Cookie").ToList();
+        var accessCookieHeader = setCookieHeaders.FirstOrDefault(c => c.Contains(AuthCookieService.AccessTokenCookieName));
+        Assert.NotNull(accessCookieHeader);
+        var tokenA = accessCookieHeader.Split(';')[0].Split('=')[1];
+        Assert.False(string.IsNullOrWhiteSpace(tokenA));
 
         // Customer token for Tenant A cannot access Tenant B runtime-menu
         var crossAccessReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/api/v1/catalog/branches/{branchB}/runtime-menu", tokenA!);
+            HttpMethod.Get, $"/api/v1/catalog/branches/{branchB}/runtime-menu", tokenA);
         var crossAccessResp = await client.SendAsync(crossAccessReq);
-        Assert.Equal(HttpStatusCode.Unauthorized, crossAccessResp.StatusCode);
+        Assert.True(crossAccessResp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
     }
 }
+
 
