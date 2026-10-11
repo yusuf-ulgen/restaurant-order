@@ -119,8 +119,9 @@ jobs:
 
       - name: E2E Database - Apply EF Core Migrations
         run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
           dotnet tool install --global dotnet-ef || true
-          dotnet ef database update --project packages/infrastructure/RestaurantOrder.Infrastructure.csproj --startup-project apps/api/RestaurantOrder.Api.csproj --connection "Host=localhost;Port=5432;Database=restaurant_order_dev;Username=postgres;Password=postgres"
+          dotnet-ef database update --project packages/infrastructure/RestaurantOrder.Infrastructure.csproj --startup-project apps/api/RestaurantOrder.Api.csproj --connection "Host=localhost;Port=5432;Database=restaurant_order_dev;Username=postgres;Password=postgres"
 
       # Step: E2E
       - name: E2E - Playwright Browser & Live API Probes
