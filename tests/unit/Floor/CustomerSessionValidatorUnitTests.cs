@@ -57,7 +57,7 @@ public class CustomerSessionValidatorUnitTests
     }
 
     [Fact]
-    public async Task ValidateSessionActiveAsync_CacheHitActive_ReturnsTrueWithoutDbQuery()
+    public async Task ValidateSessionActiveAsync_CachedOneValue_DoesNotShortCircuit_QueriesDbSourceOfTruth()
     {
         using var dbContext = CreateDummyDbContext();
         var tenantId = Guid.NewGuid();
@@ -65,13 +65,15 @@ public class CustomerSessionValidatorUnitTests
         var sessionId = Guid.NewGuid();
         var expectedKey = $"customer_session:Test:{tenantId:D}:{branchId:D}:{sessionId:D}";
 
+        // Even if Redis holds "1", validator must NOT blindly return true;
+        // it falls through to PostgreSQL source-of-truth. With dummy DbContext, DB fails closed.
         _redisDbMock.Setup(d => d.StringGetAsync(expectedKey, It.IsAny<CommandFlags>()))
             .ReturnsAsync((RedisValue)"1");
 
         var validator = CreateValidator(dbContext);
         var result = await validator.ValidateSessionActiveAsync(tenantId, branchId, sessionId);
 
-        Assert.True(result);
+        Assert.False(result);
     }
 
     [Fact]
@@ -109,7 +111,7 @@ public class CustomerSessionValidatorUnitTests
     }
 
     [Fact]
-    public async Task InvalidateSessionCacheAsync_DeletesKeyFromRedis()
+    public async Task InvalidateSessionCacheAsync_SetsNegativeZeroKeyInRedis()
     {
         using var dbContext = CreateDummyDbContext();
         var tenantId = Guid.NewGuid();
@@ -120,7 +122,13 @@ public class CustomerSessionValidatorUnitTests
         var validator = CreateValidator(dbContext);
         await validator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId);
 
-        _redisDbMock.Verify(d => d.KeyDeleteAsync(expectedKey, It.IsAny<CommandFlags>()), Times.Once);
+        _redisDbMock.Verify(d => d.StringSetAsync(
+            expectedKey,
+            (RedisValue)"0",
+            It.IsAny<TimeSpan?>(),
+            It.IsAny<bool>(),
+            It.IsAny<When>(),
+            It.IsAny<CommandFlags>()), Times.Once);
     }
 
     [Fact]
@@ -130,11 +138,17 @@ public class CustomerSessionValidatorUnitTests
         var validator = CreateValidator(dbContext);
         await validator.InvalidateSessionCacheAsync(Guid.Empty, Guid.NewGuid(), Guid.NewGuid());
 
-        _redisDbMock.Verify(d => d.KeyDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()), Times.Never);
+        _redisDbMock.Verify(d => d.StringSetAsync(
+            It.IsAny<RedisKey>(),
+            It.IsAny<RedisValue>(),
+            It.IsAny<TimeSpan?>(),
+            It.IsAny<bool>(),
+            It.IsAny<When>(),
+            It.IsAny<CommandFlags>()), Times.Never);
     }
 
     [Fact]
-    public async Task InvalidateSessionCacheAsync_WhenRedisThrows_CatchesAndLogsWithoutThrowing()
+    public async Task InvalidateSessionCacheAsync_WhenRedisThrows_PropagatesExceptionForCallerRetry()
     {
         using var dbContext = CreateDummyDbContext();
         var tenantId = Guid.NewGuid();
@@ -147,6 +161,7 @@ public class CustomerSessionValidatorUnitTests
         var validator = CreateValidator(dbContext);
         var exception = await Record.ExceptionAsync(() => validator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId));
 
-        Assert.Null(exception);
+        Assert.NotNull(exception);
+        Assert.IsType<RedisConnectionException>(exception);
     }
 }

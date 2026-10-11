@@ -190,6 +190,14 @@ export interface QrExchangeResponse {
   tableName: string;
 }
 
+/**
+ * Request payload to transfer a dining session to another available table.
+ *
+ * - `targetTableConcurrencyToken`: Optional. Server acquires deterministic row-level locks
+ *   (SELECT ... FOR UPDATE in ascending UUID order) across source and target tables,
+ *   guaranteeing race isolation. If supplied, the token will be strictly verified.
+ * - `idempotencyKey`: Optional in body when supplied via the 'Idempotency-Key' HTTP header.
+ */
 export interface TransferSessionRequest {
   targetTableId: string;
   concurrencyToken?: string;
@@ -198,6 +206,13 @@ export interface TransferSessionRequest {
   reason?: string;
 }
 
+/**
+ * Request payload to merge a source dining session into an existing target dining session.
+ *
+ * - `sourceConcurrencyToken`: Concurrency token for the source session (or via If-Match header).
+ * - `targetConcurrencyToken`: Required concurrency token for the target session to prevent stale merges.
+ * - `idempotencyKey`: Optional in body when supplied via the 'Idempotency-Key' HTTP header.
+ */
 export interface MergeSessionRequest {
   targetSessionId: string;
   sourceConcurrencyToken: string;

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Common;
 using RestaurantOrder.Domain.Tenants;
@@ -13,6 +15,7 @@ public sealed class DiningSessionMovement
     public const int MaxReasonLength = 500;
     public const int MaxIdempotencyKeyLength = 100;
     public const int MaxActorRoleLength = 50;
+    public const int MaxFingerprintLength = 64;
 
     public Guid Id { get; private set; }
     public TenantId TenantId { get; private set; }
@@ -26,6 +29,7 @@ public sealed class DiningSessionMovement
     public string ActorRole { get; private set; } = string.Empty;
     public string? Reason { get; private set; }
     public string IdempotencyKey { get; private set; } = string.Empty;
+    public string RequestFingerprint { get; private set; } = string.Empty;
     public int GuestsMoved { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
@@ -48,7 +52,8 @@ public sealed class DiningSessionMovement
         string actorRole,
         string idempotencyKey,
         string? reason = null,
-        DateTimeOffset? nowUtc = null)
+        DateTimeOffset? nowUtc = null,
+        string? requestFingerprint = null)
     {
         if (sourceTableId == targetTableId)
         {
@@ -75,6 +80,17 @@ public sealed class DiningSessionMovement
             throw new DomainException($"Reason cannot exceed {MaxReasonLength} characters.");
         }
 
+        var fingerprint = !string.IsNullOrWhiteSpace(requestFingerprint)
+            ? requestFingerprint.Trim()
+            : ComputeFingerprint(
+                tenantId,
+                branchId,
+                DiningSessionMovementType.Transfer,
+                sessionId,
+                targetTableId,
+                null,
+                sanitizedReason);
+
         return new DiningSessionMovement
         {
             Id = Guid.NewGuid(),
@@ -90,6 +106,7 @@ public sealed class DiningSessionMovement
             ActorRole = string.IsNullOrWhiteSpace(actorRole) ? "Staff" : actorRole.Trim(),
             Reason = sanitizedReason,
             IdempotencyKey = sanitizedKey,
+            RequestFingerprint = fingerprint,
             CreatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow
         };
     }
@@ -109,7 +126,8 @@ public sealed class DiningSessionMovement
         string actorRole,
         string idempotencyKey,
         string? reason = null,
-        DateTimeOffset? nowUtc = null)
+        DateTimeOffset? nowUtc = null,
+        string? requestFingerprint = null)
     {
         if (sourceSessionId == targetSessionId)
         {
@@ -136,6 +154,17 @@ public sealed class DiningSessionMovement
             throw new DomainException($"Reason cannot exceed {MaxReasonLength} characters.");
         }
 
+        var fingerprint = !string.IsNullOrWhiteSpace(requestFingerprint)
+            ? requestFingerprint.Trim()
+            : ComputeFingerprint(
+                tenantId,
+                branchId,
+                DiningSessionMovementType.Merge,
+                sourceSessionId,
+                null,
+                targetSessionId,
+                sanitizedReason);
+
         return new DiningSessionMovement
         {
             Id = Guid.NewGuid(),
@@ -151,7 +180,45 @@ public sealed class DiningSessionMovement
             ActorRole = string.IsNullOrWhiteSpace(actorRole) ? "Staff" : actorRole.Trim(),
             Reason = sanitizedReason,
             IdempotencyKey = sanitizedKey,
+            RequestFingerprint = fingerprint,
             CreatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Computes a deterministic SHA-256 fingerprint for idempotency replay validation.
+    /// Canonical payload includes tenant, branch, operation type, source session, target, and normalized reason.
+    /// </summary>
+    public static string ComputeFingerprint(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionMovementType movementType,
+        DiningSessionId sourceSessionId,
+        RestaurantTableId? targetTableId,
+        DiningSessionId? targetSessionId,
+        string? reason)
+    {
+        var normalizedReason = string.IsNullOrWhiteSpace(reason) ? string.Empty : reason.Trim();
+        var targetTableStr = targetTableId.HasValue ? targetTableId.Value.Value.ToString("N") : string.Empty;
+        var targetSessionStr = targetSessionId.HasValue ? targetSessionId.Value.Value.ToString("N") : string.Empty;
+        var canonical = $"tenant:{tenantId.Value:N}|branch:{branchId.Value:N}|op:{movementType}|src_s:{sourceSessionId.Value:N}|tgt_t:{targetTableStr}|tgt_s:{targetSessionStr}|reason:{normalizedReason}";
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return Convert.ToHexStringLower(hashBytes);
+    }
+
+    /// <summary>
+    /// Performs a constant-time comparison of two request fingerprints to prevent timing side channels.
+    /// </summary>
+    public static bool MatchesFingerprint(string? storedFingerprint, string? computedFingerprint)
+    {
+        if (string.IsNullOrWhiteSpace(storedFingerprint) || string.IsNullOrWhiteSpace(computedFingerprint))
+        {
+            return false;
+        }
+
+        var storedBytes = Encoding.UTF8.GetBytes(storedFingerprint);
+        var computedBytes = Encoding.UTF8.GetBytes(computedFingerprint);
+
+        return CryptographicOperations.FixedTimeEquals(storedBytes, computedBytes);
     }
 }

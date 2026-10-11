@@ -212,6 +212,9 @@ public record QrExchangeResult(
 
 /// <summary>
 /// Request payload to transfer a dining session to another active table.
+/// TargetTableConcurrencyToken is optional because deterministic row-level locks
+/// (SELECT ... FOR UPDATE in ascending UUID order) provide transactional isolation.
+/// IdempotencyKey is optional in body when provided via the 'Idempotency-Key' HTTP header.
 /// </summary>
 public record TransferSessionRequest(
     Guid TargetTableId,
@@ -222,6 +225,9 @@ public record TransferSessionRequest(
 
 /// <summary>
 /// Request payload to merge a source dining session into a target session.
+/// SourceConcurrencyToken can be provided via body or If-Match header.
+/// TargetConcurrencyToken is required to prevent stale session merges.
+/// IdempotencyKey is optional in body when provided via the 'Idempotency-Key' HTTP header.
 /// </summary>
 public record MergeSessionRequest(
     Guid TargetSessionId,

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
@@ -330,7 +331,22 @@ public partial class FloorService
 
         if (_customerSessionValidator != null)
         {
-            await _customerSessionValidator.InvalidateSessionCacheAsync(session.TenantId.Value, session.BranchId.Value, session.Id.Value, ct);
+            try
+            {
+                await _customerSessionValidator.InvalidateSessionCacheAsync(session.TenantId.Value, session.BranchId.Value, session.Id.Value, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to invalidate customer session cache for closed session {SessionId}. Retrying...", session.Id.Value);
+                try
+                {
+                    await _customerSessionValidator.InvalidateSessionCacheAsync(session.TenantId.Value, session.BranchId.Value, session.Id.Value, ct);
+                }
+                catch (Exception retryEx)
+                {
+                    _logger.LogError(retryEx, "Retry failed to invalidate customer session cache for closed session {SessionId}.", session.Id.Value);
+                }
+            }
         }
 
         return MapSession(session);

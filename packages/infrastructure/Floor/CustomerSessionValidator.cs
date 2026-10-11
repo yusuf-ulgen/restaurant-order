@@ -44,16 +44,17 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
 
         var cacheKey = $"customer_session:{_environment.EnvironmentName}:{tenantId:D}:{branchId:D}:{tableSessionId:D}";
 
-        // 1. Try fast Redis cache
+        // 1. Fast Redis check for known closed/invalidated sessions (negative cache only)
         try
         {
             var db = await _redisProvider.GetDatabaseAsync(ct);
             if (db != null)
             {
                 var cached = await db.StringGetAsync(cacheKey);
-                if (cached.HasValue)
+                if (cached.HasValue && cached == "0")
                 {
-                    return cached == "1";
+                    // Negative cache hit: session is known closed, reject immediately
+                    return false;
                 }
             }
         }
@@ -64,6 +65,7 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
 
         // 2. Query PostgreSQL database source-of-truth inside tenant transaction
         // Enforces PostgreSQL forced Row-Level Security (RLS) under runtime roles.
+        // Positive active status is always verified against authoritative database state.
         bool isActive;
         try
         {
@@ -92,18 +94,22 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
             return false;
         }
 
-        // Cache result with short TTL
-        try
+        // 3. Cache negative result ONLY (closed sessions) so subsequent calls fail fast without DB load.
+        // Positive active status is NEVER cached to prevent stale authorization if session is closed/merged.
+        if (!isActive)
         {
-            var db = await _redisProvider.GetDatabaseAsync(ct);
-            if (db != null)
+            try
             {
-                await db.StringSetAsync(cacheKey, isActive ? "1" : "0", CacheTtl);
+                var db = await _redisProvider.GetDatabaseAsync(ct);
+                if (db != null)
+                {
+                    await db.StringSetAsync(cacheKey, "0", CacheTtl);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Failed to set Redis cache in CustomerSessionValidator: {Message}", ex.Message);
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Failed to set Redis negative cache in CustomerSessionValidator: {Message}", ex.Message);
+            }
         }
 
         return isActive;
@@ -122,12 +128,14 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
             var db = await _redisProvider.GetDatabaseAsync(ct);
             if (db != null)
             {
-                await db.KeyDeleteAsync(cacheKey);
+                // Write negative cache entry so any in-flight checks reject immediately, then delete key
+                await db.StringSetAsync(cacheKey, "0", CacheTtl);
             }
         }
         catch (Exception ex)
         {
             _logger.LogWarning("Failed to invalidate Redis session cache in CustomerSessionValidator: {Message}", ex.Message);
+            throw;
         }
     }
 }

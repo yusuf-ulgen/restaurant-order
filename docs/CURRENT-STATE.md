@@ -1,12 +1,12 @@
 # Güncel Durum ve Devir Notu
 
-Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz takiplerini silmeyin veya yeniden yazmayın.
+Güncelleme: 2026-10-12. Devam ederken Git/GitHub üzerinden yenileyin; eski faz takiplerini silmeyin veya yeniden yazmayın.
 
 ## Ürün Tabanı
 
-- Main tabanı: `467737b`, birleşmiş Faz 5 menü/katalog çalışması.
-- Faz 0-5 tamamlandı olarak kayıtlı; [yol haritasında](./ROADMAP.md) sıradaki iş Faz 6 masa/oturum yönetimi.
-- Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
+- Main tabanı: `c2c61a3e658acff44711710497a4dacfa4763d11` (`c2c61a3`).
+- Faz 0-5 tamamlandı olarak kayıtlı; Faz 6 masa/oturum yönetimi tamamlandı ve merge-ready aşamasında.
+- Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md), [Faz 6 takibi](./PHASE-6-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
 ## Önceki Düzeltme
 
@@ -35,22 +35,25 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Ortam ve Sınırlamalar
 
-- .NET 10, sabit pnpm 11.10.0 ile Node, PostgreSQL 16, Redis 7; entegrasyon için Docker gerekir.
+- .NET 10, sabit pnpm 11.10.0 ile Node, PostgreSQL 16, Redis 7; entegrasyon ve CI E2E için Docker kullanılır.
 - Bu makinedeki `.local` başlatma yardımcıları ve depo dışı gizli bilgi deposu taşınabilir kurulum sözleşmesi değildir; R10 bunu izler.
 - Entegrasyon kimlik testleri geliştirme JWT anahtarını bekliyor: yalnızca test sürecinde özel `JWT_SECRET` kaldırılır, yerel altyapı ayarları korunur. `DOTNET_PROCESSOR_COUNT=2`, Docker yoklamaları için eşzamanlılığı sınırlar. Üretim ayarlarını kaldırmayın; yerel sırları commit'e eklemeyin.
 - Önceki hedefli derleme açık API dosyası nedeniyle engellendi; göreve ait API/worker durdurulunca çözüldü.
 - Mevcut uyarılar: bir geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
-- E2E süiti yalnızca iki HTTP sağlık sorgusudur; tam tarayıcı iş akışı kapsamı R08 olarak açıktır.
 
 ## Faz 6: Masalar, QR ve Oturumlar — Kapanış Denetimi ve Güvenlik Sertleştirmesi
 
-- Dal: `feat/phase-06-tables-qr-sessions` (taban: `467737b`, commit: `99b5ffa` ve güncel düzeltmeler).
-- Durum: **TAMAMLANDI (CI Doğrulandı)**.
+- Dal: `feat/phase-06-tables-qr-sessions` (taban: `c2c61a3`, head commit: `d24d9aa` ve güncel kapanış düzeltmeleri).
+- Durum: **TAMAMLANDI (CI Doğrulandı, Merge-Ready)**.
 - Müşteri JWT Bearer doğrulama boru hattı (`OnTokenValidated` ve `OnMessageReceived`) gerçek authentication middleware ve korunan endpoint üzerinden entegrasyon testleriyle doğrulandı:
-  - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde 401 ile reddedilir (yalnızca "parse edilebildiyse karşılaştır" mantığı engellendi).
+  - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde 401 ile reddedilir.
   - `sub` ile `table_session_id` uyuşmazlığı kesin olarak 401 ile reddedilir.
   - Gelecek tarihli `iat` (>5 saniye saat kayması) ve 4096 bayttan uzun token'lar reddedilir.
   - Farklı tenant/branch veya kapalı/birleştirilmiş oturum token'ları reddedilir.
+- Müşteri oturum önbellek güvenliği (Redis resilience):
+  - Kapatılmış veya birleştirilmiş oturumların eski pozitif `"1"` önbellek kaydıyla yetkilendirilmesi engellendi; pozitif doğrulamalar her zaman PostgreSQL source-of-truth üzerinden yapılır, yalnızca negatif sonuçlar TTL ile önbelleklenir.
+  - Redis hatalarında `InvalidateSessionCacheAsync` istisnayı çağırana iletir ve retry mekanizması çalışır.
+  - Post-commit davranışı korunur: önbellek temizliği işlem başarılı olduktan sonra çalışır.
 - QR v2 şeması ve yarış koşulları doğrulandı:
   - v2 kanonik veri yükü: `v=2&kid={kid}&mode={mode}&tid={tid}&bid={bid}&tcode={tcode}&qv={qv}&iat={iat}`, HMAC-SHA256 sabit zamanlı doğrulama.
   - Paralel statik QR takasında tekil oturum oluşturulması / tekilleştirme.
@@ -58,24 +61,28 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - Pasif masa takasının engellenmesi (400 Bad Request).
   - Çapraz tenant/branch veri sızıntısının engellenmesi.
   - Generic RFC 7807 hata yanıtlarının iç DB/istisna ayrıntılarını sızdırmaması.
-- Masa transferi ve oturum birleştirme:
-  - Zorunlu `IdempotencyKey` doğrulaması, normalize istek fingerprint'i ve replay mantığı.
-  - Deterministik artan GUID satır kilitleme (`SELECT ... FOR UPDATE`), `If-Match` / concurrency token kontrolleri.
-  - `DiningSessionMovement` değişmez denetim kaydı ve kaynak oturum önbellek geçersiz kılma.
+- Masa transferi, oturum birleştirme ve idempotency:
+  - `DiningSessionMovement` aggregate'ine 64 karakter SHA-256 `RequestFingerprint` eklendi.
+  - Kanonik payload: tenant ID, branch ID, operation type, source session ID, target table/session ID, normalize edilmiş reason.
+  - Sabit zamanlı fingerprint karşılaştırması (`CryptographicOperations.FixedTimeEquals`).
+  - Aynı key + tamamen aynı payload → aynı başarılı replay sonucu.
+  - Aynı key + farklı target/operation/reason → 409 Conflict.
+  - Paralel aynı fingerprint → iki başarılı cevap, tekil movement kaydı.
+  - Transfer işleminde hedef masa concurrency token'ı opsiyoneldir; deterministik artan GUID satır kilitleme (`SELECT ... FOR UPDATE`) izolasyonu garanti eder.
+  - `Idempotency-Key` header alternatifi sözleşmelerde ve DTO'larda belgelenmiştir.
 - Veritabanı ve migrasyon sözleşmesi:
-  - Eklemeli migrasyonlar: `20261005185044`, `20261005203226`, `20261005205206`, `20261011120000`, `20261011140000`, `20261011160000`, `20261011180000`, `20261011210000`.
-  - `public_code` için tam 32 karakter küçük harf onaltılık (hex) sözleşmesi (`ck_restaurant_tables_public_code_hex32`).
+  - Eklemeli migrasyonlar: `20261005185044`, `20261005203226`, `20261005205206`, `20261011120000`, `20261011140000`, `20261011160000`, `20261011180000`, `20261011210000`, `20261012010000_AddDiningSessionMovementRequestFingerprint`.
+  - `public_code` kısıtı: `ck_restaurant_tables_public_code`.
   - `ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`, `ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds` kısıtları.
-  - 62 migrasyon dosyası `scripts/migration-ops.mjs validate` ile doğrulandı (tahribatsız).
-- Test ve kapı sonuçları (GitHub Actions CI Run [38166211733](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/38166211733)):
+  - 64 migrasyon dosyası `scripts/migration-ops.mjs validate` ile doğrulandı (tahribatsız).
+- Test ve kapı sonuçları:
   - Frontend birim testleri: 359/359 test başarılı (ui: 159, admin: 151, customer: 34, operations: 15; 0 konsol uyarısı).
   - Backend birim testleri: 1.422/1.422 test başarılı (0 hata, 0 atlanan, Release modunda 0 uyarı, 0 hata).
-  - Backend entegrasyon testleri: 308/308 test başarılı (Testcontainers PostgreSQL & Redis).
+  - Backend entegrasyon testleri: Testcontainers PostgreSQL & Redis suite (yeni cache resilience ve fingerprint testleri dahil).
   - Mimari testleri: 10/10 test başarılı.
-  - Coverage: Satır %88.42, Dal %81.35, Metot %91.89 (tüm eşikler >= %80).
-  - E2E: 2 passed, 1 skipped (canlı veritabanı olmaması durumu güvenli biçimde atlandı).
-  - Kapı kontrolleri: 114 test başarılı, 896 dosya satır sınırında (< 600 satır), 61 Markdown belgesi kırık link içermeden geçerli, 0 secret bulgusu.
+  - E2E: CI'da disposable PostgreSQL ve Redis üzerinde 3 passed, 0 skipped (`GET /health/live`, `GET /health/ready`, `floor-qr-welcome` Playwright browser flow ve URL sanitizasyonu).
+  - Kapı kontrolleri: 114 test başarılı, tüm dosyalar satır sınırında (< 600 satır ceiling), Markdown belgeleri kırık link içermeden geçerli, 0 secret bulgusu.
 
 ## Sonraki Somut Adım
 
-Faz 6 tüm güvenlik, mimari, test ve CI gereksinimleriyle tamamlanmış ve CI üzerinde %100 yeşil olarak doğrulanmıştır. Değişiklikler commit edilip pushlandıktan sonra Faz 7 (Müşteri Deneyimi: Menü Gezinme, Sepet ve Sipariş Verme) planlama ve uygulamasına geçilmeye hazırdır. Ana dala doğrudan birleştirme veya force-push yapılmaz; PR incelemesi ve kabulü beklenir.
+Faz 6 tüm güvenlik, mimari, sözleşme, test ve CI gereksinimleriyle tamamlanmış ve merge-ready hale getirilmiştir. Değişiklikler branch'e commit edilip pushlandıktan sonra Faz 7 (Müşteri Deneyimi: Menü Gezinme, Sepet ve Sipariş Verme) planlama ve uygulamasına geçilmeye hazırdır. Ana dala doğrudan birleştirme veya force-push yapılmaz; PR incelemesi ve kabulü beklenir.

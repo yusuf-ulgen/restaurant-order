@@ -65,6 +65,14 @@ public partial class FloorService
         EnsureBranchAllowsFloorMutation(branch);
 
         var targetSessionId = new DiningSessionId(request.TargetSessionId);
+        var requestFingerprint = DiningSessionMovement.ComputeFingerprint(
+            tenantId,
+            branchId,
+            DiningSessionMovementType.Merge,
+            sourceSessionId,
+            null,
+            targetSessionId,
+            request.Reason);
         DiningSessionDto? resultDto = null;
 
         try
@@ -88,7 +96,8 @@ public partial class FloorService
 
                 if (existingMovement != null)
                 {
-                    if (existingMovement.MovementType != DiningSessionMovementType.Merge ||
+                    if (!DiningSessionMovement.MatchesFingerprint(existingMovement.RequestFingerprint, requestFingerprint) ||
+                        existingMovement.MovementType != DiningSessionMovementType.Merge ||
                         existingMovement.SourceSessionId != sourceSessionId ||
                         existingMovement.TargetSessionId != targetSessionId)
                     {
@@ -215,7 +224,8 @@ public partial class FloorService
                     actor.Role.ToString(),
                     idempotencyKey,
                     request.Reason,
-                    now);
+                    now,
+                    requestFingerprint: requestFingerprint);
 
                 _dbContext.DiningSessionMovements.Add(movement);
 
@@ -247,7 +257,8 @@ public partial class FloorService
 
             if (existingMovement != null)
             {
-                if (existingMovement.MovementType != DiningSessionMovementType.Merge ||
+                if (!DiningSessionMovement.MatchesFingerprint(existingMovement.RequestFingerprint, requestFingerprint) ||
+                    existingMovement.MovementType != DiningSessionMovementType.Merge ||
                     existingMovement.SourceSessionId != sourceSessionId ||
                     existingMovement.TargetSessionId != targetSessionId)
                 {

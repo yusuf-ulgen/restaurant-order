@@ -87,6 +87,11 @@ public class DiningSessionMovementConfiguration : IEntityTypeConfiguration<Dinin
             .HasMaxLength(DiningSessionMovement.MaxIdempotencyKeyLength)
             .IsRequired();
 
+        builder.Property(m => m.RequestFingerprint)
+            .HasColumnName("request_fingerprint")
+            .HasMaxLength(DiningSessionMovement.MaxFingerprintLength)
+            .IsRequired();
+
         builder.Property(m => m.GuestsMoved)
             .HasColumnName("guests_moved")
             .IsRequired();

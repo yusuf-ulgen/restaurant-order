@@ -63,8 +63,8 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
     // 0. Ensure dev/test backend is healthy and seeded with synthetic identities
     const seedRes = await request.post('/api/v1/dev/seed');
     if (!seedRes.ok()) {
-      test.skip(true, 'Live database is not connected to API webServer in this environment; skipping browser dining session flow (R08).');
-      return;
+      const errorBody = await seedRes.text();
+      throw new Error(`CRITICAL: /api/v1/dev/seed failed with status ${seedRes.status()}: ${errorBody}`);
     }
 
     // 1. Get or create dining area with authenticated admin
@@ -172,61 +172,55 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
       // 10. Strict Phase 6 boundary: no orders, bill requests, or payments exist
     } finally {
       // 1. Cleanly close any open dining sessions for the table
-      try {
-        const sessionsRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}/sessions`, {
-          headers: authHeaders,
-        });
-        if (sessionsRes.ok()) {
-          const sessions = await sessionsRes.json();
-          for (const session of sessions) {
-            if (session.status !== 'Closed') {
-              let currentToken = session.concurrencyToken;
-              if (session.status === 'Open') {
-                const actRes = await request.post(
-                  `/api/v1/floor/branches/${branchId}/sessions/${session.id}/activate`,
-                  {
-                    headers: authHeaders,
-                    data: { concurrencyToken: currentToken },
-                  }
-                );
-                if (actRes.ok()) {
-                  const actData = await actRes.json();
-                  currentToken = actData.concurrencyToken;
-                }
+      const sessionsRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}/sessions`, {
+        headers: authHeaders,
+      });
+      expect(sessionsRes.ok(), 'Fetching sessions for cleanup must succeed').toBe(true);
+      const sessions = await sessionsRes.json();
+      for (const session of sessions) {
+        if (session.status !== 'Closed') {
+          let currentToken = session.concurrencyToken;
+          if (session.status === 'Open') {
+            const actRes = await request.post(
+              `/api/v1/floor/branches/${branchId}/sessions/${session.id}/activate`,
+              {
+                headers: authHeaders,
+                data: { concurrencyToken: currentToken },
               }
-              const billRes = await request.post(
-                `/api/v1/floor/branches/${branchId}/sessions/${session.id}/request-bill`,
-                {
-                  headers: authHeaders,
-                  data: { concurrencyToken: currentToken },
-                }
-              );
-              if (billRes.ok()) {
-                const billData = await billRes.json();
-                currentToken = billData.concurrencyToken;
-              }
-              await request.post(
-                `/api/v1/floor/branches/${branchId}/sessions/${session.id}/close`,
-                {
-                  headers: authHeaders,
-                  data: { concurrencyToken: currentToken, reason: 'E2E Cleanup' },
-                }
-              );
-            }
+            );
+            expect(actRes.ok(), `Activating session ${session.id} during cleanup must succeed`).toBe(true);
+            const actData = await actRes.json();
+            currentToken = actData.concurrencyToken;
           }
+          const billRes = await request.post(
+            `/api/v1/floor/branches/${branchId}/sessions/${session.id}/request-bill`,
+            {
+              headers: authHeaders,
+              data: { concurrencyToken: currentToken },
+            }
+          );
+          expect(billRes.ok(), `Requesting bill for session ${session.id} during cleanup must succeed`).toBe(true);
+          const billData = await billRes.json();
+          currentToken = billData.concurrencyToken;
+
+          const closeRes = await request.post(
+            `/api/v1/floor/branches/${branchId}/sessions/${session.id}/close`,
+            {
+              headers: authHeaders,
+              data: { concurrencyToken: currentToken, reason: 'E2E Cleanup' },
+            }
+          );
+          expect(closeRes.ok(), `Closing session ${session.id} during cleanup must succeed`).toBe(true);
         }
-      } catch {
-        // Proceed with table deactivation
       }
 
       // 2. Fetch fresh concurrency token and deactivate table
       const tableGetRes = await request.get(`/api/v1/floor/branches/${branchId}/tables/${tableId}`, {
         headers: authHeaders,
       });
-      if (tableGetRes.ok()) {
-        const tableData = await tableGetRes.json();
-        concurrencyToken = tableData.concurrencyToken;
-      }
+      expect(tableGetRes.ok(), 'Fetching table for deactivation must succeed').toBe(true);
+      const tableData = await tableGetRes.json();
+      concurrencyToken = tableData.concurrencyToken;
 
       const deactRes = await request.post(
         `/api/v1/floor/branches/${branchId}/tables/${tableId}/deactivate`,
@@ -239,13 +233,14 @@ test.describe('Floor Layout, QR Generation, and Customer Welcome Flow (E2E)', ()
 
       // 3. If test created its own dining area, deactivate it
       if (createdAreaId && createdAreaConcurrencyToken) {
-        await request.post(
+        const areaDeactRes = await request.post(
           `/api/v1/restaurant-config/branches/${branchId}/dining-areas/${createdAreaId}/deactivate`,
           {
             headers: authHeaders,
             data: { concurrencyToken: createdAreaConcurrencyToken },
           }
         );
+        expect(areaDeactRes.ok(), 'Deactivating dining area during cleanup must succeed').toBe(true);
       }
     }
   });

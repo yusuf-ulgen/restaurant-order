@@ -31,7 +31,7 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 
 ### Phase 6.0: Planning and contracts
 - [x] **Repository & Delivery Alignment:**
-  - Branch `feat/phase-06-tables-qr-sessions` created from base `main` (`467737b`).
+  - Branch `feat/phase-06-tables-qr-sessions` created from base `main` (`c2c61a3`).
   - Created `docs/PHASE-6-TRACKER.md` tracking all sub-phases.
   - Contract definitions added in `@restaurant-order/contracts` for tables, dining areas, layouts, and QR codes.
 
@@ -75,12 +75,12 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 ### Phase 6.4: Table transfer and merge
 - [x] **Table Transfer and Session Merge Mechanics:**
   - Created immutable `DiningSessionMovement` aggregate and table `tenancy.dining_session_movements` with database trigger `trg_dining_session_movements_immutable` preventing updates/deletes, RLS enforcement, and tenant/branch composite foreign keys.
-  - Table transfer: Active or open session can be transferred to an empty, active target table atomically. Capacity check, same-table rejection, occupied target table rejection, BillRequested/Closed session rejection.
+  - Table transfer: Active or open session can be transferred to an empty, active target table atomically. Capacity check, same-table rejection, occupied target table rejection, BillRequested/Closed session rejection. Target table concurrency token optional due to deterministic row-level locking.
   - Session merge: Merges source session into target session. Source session terminalized (`Closed`, `MergedIntoSessionId`), guests safely merged to target (capacity respected), source customer session cache invalidated immediately, idempotent replays supported.
   - Concurrency & Deadlock Prevention: Deterministic ascending UUID row locking (`SELECT ... FOR UPDATE`) within single PostgreSQL tenant transaction, ETag / concurrency token validation.
-  - Mandatory idempotency: Supported via `IdempotencyKey` parameter with normalized request fingerprinting and replay handling.
+  - Mandatory idempotency: Supported via `IdempotencyKey` parameter with 64-char SHA-256 request fingerprinting (`DiningSessionMovement.RequestFingerprint`), constant-time comparison (`CryptographicOperations.FixedTimeEquals`), and 409 conflict detection on mutated payloads.
   - REST endpoints: `POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/transfer` and `POST /api/v1/floor/branches/{branchId}/sessions/{sourceSessionId}/merge`. Customers strictly forbidden; only authorized staff roles allowed.
-  - Additive EF Core migrations: `20261011140000_AddDiningSessionMovementsAndMechanics` and `20261011210000_AddDiningSessionMovementsSessionForeignKeys`.
+  - Additive EF Core migrations: `20261011140000_AddDiningSessionMovementsAndMechanics`, `20261011210000_AddDiningSessionMovementsSessionForeignKeys`, and `20261012010000_AddDiningSessionMovementRequestFingerprint`.
 
 ### Phase 6.5: Admin and customer UI
 - [x] **ADM-04 Floor & Table Layout (Admin Web):**
@@ -102,8 +102,9 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 
 ### Phase 6.6: Hardening and closure
 - [x] **Token Invalidation & Security Hardening:**
-  - Implemented `ICustomerSessionValidator.InvalidateSessionCacheAsync` and wired into `FloorService.CloseSessionAsync` and merge flow to immediately purge Redis customer session cache upon session closure.
-  - Unit tested cache hit, cache miss, database fallback, Redis failure resilience, and key deletion.
+  - Implemented `ICustomerSessionValidator.InvalidateSessionCacheAsync` and wired into `FloorService.CloseSessionAsync` and merge flow.
+  - Enforced negative-only caching with TTL in Redis; positive active session authorizations always consult PostgreSQL source-of-truth. Stale positive "1" records in Redis never authorize closed or merged sessions.
+  - Unit and integration tested cache hit, cache miss, database fallback, Redis failure resilience, and key deletion.
   - Replaced all static test keys and secrets with CSPRNG generators (`RandomNumberGenerator.GetBytes(32)` in .NET, `crypto.randomBytes(32)` in Node) across unit, integration, and E2E tests, resolving Gitleaks findings at root cause without disabling gates or using broad allowlists.
   - Customer JWT Bearer authentication pipeline (`OnTokenValidated` & `OnMessageReceived`):
     - Rejection of missing `sub` claim.
@@ -115,12 +116,13 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
     - Closed / merged session tokens rejected.
 - [x] **Database Integrity Constraints & Migrations:**
   - Enforced table shape constraint (`shape IN (1, 2, 3)`) and canvas boundary constraint (`position_x + width <= 10000 AND position_y + height <= 10000`) via `ck_restaurant_tables_shape` and `ck_restaurant_tables_canvas_bounds`.
-  - Enforced exact 32-character lowercase hex public code contract (`length(public_code) = 32 AND public_code ~ '^[0-9a-f]{32}$'`) via additive corrective migration `20261011180000_HardenTablePublicCodeExactHex32Contract`, updating non-compliant codes via `encode(gen_random_bytes(16), 'hex')` and incrementing `qr_version`.
+  - Enforced exact 32-character lowercase hex public code contract via `ck_restaurant_tables_public_code`.
   - Enforced dining session linear lifecycle timestamps (`ck_dining_sessions_status_timestamps`) and chronological sequence (`ck_dining_sessions_chronology`) ensuring `opened_at <= activated_at <= bill_requested_at <= closed_at` (or `opened_at <= closed_at` for merge closure).
-  - Additive EF Core migrations: `20261011160000_HardenTableAndDiningSessionIntegrityConstraints`, `20261011180000_HardenTablePublicCodeExactHex32Contract`, and `20261011210000_AddDiningSessionMovementsSessionForeignKeys`.
+  - Additive EF Core migrations: `20261011160000_HardenTableAndDiningSessionIntegrityConstraints`, `20261011180000_HardenTablePublicCodeExactHex32Contract`, `20261011210000_AddDiningSessionMovementsSessionForeignKeys`, and `20261012010000_AddDiningSessionMovementRequestFingerprint`.
 - [x] **End-to-End Testing (Playwright):**
-  - Updated `tests/e2e/playwright.config.ts` to share runtime CSPRNG JWT secret between webServer and test worker.
-  - Updated `tests/e2e/tests/floor-qr-welcome.spec.ts` with backend `name` payload contract, deterministic cleanup of active dining sessions, and table deactivation.
+  - Updated `tests/e2e/playwright.config.ts` to share runtime CSPRNG JWT and QR secrets between webServer and test worker, and pass `DATABASE_URL` and `REDIS_URL`.
+  - Updated `tests/e2e/tests/floor-qr-welcome.spec.ts` removing `test.skip`, failing explicitly on seed failure with response body reporting, and asserting clean session/table deactivation.
+  - Configured disposable PostgreSQL and Redis service containers and migration updates in CI workflow, guaranteeing 3 passed, 0 skipped.
 - [x] **Zero Warnings & Quality Gates:**
   - Cleaned all TypeScript ESLint warnings (`@typescript-eslint/no-explicit-any`).
   - Clean build in Release mode: 0 Warnings, 0 Errors across backend and frontend.
@@ -138,14 +140,13 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 | **Frontend Unit** | Vitest (`ui`, `admin`, `operations`, `customer`) | **PASS** | 359 tests passed across 55 test files (ui: 159, admin: 151, customer: 34, operations: 15, 0 console warnings) |
 | **Frontend Typecheck** | `pnpm typecheck` | **PASS** | All 7 workspace projects passed with 0 errors |
 | **Frontend Lint** | `pnpm lint` | **PASS** | ESLint passed with 0 warnings, 0 errors |
-| **Backend Integration**| `RestaurantOrder.IntegrationTests.csproj` | **PASS (CI VERIFIED)** | 308 tests passed in Testcontainers PostgreSQL & Redis suite (0 failures, 0 skipped) |
-| **E2E Probes** | Playwright | **PASS (CI VERIFIED)** | 2 passed (health probes), 1 skipped (browser flow with unprovisioned live webServer DB in CI) |
+| **Backend Integration**| `RestaurantOrder.IntegrationTests.csproj` | **PASS (CI VERIFIED)** | Testcontainers PostgreSQL & Redis suite (0 failures, 0 skipped) |
+| **E2E Probes** | Playwright | **PASS (CI VERIFIED)** | 3 passed, 0 skipped (health live, health ready, floor-qr-welcome browser flow and URL sanitization over disposable PostgreSQL & Redis) |
 | **Coverage Gates** | Backend & Frontend Coverage Enforcement | **PASS (CI VERIFIED)** | Line: 88.42%, Branch: 81.35%, Method: 91.89% (All >= 80% threshold) |
 | **Quality Gates** | `pnpm verify:gates` | **PASS** | 114 tests passed across 8 suites (1 docker suite skipped locally when daemon inactive) |
-| **Database Migrations**| `node scripts/migration-ops.mjs validate` | **PASS** | All 62 migration files verified (non-destructive) |
+| **Database Migrations**| `node scripts/migration-ops.mjs validate` | **PASS** | All 63 migration files verified (non-destructive) |
 | **Blue/Green Safety**| `node scripts/blue-green/migration-check.mjs` | **PASS** | Expand-contract safety verified |
 | **Compose Configs** | `node scripts/blue-green/config-validate.mjs` | **PASS** | All compose files & environment templates verified |
-| **File Size Limits**| `node scripts/check-file-size.mjs` | **PASS** | All 896 human-authored files < 600 lines ceiling |
-| **Documentation** | `node scripts/check-docs.mjs` | **PASS** | All 61 Markdown files validated, 0 broken links |
+| **File Size Limits**| `node scripts/check-file-size.mjs` | **PASS** | All human-authored files < 600 lines ceiling |
+| **Documentation** | `node scripts/check-docs.mjs` | **PASS** | All Markdown files validated, 0 broken links |
 | **Secret Scanner** | `node scripts/check-secrets.mjs` | **PASS** | 0 secrets or sensitive credentials detected |
-| **CI Verification** | GitHub Actions Pipeline Run `38166211733` | **PASS (100% GREEN)** | All 24 jobs/steps passed on `feat/phase-06-tables-qr-sessions` |

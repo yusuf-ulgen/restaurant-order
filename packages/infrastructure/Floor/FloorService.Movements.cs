@@ -50,6 +50,14 @@ public partial class FloorService
         EnsureBranchAllowsFloorMutation(branch);
 
         var targetTableId = new RestaurantTableId(request.TargetTableId);
+        var requestFingerprint = DiningSessionMovement.ComputeFingerprint(
+            tenantId,
+            branchId,
+            DiningSessionMovementType.Transfer,
+            sessionId,
+            targetTableId,
+            null,
+            request.Reason);
         DiningSessionDto? resultDto = null;
 
         try
@@ -73,7 +81,8 @@ public partial class FloorService
 
                 if (existingMovement != null)
                 {
-                    if (existingMovement.MovementType != DiningSessionMovementType.Transfer ||
+                    if (!DiningSessionMovement.MatchesFingerprint(existingMovement.RequestFingerprint, requestFingerprint) ||
+                        existingMovement.MovementType != DiningSessionMovementType.Transfer ||
                         existingMovement.SourceSessionId != sessionId ||
                         existingMovement.TargetTableId != targetTableId)
                     {
@@ -190,7 +199,8 @@ public partial class FloorService
                     actor.SubjectId,
                     actor.Role.ToString(),
                     idempotencyKey,
-                    request.Reason);
+                    request.Reason,
+                    requestFingerprint: requestFingerprint);
 
                 _dbContext.DiningSessionMovements.Add(movement);
 
@@ -221,7 +231,8 @@ public partial class FloorService
                                           m.IdempotencyKey == idempotencyKey, ct);
             if (committed != null)
             {
-                if (committed.MovementType != DiningSessionMovementType.Transfer ||
+                if (!DiningSessionMovement.MatchesFingerprint(committed.RequestFingerprint, requestFingerprint) ||
+                    committed.MovementType != DiningSessionMovementType.Transfer ||
                     committed.SourceSessionId != sessionId ||
                     committed.TargetTableId != targetTableId)
                 {
