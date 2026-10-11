@@ -103,7 +103,7 @@ public class FloorTableTransferAndMergeIntegrationTests : IClassFixture<Testcont
         // 3. Replay with same idempotency key returns same session without error
         var replayReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/transfer", token);
         replayReq.Headers.Add("If-Match", $"\"{transferred.ConcurrencyToken}\"");
-        replayReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: transferred.ConcurrencyToken, IdempotencyKey: idempotencyKey));
+        replayReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: transferred.ConcurrencyToken, IdempotencyKey: idempotencyKey, Reason: "Guest requested Table 2"));
         var replayRes = await client.SendAsync(replayReq);
         Assert.Equal(HttpStatusCode.OK, replayRes.StatusCode);
 
@@ -199,7 +199,7 @@ public class FloorTableTransferAndMergeIntegrationTests : IClassFixture<Testcont
         // Replay merge: guest count remains 5 (not 7)
         var replayMergeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{s1.Id}/merge", token);
         replayMergeReq.Headers.Add("If-Match", $"\"{s1.ConcurrencyToken}\"");
-        replayMergeReq.Content = JsonContent.Create(new MergeSessionRequest(s2.Id, s1.ConcurrencyToken, s2.ConcurrencyToken, IdempotencyKey: idempotencyKey));
+        replayMergeReq.Content = JsonContent.Create(new MergeSessionRequest(s2.Id, s1.ConcurrencyToken, s2.ConcurrencyToken, IdempotencyKey: idempotencyKey, Reason: "Joined family"));
         var replayRes = await client.SendAsync(replayMergeReq);
         Assert.Equal(HttpStatusCode.OK, replayRes.StatusCode);
         var replayedTarget = await replayRes.Content.ReadFromJsonAsync<DiningSessionDto>();

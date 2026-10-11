@@ -118,15 +118,22 @@ public class CustomerSessionCacheResilienceIntegrationTests : IClassFixture<Test
         var activeResp = await client.SendAsync(activeReq);
         Assert.Equal(HttpStatusCode.OK, activeResp.StatusCode);
 
-        // 2. Close session via staff endpoint
+        // 2. Request bill and close session via staff endpoint
         var sessionGetReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}", adminToken);
         var sessionDto = await (await client.SendAsync(sessionGetReq)).Content.ReadFromJsonAsync<DiningSessionDto>();
 
+        var billReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/request-bill", adminToken);
+        billReq.Headers.Add("If-Match", $"\"{sessionDto!.ConcurrencyToken}\"");
+        var billResp = await client.SendAsync(billReq);
+        Assert.Equal(HttpStatusCode.OK, billResp.StatusCode);
+        var billSession = await billResp.Content.ReadFromJsonAsync<DiningSessionDto>();
+
         var closeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/close", adminToken);
-        closeReq.Headers.Add("If-Match", $"\"{sessionDto!.ConcurrencyToken}\"");
-        closeReq.Content = JsonContent.Create(new CloseDiningSessionRequest("Guest left", sessionDto.ConcurrencyToken));
+        closeReq.Headers.Add("If-Match", $"\"{billSession!.ConcurrencyToken}\"");
+        closeReq.Content = JsonContent.Create(new CloseDiningSessionRequest("Guest left", billSession.ConcurrencyToken));
         var closeResp = await client.SendAsync(closeReq);
         Assert.Equal(HttpStatusCode.OK, closeResp.StatusCode);
 
