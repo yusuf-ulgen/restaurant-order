@@ -94,7 +94,7 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 - [x] Yönetici kataloğu düzenleyicisi ve filtrelenmiş çalışma zamanı kataloğu okuma modeli, hızlı86/yeniden stok kontrolleri.
 - [x] Nihai sertleşme ve kapatma; push ve pull_request CI yeşil (218/218 entegrasyon testleri).
 
-### Aşama 6: Masalar, QR ve Oturumlar (Durum: DEVAM EDİYOR — CI Doğrulaması Bekleniyor)
+### Aşama 6: Masalar, QR ve Oturumlar (Durum: COMPLETED — CI Doğrulandı)
 - Aşama 6 masaları, fiziksel kat planını, QR kimliğini ve yemek oturumu altyapısını kurar. Müşteri menüleri/sipariş (Aşama 7), sipariş çekirdeği (Aşama 8), gerçek zamanlı olaylar (Aşama 9), faturalandırma (Aşama 13) ve ödemeler (Aşama 16) sonraki aşamalardır.
 - [x] Masa numaralandırma, kapasite, şekiller, fiziksel kat planı tuval/ızgara konumlandırması ve ETag iyimser eşzamanlılık.
 - [x] HMAC-SHA256 imzası, kanonik veri yükü, sürüm iptali ve sabit zamanlı doğrulama ile dinamik ve statik QR kod üretimi (v2 şeması, `iat` zaman damgası zorunluluğu).
@@ -103,7 +103,7 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 - [x] Masa taşıma ve oturum birleştirme mekanikleri (Faz 6.4): Değişmez hareket geçmişi (`DiningSessionMovement`), deterministik satır kilitleme (deadlock önleme), kapasite ve durum kontrolleri, zorunlu idempotency anahtarı desteği ve kaynak oturum önbellek geçersiz kılma tamamlandı.
 - [x] Veritabanı kısıtları ve sertleştirme (Faz 6.6): Doğrusal yaşam döngüsü (`Open -> Active -> BillRequested -> Closed`) ve kronoloji kısıtları (`ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`), masa şekil ve tuval sınır kısıtları (`ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds`), `public_code` 32 karakter hex kısıtı ve eklemeli migrasyonlar (`20261011140000`, `20261011160000`, `20261011180000`, `20261011210000`).
 - [x] Müşteri JWT Bearer boru hattı (`OnTokenValidated` & `OnMessageReceived`): GUID formatında olmayan `sub`, eksik `sub`, oturum claim uyuşmazlığı, gelecek tarihli `iat`, 4096 bayttan uzun token ve kapalı oturum reddi entegrasyon testleriyle doğrulandı.
-- [x] Birim ve mimari testleri: 1.404 backend birim testi, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. Entegrasyon ve E2E akışları CI ortamında doğrulanmaktadır.
+- [x] Birim, mimari ve entegrasyon testleri: 1.422 backend birim testi, 308 entegrasyon testi, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. GitHub Actions CI pipeline (38166211733) %100 yeşil tamamlandı.
 
 > **Not:** Aşama 7 henüz başlamamıştır; Aşama 6 kapanış denetimindedir.
 

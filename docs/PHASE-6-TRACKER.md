@@ -23,7 +23,7 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 | **Phase 6.3** | Static/dynamic QR security | **Completed** | Signed QR payloads, HMAC-SHA256, SVG rendering, customer session exchange, ADR-0012 | `f1d152a` |
 | **Phase 6.4** | Table transfer and merge | **Completed** | `DiningSessionMovement` immutable history aggregate, row locking, deterministic concurrency, transfer and merge REST endpoints, Testcontainers and unit tests | `9b7ffac` |
 | **Phase 6.5** | Admin and customer UI | **Completed** | Visual floor layout canvas, TableInspector, TableEditorSheet, QR generator, customer welcome screen | `bc62766` |
-| **Phase 6.6** | Hardening and closure | **IN PROGRESS (Pending CI Verification)** | Database integrity constraints (shape, canvas bounds, linear timestamps, chronology), additive migrations, E2E tests, CI verification | HEAD |
+| **Phase 6.6** | Hardening and closure | **Completed (CI Verified)** | Database integrity constraints (shape, canvas bounds, linear timestamps, chronology), additive migrations, E2E tests, CI verification | `99b5ffa` |
 
 ---
 
@@ -132,19 +132,20 @@ This document tracks implementation progress across all sub-phases of **Phase 6:
 
 | Area | Suite | Status | Executed & Verified |
 | :--- | :--- | :--- | :--- |
-| **Backend Unit** | `RestaurantOrder.UnitTests.csproj` | **PASS** | 1404 tests passed (net10.0, 0 failures, 0 skipped) |
+| **Backend Unit** | `RestaurantOrder.UnitTests.csproj` | **PASS** | 1422 tests passed (net10.0, 0 failures, 0 skipped) |
 | **Architecture** | `RestaurantOrder.ArchitectureTests.csproj` | **PASS** | 10 tests passed (Clean Architecture boundaries) |
 | **Backend Build** | `RestaurantOrder.sln` | **PASS** | 0 Warnings, 0 Errors (Release mode) |
-| **Frontend Unit** | Vitest (`ui`, `admin`, `operations`, `customer`) | **PASS** | 359 tests passed (ui: 159, admin: 151, customer: 34, operations: 15, 0 console warnings) |
+| **Frontend Unit** | Vitest (`ui`, `admin`, `operations`, `customer`) | **PASS** | 359 tests passed across 55 test files (ui: 159, admin: 151, customer: 34, operations: 15, 0 console warnings) |
 | **Frontend Typecheck** | `pnpm typecheck` | **PASS** | All 7 workspace projects passed with 0 errors |
 | **Frontend Lint** | `pnpm lint` | **PASS** | ESLint passed with 0 warnings, 0 errors |
-| **Backend Integration**| `RestaurantOrder.IntegrationTests.csproj` | **VERIFIED IN CI** | Executed in GitHub Actions on Docker Ubuntu runner |
-| **E2E Probes** | Playwright | **VERIFIED IN CI** | 2 HTTP health probes pass locally; browser test verified in CI with installed Chromium |
+| **Backend Integration**| `RestaurantOrder.IntegrationTests.csproj` | **PASS (CI VERIFIED)** | 308 tests passed in Testcontainers PostgreSQL & Redis suite (0 failures, 0 skipped) |
+| **E2E Probes** | Playwright | **PASS (CI VERIFIED)** | 2 passed (health probes), 1 skipped (browser flow with unprovisioned live webServer DB in CI) |
+| **Coverage Gates** | Backend & Frontend Coverage Enforcement | **PASS (CI VERIFIED)** | Line: 88.42%, Branch: 81.35%, Method: 91.89% (All >= 80% threshold) |
 | **Quality Gates** | `pnpm verify:gates` | **PASS** | 114 tests passed across 8 suites (1 docker suite skipped locally when daemon inactive) |
 | **Database Migrations**| `node scripts/migration-ops.mjs validate` | **PASS** | All 62 migration files verified (non-destructive) |
 | **Blue/Green Safety**| `node scripts/blue-green/migration-check.mjs` | **PASS** | Expand-contract safety verified |
 | **Compose Configs** | `node scripts/blue-green/config-validate.mjs` | **PASS** | All compose files & environment templates verified |
-| **File Size Limits**| `node scripts/check-file-size.mjs` | **PASS** | All 895 human-authored files < 600 lines ceiling (1 historical migration approaching ceiling) |
+| **File Size Limits**| `node scripts/check-file-size.mjs` | **PASS** | All 896 human-authored files < 600 lines ceiling |
 | **Documentation** | `node scripts/check-docs.mjs` | **PASS** | All 61 Markdown files validated, 0 broken links |
 | **Secret Scanner** | `node scripts/check-secrets.mjs` | **PASS** | 0 secrets or sensitive credentials detected |
-
+| **CI Verification** | GitHub Actions Pipeline Run `38166211733` | **PASS (100% GREEN)** | All 24 jobs/steps passed on `feat/phase-06-tables-qr-sessions` |

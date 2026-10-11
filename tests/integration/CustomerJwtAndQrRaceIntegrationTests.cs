@@ -417,5 +417,3 @@ public class CustomerJwtAndQrRaceIntegrationTests : IClassFixture<Testcontainers
         Assert.True(crossAccessResp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
     }
 }
-
-

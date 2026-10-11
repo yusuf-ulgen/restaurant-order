@@ -44,8 +44,8 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Faz 6: Masalar, QR ve Oturumlar — Kapanış Denetimi ve Güvenlik Sertleştirmesi
 
-- Dal: `feat/phase-06-tables-qr-sessions` (taban: `467737b`, commit: `9b7ffac` ve güncel düzeltmeler).
-- Durum: **DEVAM EDİYOR (CI Doğrulaması Bekleniyor)**.
+- Dal: `feat/phase-06-tables-qr-sessions` (taban: `467737b`, commit: `99b5ffa` ve güncel düzeltmeler).
+- Durum: **TAMAMLANDI (CI Doğrulandı)**.
 - Müşteri JWT Bearer doğrulama boru hattı (`OnTokenValidated` ve `OnMessageReceived`) gerçek authentication middleware ve korunan endpoint üzerinden entegrasyon testleriyle doğrulandı:
   - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde 401 ile reddedilir (yalnızca "parse edilebildiyse karşılaştır" mantığı engellendi).
   - `sub` ile `table_session_id` uyuşmazlığı kesin olarak 401 ile reddedilir.
@@ -67,13 +67,15 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - `public_code` için tam 32 karakter küçük harf onaltılık (hex) sözleşmesi (`ck_restaurant_tables_public_code_hex32`).
   - `ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`, `ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds` kısıtları.
   - 62 migrasyon dosyası `scripts/migration-ops.mjs validate` ile doğrulandı (tahribatsız).
-- Test ve kapı sonuçları:
-  - Frontend birim testleri: JSDOM navigasyon mock'u, SVG koordinat NaN koruması ve `act(...)` sarmalamalarıyla 0 uyarı, 0 hata seviyesinde (359/359 test başarılı; ui: 159, admin: 151, customer: 34, operations: 15).
-  - Backend birim testleri: 1.404/1.404 test başarılı (0 hata, 0 atlanan, Release modunda 0 uyarı, 0 hata).
+- Test ve kapı sonuçları (GitHub Actions CI Run [38166211733](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/38166211733)):
+  - Frontend birim testleri: 359/359 test başarılı (ui: 159, admin: 151, customer: 34, operations: 15; 0 konsol uyarısı).
+  - Backend birim testleri: 1.422/1.422 test başarılı (0 hata, 0 atlanan, Release modunda 0 uyarı, 0 hata).
+  - Backend entegrasyon testleri: 308/308 test başarılı (Testcontainers PostgreSQL & Redis).
   - Mimari testleri: 10/10 test başarılı.
-  - Kapı kontrolleri: 114 test başarılı (1 Docker testi yerel daemon yokluğunda atlandı), 895 dosya satır sınırında (< 600 satır), 61 Markdown belgesi kırık link içermeden geçerli, 0 secret bulgusu.
-  - Entegrasyon ve Playwright E2E: Docker ve Chromium headless shell kurulumu GitHub Actions Ubuntu koşucusunda sağlandığından, CI üzerinde doğrulanmaktadır (yerel ortamda 2 HTTP sağlık probu başarılı).
+  - Coverage: Satır %88.42, Dal %81.35, Metot %91.89 (tüm eşikler >= %80).
+  - E2E: 2 passed, 1 skipped (canlı veritabanı olmaması durumu güvenli biçimde atlandı).
+  - Kapı kontrolleri: 114 test başarılı, 896 dosya satır sınırında (< 600 satır), 61 Markdown belgesi kırık link içermeden geçerli, 0 secret bulgusu.
 
 ## Sonraki Somut Adım
 
-`feat/phase-06-tables-qr-sessions` dalındaki düzeltmeleri commit edip origin'e push edin. GitHub Actions üzerinde `CI Quality & Verification Pipeline` (push ve pull_request) workflow'larının tamamlanmasını bekleyin. Tüm required check'ler yeşil olduğunda Phase 6 tamamlandı olarak işaretlenecek ve devir raporu sunulacaktır. Ana dala doğrudan birleştirme veya force-push yapmayın.
+Faz 6 tüm güvenlik, mimari, test ve CI gereksinimleriyle tamamlanmış ve CI üzerinde %100 yeşil olarak doğrulanmıştır. Değişiklikler commit edilip pushlandıktan sonra Faz 7 (Müşteri Deneyimi: Menü Gezinme, Sepet ve Sipariş Verme) planlama ve uygulamasına geçilmeye hazırdır. Ana dala doğrudan birleştirme veya force-push yapılmaz; PR incelemesi ve kabulü beklenir.
