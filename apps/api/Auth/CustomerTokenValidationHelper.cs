@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,18 +15,24 @@ public static class CustomerTokenValidationHelper
 {
     public static async Task<bool> ValidateCustomerTokenAsync(TokenValidatedContext context)
     {
-        var tenantClaim = context.Principal?.FindFirst(JwtClaimNames.TenantId)?.Value
-            ?? context.Principal?.FindFirst("tenant_id")?.Value;
+        var principal = context.Principal;
+        if (principal == null)
+        {
+            context.Fail("Customer token has no principal.");
+            return false;
+        }
 
-        var branchClaim = context.Principal?.FindFirst(JwtClaimNames.BranchId)?.Value
-            ?? context.Principal?.FindFirst("branch_id")?.Value;
+        var tenantClaim = principal.FindFirst(JwtClaimNames.TenantId)?.Value
+            ?? principal.FindFirst("tenant_id")?.Value;
 
-        var tableSessionClaim = context.Principal?.FindFirst(JwtClaimNames.TableSessionId)?.Value
-            ?? context.Principal?.FindFirst("table_session_id")?.Value;
+        var branchClaim = principal.FindFirst(JwtClaimNames.BranchId)?.Value
+            ?? principal.FindFirst("branch_id")?.Value;
 
-        var customerSubClaim = context.Principal?.FindFirst(JwtClaimNames.Subject)?.Value
-            ?? context.Principal?.FindFirst("sub")?.Value
-            ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var tableSessionClaim = principal.FindFirst(JwtClaimNames.TableSessionId)?.Value
+            ?? principal.FindFirst("table_session_id")?.Value;
+
+        var customerSubClaim = principal.FindFirst(JwtClaimNames.Subject)?.Value
+            ?? principal.FindFirst("sub")?.Value;
 
         if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty ||
             !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty ||
@@ -74,3 +79,4 @@ public static class CustomerTokenValidationHelper
         return true;
     }
 }
+
