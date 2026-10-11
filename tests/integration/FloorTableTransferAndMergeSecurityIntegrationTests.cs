@@ -254,7 +254,7 @@ public class FloorTableTransferAndMergeSecurityIntegrationTests : IClassFixture<
         await conn.OpenAsync();
         await using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "UPDATE tenancy.branches SET status = 3 WHERE id = @bid;"; // 3 = Suspended
+            cmd.CommandText = "UPDATE tenancy.branches SET status = 'Suspended' WHERE id = @bid;";
             cmd.Parameters.AddWithValue("bid", branchId);
             await cmd.ExecuteNonQueryAsync();
         }

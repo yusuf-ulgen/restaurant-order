@@ -193,17 +193,24 @@ public class CustomerJwtAndQrRaceIntegrationTests : IClassFixture<Testcontainers
         var (tenantId, branchId, tableId, sessionId) = await SetupCustomerEnvironmentAsync(client);
         var adminToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "RestaurantAdmin");
 
-        // Activate -> RequestBill -> Close session
+        // Activate -> RequestBill -> Close session with proper ConcurrencyToken headers
+        var getReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}", adminToken);
+        var sDto = await (await client.SendAsync(getReq)).Content.ReadFromJsonAsync<DiningSessionDto>();
+
         var actReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/activate", adminToken);
-        await client.SendAsync(actReq);
+        actReq.Headers.Add("If-Match", $"\"{sDto!.ConcurrencyToken}\"");
+        var actDto = await (await client.SendAsync(actReq)).Content.ReadFromJsonAsync<DiningSessionDto>();
 
         var billReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/request-bill", adminToken);
-        await client.SendAsync(billReq);
+        billReq.Headers.Add("If-Match", $"\"{actDto!.ConcurrencyToken}\"");
+        var billDto = await (await client.SendAsync(billReq)).Content.ReadFromJsonAsync<DiningSessionDto>();
 
         var closeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/close", adminToken);
+        closeReq.Headers.Add("If-Match", $"\"{billDto!.ConcurrencyToken}\"");
         await client.SendAsync(closeReq);
 
         // Now attempt to access runtime-menu with the customer token for the closed session
@@ -323,9 +330,15 @@ public class CustomerJwtAndQrRaceIntegrationTests : IClassFixture<Testcontainers
         var qrMeta1 = await qrResp1.Content.ReadFromJsonAsync<TableQrCodeDto>(JsonOptions);
         var oldToken = qrMeta1!.Token;
 
-        // Rotate QR version (bump to version 2)
-        var rotateResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{tableId}/qr/rotate", adminToken));
+        // Rotate QR version (bump to version 2) with table concurrency token
+        var tableGetResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{tableId}", adminToken));
+        var tableDto1 = await tableGetResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+
+        var rotateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{tableId}/qr/rotate", adminToken);
+        rotateReq.Headers.Add("If-Match", $"\"{tableDto1!.ConcurrencyToken}\"");
+        var rotateResp = await client.SendAsync(rotateReq);
         Assert.Equal(HttpStatusCode.OK, rotateResp.StatusCode);
 
         // Exchanging old QR token must fail with 410 Gone / 400 Bad Request
@@ -364,4 +377,42 @@ public class CustomerJwtAndQrRaceIntegrationTests : IClassFixture<Testcontainers
         Assert.DoesNotContain("Npgsql", body);
         Assert.Contains("application/problem+json", resp.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public async Task Qr_CrossTenantAndCrossBranch_DoesNotLeakData()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (tenantA, branchA, tableA, _) = await SetupCustomerEnvironmentAsync(client);
+        var (tenantB, branchB, _, _) = await SetupCustomerEnvironmentAsync(client);
+
+        var adminTokenA = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantA, role: "RestaurantAdmin");
+        var adminTokenB = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantB, role: "RestaurantAdmin");
+
+        // 1. Tenant B cannot access Table A QR
+        var crossQrReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchA}/tables/{tableA}/qr", adminTokenB);
+        var crossQrResp = await client.SendAsync(crossQrReq);
+        Assert.True(crossQrResp.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound);
+
+        // 2. Exchanging Table A's QR token returns a customer token valid ONLY for Tenant A / Branch A
+        var qrMetaResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchA}/tables/{tableA}/qr", adminTokenA));
+        var qrMeta = await qrMetaResp.Content.ReadFromJsonAsync<TableQrCodeDto>(JsonOptions);
+        var exchangeResp = await client.PostAsJsonAsync("/api/v1/qr/exchange", new QrExchangeRequest(qrMeta!.Token));
+        Assert.Equal(HttpStatusCode.OK, exchangeResp.StatusCode);
+
+        var exchangeBody = await exchangeResp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var tokenA = exchangeBody.GetProperty("accessToken").GetString();
+        Assert.NotNull(tokenA);
+
+        // Customer token for Tenant A cannot access Tenant B runtime-menu
+        var crossAccessReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/catalog/branches/{branchB}/runtime-menu", tokenA!);
+        var crossAccessResp = await client.SendAsync(crossAccessReq);
+        Assert.Equal(HttpStatusCode.Unauthorized, crossAccessResp.StatusCode);
+    }
 }
+

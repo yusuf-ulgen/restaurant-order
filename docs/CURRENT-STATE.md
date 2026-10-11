@@ -44,26 +44,36 @@ Güncelleme: 2026-10-08. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Faz 6: Masalar, QR ve Oturumlar — Kapanış Denetimi ve Güvenlik Sertleştirmesi
 
-- Dal: `feat/phase-06-tables-qr-sessions`.
-- Faz 6.0 - 6.6 tamamlandı.
-- Müşteri JWT Bearer doğrulama boru hattı (`OnTokenValidated` ve `OnMessageReceived`) güçlendirildi:
-  - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde reddedilir.
+- Dal: `feat/phase-06-tables-qr-sessions` (taban: `467737b`, commit: `9b7ffac` ve güncel düzeltmeler).
+- Durum: **DEVAM EDİYOR (CI Doğrulaması Bekleniyor)**.
+- Müşteri JWT Bearer doğrulama boru hattı (`OnTokenValidated` ve `OnMessageReceived`) gerçek authentication middleware ve korunan endpoint üzerinden entegrasyon testleriyle doğrulandı:
+  - GUID formatında olmayan veya eksik `sub` claim'leri katı biçimde 401 ile reddedilir (yalnızca "parse edilebildiyse karşılaştır" mantığı engellendi).
   - `sub` ile `table_session_id` uyuşmazlığı kesin olarak 401 ile reddedilir.
   - Gelecek tarihli `iat` (>5 saniye saat kayması) ve 4096 bayttan uzun token'lar reddedilir.
   - Farklı tenant/branch veya kapalı/birleştirilmiş oturum token'ları reddedilir.
-- QR yarış koşulları ve güvenlik doğrulandı:
+- QR v2 şeması ve yarış koşulları doğrulandı:
+  - v2 kanonik veri yükü: `v=2&kid={kid}&mode={mode}&tid={tid}&bid={bid}&tcode={tcode}&qv={qv}&iat={iat}`, HMAC-SHA256 sabit zamanlı doğrulama.
   - Paralel statik QR takasında tekil oturum oluşturulması / tekilleştirme.
-  - QR döndürme (rotation) sonrası eski QR sürümünün geçersiz kılınması (409).
-  - Pasif masa takasının engellenmesi (400).
+  - QR döndürme (rotation) sonrası eski QR sürümünün geçersiz kılınması (409 Conflict).
+  - Pasif masa takasının engellenmesi (400 Bad Request).
   - Çapraz tenant/branch veri sızıntısının engellenmesi.
   - Generic RFC 7807 hata yanıtlarının iç DB/istisna ayrıntılarını sızdırmaması.
+- Masa transferi ve oturum birleştirme:
+  - Zorunlu `IdempotencyKey` doğrulaması, normalize istek fingerprint'i ve replay mantığı.
+  - Deterministik artan GUID satır kilitleme (`SELECT ... FOR UPDATE`), `If-Match` / concurrency token kontrolleri.
+  - `DiningSessionMovement` değişmez denetim kaydı ve kaynak oturum önbellek geçersiz kılma.
 - Veritabanı ve migrasyon sözleşmesi:
-  - `public_code` için tam 32 karakter küçük harf onaltılık (hex) sözleşmesi (`20261011180000_HardenTablePublicCodeExactHex32Contract`).
+  - Eklemeli migrasyonlar: `20261005185044`, `20261005203226`, `20261005205206`, `20261011120000`, `20261011140000`, `20261011160000`, `20261011180000`, `20261011210000`.
+  - `public_code` için tam 32 karakter küçük harf onaltılık (hex) sözleşmesi (`ck_restaurant_tables_public_code_hex32`).
   - `ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`, `ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds` kısıtları.
-- Frontend testleri: JSDOM navigasyon mock'u, SVG koordinat NaN koruması ve `act(...)` sarmalamalarıyla 0 uyarı, 0 hata seviyesine getirildi (359/359 test başarılı).
-- Backend birim testleri: 1.403/1.403 test başarılı (0 hata, 0 atlanan).
-- Mimari testleri: 10/10 test başarılı.
+  - 62 migrasyon dosyası `scripts/migration-ops.mjs validate` ile doğrulandı (tahribatsız).
+- Test ve kapı sonuçları:
+  - Frontend birim testleri: JSDOM navigasyon mock'u, SVG koordinat NaN koruması ve `act(...)` sarmalamalarıyla 0 uyarı, 0 hata seviyesinde (359/359 test başarılı; ui: 159, admin: 151, customer: 34, operations: 15).
+  - Backend birim testleri: 1.404/1.404 test başarılı (0 hata, 0 atlanan, Release modunda 0 uyarı, 0 hata).
+  - Mimari testleri: 10/10 test başarılı.
+  - Kapı kontrolleri: 114 test başarılı (1 Docker testi yerel daemon yokluğunda atlandı), 895 dosya satır sınırında (< 600 satır), 61 Markdown belgesi kırık link içermeden geçerli, 0 secret bulgusu.
+  - Entegrasyon ve Playwright E2E: Docker ve Chromium headless shell kurulumu GitHub Actions Ubuntu koşucusunda sağlandığından, CI üzerinde doğrulanmaktadır (yerel ortamda 2 HTTP sağlık probu başarılı).
 
 ## Sonraki Somut Adım
 
-`feat/phase-06-tables-qr-sessions` dalındaki tüm değişiklikleri doğrulanmış biçimde commit edin ve origin'e push edin. PR oluşturulup CI kontrolleri doğrulandıktan sonra Faz 7 (Müşteri Deneyimi) hazırlıklarına geçilebilir. Katkı akışını izleyin; ana dala (main) doğrudan birleştirme veya force-push yapmayın.
+`feat/phase-06-tables-qr-sessions` dalındaki düzeltmeleri commit edip origin'e push edin. GitHub Actions üzerinde `CI Quality & Verification Pipeline` (push ve pull_request) workflow'larının tamamlanmasını bekleyin. Tüm required check'ler yeşil olduğunda Phase 6 tamamlandı olarak işaretlenecek ve devir raporu sunulacaktır. Ana dala doğrudan birleştirme veya force-push yapmayın.

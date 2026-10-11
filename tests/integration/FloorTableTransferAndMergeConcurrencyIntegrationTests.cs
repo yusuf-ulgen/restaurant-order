@@ -217,11 +217,17 @@ public class FloorTableTransferAndMergeConcurrencyIntegrationTests : IClassFixtu
             return await client.PostAsJsonAsync("/api/v1/qr/exchange", new QrExchangeRequest(qrMeta.Token));
         });
 
+        var tableResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{tableId}", adminToken));
+        var tableDto = await tableResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+
         var rotateTask = Task.Run(async () =>
         {
             await barrier.Task;
-            return await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-                HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{tableId}/qr/rotate", adminToken));
+            var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+                HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{tableId}/qr/rotate", adminToken);
+            req.Headers.Add("If-Match", $"\"{tableDto!.ConcurrencyToken}\"");
+            return await client.SendAsync(req);
         });
 
         barrier.SetResult();

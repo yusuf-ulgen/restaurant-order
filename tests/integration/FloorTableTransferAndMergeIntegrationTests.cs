@@ -143,13 +143,13 @@ public class FloorTableTransferAndMergeIntegrationTests : IClassFixture<Testcont
 
         // C. Stale concurrency token rejected with 409
         var staleReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/transfer", token);
-        staleReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: Guid.NewGuid()));
+        staleReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: Guid.NewGuid(), IdempotencyKey: $"stale-{Guid.NewGuid():N}"));
         Assert.Equal(HttpStatusCode.Conflict, (await client.SendAsync(staleReq)).StatusCode);
 
         // D. Customer role forbidden
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, session.Id);
         var custReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/transfer", customerToken);
-        custReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: session.ConcurrencyToken));
+        custReq.Content = JsonContent.Create(new TransferSessionRequest(t2Id, ConcurrencyToken: session.ConcurrencyToken, IdempotencyKey: $"cust-{Guid.NewGuid():N}"));
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(custReq)).StatusCode);
     }
 
@@ -199,7 +199,7 @@ public class FloorTableTransferAndMergeIntegrationTests : IClassFixture<Testcont
         // Replay merge: guest count remains 5 (not 7)
         var replayMergeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{s1.Id}/merge", token);
         replayMergeReq.Headers.Add("If-Match", $"\"{s1.ConcurrencyToken}\"");
-        replayMergeReq.Content = JsonContent.Create(new MergeSessionRequest(s2.Id, s1.ConcurrencyToken, IdempotencyKey: idempotencyKey));
+        replayMergeReq.Content = JsonContent.Create(new MergeSessionRequest(s2.Id, s1.ConcurrencyToken, s2.ConcurrencyToken, IdempotencyKey: idempotencyKey));
         var replayRes = await client.SendAsync(replayMergeReq);
         Assert.Equal(HttpStatusCode.OK, replayRes.StatusCode);
         var replayedTarget = await replayRes.Content.ReadFromJsonAsync<DiningSessionDto>();
