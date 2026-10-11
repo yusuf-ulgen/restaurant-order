@@ -117,6 +117,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.BranchItemAvailability>().HasQueryFilter(bia => HasTenant && bia.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.RestaurantTable>().HasQueryFilter(rt => HasTenant && rt.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSession>().HasQueryFilter(ds => HasTenant && ds.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSessionMovement>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

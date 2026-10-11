@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
@@ -34,344 +35,213 @@ public partial class FloorService
             throw new DomainException("Target table ID cannot be empty.");
         }
 
-        var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey)
-            ? Guid.NewGuid().ToString("N")
-            : request.IdempotencyKey.Trim();
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        {
+            throw new ArgumentException("Idempotency key is required.");
+        }
 
+        var idempotencyKey = request.IdempotencyKey.Trim();
+        if (idempotencyKey.Length > 100)
+        {
+            throw new ArgumentException("Idempotency key cannot exceed 100 characters.");
+        }
+
+        var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
+        EnsureBranchAllowsFloorMutation(branch);
+
+        var targetTableId = new RestaurantTableId(request.TargetTableId);
         DiningSessionDto? resultDto = null;
 
-        await ExecuteInTenantTransactionAsync(tenantId, async () =>
+        try
         {
-            // 1. Idempotency check: replay previous transfer if key was already processed
-            var existingMovement = await _dbContext.DiningSessionMovements
+            await ExecuteInTenantTransactionAsync(tenantId, async () =>
+            {
+                // 1. Transaction-level advisory lock to serialize duplicate concurrent requests
+                if (_dbContext.Database.IsNpgsql())
+                {
+                    var lockKey = $"idem:{tenantId.Value:N}:{branchId.Value:N}:{idempotencyKey}";
+                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))", ct);
+                }
+
+                // 2. Idempotency check: replay previous transfer if key was already processed
+                var existingMovement = await _dbContext.DiningSessionMovements
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.TenantId == tenantId &&
+                                              m.BranchId == branchId &&
+                                              m.IdempotencyKey == idempotencyKey, ct);
+
+                if (existingMovement != null)
+                {
+                    if (existingMovement.MovementType != DiningSessionMovementType.Transfer ||
+                        existingMovement.SourceSessionId != sessionId ||
+                        existingMovement.TargetTableId != targetTableId)
+                    {
+                        throw new ConcurrencyConflictException("Idempotency key was previously used for a different session movement or target.");
+                    }
+
+                    var currentSession = await _dbContext.DiningSessions
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
+                                                  s.BranchId == branchId &&
+                                                  s.Id == sessionId, ct)
+                        ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found.");
+
+                    resultDto = MapSession(currentSession);
+                    return;
+                }
+
+                // 3. Lock session row first
+                if (_dbContext.Database.IsNpgsql())
+                {
+                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT id FROM tenancy.dining_sessions WHERE id = {sessionId.Value} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
+                }
+
+                // 4. Fetch source session after lock
+                var session = await _dbContext.DiningSessions
+                    .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
+                                              s.BranchId == branchId &&
+                                              s.Id == sessionId, ct)
+                    ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found in branch '{branchId.Value}'.");
+
+                if (targetTableId == session.TableId)
+                {
+                    throw new DomainException("Cannot transfer session to the same table.");
+                }
+
+                // 5. Deterministic row-level locking on tables in ascending UUID order
+                if (_dbContext.Database.IsNpgsql())
+                {
+                    var tableIdsToLock = new[] { session.TableId.Value, targetTableId.Value }
+                        .Distinct()
+                        .OrderBy(id => id)
+                        .ToList();
+
+                    foreach (var tid in tableIdsToLock)
+                    {
+                        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                            $"SELECT id FROM tenancy.restaurant_tables WHERE id = {tid} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
+                    }
+                }
+
+                // 6. Fetch target table after lock
+                var targetTable = await _dbContext.RestaurantTables
+                    .FirstOrDefaultAsync(t => t.TenantId == tenantId &&
+                                              t.BranchId == branchId &&
+                                              t.Id == targetTableId, ct)
+                    ?? throw new ResourceNotFoundException($"Target table '{targetTableId.Value}' was not found in branch '{branchId.Value}'.");
+
+                // 7. Concurrency token validations
+                VerifyConcurrencyToken(session.ConcurrencyToken, concurrencyToken ?? request.ConcurrencyToken);
+                if (request.TargetTableConcurrencyToken.HasValue)
+                {
+                    VerifyConcurrencyToken(targetTable.ConcurrencyToken, request.TargetTableConcurrencyToken.Value);
+                }
+
+                // 8. Session status verification
+                if (session.Status == DiningSessionStatus.Closed)
+                {
+                    throw new DomainException("Cannot transfer a closed dining session.");
+                }
+
+                if (session.Status == DiningSessionStatus.BillRequested)
+                {
+                    throw new DomainException(
+                        "Cannot transfer dining session with bill requested. Bill requested sessions cannot be transferred.");
+                }
+
+                if (!targetTable.IsActive)
+                {
+                    throw new DomainException($"Cannot transfer to inactive table '{targetTable.TableNumber}'.");
+                }
+
+                if (session.GuestCount > targetTable.Capacity)
+                {
+                    throw new DomainException(
+                        $"Guest count ({session.GuestCount}) exceeds target table capacity ({targetTable.Capacity}).");
+                }
+
+                // 9. Validate target table is not already occupied by another non-closed session
+                var isTargetOccupied = await _dbContext.DiningSessions
+                    .AnyAsync(s => s.TenantId == tenantId &&
+                                   s.BranchId == branchId &&
+                                   s.TableId == targetTableId &&
+                                   s.Status != DiningSessionStatus.Closed &&
+                                   s.Id != session.Id, ct);
+
+                if (isTargetOccupied)
+                {
+                    throw new DomainException(
+                        $"Target table '{targetTable.TableNumber}' already has an active dining session. Use merge endpoint instead of transfer.");
+                }
+
+                // 10. Execute transfer and record immutable movement
+                var oldTableId = session.TableId;
+                session.TransferToTable(targetTable);
+
+                var movement = DiningSessionMovement.CreateTransfer(
+                    tenantId,
+                    branchId,
+                    session.Id,
+                    oldTableId,
+                    targetTableId,
+                    session.GuestCount,
+                    actor.SubjectId,
+                    actor.Role.ToString(),
+                    idempotencyKey,
+                    request.Reason);
+
+                _dbContext.DiningSessionMovements.Add(movement);
+
+                AddAuditEvent(
+                    tenantId,
+                    "Floor.SessionTransferred",
+                    actor,
+                    branchId,
+                    new
+                    {
+                        SessionId = session.Id.Value,
+                        OldTableId = oldTableId.Value,
+                        NewTableId = targetTableId.Value,
+                        GuestCount = session.GuestCount,
+                        IdempotencyKey = idempotencyKey
+                    });
+
+                await _dbContext.SaveChangesAsync(ct);
+                resultDto = MapSession(session);
+            }, ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            var committed = await _dbContext.DiningSessionMovements
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.TenantId == tenantId &&
                                           m.BranchId == branchId &&
                                           m.IdempotencyKey == idempotencyKey, ct);
-
-            if (existingMovement != null)
+            if (committed != null)
             {
-                if (existingMovement.MovementType != DiningSessionMovementType.Transfer ||
-                    existingMovement.SourceSessionId != sessionId)
+                if (committed.MovementType != DiningSessionMovementType.Transfer ||
+                    committed.SourceSessionId != sessionId ||
+                    committed.TargetTableId != targetTableId)
                 {
-                    throw new DomainException("Idempotency key was previously used for a different session movement.");
+                    throw new ConcurrencyConflictException("Idempotency key was previously used for a different session movement or target.");
                 }
 
                 var currentSession = await _dbContext.DiningSessions
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
                                               s.BranchId == branchId &&
                                               s.Id == sessionId, ct)
                     ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found.");
 
                 resultDto = MapSession(currentSession);
-                return;
             }
-
-            // 2. Fetch source session
-            var session = await _dbContext.DiningSessions
-                .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
-                                          s.BranchId == branchId &&
-                                          s.Id == sessionId, ct)
-                ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found in branch '{branchId.Value}'.");
-
-            // 3. Concurrency token validation
-            VerifyConcurrencyToken(session.ConcurrencyToken, concurrencyToken ?? request.ConcurrencyToken);
-
-            // 4. Session status verification (safe default: only Open or Active can transfer)
-            if (session.Status == DiningSessionStatus.Closed)
+            else
             {
-                throw new DomainException("Cannot transfer a closed dining session.");
+                throw;
             }
-
-            if (session.Status == DiningSessionStatus.BillRequested)
-            {
-                throw new DomainException(
-                    "Cannot transfer dining session with bill requested. Bill requested sessions cannot be transferred.");
-            }
-
-            var targetTableId = new RestaurantTableId(request.TargetTableId);
-            if (targetTableId == session.TableId)
-            {
-                throw new DomainException("Cannot transfer session to the same table.");
-            }
-
-            // 5. Deterministic row-level locking on tables and session in ascending UUID order
-            if (_dbContext.Database.IsNpgsql())
-            {
-                var tableIdsToLock = new[] { session.TableId.Value, targetTableId.Value }
-                    .OrderBy(id => id)
-                    .ToList();
-
-                foreach (var tid in tableIdsToLock)
-                {
-                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                        $"SELECT id FROM tenancy.restaurant_tables WHERE id = {tid} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
-                }
-
-                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                    $"SELECT id FROM tenancy.dining_sessions WHERE id = {session.Id.Value} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
-            }
-
-            // 6. Validate target table existence and status
-            var targetTable = await _dbContext.RestaurantTables
-                .FirstOrDefaultAsync(t => t.TenantId == tenantId &&
-                                          t.BranchId == branchId &&
-                                          t.Id == targetTableId, ct)
-                ?? throw new ResourceNotFoundException($"Target table '{targetTableId.Value}' was not found in branch '{branchId.Value}'.");
-
-            if (!targetTable.IsActive)
-            {
-                throw new DomainException($"Cannot transfer to inactive table '{targetTable.TableNumber}'.");
-            }
-
-            if (session.GuestCount > targetTable.Capacity)
-            {
-                throw new DomainException(
-                    $"Guest count ({session.GuestCount}) exceeds target table capacity ({targetTable.Capacity}).");
-            }
-
-            // 7. Validate target table is not already occupied by another non-closed session
-            var isTargetOccupied = await _dbContext.DiningSessions
-                .AnyAsync(s => s.TenantId == tenantId &&
-                               s.BranchId == branchId &&
-                               s.TableId == targetTableId &&
-                               s.Status != DiningSessionStatus.Closed &&
-                               s.Id != session.Id, ct);
-
-            if (isTargetOccupied)
-            {
-                throw new DomainException(
-                    $"Target table '{targetTable.TableNumber}' already has an active dining session. Use merge endpoint instead of transfer.");
-            }
-
-            // 8. Execute transfer and record immutable movement
-            var oldTableId = session.TableId;
-            session.TransferToTable(targetTable);
-
-            var movement = DiningSessionMovement.CreateTransfer(
-                tenantId,
-                branchId,
-                session.Id,
-                oldTableId,
-                targetTableId,
-                session.GuestCount,
-                actor.SubjectId,
-                actor.Role.ToString(),
-                idempotencyKey,
-                request.Reason);
-
-            _dbContext.DiningSessionMovements.Add(movement);
-
-            AddAuditEvent(
-                tenantId,
-                "Floor.SessionTransferred",
-                actor,
-                branchId,
-                new
-                {
-                    SessionId = session.Id.Value,
-                    OldTableId = oldTableId.Value,
-                    NewTableId = targetTableId.Value,
-                    GuestCount = session.GuestCount,
-                    IdempotencyKey = idempotencyKey
-                });
-
-            await _dbContext.SaveChangesAsync(ct);
-            resultDto = MapSession(session);
-        }, ct);
-
-        return resultDto!;
-    }
-
-    public async Task<DiningSessionDto> MergeSessionAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        DiningSessionId sourceSessionId,
-        MergeSessionRequest request,
-        Guid? sourceConcurrencyToken,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        EnsureBranchAccess(tenantId, branchId, actor);
-        EnsureSessionsManagePermission(actor);
-
-        if (actor.Role == AuthRole.Customer)
-        {
-            throw new InvalidAuthorizationScopeException("Customer is not authorized to merge dining sessions.");
         }
-
-        if (request.TargetSessionId == Guid.Empty)
-        {
-            throw new DomainException("Target session ID cannot be empty.");
-        }
-
-        if (sourceSessionId.Value == request.TargetSessionId)
-        {
-            throw new DomainException("Cannot merge a dining session into itself.");
-        }
-
-        var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey)
-            ? Guid.NewGuid().ToString("N")
-            : request.IdempotencyKey.Trim();
-
-        var targetSessionId = new DiningSessionId(request.TargetSessionId);
-        DiningSessionDto? resultDto = null;
-
-        await ExecuteInTenantTransactionAsync(tenantId, async () =>
-        {
-            // 1. Idempotency check: replay previous merge if key was already processed
-            var existingMovement = await _dbContext.DiningSessionMovements
-                .FirstOrDefaultAsync(m => m.TenantId == tenantId &&
-                                          m.BranchId == branchId &&
-                                          m.IdempotencyKey == idempotencyKey, ct);
-
-            if (existingMovement != null)
-            {
-                if (existingMovement.MovementType != DiningSessionMovementType.Merge ||
-                    existingMovement.SourceSessionId != sourceSessionId)
-                {
-                    throw new DomainException("Idempotency key was previously used for a different session movement.");
-                }
-
-                var currentTarget = await _dbContext.DiningSessions
-                    .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
-                                              s.BranchId == branchId &&
-                                              s.Id == targetSessionId, ct)
-                    ?? throw new ResourceNotFoundException($"Target dining session '{targetSessionId.Value}' was not found.");
-
-                resultDto = MapSession(currentTarget);
-                return;
-            }
-
-            // 2. Fetch source and target sessions
-            var sourceSession = await _dbContext.DiningSessions
-                .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
-                                          s.BranchId == branchId &&
-                                          s.Id == sourceSessionId, ct)
-                ?? throw new ResourceNotFoundException($"Source dining session '{sourceSessionId.Value}' was not found in branch '{branchId.Value}'.");
-
-            var targetSession = await _dbContext.DiningSessions
-                .FirstOrDefaultAsync(s => s.TenantId == tenantId &&
-                                          s.BranchId == branchId &&
-                                          s.Id == targetSessionId, ct)
-                ?? throw new ResourceNotFoundException($"Target dining session '{targetSessionId.Value}' was not found in branch '{branchId.Value}'.");
-
-            // 3. Concurrency token validations
-            VerifyConcurrencyToken(sourceSession.ConcurrencyToken, sourceConcurrencyToken ?? request.SourceConcurrencyToken);
-            if (request.TargetConcurrencyToken.HasValue)
-            {
-                VerifyConcurrencyToken(targetSession.ConcurrencyToken, request.TargetConcurrencyToken.Value);
-            }
-
-            // 4. Validate session statuses
-            if (sourceSession.Status == DiningSessionStatus.Closed)
-            {
-                throw new DomainException("Source dining session is already closed.");
-            }
-
-            if (sourceSession.Status == DiningSessionStatus.BillRequested)
-            {
-                throw new DomainException("Cannot merge a dining session with bill requested.");
-            }
-
-            if (targetSession.Status == DiningSessionStatus.Closed)
-            {
-                throw new DomainException("Target dining session is already closed.");
-            }
-
-            if (targetSession.Status == DiningSessionStatus.BillRequested)
-            {
-                throw new DomainException("Cannot merge into a target dining session with bill requested.");
-            }
-
-            // 5. Deterministic row-level locking on tables and sessions in ascending UUID order
-            if (_dbContext.Database.IsNpgsql())
-            {
-                var tableIdsToLock = new[] { sourceSession.TableId.Value, targetSession.TableId.Value }
-                    .Distinct()
-                    .OrderBy(id => id)
-                    .ToList();
-
-                foreach (var tid in tableIdsToLock)
-                {
-                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                        $"SELECT id FROM tenancy.restaurant_tables WHERE id = {tid} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
-                }
-
-                var sessionIdsToLock = new[] { sourceSession.Id.Value, targetSession.Id.Value }
-                    .OrderBy(id => id)
-                    .ToList();
-
-                foreach (var sid in sessionIdsToLock)
-                {
-                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                        $"SELECT id FROM tenancy.dining_sessions WHERE id = {sid} AND tenant_id = {tenantId.Value} FOR UPDATE", ct);
-                }
-            }
-
-            // 6. Validate target table capacity for combined guest count
-            var targetTable = await _dbContext.RestaurantTables
-                .FirstOrDefaultAsync(t => t.TenantId == tenantId &&
-                                          t.BranchId == branchId &&
-                                          t.Id == targetSession.TableId, ct)
-                ?? throw new ResourceNotFoundException($"Target table was not found for session '{targetSession.Id.Value}'.");
-
-            if (!targetTable.IsActive)
-            {
-                throw new DomainException($"Cannot merge into session at inactive table '{targetTable.TableNumber}'.");
-            }
-
-            var combinedGuests = targetSession.GuestCount + sourceSession.GuestCount;
-            if (combinedGuests > targetTable.Capacity)
-            {
-                throw new DomainException(
-                    $"Combined guest count ({combinedGuests}) exceeds target table capacity ({targetTable.Capacity}).");
-            }
-
-            // 7. Execute merge domain operations
-            var guestsMoved = sourceSession.GuestCount;
-            targetSession.AcceptMergedGuests(guestsMoved, targetTable);
-            sourceSession.MergeInto(targetSession, request.Reason);
-
-            var movement = DiningSessionMovement.CreateMerge(
-                tenantId,
-                branchId,
-                sourceSession.Id,
-                sourceSession.TableId,
-                targetSession.Id,
-                targetSession.TableId,
-                guestsMoved,
-                actor.SubjectId,
-                actor.Role.ToString(),
-                idempotencyKey,
-                request.Reason);
-
-            _dbContext.DiningSessionMovements.Add(movement);
-
-            AddAuditEvent(
-                tenantId,
-                "Floor.SessionMerged",
-                actor,
-                branchId,
-                new
-                {
-                    SourceSessionId = sourceSession.Id.Value,
-                    TargetSessionId = targetSession.Id.Value,
-                    GuestsMoved = guestsMoved,
-                    CombinedGuests = targetSession.GuestCount,
-                    IdempotencyKey = idempotencyKey
-                });
-
-            await _dbContext.SaveChangesAsync(ct);
-
-            // 8. Invalidate source customer session cache immediately
-            if (_customerSessionValidator != null)
-            {
-                await _customerSessionValidator.InvalidateSessionCacheAsync(
-                    tenantId.Value, branchId.Value, sourceSession.Id.Value, ct);
-            }
-
-            resultDto = MapSession(targetSession);
-        }, ct);
 
         return resultDto!;
     }

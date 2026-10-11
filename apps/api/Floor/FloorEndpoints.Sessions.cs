@@ -303,9 +303,20 @@ public static class FloorSessionEndpoints
                     throw new ConcurrencyPreconditionException("Concurrency token is required via If-Match header or body.");
                 }
 
-                var idempotencyKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                var rawKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
                     ? request.IdempotencyKey
                     : context.Request.Headers["Idempotency-Key"].FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(rawKey))
+                {
+                    throw new ArgumentException("Idempotency key is required via 'Idempotency-Key' header or request body.");
+                }
+
+                var idempotencyKey = rawKey.Trim();
+                if (idempotencyKey.Length > 100)
+                {
+                    throw new ArgumentException("Idempotency key cannot exceed 100 characters.");
+                }
 
                 var effectiveRequest = request with { IdempotencyKey = idempotencyKey };
 
@@ -359,11 +370,27 @@ public static class FloorSessionEndpoints
                     throw new ConcurrencyPreconditionException("Source concurrency token is required via If-Match header or body.");
                 }
 
-                var idempotencyKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                if (!request.TargetConcurrencyToken.HasValue || request.TargetConcurrencyToken.Value == Guid.Empty)
+                {
+                    throw new ConcurrencyPreconditionException("Target concurrency token is required in request body.");
+                }
+
+                var rawMergeKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
                     ? request.IdempotencyKey
                     : context.Request.Headers["Idempotency-Key"].FirstOrDefault();
 
-                var effectiveRequest = request with { IdempotencyKey = idempotencyKey };
+                if (string.IsNullOrWhiteSpace(rawMergeKey))
+                {
+                    throw new ArgumentException("Idempotency key is required via 'Idempotency-Key' header or request body.");
+                }
+
+                var mergeIdempotencyKey = rawMergeKey.Trim();
+                if (mergeIdempotencyKey.Length > 100)
+                {
+                    throw new ArgumentException("Idempotency key cannot exceed 100 characters.");
+                }
+
+                var effectiveRequest = request with { IdempotencyKey = mergeIdempotencyKey };
 
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);

@@ -207,4 +207,29 @@ public class DiningSessionMovementUnitTests
         Assert.Equal(2, movement.GuestsMoved);
         Assert.Equal("key-merge", movement.IdempotencyKey);
     }
+
+    [Fact]
+    public void CreateMovement_InvalidIdempotencyKey_ThrowsDomainException()
+    {
+        var s1 = DiningSessionId.New();
+        var s2 = DiningSessionId.New();
+        var t1 = RestaurantTableId.New();
+        var t2 = RestaurantTableId.New();
+        var actorId = Guid.NewGuid();
+
+        // 1. Whitespace or empty
+        Assert.Throws<DomainException>(() => DiningSessionMovement.CreateTransfer(
+            _tenantId, _branchId, s1, t1, t2, 2, actorId, "Waiter", "   ", "reason"));
+
+        Assert.Throws<DomainException>(() => DiningSessionMovement.CreateMerge(
+            _tenantId, _branchId, s1, t1, s2, t2, 2, actorId, "Waiter", "", "reason"));
+
+        // 2. Exceeds 100 characters
+        var longKey = new string('x', 101);
+        Assert.Throws<DomainException>(() => DiningSessionMovement.CreateTransfer(
+            _tenantId, _branchId, s1, t1, t2, 2, actorId, "Waiter", longKey, "reason"));
+
+        Assert.Throws<DomainException>(() => DiningSessionMovement.CreateMerge(
+            _tenantId, _branchId, s1, t1, s2, t2, 2, actorId, "Waiter", longKey, "reason"));
+    }
 }

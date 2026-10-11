@@ -141,6 +141,14 @@ public sealed class QrPublicService : IQrPublicService
                                               t.PublicCode == payload.PublicTableCode, ct)
                     ?? throw new QrTableInactiveException($"Table with code '{payload.PublicTableCode}' was not found.");
 
+                // Deterministic row-level lock on table to serialize concurrent exchange requests for the same table
+                if (_dbContext.Database.IsNpgsql())
+                {
+                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT id FROM tenancy.restaurant_tables WHERE id = {table.Id.Value} AND tenant_id = {payload.TenantId.Value} FOR UPDATE", ct);
+                    await _dbContext.Entry(table).ReloadAsync(ct);
+                }
+
                 if (!table.IsActive)
                 {
                     throw new QrTableInactiveException($"Table '{table.TableNumber}' is currently inactive.");
@@ -150,13 +158,6 @@ public sealed class QrPublicService : IQrPublicService
                 {
                     throw new QrRevokedException(
                         $"Table QR code has been revoked. Current version is {table.QrVersion}, token has {payload.QrVersion}.");
-                }
-
-                // Deterministic row-level lock on table to serialize concurrent exchange requests for the same table
-                if (_dbContext.Database.IsNpgsql())
-                {
-                    await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                        $"SELECT id FROM tenancy.restaurant_tables WHERE id = {table.Id.Value} AND tenant_id = {payload.TenantId.Value} FOR UPDATE", ct);
                 }
 
                 DiningSession targetSession;

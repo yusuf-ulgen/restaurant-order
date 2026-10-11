@@ -216,6 +216,7 @@ public record QrExchangeResult(
 public record TransferSessionRequest(
     Guid TargetTableId,
     Guid? ConcurrencyToken = null,
+    Guid? TargetTableConcurrencyToken = null,
     string? IdempotencyKey = null,
     string? Reason = null);
 

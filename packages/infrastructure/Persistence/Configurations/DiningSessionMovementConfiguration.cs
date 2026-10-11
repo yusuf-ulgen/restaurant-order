@@ -110,6 +110,21 @@ public class DiningSessionMovementConfiguration : IEntityTypeConfiguration<Dinin
             .HasConstraintName("fk_dining_session_movements_target_table")
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Foreign keys to dining sessions
+        builder.HasOne<DiningSession>()
+            .WithMany()
+            .HasForeignKey(m => new { m.TenantId, m.BranchId, m.SourceSessionId })
+            .HasPrincipalKey(ds => new { ds.TenantId, ds.BranchId, ds.Id })
+            .HasConstraintName("fk_dining_session_movements_source_session")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<DiningSession>()
+            .WithMany()
+            .HasForeignKey(m => new { m.TenantId, m.BranchId, m.TargetSessionId })
+            .HasPrincipalKey(ds => new { ds.TenantId, ds.BranchId, ds.Id })
+            .HasConstraintName("fk_dining_session_movements_target_session")
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Unique index per tenant + branch + idempotency key
         builder.HasIndex(m => new { m.TenantId, m.BranchId, m.IdempotencyKey })
             .HasDatabaseName("ix_dining_session_movements_tenant_branch_idempotency_key")
@@ -118,6 +133,9 @@ public class DiningSessionMovementConfiguration : IEntityTypeConfiguration<Dinin
         // Operational lookup indexes
         builder.HasIndex(m => new { m.TenantId, m.BranchId, m.SourceSessionId })
             .HasDatabaseName("ix_dining_session_movements_tenant_branch_source_session");
+
+        builder.HasIndex(m => new { m.TenantId, m.BranchId, m.TargetSessionId })
+            .HasDatabaseName("ix_dining_session_movements_tenant_branch_target_session");
 
         builder.HasIndex(m => new { m.TenantId, m.BranchId, m.CreatedAtUtc })
             .HasDatabaseName("ix_dining_session_movements_tenant_branch_created");

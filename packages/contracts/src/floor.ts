@@ -189,3 +189,38 @@ export interface QrExchangeResponse {
   tableNumber: string;
   tableName: string;
 }
+
+export interface TransferSessionRequest {
+  targetTableId: string;
+  concurrencyToken?: string;
+  targetTableConcurrencyToken?: string;
+  idempotencyKey?: string;
+  reason?: string;
+}
+
+export interface MergeSessionRequest {
+  targetSessionId: string;
+  sourceConcurrencyToken: string;
+  targetConcurrencyToken: string;
+  idempotencyKey?: string;
+  reason?: string;
+}
+
+export type DiningSessionMovementType = 'Transfer' | 'Merge';
+
+export interface DiningSessionMovementDto {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  sourceSessionId: string;
+  sourceTableId: string;
+  targetSessionId?: string | null;
+  targetTableId: string;
+  movementType: DiningSessionMovementType;
+  actorId: string;
+  actorRole: string;
+  reason?: string | null;
+  idempotencyKey: string;
+  guestsMoved: number;
+  createdAtUtc: string;
+}
