@@ -71,3 +71,9 @@
 ## Aşama 5 Yönetici Kataloğu
 
 Yönetici menüsü ekranı şube menülerini, kategorileri, öğeleri, çeşitleri, değiştirici grupları/seçenekleri, diyet/alerjen meta verilerini ve hızlı86/yeniden stokla. Mevcut yönetici kabuğunu ve tasarım sistemini, duyarlı düzenleyici sayfalarını, güvenli metin önizlemesini ve izne duyarlı kontrolleri kullanır. Yalnızca katalog yönetimidir; müşteri siparişi daha sonraki bir aşama olarak kalır.
+
+## Aşama 6 Kat Planı ve Masa Arayüzü Uygulaması
+
+- **ADM-04 / ADM-05 (Kat Planı ve QR Yönetimi):** Mevcut tasarım sistemi ve yönetici kabuğu altında `apps/admin-web` içinde uygulanmıştır. Şube kapsamlı servis alanı sekmeleri, etkileşimli 2B kat planı tuval ızgarası, masa konumlandırma, şekil işleme (Yuvarlak, Kare, Dikdörtgen), duyarlı denetçi çekmecesi/modali, masa kodu/kapasite düzenleyicisi, yüksek çözünürlüklü SVG QR kod oluşturma, masa QR rotasyonu ve baskıya hazır kart düzenleri sunar.
+- **CUST-01 (Masa Karşılama ve Karşılama Ekranı):** Mobil öncelikli duyarlı bir karşılama görünümü olarak `apps/customer-web` içinde uygulanmıştır. Kriptografik QR belirteçlerini doğrular, şube/masa meta verilerini ve servis alanı adını görüntüler, aktif oturum varlığını denetler ve müşteri oturum değişimini yürütür.
+- **Kapsam Sınırları:** Müşteri katalog taraması, sepet ve sipariş gönderimi (CUST-02 - CUST-06) Aşama 7'ye aittir. Garson mobil ekranları ve faturalandırma (WAIT-01 - WAIT-07) Aşama 10'a aittir (masa transferi ve birleştirme arka plan mekaniği Faz 6.4 kapsamında tamamlanmıştır). Gerçek zamanlı KDS (Aşama 9/11) ve ödeme mutabakatı (Aşama 13/16) Aşama 6'nın parçası değildir.

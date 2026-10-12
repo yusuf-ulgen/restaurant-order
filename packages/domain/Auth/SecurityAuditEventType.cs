@@ -93,4 +93,17 @@ public static class SecurityAuditEventType
     public const string ItemRestocked = "item_restocked";
     public const string ItemVariantAvailabilityChanged = "item_variant_availability_changed";
     public const string ItemVariantRestocked = "item_variant_restocked";
+
+    // Floor & Tables (Phase 6)
+    public const string RestaurantTableCreated = "restaurant_table_created";
+    public const string RestaurantTableUpdated = "restaurant_table_updated";
+    public const string RestaurantTableLayoutUpdated = "restaurant_table_layout_updated";
+    public const string RestaurantTableActivated = "restaurant_table_activated";
+    public const string RestaurantTableDeactivated = "restaurant_table_deactivated";
+    public const string DiningSessionOpened = "dining_session_opened";
+    public const string DiningSessionActivated = "dining_session_activated";
+    public const string DiningSessionBillRequested = "dining_session_bill_requested";
+    public const string DiningSessionClosed = "dining_session_closed";
+    public const string TableQrRotated = "table_qr_rotated";
+    public const string QrExchanged = "qr_exchanged";
 }

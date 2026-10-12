@@ -168,7 +168,7 @@ describe('Admin Web App - Authentication & Access Control', () => {
       expect(screen.getByText('Restoran Yönetim')).toBeDefined();
       expect(screen.getByText('Kontrol Paneli')).toBeDefined();
       expect(screen.getByText(/Men.*Katalo/i)).toBeDefined();
-      expect(screen.getByText(/Şube & Masalar/i)).toBeDefined();
+      expect(screen.getByText(/Masa Düzeni & QR|Şube & Masalar/i)).toBeDefined();
     });
 
     it('renders header, title, and admin badge', () => {

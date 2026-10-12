@@ -116,14 +116,51 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
         {
             OnMessageReceived = context =>
             {
-                if (string.IsNullOrEmpty(context.Token))
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 {
-                    context.Token = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
+                    var token = authHeader["Bearer ".Length..].Trim();
+                    if (token.Length > 4096)
+                    {
+                        context.Fail("Token exceeds maximum allowed length.");
+                        return Task.CompletedTask;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(context.Token) &&
+                    context.Request.Cookies.ContainsKey(RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName))
+                {
+                    var cookieToken = context.Request.Cookies[RestaurantOrder.Api.Auth.AuthCookieService.AccessTokenCookieName];
+                    if (cookieToken != null && cookieToken.Length > 4096)
+                    {
+                        context.Fail("Token exceeds maximum allowed length.");
+                        return Task.CompletedTask;
+                    }
+                    context.Token = cookieToken;
                 }
                 return Task.CompletedTask;
             },
             OnTokenValidated = async context =>
             {
+                var iatClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Iat)?.Value
+                    ?? context.Principal?.FindFirst("iat")?.Value;
+                if (!string.IsNullOrWhiteSpace(iatClaim) &&
+                    long.TryParse(iatClaim, out var iatSeconds) &&
+                    iatSeconds > DateTimeOffset.UtcNow.AddSeconds(5).ToUnixTimeSeconds())
+                {
+                    context.Fail("Token has future issued-at timestamp.");
+                    return;
+                }
+
+                var principalTypeClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.PrincipalType)?.Value
+                    ?? context.Principal?.FindFirst("principal_type")?.Value;
+
+                if (string.Equals(principalTypeClaim, "customer", StringComparison.OrdinalIgnoreCase))
+                {
+                    await RestaurantOrder.Api.Auth.CustomerTokenValidationHelper.ValidateCustomerTokenAsync(context);
+                    return;
+                }
+
                 var validator = context.HttpContext.RequestServices.GetRequiredService<RestaurantOrder.Application.Auth.ITokenRevocationValidator>();
 
                 var sidClaim = context.Principal?.FindFirst(RestaurantOrder.Application.Auth.JwtClaimNames.SessionId)?.Value
@@ -223,8 +260,15 @@ if (app.Environment.IsDevelopment())
         RestaurantOrder.Infrastructure.Persistence.Seed.IDevDataSeeder seeder,
         CancellationToken ct) =>
     {
-        var result = await seeder.SeedAsync(ct);
-        return Results.Ok(result);
+        try
+        {
+            var result = await seeder.SeedAsync(ct);
+            return Results.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.ToString(), statusCode: 500);
+        }
     })
     .WithName("DevSeed")
     .WithSummary("Idempotent synthetic seed for local development only")
@@ -365,6 +409,7 @@ RestaurantOrder.Api.Auth.PinAuthEndpoints.MapPinAuthEndpoints(app);
 RestaurantOrder.Api.Auth.StaffEndpoints.MapStaffEndpoints(app);
 RestaurantOrder.Api.RestaurantConfig.RestaurantConfigEndpoints.MapRestaurantConfigEndpoints(app);
 RestaurantOrder.Api.Catalog.CatalogEndpoints.MapCatalogEndpoints(app);
+RestaurantOrder.Api.Floor.FloorEndpoints.MapFloorEndpoints(app);
 
 app.Run();
 

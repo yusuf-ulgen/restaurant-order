@@ -33,10 +33,12 @@
 - **PreparationStation:** Kitchen, Bar veya Other hazırlık istasyonu; şube içinde benzersiz kod, görünen ad ve etkinlik durumu.
 - **BranchFeatureFlags:** Yetkilendirme önceliği korunarak değerlendirilen şube özellik bayrakları.
 
-### 3.3. Masa ve Salon
+### 3.3. Masa ve Salon Yönetimi
 
-- **Table:** Şube içinde benzersiz kimliği ve numarası olan masa/oturma noktası; kalıcı QR koduyla ilişkilidir.
-- **TableSession:** Misafirlerin oturması veya ilk siparişle başlayan yemek oturumu; ödeme tamamlanınca kapanır. Ayrıntılı yaşam döngüsü Faz 6 öncesi kesinleştirilecektir.
+- **RestaurantTable:** Şubeye ve `DiningArea` alanına bağlı masa. `table_number`, şube bazında benzersiz `code`, oturma kapasitesi `capacity`, şekil `shape` (`Round`, `Square`, `Rectangle`), etkinlik durumu `status`, `qr_version`, QR çözünürlüğü için 128-bit `public_code` ve iyimser eşzamanlılık tokenı (`row_version`) içerir.
+- **TableLayout:** Masanın 2D kat planı tuvali üzerindeki koordinatları (`x`, `y`, `width`, `height`, `rotation`). Tuval sınırlarına ve boyut kurallarına göre doğrulanır.
+- **DiningSession:** Masada oturan misafir grubunu temsil eden yemek oturumu. `Open -> Active -> BillRequested -> Closed` durum makinesini izler. Masada aynı anda yalnızca tek bir açık/kapanmamış (`status <> 4`) oturum bulunabilir (`ix_dining_sessions_tenant_branch_table_active`).
+- **DiningSessionMovement:** Oturumun başka bir masaya taşınmasını (`Transfer`) veya iki oturumun birleştirilmesini (`Merge`) kaydeden değişmez hareket ve denetim tablosudur. Veritabanı tetikleyicisiyle güncelleme ve silmeye kapatılmıştır; işletme ve şube izolasyonunu RLS ile korur. Masalar arası transferde hedef masa boş ve aktif olmalıdır; kapasite aşımı yapılamaz. Birleştirmede kaynak oturum `Closed` ve `MergedIntoSessionId` durumuna geçirilerek terminalize edilir, misafir sayısı hedef oturuma aktarılır ve kaynak oturumun müşteri belirteçleri anında geçersiz kılınır.
 
 ### 3.4. Menü ve Katalog
 
@@ -88,3 +90,7 @@
 ## Faz 5 Katalog Bütünlüğü
 
 Menüler işletme ve şubeye aittir; `Draft -> Active -> Archived` geçişinde Archived son durumdur. Kategori, ürün, varyant, ek seçenek grubu ve seçenekler yumuşak yaşam döngüsü kullanır. Fiyat ve ek ücretler sınırlı, negatif olmayan tam sayı alt para birimleridir; varyant fiyatı mutlak tutardır. `0 <= min <= max <= etkin seçenek sayısı`; etkin varsayılan seçenek sayısı max'ı aşamaz. Diyet/alerjen birleşimleri kapalı desteklenen etiket kümesine göre doğrulanır. Bulunabilirlik, ürün yaşam döngüsünden ayrı şube ayarıdır; ürün düzeyindeki 86 işlemi, çalışma zamanı görünümünde etkin varyantları da kullanılamaz yapar.
+
+## Faz 6 Masa, Kat Planı ve QR Bütünlüğü
+
+Masalar, bileşik yabancı anahtar (composite foreign key) bütünlüğü ile işletme (tenant), şube ve servis alanına (dining area) aittir. Şube bazında masa kodu ve numarası benzersizlik kuralına tabidir (`ix_restaurant_tables_tenant_branch_code`). Masa yerleşim koordinatları kat planı tuvali sınır kısıtlamalarına uymalıdır (`x, y >= 0`, `10 <= width <= 5000`, `10 <= height <= 5000`, `x + width <= 10000`, `y + height <= 10000`, `shape IN (1, 2, 3)` ve `rotation [0, 360)` aralığında; veritabanı kısıtları: `ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds`). Masa yemek oturumlarına veya geçmiş denetim kayıtlarına bağlıysa fiziksel silme yasaktır; masalar yazılımsal durum (soft-status) devre dışı bırakma kullanır. Etkin, kapatılmamış bir oturumu olan bir masanın devre dışı bırakılması kesin olarak engellenir (409 Conflict döner). QR kod üretimi sabit zamanlı doğrulamaya (constant-time verification) sahip HMAC-SHA256 imzaları kullanır. Masa rotasyonu `qr_version` değerini artırır ve `public_code` değerini yeniden oluşturarak eski fiziksel QR baskılarını anında geçersiz kılar. Masa taşıma ve oturum birleştirme mekanikleri (Faz 6.4), masalar ve oturumlar düzeyinde eksiksiz uygulanmış olup değişmez denetim geçmişi (`DiningSessionMovement`) ve deadlock koruması sağlar; sipariş düzeyindeki kalem transferleri ve hesap bölme entegrasyonu ise ilgili sipariş modelleri oluştukça sonraki aşamalarda bağlanacaktır.

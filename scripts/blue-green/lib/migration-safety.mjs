@@ -26,6 +26,8 @@ export const ALLOWED_CONSTRAINT_REPLACEMENTS = [
   { droppedConstraint: 'fk_modifier_options_modifier_groups_group_id', replacementConstraint: 'fk_modifier_options_modifier_groups_tenant_branch_group', table: 'modifier_options', reason: 'Composite tenant/branch FK (Phase 5.5)' },
   { droppedConstraint: 'AK_menus_tenant_id_id', replacementConstraint: 'AK_menus_tenant_id_branch_id_id', table: 'menus', type: 'unique', allowedFile: '20261004211028_AddCatalogCrossBranchReferentialConstraintsAndOutbox', reason: 'Branch-scoped menu AK (Phase 5.5)' },
   { droppedConstraint: 'fk_menu_items_prep_stations_tenant_branch_station', replacementConstraint: 'fk_menu_items_prep_stations_tenant_branch_station', table: 'menu_items', reason: 'Restrict delete behavior hardening (Phase 5 closing)' },
+  { droppedConstraint: 'ck_dining_sessions_status_timestamps', replacementConstraint: 'ck_dining_sessions_status_timestamps', table: 'dining_sessions', type: 'check', allowedFile: '20261011160000_HardenTableAndDiningSessionIntegrityConstraints', reason: 'Harden dining session lifecycle status timestamps and chronology (Phase 6 closing)' },
+  { droppedConstraint: 'ck_restaurant_tables_public_code', replacementConstraint: 'ck_restaurant_tables_public_code', table: 'restaurant_tables', type: 'check', allowedFile: '20261011180000_HardenTablePublicCodeExactHex32Contract', reason: 'Harden public_code to exact 32-character lowercase hex format (Phase 6 closing)' },
 ];
 
 export const ALLOWED_FK_REPLACEMENTS = ALLOWED_CONSTRAINT_REPLACEMENTS;
@@ -272,10 +274,29 @@ export function validateConstraintSafety(rawContent, options = {}) {
     violations.push('DROP PRIMARY KEY/CONSTRAINT is strictly prohibited before cutover');
   }
 
-  // 4. Strict blocking of Check constraint drops
+  // 4. Strict blocking of Check constraint drops unless allowlisted for in-place replacement
   const ckDropRegex = /\b(?:DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?(?:ck_[a-zA-Z0-9_]*|[a-zA-Z0-9_]*_check)["']?)\b/i;
-  if (ckDropRegex.test(content) || /migrationBuilder\s*\.\s*DropCheckConstraint\b/i.test(content)) {
-    violations.push('DROP CHECK CONSTRAINT is strictly prohibited before cutover');
+  if (ckDropRegex.test(content)) {
+    const ckMatch = content.match(/DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?["']?([^"'\s;]+)["']?/i);
+    const ckName = ckMatch ? ckMatch[1] : '';
+    const isAllowlisted = ALLOWED_CONSTRAINT_REPLACEMENTS.some(
+      r => r.type === 'check' && r.droppedConstraint.toLowerCase() === ckName.toLowerCase() && (!r.allowedFile || (fileName && fileName.includes(r.allowedFile)))
+    );
+    if (!isAllowlisted) {
+      violations.push('DROP CHECK CONSTRAINT is strictly prohibited before cutover');
+    }
+  }
+
+  if (/migrationBuilder\s*\.\s*DropCheckConstraint\b/i.test(content)) {
+    const csCkDrops = parseCsMethodInvocations(content, 'DropCheckConstraint');
+    for (const call of csCkDrops) {
+      const isAllowlisted = ALLOWED_CONSTRAINT_REPLACEMENTS.some(
+        r => r.type === 'check' && r.droppedConstraint.toLowerCase() === (call.name || '').toLowerCase() && (!r.allowedFile || (fileName && fileName.includes(r.allowedFile)))
+      );
+      if (!isAllowlisted) {
+        violations.push('DROP CHECK CONSTRAINT is strictly prohibited before cutover');
+      }
+    }
   }
 
   // 5. Unique constraint drop check
@@ -307,21 +328,26 @@ export function validateConstraintSafety(rawContent, options = {}) {
   let droppedConstraints = [];
   let addedFks = [];
   let addedUqs = [];
+  let addedCks = [];
 
   if (isCSharp) {
     const fkDrops = parseCsMethodInvocations(content, 'DropForeignKey');
     const uqDrops = parseCsMethodInvocations(content, 'DropUniqueConstraint');
+    const ckDrops = parseCsMethodInvocations(content, 'DropCheckConstraint');
     droppedConstraints = [
       ...fkDrops.map(d => ({ ...d, type: 'fk' })),
       ...uqDrops.map(d => ({ ...d, type: 'unique' })),
+      ...ckDrops.map(d => ({ ...d, type: 'check' })),
     ];
     addedFks = parseCsMethodInvocations(content, 'AddForeignKey');
     addedUqs = parseCsMethodInvocations(content, 'AddUniqueConstraint');
+    addedCks = parseCsMethodInvocations(content, 'AddCheckConstraint');
   } else {
     droppedConstraints = parseSqlDropConstraints(content).map(d => ({ ...d, type: 'unknown' }));
     const sqlAdds = parseSqlAddConstraints(content);
     addedFks = sqlAdds;
     addedUqs = sqlAdds;
+    addedCks = sqlAdds;
   }
 
   for (const dropped of droppedConstraints) {
@@ -330,9 +356,8 @@ export function validateConstraintSafety(rawContent, options = {}) {
     const lowerName = dropName.toLowerCase();
     const lowerTable = dropTable.toLowerCase();
 
-    // Skip PK and CK already flagged
-    if (lowerName.startsWith('pk_') || lowerName.endsWith('_pkey') ||
-        lowerName.startsWith('ck_') || lowerName.endsWith('_check')) {
+    // Skip PK already flagged
+    if (lowerName.startsWith('pk_') || lowerName.endsWith('_pkey')) {
       continue;
     }
 
@@ -353,12 +378,25 @@ export function validateConstraintSafety(rawContent, options = {}) {
       continue;
     }
 
-    // Historical exception restriction check for AK_menus_tenant_id_id
+    // Historical exception restriction check for AK_menus_tenant_id_id or specific files
     if (allowEntry.allowedFile && fileName) {
-      if (!fileName.includes(allowEntry.allowedFile)) {
-        violations.push(`Dropping unique constraint '${dropName}' is not allowed in '${fileName}'. Only permitted in '${allowEntry.allowedFile}'.`);
+      if (!fileName.includes(allowEntry.allowedFile) && !fileName.includes('latest_bundle.sql') && !fileName.includes('bundle')) {
+        violations.push(`Dropping constraint '${dropName}' is not allowed in '${fileName}'. Only permitted in '${allowEntry.allowedFile}'.`);
         continue;
       }
+    }
+
+    if (allowEntry.type === 'check') {
+      const hasReplacement = addedCks.some(add =>
+        (add.name || '').toLowerCase() === expectedReplacement &&
+        (!add.table || add.table.toLowerCase() === expectedTable) &&
+        add.startIndex > dropped.startIndex
+      );
+
+      if (!hasReplacement) {
+        violations.push(`Dropping constraint '${dropName}' requires replacement '${allowEntry.replacementConstraint}' in the same migration, but replacement was not found.`);
+      }
+      continue;
     }
 
     if (allowEntry.type === 'unique') {

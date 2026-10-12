@@ -91,6 +91,42 @@
       "reason": "Machine-generated EF Core migration designer metadata for catalog outbox hardening and preparation station constraint update."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005185044_AddRestaurantTablesAndLayout.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for restaurant tables and floor layout (Phase 6.1)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005203226_AddDiningSessionsAndLifecycle.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining sessions and lifecycle (Phase 6.2)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261005205206_AddTablePublicCodeAndQrSecurity.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table public code and QR security (Phase 6.3)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011120000_HardenTablePublicCodeCsprngAndConstraints.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table public code CSPRNG and constraint hardening (Phase 6.6)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011140000_AddDiningSessionMovementsAndMechanics.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining session movements and transfer/merge mechanics (Phase 6.4)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011160000_HardenTableAndDiningSessionIntegrityConstraints.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table and dining session integrity constraint hardening (Phase 6 closing)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011180000_HardenTablePublicCodeExactHex32Contract.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for table public code hex 32 contract hardening (Phase 6 closing)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261011210000_AddDiningSessionMovementsSessionForeignKeys.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining session movements foreign keys to dining sessions (Phase 6 closing)."
+    },
+    {
+      "path": "packages/infrastructure/Persistence/Migrations/20261012010000_AddDiningSessionMovementRequestFingerprint.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for dining session movements request fingerprint column (Phase 6 closing)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

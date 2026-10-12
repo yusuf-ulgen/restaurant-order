@@ -1,0 +1,419 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using RestaurantOrder.Api.Auth;
+using RestaurantOrder.Api.Tenancy;
+using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Floor;
+using RestaurantOrder.Application.RestaurantConfig;
+using RestaurantOrder.Application.Tenancy;
+using RestaurantOrder.Domain.Branches;
+using RestaurantOrder.Domain.Floor;
+
+namespace RestaurantOrder.Api.Floor;
+
+public static class FloorSessionEndpoints
+{
+    public static RouteGroupBuilder MapFloorSessionEndpoints(this RouteGroupBuilder branchGroup)
+    {
+        branchGroup.MapGet("/status", async (
+            Guid branchId,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var status = await floorService.GetBranchFloorStatusAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    actor,
+                    ct);
+                return Results.Ok(status);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("GetBranchFloorStatus")
+        .WithSummary("Get real-time floor occupancy and table status for a branch");
+
+        branchGroup.MapGet("/tables/{tableId:guid}/session", async (
+            Guid branchId,
+            Guid tableId,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.GetActiveSessionForTableAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new RestaurantTableId(tableId),
+                    actor,
+                    ct);
+
+                return session != null
+                    ? FloorEndpointHelpers.SessionResult(context, session)
+                    : Results.NotFound();
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("GetActiveTableSession")
+        .WithSummary("Get current active dining session for a table");
+
+        branchGroup.MapGet("/tables/{tableId:guid}/sessions", async (
+            Guid branchId,
+            Guid tableId,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var sessions = await floorService.ListSessionsForTableAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new RestaurantTableId(tableId),
+                    actor,
+                    ct);
+                return Results.Ok(sessions);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("ListTableSessions")
+        .WithSummary("List dining session history for a table");
+
+        branchGroup.MapGet("/sessions/{sessionId:guid}", async (
+            Guid branchId,
+            Guid sessionId,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.GetSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sessionId),
+                    actor,
+                    ct);
+                return FloorEndpointHelpers.SessionResult(context, session);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("GetSessionById")
+        .WithSummary("Get dining session by identifier");
+
+        branchGroup.MapPost("/tables/{tableId:guid}/sessions", async (
+            Guid branchId,
+            Guid tableId,
+            [FromBody] OpenDiningSessionRequest request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.OpenSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new RestaurantTableId(tableId),
+                    request,
+                    actor,
+                    ct);
+                return FloorEndpointHelpers.SessionResult(context, session, StatusCodes.Status201Created);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("OpenTableSession")
+        .WithSummary("Open a new dining session at a table");
+
+        branchGroup.MapPost("/sessions/{sessionId:guid}/activate", async (
+            Guid branchId,
+            Guid sessionId,
+            [FromBody] TransitionSessionRequest? request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var token = FloorEndpointHelpers.ExtractConcurrencyToken(request?.ConcurrencyToken, context.Request);
+                if (!token.HasValue)
+                {
+                    throw new ConcurrencyPreconditionException("Concurrency token is required via If-Match header or body.");
+                }
+
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.ActivateSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sessionId),
+                    token,
+                    actor,
+                    ct);
+                return FloorEndpointHelpers.SessionResult(context, session);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("ActivateSession")
+        .WithSummary("Transition dining session from Open to Active");
+
+        branchGroup.MapPost("/sessions/{sessionId:guid}/request-bill", async (
+            Guid branchId,
+            Guid sessionId,
+            [FromBody] TransitionSessionRequest? request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var token = FloorEndpointHelpers.ExtractConcurrencyToken(request?.ConcurrencyToken, context.Request);
+                if (!token.HasValue)
+                {
+                    throw new ConcurrencyPreconditionException("Concurrency token is required via If-Match header or body.");
+                }
+
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.RequestBillAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sessionId),
+                    token,
+                    actor,
+                    ct);
+                return FloorEndpointHelpers.SessionResult(context, session);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("RequestSessionBill")
+        .WithSummary("Transition dining session from Active to BillRequested");
+
+        branchGroup.MapPost("/sessions/{sessionId:guid}/close", async (
+            Guid branchId,
+            Guid sessionId,
+            [FromBody] CloseDiningSessionRequest? request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var token = FloorEndpointHelpers.ExtractConcurrencyToken(request?.ConcurrencyToken, context.Request);
+                if (!token.HasValue)
+                {
+                    throw new ConcurrencyPreconditionException("Concurrency token is required via If-Match header or body.");
+                }
+
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+                var session = await floorService.CloseSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sessionId),
+                    request ?? new CloseDiningSessionRequest(),
+                    token,
+                    actor,
+                    ct);
+                return FloorEndpointHelpers.SessionResult(context, session);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("CloseSession")
+        .WithSummary("Transition dining session from BillRequested to Closed");
+
+        branchGroup.MapPost("/sessions/{sessionId:guid}/transfer", async (
+            Guid branchId,
+            Guid sessionId,
+            [FromBody] TransferSessionRequest? request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return Results.BadRequest(new ProblemDetails
+                    {
+                        Status = StatusCodes.Status400BadRequest,
+                        Title = "Bad Request",
+                        Detail = "Transfer request body is required."
+                    });
+                }
+
+                var token = FloorEndpointHelpers.ExtractConcurrencyToken(request.ConcurrencyToken, context.Request);
+                if (!token.HasValue)
+                {
+                    throw new ConcurrencyPreconditionException("Concurrency token is required via If-Match header or body.");
+                }
+
+                var rawKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                    ? request.IdempotencyKey
+                    : context.Request.Headers["Idempotency-Key"].FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(rawKey))
+                {
+                    throw new ArgumentException("Idempotency key is required via 'Idempotency-Key' header or request body.");
+                }
+
+                var idempotencyKey = rawKey.Trim();
+                if (idempotencyKey.Length > 100)
+                {
+                    throw new ArgumentException("Idempotency key cannot exceed 100 characters.");
+                }
+
+                var effectiveRequest = request with { IdempotencyKey = idempotencyKey };
+
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+                var session = await floorService.TransferSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sessionId),
+                    effectiveRequest,
+                    token,
+                    actor,
+                    ct);
+
+                return FloorEndpointHelpers.SessionResult(context, session);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("TransferSession")
+        .WithSummary("Transfer active dining session to another available table");
+
+        branchGroup.MapPost("/sessions/{sourceSessionId:guid}/merge", async (
+            Guid branchId,
+            Guid sourceSessionId,
+            [FromBody] MergeSessionRequest? request,
+            HttpContext context,
+            IFloorService floorService,
+            ITenantContext tenantContext,
+            IJwtClaimPrincipalParser parser,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return Results.BadRequest(new ProblemDetails
+                    {
+                        Status = StatusCodes.Status400BadRequest,
+                        Title = "Bad Request",
+                        Detail = "Merge request body is required."
+                    });
+                }
+
+                var sourceToken = FloorEndpointHelpers.ExtractConcurrencyToken(request.SourceConcurrencyToken, context.Request);
+                if (!sourceToken.HasValue)
+                {
+                    throw new ConcurrencyPreconditionException("Source concurrency token is required via If-Match header or body.");
+                }
+
+                if (!request.TargetConcurrencyToken.HasValue || request.TargetConcurrencyToken.Value == Guid.Empty)
+                {
+                    throw new ConcurrencyPreconditionException("Target concurrency token is required in request body.");
+                }
+
+                var rawMergeKey = !string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                    ? request.IdempotencyKey
+                    : context.Request.Headers["Idempotency-Key"].FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(rawMergeKey))
+                {
+                    throw new ArgumentException("Idempotency key is required via 'Idempotency-Key' header or request body.");
+                }
+
+                var mergeIdempotencyKey = rawMergeKey.Trim();
+                if (mergeIdempotencyKey.Length > 100)
+                {
+                    throw new ArgumentException("Idempotency key cannot exceed 100 characters.");
+                }
+
+                var effectiveRequest = request with { IdempotencyKey = mergeIdempotencyKey };
+
+                var actor = FloorEndpointHelpers.GetActor(context, parser);
+                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+                var targetSession = await floorService.MergeSessionAsync(
+                    tenantId,
+                    new BranchId(branchId),
+                    new DiningSessionId(sourceSessionId),
+                    effectiveRequest,
+                    sourceToken,
+                    actor,
+                    ct);
+
+                return FloorEndpointHelpers.SessionResult(context, targetSession);
+            }
+            catch (Exception ex)
+            {
+                return FloorEndpointHelpers.HandleException(ex, context);
+            }
+        })
+        .WithName("MergeSession")
+        .WithSummary("Merge source dining session into target dining session");
+
+        return branchGroup;
+    }
+}

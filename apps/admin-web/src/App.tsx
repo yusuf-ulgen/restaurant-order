@@ -24,6 +24,7 @@ import { DiningAreasView } from './settings/DiningAreasView';
 import { PreparationStationsView } from './settings/PreparationStationsView';
 import { FeatureFlagsView } from './settings/FeatureFlagsView';
 import { MenuCatalogView } from './catalog/MenuCatalogView';
+import { FloorLayoutAndQrView } from './floor/FloorLayoutAndQrView';
 
 export interface AdminAppProps {
   hasMetrics?: boolean;
@@ -250,6 +251,8 @@ export const AdminContent: React.FC<AdminAppProps> = ({
         />
       ) : currentView === 'menu' ? (
         <MenuCatalogView />
+      ) : currentView === 'tables' ? (
+        <FloorLayoutAndQrView />
       ) : currentView === 'dashboard' ? (
         <>
           <PageHeader

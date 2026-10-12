@@ -38,10 +38,14 @@ public sealed class CsrfValidationMiddleware
         // Documented exemptions:
         // - /api/v1/auth/login: Initial email/password pre-authentication (no ambient cookie yet)
         // - /api/v1/terminals/activate: Device enrollment pairing (no terminal credentials yet)
+        // - /api/v1/qr/exchange: Initial anonymous QR token exchange for customer session
+        // - /api/v1/qr/resolve: Initial anonymous QR token inspection/resolution
         // - /health/: Infrastructure probes
         // - /api/v1/dev/: Local synthetic seed endpoints
         if (path.Equals("/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("/api/v1/terminals/activate", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/v1/qr/exchange", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/api/v1/qr/resolve", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/v1/dev/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/health/", StringComparison.OrdinalIgnoreCase))
         {
