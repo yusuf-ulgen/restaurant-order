@@ -29,6 +29,12 @@ Faz 4: Restoran yapılandırması [Tamamlandı]
 Faz 5: Menü ve katalog [Tamamlandı]
   Kategori, ürün, porsiyon fiyatları ve seçenek grupları;
   zorunlu/isteğe bağlı, tek/çoklu, ücretsiz/ücretli seçimler.
+        ↓
+Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
+  Masa yerleşimi, kapasite, şekiller, ETag eşzamanlılığı ve denetim izi;
+  HMAC-SHA256 statik ve dinamik QR oluşturma ve rotasyonu;
+  yemek oturumu durum makinesi (Açık -> Etkin -> Fatura İstendi -> Kapalı);
+  ADM-04 Kat Planı Yönetimi ve CUST-01 Masa Karşılama arayüzü.
 ```
 
 ---
@@ -88,11 +94,18 @@ Faz 5: Menü ve katalog [Tamamlandı]
 - [x] Yönetici kataloğu düzenleyicisi ve filtrelenmiş çalışma zamanı kataloğu okuma modeli, hızlı86/yeniden stok kontrolleri.
 - [x] Nihai sertleşme ve kapatma; push ve pull_request CI yeşil (218/218 entegrasyon testleri).
 
-### Aşama 6: Masalar, QR ve Oturumlar (Durum: NEXT)
-- [ ] Masa numaralandırma, kapasite ve fiziksel düzen konumlandırma.
-- [ ] Kriptografik imzayla dinamik ve statik QR kodu oluşturma.
-- [ ] Yemek oturumu yaşam döngüsü durum makinesi (Açık -> Etkin -> Fatura İstendi -> Kapalı).
-- [ ] Masa taşıma ve birleştirme mekaniği.
+### Aşama 6: Masalar, QR ve Oturumlar (Durum: COMPLETED — CI Doğrulandı)
+- Aşama 6 masaları, fiziksel kat planını, QR kimliğini ve yemek oturumu altyapısını kurar. Müşteri menüleri/sipariş (Aşama 7), sipariş çekirdeği (Aşama 8), gerçek zamanlı olaylar (Aşama 9), faturalandırma (Aşama 13) ve ödemeler (Aşama 16) sonraki aşamalardır.
+- [x] Masa numaralandırma, kapasite, şekiller, fiziksel kat planı tuval/ızgara konumlandırması ve ETag iyimser eşzamanlılık.
+- [x] HMAC-SHA256 imzası, kanonik veri yükü, sürüm iptali ve sabit zamanlı doğrulama ile dinamik ve statik QR kod üretimi (v2 şeması, `iat` zaman damgası zorunluluğu).
+- [x] Masa başına tek aktif oturum kısıtlaması, anında önbellek geçersiz kılma ve güvenli müşteri oturum çerezleri ile yemek oturumu yaşam döngüsü durum makinesi (`Open` -> `Active` -> `BillRequested` -> `Closed`).
+- [x] Yönetici kat ve QR yönetim paneli (ADM-04) ve müşteri masa karşılama açılış arayüzü (CUST-01).
+- [x] Masa taşıma ve oturum birleştirme mekanikleri (Faz 6.4): Değişmez hareket geçmişi (`DiningSessionMovement`), 64 karakter SHA-256 istek fingerprint'i (`RequestFingerprint`), sabit zamanlı replay karşılaştırması, 409 Conflict çakışma tespiti, deterministik artan GUID satır kilitleme (deadlock önleme), kapasite ve durum kontrolleri, zorunlu idempotency anahtarı desteği ve kaynak oturum önbellek geçersiz kılma tamamlandı.
+- [x] Veritabanı kısıtları ve sertleştirme (Faz 6.6): Doğrusal yaşam döngüsü (`Open -> Active -> BillRequested -> Closed`) ve kronoloji kısıtları (`ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`), masa şekil ve tuval sınır kısıtları (`ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds`), `ck_restaurant_tables_public_code` kısıtı ve eklemeli migrasyonlar (`20261011140000`, `20261011160000`, `20261011180000`, `20261011210000`, `20261012010000`).
+- [x] Müşteri JWT Bearer boru hattı ve önbellek güvenliği: GUID formatında olmayan `sub`, eksik `sub`, oturum claim uyuşmazlığı, gelecek tarihli `iat`, 4096 bayttan uzun token ve kapalı/birleştirilmiş oturum reddi entegrasyon testleriyle doğrulandı. Redis önbelleğinde negatif-yalnızca TTL stratejisiyle stale pozitif "1" yetkilendirmesi imkansız kılındı.
+- [x] Birim, mimari, entegrasyon ve E2E testleri: 1.422 backend birim testi, Testcontainers PostgreSQL & Redis entegrasyon testleri, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. Playwright E2E disposable servisler üzerinde 3 passed, 0 skipped olarak tamamlandı.
+
+> **Not:** Aşama 7 henüz başlamamıştır; Aşama 6 kapanış denetimindedir.
 
 ### Aşama 7: Müşteri Deneyimi (Durum: Planlandı)
 - [ ] Arayüz 1: QR Müşteri Web Uygulamasının tam uygulaması.

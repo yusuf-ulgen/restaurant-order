@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Brands;
 using RestaurantOrder.Domain.Tenants;
@@ -33,6 +34,10 @@ public class DevDataSeeder : IDevDataSeeder
     public static readonly BranchId SyntheticBranch3Id = BranchId.From(Guid.Parse("d3333333-3333-3333-3333-333333333333"));
     public static readonly BranchId SyntheticBranch4Id = BranchId.From(Guid.Parse("d4444444-4444-4444-4444-444444444444"));
 
+    public static readonly UserId SyntheticAdminUserId = UserId.From(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+    public static readonly Guid SyntheticAdminSessionId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+    public static readonly Guid SyntheticAdminMembershipId = Guid.Parse("00000000-0000-0000-0000-000000000003");
+
     public DevDataSeeder(
         RestaurantOrderDbContext dbContext,
         IHostEnvironment environment,
@@ -52,16 +57,6 @@ public class DevDataSeeder : IDevDataSeeder
         }
 
         _logger.LogInformation("[DEV SEED] Checking for existing synthetic seed data...");
-
-        var existingTenantCount = await _dbContext.Tenants
-            .IgnoreQueryFilters()
-            .CountAsync(t => t.Id == SyntheticTenant1Id || t.Id == SyntheticTenant2Id, cancellationToken);
-
-        if (existingTenantCount >= 2)
-        {
-            _logger.LogInformation("[DEV SEED] Synthetic seed data already present. Skipping creation (idempotent).");
-            return new DevSeedResult(0, 0, 0, "Synthetic seed already applied. No changes made.");
-        }
 
         var tenantsCreated = 0;
         var brandsCreated = 0;
@@ -104,16 +99,60 @@ public class DevDataSeeder : IDevDataSeeder
             branchesCreated++;
         }
 
+        // Synthetic Admin User & Session for Local Dev / E2E Testing
+        var nowUtc = DateTimeOffset.UtcNow;
+        var userExists = await _dbContext.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == SyntheticAdminUserId, cancellationToken);
+        if (!userExists)
+        {
+            var adminUser = User.Create(
+                "dev-admin@restaurantorder.local",
+                "insecure-dev-hash-for-local-development-only",
+                nowUtc,
+                SyntheticAdminUserId,
+                UserStatus.Active);
+            _dbContext.Users.Add(adminUser);
+        }
+
+        var membershipExists = await _dbContext.Memberships.IgnoreQueryFilters().AnyAsync(m => m.Id == SyntheticAdminMembershipId, cancellationToken);
+        if (!membershipExists)
+        {
+            var membership = UserMembership.Create(
+                SyntheticTenant1Id,
+                SyntheticAdminUserId,
+                AuthRole.RestaurantAdmin,
+                null,
+                nowUtc,
+                SyntheticAdminMembershipId);
+            _dbContext.Memberships.Add(membership);
+        }
+
+        var sessionExists = await _dbContext.Sessions.IgnoreQueryFilters().AnyAsync(s => s.Id == SyntheticAdminSessionId, cancellationToken);
+        if (!sessionExists)
+        {
+            var session = AuthSession.Create(
+                SyntheticTenant1Id,
+                SyntheticAdminUserId,
+                SyntheticAdminMembershipId,
+                null,
+                AuthenticationMethod.Password,
+                TimeSpan.FromDays(3650),
+                nowUtc,
+                ipAddress: "127.0.0.1",
+                userAgent: "E2E-Test-Agent",
+                id: SyntheticAdminSessionId);
+            _dbContext.Sessions.Add(session);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "[DEV SEED] Successfully seeded synthetic data: {Tenants} Tenants, {Brands} Brands, {Branches} Branches.",
+            "[DEV SEED] Successfully verified/seeded synthetic data: {Tenants} Tenants, {Brands} Brands, {Branches} Branches.",
             tenantsCreated, brandsCreated, branchesCreated);
 
         return new DevSeedResult(
             tenantsCreated,
             brandsCreated,
             branchesCreated,
-            $"Successfully seeded {tenantsCreated} tenants, {brandsCreated} brands, {branchesCreated} branches.");
+            $"Successfully seeded/verified synthetic data ({tenantsCreated} tenants, {brandsCreated} brands, {branchesCreated} branches).");
     }
 }

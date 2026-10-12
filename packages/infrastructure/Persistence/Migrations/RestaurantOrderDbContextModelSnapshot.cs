@@ -2106,6 +2106,318 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     b.ToTable("tenant_feature_flags", "tenancy");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.DiningSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("activated_at_utc");
+
+                    b.Property<Guid?>("AssignedWaiterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_waiter_id");
+
+                    b.Property<DateTimeOffset?>("BillRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("bill_requested_at_utc");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTimeOffset?>("ClosedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at_utc");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("GuestCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("guest_count");
+
+                    b.Property<Guid?>("MergedIntoSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("merged_into_session_id");
+
+                    b.Property<DateTimeOffset>("OpenedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opened_at_utc");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("table_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "MergedIntoSessionId");
+
+                    b.HasIndex("TenantId", "BranchId", "Status")
+                        .HasDatabaseName("ix_dining_sessions_tenant_branch_status");
+
+                    b.HasIndex("TenantId", "BranchId", "TableId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dining_sessions_tenant_branch_table_active")
+                        .HasFilter("status <> 4");
+
+                    b.HasIndex("TenantId", "BranchId", "TableId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_dining_sessions_tenant_branch_table_created");
+
+                    b.ToTable("dining_sessions", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_dining_sessions_chronology", "((activated_at_utc IS NULL OR opened_at_utc <= activated_at_utc) AND (bill_requested_at_utc IS NULL OR (activated_at_utc IS NOT NULL AND activated_at_utc <= bill_requested_at_utc)) AND (closed_at_utc IS NULL OR (    (merged_into_session_id IS NULL AND bill_requested_at_utc IS NOT NULL AND bill_requested_at_utc <= closed_at_utc)     OR (merged_into_session_id IS NOT NULL AND (        (activated_at_utc IS NOT NULL AND activated_at_utc <= closed_at_utc)         OR (activated_at_utc IS NULL AND opened_at_utc <= closed_at_utc)    )))))");
+
+                            t.HasCheckConstraint("ck_dining_sessions_guest_count", "guest_count >= 1");
+
+                            t.HasCheckConstraint("ck_dining_sessions_status", "status IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("ck_dining_sessions_status_timestamps", "((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 2 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL AND merged_into_session_id IS NULL) OR (status = 4 AND merged_into_session_id IS NULL AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NOT NULL) OR (status = 4 AND merged_into_session_id IS NOT NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NOT NULL))");
+                        });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.DiningSessionMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("actor_role");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("GuestsMoved")
+                        .HasColumnType("integer")
+                        .HasColumnName("guests_moved");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<int>("MovementType")
+                        .HasColumnType("integer")
+                        .HasColumnName("movement_type");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<Guid>("SourceSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_session_id");
+
+                    b.Property<Guid>("SourceTableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_table_id");
+
+                    b.Property<Guid?>("TargetSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_session_id");
+
+                    b.Property<Guid>("TargetTableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_table_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_dining_session_movements_tenant_branch_created");
+
+                    b.HasIndex("TenantId", "BranchId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dining_session_movements_tenant_branch_idempotency_key");
+
+                    b.HasIndex("TenantId", "BranchId", "SourceSessionId")
+                        .HasDatabaseName("ix_dining_session_movements_tenant_branch_source_session");
+
+                    b.HasIndex("TenantId", "BranchId", "SourceTableId");
+
+                    b.HasIndex("TenantId", "BranchId", "TargetSessionId")
+                        .HasDatabaseName("ix_dining_session_movements_tenant_branch_target_session");
+
+                    b.HasIndex("TenantId", "BranchId", "TargetTableId");
+
+                    b.ToTable("dining_session_movements", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_dining_session_movements_guests", "guests_moved >= 1");
+
+                            t.HasCheckConstraint("ck_dining_session_movements_tables_diff", "(movement_type = 1 AND source_table_id <> target_table_id) OR (movement_type = 2)");
+
+                            t.HasCheckConstraint("ck_dining_session_movements_type", "movement_type IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.RestaurantTable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DiningAreaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dining_area_id");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("PositionX")
+                        .HasColumnType("integer")
+                        .HasColumnName("position_x");
+
+                    b.Property<int>("PositionY")
+                        .HasColumnType("integer")
+                        .HasColumnName("position_y");
+
+                    b.Property<string>("PublicCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("public_code");
+
+                    b.Property<int>("QrVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("qr_version");
+
+                    b.Property<int>("RotationDegrees")
+                        .HasColumnType("integer")
+                        .HasColumnName("rotation_degrees");
+
+                    b.Property<int>("Shape")
+                        .HasColumnType("integer")
+                        .HasColumnName("shape");
+
+                    b.Property<string>("TableNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("table_number");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "DiningAreaId")
+                        .HasDatabaseName("ix_restaurant_tables_tenant_id_branch_id_dining_area_id");
+
+                    b.HasIndex("TenantId", "BranchId", "PublicCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_restaurant_tables_tenant_branch_public_code");
+
+                    b.HasIndex("TenantId", "BranchId", "TableNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_restaurant_tables_tenant_id_branch_id_table_number");
+
+                    b.ToTable("restaurant_tables", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_restaurant_tables_canvas_bounds", "position_x + width <= 10000 AND position_y + height <= 10000");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_capacity", "capacity >= 1 AND capacity <= 100");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_coordinates", "position_x >= 0 AND position_x <= 10000 AND position_y >= 0 AND position_y <= 10000");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_dimensions", "width >= 10 AND width <= 5000 AND height >= 10 AND height <= 5000");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_public_code", "length(public_code) = 32 AND public_code ~ '^[0-9a-f]{32}$'");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_qr_version", "qr_version >= 1");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_rotation", "rotation_degrees >= 0 AND rotation_degrees < 360");
+
+                            t.HasCheckConstraint("ck_restaurant_tables_shape", "shape IN (1, 2, 3)");
+                        });
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.Tenants.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2728,6 +3040,82 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_tenant_feature_flags_tenants_tenant_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.DiningSession", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Floor.DiningSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "MergedIntoSessionId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.RestaurantTable", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "TableId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.DiningSessionMovement", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Floor.DiningSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "SourceSessionId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_dining_session_movements_source_session");
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.RestaurantTable", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "SourceTableId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_dining_session_movements_source_table");
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.DiningSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "TargetSessionId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_dining_session_movements_target_session");
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.RestaurantTable", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "TargetTableId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_dining_session_movements_target_table");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.RestaurantTable", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_restaurant_tables_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_restaurant_tables_branches_tenant_id_branch_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.DiningArea", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "DiningAreaId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_restaurant_tables_dining_areas_tenant_branch_area");
                 });
 
             modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>

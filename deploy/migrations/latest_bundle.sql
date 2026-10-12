@@ -3477,3 +3477,219 @@ BEGIN
     END IF;
 END $EF$;
 COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+    ALTER TABLE tenancy.dining_areas ADD CONSTRAINT "AK_dining_areas_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+    CREATE TABLE tenancy.restaurant_tables (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        dining_area_id uuid NOT NULL,
+        table_number character varying(50) NOT NULL,
+        name character varying(100) NOT NULL,
+        capacity integer NOT NULL,
+        position_x integer NOT NULL,
+        position_y integer NOT NULL,
+        width integer NOT NULL,
+        height integer NOT NULL,
+        rotation_degrees integer NOT NULL,
+        shape integer NOT NULL,
+        is_active boolean NOT NULL,
+        qr_version integer NOT NULL,
+        concurrency_token uuid NOT NULL,
+        created_at timestamp with time zone NOT NULL,
+        updated_at timestamp with time zone,
+        CONSTRAINT "PK_restaurant_tables" PRIMARY KEY (id),
+        CONSTRAINT "AK_restaurant_tables_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id),
+        CONSTRAINT ck_restaurant_tables_capacity CHECK (capacity >= 1 AND capacity <= 100),
+        CONSTRAINT ck_restaurant_tables_coordinates CHECK (position_x >= 0 AND position_x <= 10000 AND position_y >= 0 AND position_y <= 10000),
+        CONSTRAINT ck_restaurant_tables_dimensions CHECK (width >= 10 AND width <= 5000 AND height >= 10 AND height <= 5000),
+        CONSTRAINT ck_restaurant_tables_qr_version CHECK (qr_version >= 1),
+        CONSTRAINT ck_restaurant_tables_rotation CHECK (rotation_degrees >= 0 AND rotation_degrees < 360),
+        CONSTRAINT fk_restaurant_tables_branches_tenant_id_branch_id FOREIGN KEY (tenant_id, branch_id) REFERENCES tenancy.branches (tenant_id, id) ON DELETE CASCADE,
+        CONSTRAINT fk_restaurant_tables_dining_areas_tenant_branch_area FOREIGN KEY (tenant_id, branch_id, dining_area_id) REFERENCES tenancy.dining_areas (tenant_id, branch_id, id) ON DELETE RESTRICT,
+        CONSTRAINT fk_restaurant_tables_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+    CREATE INDEX ix_restaurant_tables_tenant_id_branch_id_dining_area_id ON tenancy.restaurant_tables (tenant_id, branch_id, dining_area_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+    CREATE UNIQUE INDEX ix_restaurant_tables_tenant_id_branch_id_table_number ON tenancy.restaurant_tables (tenant_id, branch_id, table_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+
+                    ALTER TABLE tenancy.restaurant_tables ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.restaurant_tables FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS restaurant_tables_isolation_policy ON tenancy.restaurant_tables;
+                    CREATE POLICY restaurant_tables_isolation_policy ON tenancy.restaurant_tables
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.restaurant_tables TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005185044_AddRestaurantTablesAndLayout') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261005185044_AddRestaurantTablesAndLayout', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    CREATE TABLE tenancy.dining_sessions (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        branch_id uuid NOT NULL,
+        table_id uuid NOT NULL,
+        status integer NOT NULL,
+        guest_count integer NOT NULL,
+        assigned_waiter_id uuid,
+        opened_at_utc timestamp with time zone NOT NULL,
+        activated_at_utc timestamp with time zone,
+        bill_requested_at_utc timestamp with time zone,
+        closed_at_utc timestamp with time zone,
+        close_reason character varying(500),
+        merged_into_session_id uuid,
+        concurrency_token uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        updated_at_utc timestamp with time zone,
+        CONSTRAINT "PK_dining_sessions" PRIMARY KEY (id),
+        CONSTRAINT "AK_dining_sessions_tenant_id_branch_id_id" UNIQUE (tenant_id, branch_id, id),
+        CONSTRAINT ck_dining_sessions_guest_count CHECK (guest_count >= 1),
+        CONSTRAINT ck_dining_sessions_status CHECK (status IN (1, 2, 3, 4)),
+        CONSTRAINT ck_dining_sessions_status_timestamps CHECK (((status = 1 AND activated_at_utc IS NULL AND bill_requested_at_utc IS NULL AND closed_at_utc IS NULL) OR (status = 2 AND activated_at_utc IS NOT NULL AND closed_at_utc IS NULL) OR (status = 3 AND activated_at_utc IS NOT NULL AND bill_requested_at_utc IS NOT NULL AND closed_at_utc IS NULL) OR (status = 4 AND closed_at_utc IS NOT NULL))),
+        CONSTRAINT "FK_dining_sessions_dining_sessions_tenant_id_branch_id_merged_~" FOREIGN KEY (tenant_id, branch_id, merged_into_session_id) REFERENCES tenancy.dining_sessions (tenant_id, branch_id, id) ON DELETE RESTRICT,
+        CONSTRAINT "FK_dining_sessions_restaurant_tables_tenant_id_branch_id_table~" FOREIGN KEY (tenant_id, branch_id, table_id) REFERENCES tenancy.restaurant_tables (tenant_id, branch_id, id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    CREATE INDEX "IX_dining_sessions_tenant_id_branch_id_merged_into_session_id" ON tenancy.dining_sessions (tenant_id, branch_id, merged_into_session_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    CREATE INDEX ix_dining_sessions_tenant_branch_status ON tenancy.dining_sessions (tenant_id, branch_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    CREATE UNIQUE INDEX ix_dining_sessions_tenant_branch_table_active ON tenancy.dining_sessions (tenant_id, branch_id, table_id) WHERE status <> 4;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    CREATE INDEX ix_dining_sessions_tenant_branch_table_created ON tenancy.dining_sessions (tenant_id, branch_id, table_id, created_at_utc);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+
+                    ALTER TABLE tenancy.dining_sessions ENABLE ROW LEVEL SECURITY;
+                    ALTER TABLE tenancy.dining_sessions FORCE ROW LEVEL SECURITY;
+
+                    DROP POLICY IF EXISTS dining_sessions_isolation_policy ON tenancy.dining_sessions;
+                    CREATE POLICY dining_sessions_isolation_policy ON tenancy.dining_sessions
+                        FOR ALL
+                        USING (tenant_id = tenancy.get_current_tenant_id())
+                        WITH CHECK (tenant_id = tenancy.get_current_tenant_id());
+
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'restaurant_app_runtime') THEN
+                            GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy.dining_sessions TO restaurant_app_runtime;
+                        END IF;
+                    END $$;
+
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005203226_AddDiningSessionsAndLifecycle') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261005203226_AddDiningSessionsAndLifecycle', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    ALTER TABLE tenancy.restaurant_tables ADD public_code character varying(64) NOT NULL DEFAULT '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    UPDATE tenancy.restaurant_tables SET public_code = substr(md5(random()::text || clock_timestamp()::text || id::text), 1, 32) WHERE public_code = '';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    CREATE UNIQUE INDEX ix_restaurant_tables_tenant_branch_public_code ON tenancy.restaurant_tables (tenant_id, branch_id, public_code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261005205206_AddTablePublicCodeAndQrSecurity') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261005205206_AddTablePublicCodeAndQrSecurity', '10.0.4');
+    END IF;
+END $EF$;
+COMMIT;

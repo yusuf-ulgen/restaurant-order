@@ -45,5 +45,9 @@ public class DevDataSeederUnitTests
         Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticBranch2Id.Value);
         Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticBranch3Id.Value);
         Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticBranch4Id.Value);
+
+        Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticAdminUserId.Value);
+        Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticAdminSessionId);
+        Assert.NotEqual(Guid.Empty, DevDataSeeder.SyntheticAdminMembershipId);
     }
 }

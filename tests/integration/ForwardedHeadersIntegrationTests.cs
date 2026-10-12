@@ -62,6 +62,8 @@ public class ForwardedHeadersIntegrationTests
             builder.UseSetting("NOTIFICATION_ENCRYPTION_KEY", TestHexKey());
             builder.UseSetting("WEBHOOK_NOTIFICATION_URL", "https://notifications.internal/webhook");
             builder.UseSetting("WEBHOOK_NOTIFICATION_SECRET", TestSecret("webhook"));
+            builder.UseSetting("QrSecurity:CurrentKeyId", "k1");
+            builder.UseSetting("QrSecurity:Keys:k1", Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
         });
 
         var options = factory.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;

@@ -82,6 +82,11 @@ public sealed class JwtTokenService : IJwtTokenGenerator
             claims.Add(new Claim(JwtClaimNames.BranchId, scope.BranchId.Value.Value.ToString()));
         }
 
+        if (scope.TableSessionId.HasValue)
+        {
+            claims.Add(new Claim(JwtClaimNames.TableSessionId, scope.TableSessionId.Value.ToString()));
+        }
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),

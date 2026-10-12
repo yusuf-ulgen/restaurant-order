@@ -60,6 +60,10 @@ geliştirme: ortak entegrasyon; staging: üretim benzeri sentetik ortam;
 | `FORWARDED_HEADERS_FORWARD_LIMIT` | Maksimum iletilen proxy sınırı | İsteğe bağlı | Hayır | `2` |
 | `Tenancy:AllowDevHeaderOverride` | X-Tenant-Id üstbilgilerini etkinleştirme | Yalnızca geliştirici | Hayır | `false` |
 | `BACKUP_VERIFIED` | Geçişler için doğrulanmış veritabanı yedekleme önkoşulu | Staging, Production | Hayır | `false` |
+| `QrSecurity:CurrentKeyId` | Masa QR yükleri için aktif imzalama anahtarı kimliği | Staging, Production | Hayır | `k1` |
+| `QrSecurity:Keys:<key_id>` | Base64 kodlu, decode edildiğinde $\ge$ 32 bayt (256-bit entropi) HMAC-SHA256 imzalama anahtarı | Staging, Production | Evet | `[Secured in Secret Manager]` |
+| `QrSecurity:DynamicQrLifetimeMinutes` | Dinamik QR kodları geçerlilik penceresi (dakika) | İsteğe bağlı | Hayır | `15` |
+| `QrSecurity:MaxTokenLength` | Decode öncesi reddedilecek maksimum QR token karakter uzunluğu | İsteğe bağlı | Hayır | `2048` |
 
 ---
 

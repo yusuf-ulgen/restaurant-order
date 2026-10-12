@@ -11,4 +11,4 @@ export * from './auth';
 export * from './api-client';
 export * from './restaurant-config';
 export * from './catalog';
-
+export * from './floor';

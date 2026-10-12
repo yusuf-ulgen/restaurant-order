@@ -1,0 +1,48 @@
+namespace RestaurantOrder.Api.Floor;
+
+public sealed record CreateTableApiRequest(
+    Guid DiningAreaId,
+    string TableNumber,
+    string? Name = null,
+    int Capacity = 4,
+    int PositionX = 0,
+    int PositionY = 0,
+    int Width = 100,
+    int Height = 100,
+    int RotationDegrees = 0,
+    string Shape = "Square",
+    Guid? BranchId = null,
+    string? DisplayName = null);
+
+public sealed record UpdateTableApiRequest(
+    Guid DiningAreaId,
+    string TableNumber,
+    string? Name = null,
+    int Capacity = 4,
+    Guid? ConcurrencyToken = null,
+    Guid? BranchId = null,
+    string? DisplayName = null);
+
+public sealed record UpdateTableLayoutApiRequest(
+    int PositionX,
+    int PositionY,
+    int Width,
+    int Height,
+    int RotationDegrees,
+    string Shape = "Square",
+    Guid? ConcurrencyToken = null);
+
+public sealed record TableStateApiRequest(Guid? ConcurrencyToken = null);
+
+public sealed record TableLayoutBatchApiItem(
+    Guid TableId,
+    int PositionX,
+    int PositionY,
+    int Width,
+    int Height,
+    int RotationDegrees,
+    string Shape = "Square",
+    Guid? ConcurrencyToken = null);
+
+public sealed record BatchUpdateTableLayoutApiRequest(
+    IReadOnlyList<TableLayoutBatchApiItem> Items);

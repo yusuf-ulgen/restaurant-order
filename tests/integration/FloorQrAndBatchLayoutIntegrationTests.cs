@@ -1,0 +1,444 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using RestaurantOrder.Api.Floor;
+using RestaurantOrder.Api.RestaurantConfig;
+using RestaurantOrder.Application.Floor;
+using RestaurantOrder.Application.RestaurantConfig;
+using RestaurantOrder.Domain.Floor;
+using RestaurantOrder.Infrastructure.Floor;
+using RestaurantOrder.Infrastructure.Persistence;
+using Xunit;
+
+namespace RestaurantOrder.IntegrationTests;
+
+public class FloorQrAndBatchLayoutIntegrationTests : IClassFixture<TestcontainersFixture>
+{
+    private readonly TestcontainersFixture _fixture;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    public FloorQrAndBatchLayoutIntegrationTests(TestcontainersFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    private async Task EnsureMigrationsAppliedAsync()
+    {
+        var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+            .UseNpgsql(_fixture.DatabaseConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.MigrationsAssembly(typeof(RestaurantOrderDbContext).Assembly.FullName);
+            })
+            .Options;
+
+        await using var context = new RestaurantOrderDbContext(options);
+        await context.Database.MigrateAsync();
+    }
+
+    private async Task<(Guid tenantId, Guid branchId, Guid diningAreaId, string adminToken)> SetupFloorEnvironmentAsync(HttpClient client)
+    {
+        var tenantId = Guid.NewGuid();
+        await RestaurantConfigTestHelpers.SeedTenantAsync(_fixture.DatabaseConnectionString, tenantId, "Floor QR Tenant", $"fqr-{Guid.NewGuid():N}");
+        var adminToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, role: "RestaurantAdmin");
+
+        var brandReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/brands", adminToken);
+        brandReq.Content = JsonContent.Create(new CreateBrandApiRequest("Floor QR Brand", $"fqb-{Guid.NewGuid():N}"));
+        var brand = await (await client.SendAsync(brandReq)).Content.ReadFromJsonAsync<BrandDto>();
+
+        var branchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/restaurant-config/branches", adminToken);
+        branchReq.Content = JsonContent.Create(new CreateBranchApiRequest(brand!.Id, "Floor QR Branch", $"fqbr-{Guid.NewGuid():N}", "Europe/Istanbul", "TRY"));
+        var branch = await (await client.SendAsync(branchReq)).Content.ReadFromJsonAsync<BranchDto>();
+
+        var areaReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/restaurant-config/branches/{branch!.Id}/dining-areas", adminToken);
+        areaReq.Content = JsonContent.Create(new CreateDiningAreaApiRequest("Garden", $"gd-{Guid.NewGuid():N}", "Indoor", 0));
+        var area = await (await client.SendAsync(areaReq)).Content.ReadFromJsonAsync<DiningAreaDto>(JsonOptions);
+
+        return (tenantId, branch!.Id, area!.Id, adminToken);
+    }
+
+    [Fact]
+    public async Task Table_BatchUpdateLayout_AtomicallyUpdatesTables()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        // Create 2 tables
+        var create1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        create1.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-01", "Batch 1", 2, 0, 0, 100, 100, 0, "Square"));
+        var table1 = await (await client.SendAsync(create1)).Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+
+        var create2 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        create2.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "B-02", "Batch 2", 4, 100, 100, 120, 80, 0, "Rectangle"));
+        var table2 = await (await client.SendAsync(create2)).Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+
+        // Batch update layout
+        var batchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/batch-layout", adminToken);
+        batchReq.Content = JsonContent.Create(new BatchUpdateTableLayoutApiRequest(new[]
+        {
+            new TableLayoutBatchApiItem(table1!.Id, 250, 350, 110, 110, 45, "Round", table1.ConcurrencyToken),
+            new TableLayoutBatchApiItem(table2!.Id, 500, 600, 150, 90, 90, "Rectangle", table2.ConcurrencyToken)
+        }));
+
+        var batchResp = await client.SendAsync(batchReq);
+        Assert.Equal(HttpStatusCode.OK, batchResp.StatusCode);
+
+        var batchResult = await batchResp.Content.ReadFromJsonAsync<List<RestaurantTableDto>>(JsonOptions);
+        Assert.NotNull(batchResult);
+        Assert.Equal(2, batchResult.Count);
+
+        var updated1 = batchResult.First(t => t.Id == table1.Id);
+        Assert.Equal(250, updated1.PositionX);
+        Assert.Equal(350, updated1.PositionY);
+        Assert.Equal("Round", updated1.Shape);
+
+        var updated2 = batchResult.First(t => t.Id == table2.Id);
+        Assert.Equal(500, updated2.PositionX);
+        Assert.Equal(600, updated2.PositionY);
+        Assert.Equal(90, updated2.RotationDegrees);
+    }
+
+    [Fact]
+    public async Task Table_List_FilterByAreaAndActive_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "F-01", "Filtered Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+
+        // Query with diningAreaId and isActive
+        var queryReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables?diningAreaId={diningAreaId}&isActive=true", adminToken);
+        var queryResp = await client.SendAsync(queryReq);
+        Assert.Equal(HttpStatusCode.OK, queryResp.StatusCode);
+
+        var tables = await queryResp.Content.ReadFromJsonAsync<List<RestaurantTableDto>>(JsonOptions);
+        Assert.NotNull(tables);
+        Assert.Contains(tables, t => t.TableNumber == "F-01");
+    }
+
+    [Fact]
+    public async Task Table_QrRotate_And_Revoke_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "QR-01", "QR Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+        Assert.Equal(1, table.QrVersion);
+
+        // Rotate QR
+        var rotateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr/rotate", adminToken);
+        rotateReq.Content = JsonContent.Create(new RotateQrVersionRequest(table.ConcurrencyToken));
+        var rotateResp = await client.SendAsync(rotateReq);
+        Assert.Equal(HttpStatusCode.OK, rotateResp.StatusCode);
+
+        var rotated = await rotateResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(rotated);
+        Assert.Equal(2, rotated.QrVersion);
+
+        // Revoke QR via another rotate
+        var revokeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr/rotate", adminToken);
+        revokeReq.Content = JsonContent.Create(new RotateQrVersionRequest(rotated.ConcurrencyToken));
+        var revokeResp = await client.SendAsync(revokeReq);
+        Assert.Equal(HttpStatusCode.OK, revokeResp.StatusCode);
+
+        var revoked = await revokeResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(revoked);
+        Assert.Equal(3, revoked.QrVersion);
+    }
+
+    [Fact]
+    public async Task Qr_Public_Resolve_Static_And_Exchange_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (tenantId, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "PUB-01", "Public QR Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+
+        // Build valid static QR token using QrSecurityService
+        var qrSecurity = new QrSecurityService(
+            Microsoft.Extensions.Options.Options.Create(new QrSecurityOptions
+            {
+                CurrentKeyId = "k1",
+                Keys = new Dictionary<string, string> { ["k1"] = RestaurantConfigTestHelpers.SharedTestQrKeyBase64 }
+            }),
+            new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Development" });
+
+        var payload = QrPayload.CreateStatic(
+            "k1",
+            new RestaurantOrder.Domain.Tenants.TenantId(tenantId),
+            new RestaurantOrder.Domain.Branches.BranchId(branchId),
+            table.PublicCode,
+            table.QrVersion);
+
+        var token = qrSecurity.GenerateToken(payload);
+
+        // 1. Resolve QR token publicly (GET & POST)
+        var resolveResp = await client.GetAsync($"/api/v1/qr/resolve?token={token}");
+        Assert.Equal(HttpStatusCode.OK, resolveResp.StatusCode);
+        var postResolveResp = await client.PostAsJsonAsync("/api/v1/qr/resolve", new QrExchangeRequest(token));
+        Assert.Equal(HttpStatusCode.OK, postResolveResp.StatusCode);
+
+        var resolveData = await resolveResp.Content.ReadFromJsonAsync<QrResolveResponse>(JsonOptions);
+        Assert.NotNull(resolveData);
+        Assert.Equal("PUB-01", resolveData.TableNumber);
+        Assert.Equal("Floor QR Branch", resolveData.BranchName);
+        Assert.Equal("static", resolveData.Mode);
+
+        // 2. Exchange token for customer session
+        var exchangeResp = await client.PostAsJsonAsync("/api/v1/qr/exchange", new QrExchangeRequest(token));
+        Assert.Equal(HttpStatusCode.OK, exchangeResp.StatusCode);
+
+        var exchangeData = await exchangeResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("Open", exchangeData.GetProperty("sessionStatus").GetString());
+        var sessionId = exchangeData.GetProperty("sessionId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(sessionId));
+    }
+
+    [Fact]
+    public async Task Qr_Public_Resolve_InvalidToken_Returns400()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var response = await client.GetAsync("/api/v1/qr/resolve?token=invalid.tampered.token");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Qr_Public_Endpoints_MissingOrInvalidPayloads_ReturnBadRequest()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+
+        // GET /resolve without token
+        var getResolve = await client.GetAsync("/api/v1/qr/resolve");
+        Assert.Equal(HttpStatusCode.BadRequest, getResolve.StatusCode);
+
+        // POST /resolve with empty token
+        var postResolve = await client.PostAsJsonAsync("/api/v1/qr/resolve", new QrExchangeRequest(""));
+        Assert.Equal(HttpStatusCode.BadRequest, postResolve.StatusCode);
+
+        // POST /exchange with empty token
+        var postExchange = await client.PostAsJsonAsync("/api/v1/qr/exchange", new QrExchangeRequest(""));
+        Assert.Equal(HttpStatusCode.BadRequest, postExchange.StatusCode);
+    }
+
+    [Fact]
+    public async Task Table_Qr_StaticSvg_And_Metadata_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "SVG-01", "SVG Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+
+        // GET format=svg
+        var svgReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr?format=svg", adminToken);
+        var svgResp = await client.SendAsync(svgReq);
+        Assert.Equal(HttpStatusCode.OK, svgResp.StatusCode);
+        Assert.Equal("image/svg+xml", svgResp.Content.Headers.ContentType?.MediaType);
+
+        // GET format=json (default)
+        var jsonReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr", adminToken);
+        var jsonResp = await client.SendAsync(jsonReq);
+        Assert.Equal(HttpStatusCode.OK, jsonResp.StatusCode);
+
+        // GET metadata
+        var metaReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr/metadata", adminToken);
+        var metaResp = await client.SendAsync(metaReq);
+        Assert.Equal(HttpStatusCode.OK, metaResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Table_Lifecycle_And_MismatchedBranch_BranchesCovered()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        // Mismatched branch ID in payload
+        var badBranchReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        badBranchReq.Content = JsonContent.Create(new CreateTableApiRequest(
+            diningAreaId, "MM-01", "Mismatch", 2, BranchId: Guid.NewGuid()));
+        var badResp = await client.SendAsync(badBranchReq);
+        Assert.Equal(HttpStatusCode.BadRequest, badResp.StatusCode);
+
+        // Valid create
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "LC-01", "Lifecycle Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+
+        // Deactivate
+        var deactReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/deactivate", adminToken);
+        deactReq.Content = JsonContent.Create(new TableStateApiRequest(table.ConcurrencyToken));
+        var deactResp = await client.SendAsync(deactReq);
+        Assert.Equal(HttpStatusCode.OK, deactResp.StatusCode);
+        var deact = await deactResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.False(deact!.IsActive);
+
+        // Activate
+        var actReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/activate", adminToken);
+        actReq.Content = JsonContent.Create(new TableStateApiRequest(deact.ConcurrencyToken));
+        var actResp = await client.SendAsync(actReq);
+        Assert.Equal(HttpStatusCode.OK, actResp.StatusCode);
+        var act = await actResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.True(act!.IsActive);
+
+        // Update table basic information (PUT /tables/{tableId})
+        var updateReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}", adminToken);
+        updateReq.Content = JsonContent.Create(new UpdateTableApiRequest(diningAreaId, "LC-01-U", "Updated", 6, act.ConcurrencyToken));
+        var updateResp = await client.SendAsync(updateReq);
+        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
+        var updated = await updateResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(updated);
+
+        // Rotate without token => 412
+        var rotateNoToken = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/qr/rotate", adminToken);
+        rotateNoToken.Content = JsonContent.Create(new RotateQrVersionRequest(null));
+        var rotateNoTokenResp = await client.SendAsync(rotateNoToken);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, rotateNoTokenResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Floor_Status_ActiveSession_DynamicQr_And_SingleTableLayout_Succeeds()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, branchId, diningAreaId, adminToken) = await SetupFloorEnvironmentAsync(client);
+
+        var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables", adminToken);
+        createReq.Content = JsonContent.Create(new CreateTableApiRequest(diningAreaId, "DYN-01", "Dynamic QR Table", 4));
+        var createResp = await client.SendAsync(createReq);
+        var table = await createResp.Content.ReadFromJsonAsync<RestaurantTableDto>(JsonOptions);
+        Assert.NotNull(table);
+
+        // 1. Single table layout update (UpdateTableLayout endpoint)
+        var layoutReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Put, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/layout", adminToken);
+        layoutReq.Content = JsonContent.Create(new UpdateTableLayoutApiRequest(200, 300, 140, 100, 45, "Rectangle", table.ConcurrencyToken));
+        var layoutResp = await client.SendAsync(layoutReq);
+        Assert.Equal(HttpStatusCode.OK, layoutResp.StatusCode);
+
+        // 2. Open dining session
+        var openReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/sessions", adminToken);
+        openReq.Content = JsonContent.Create(new OpenDiningSessionRequest(3));
+        var openResp = await client.SendAsync(openReq);
+        Assert.Equal(HttpStatusCode.Created, openResp.StatusCode);
+        var session = await openResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
+        Assert.NotNull(session);
+
+        // 3. GET /tables/{tableId}/session
+        var sessionReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/session", adminToken);
+        var sessionResp = await client.SendAsync(sessionReq);
+        Assert.Equal(HttpStatusCode.OK, sessionResp.StatusCode);
+
+        // 4. GET /status (branch status)
+        var statusReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/status", adminToken);
+        var statusResp = await client.SendAsync(statusReq);
+        Assert.Equal(HttpStatusCode.OK, statusResp.StatusCode);
+
+        // 5. POST /sessions/{sessionId}/qr?format=svg
+        var dynSvgReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/qr?format=svg", adminToken);
+        var dynSvgResp = await client.SendAsync(dynSvgReq);
+        Assert.Equal(HttpStatusCode.OK, dynSvgResp.StatusCode);
+        Assert.Equal("image/svg+xml", dynSvgResp.Content.Headers.ContentType?.MediaType);
+
+        // 6. POST /sessions/{sessionId}/qr (json)
+        var dynJsonReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/qr", adminToken);
+        var dynJsonResp = await client.SendAsync(dynJsonReq);
+        Assert.Equal(HttpStatusCode.OK, dynJsonResp.StatusCode);
+
+        // 7. Session detail and history
+        var getSessionResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}", adminToken));
+        Assert.Equal(HttpStatusCode.OK, getSessionResp.StatusCode);
+        var historyResp = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/sessions", adminToken));
+        Assert.Equal(HttpStatusCode.OK, historyResp.StatusCode);
+
+        // 8. Session transitions: Open -> Active -> BillRequested -> Closed
+        var actReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/activate", adminToken);
+        actReq.Content = JsonContent.Create(new TransitionSessionRequest(session.ConcurrencyToken));
+        var actResp = await client.SendAsync(actReq);
+        Assert.Equal(HttpStatusCode.OK, actResp.StatusCode);
+        var activated = await actResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
+        var billReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/request-bill", adminToken);
+        billReq.Content = JsonContent.Create(new TransitionSessionRequest(activated!.ConcurrencyToken));
+        var billResp = await client.SendAsync(billReq);
+        Assert.Equal(HttpStatusCode.OK, billResp.StatusCode);
+        var billed = await billResp.Content.ReadFromJsonAsync<DiningSessionDto>(JsonOptions);
+        var closeReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{session.Id}/close", adminToken);
+        closeReq.Content = JsonContent.Create(new CloseDiningSessionRequest("Paid", billed!.ConcurrencyToken));
+        var closeResp = await client.SendAsync(closeReq);
+        Assert.Equal(HttpStatusCode.OK, closeResp.StatusCode);
+
+        // 9. Table session 404 when closed
+        var closedCheck = await client.SendAsync(RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/api/v1/floor/branches/{branchId}/tables/{table.Id}/session", adminToken));
+        Assert.Equal(HttpStatusCode.NotFound, closedCheck.StatusCode);
+    }
+}

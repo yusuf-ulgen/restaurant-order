@@ -147,6 +147,15 @@ public static class ConfigurationValidator
                 {
                     ValidateWebhookSecret(webhookSecret);
                 }
+
+                // 9. QR Signing Key Validation (format validation when key is configured)
+                var currentKeyId = configuration["QrSecurity:CurrentKeyId"] ?? "k1";
+                var qrKey = configuration.GetSection("QrSecurity:Keys")[currentKeyId]
+                    ?? configuration[$"QrSecurity__Keys__{currentKeyId}"];
+                if (!string.IsNullOrWhiteSpace(qrKey))
+                {
+                    ValidateQrSigningKey(currentKeyId, qrKey);
+                }
             }
 
             if (missingKeys.Count > 0)
@@ -403,6 +412,24 @@ public static class ConfigurationValidator
                 throw new InvalidOperationException(
                     "FATAL CONFIGURATION ERROR: REDIS_URL host/port format is invalid.");
             }
+        }
+    }
+
+    private static void ValidateQrSigningKey(string keyId, string base64Secret)
+    {
+        try
+        {
+            var decoded = Convert.FromBase64String(base64Secret);
+            if (decoded.Length < 32)
+            {
+                throw new InvalidOperationException(
+                    $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must decode to at least 32 bytes (256 bits entropy). Decoded length was {decoded.Length} bytes.");
+            }
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                $"FATAL CONFIGURATION ERROR: QR signing key '{keyId}' must be a valid Base64 encoded string.", ex);
         }
     }
 }

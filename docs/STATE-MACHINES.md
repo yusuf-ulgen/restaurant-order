@@ -124,3 +124,44 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 3. Müşterinin doğrudan iptal yetkisi yoktur. Yetkili personelin iptali ile hazırlık yarışında yetki, sürüm ve mevcut durum atomik denetlenir; çelişen geçişlerden yalnızca biri başarılı olur. Hazırlık önce commit edilirse sıradan iptal reddedilir, yönetici iptali gerekir. Commit sırasından bağımsız koşulsuz öncelik verilemez.
 
 Teknik varlık adları: sipariş `Order`, sipariş kalemi `OrderItem`.
+
+---
+
+## 6. DiningSession Durum Makinesi (Faz 6)
+
+```text
+   [ OPEN ] (1)
+       |
+       | (Aktive et / Activate)
+       v
+   [ ACTIVE ] (2)
+       |
+       | (Hesap iste / RequestBill)
+       v
+[ BILL_REQUESTED ] (3)
+       |
+       | (Kapat / Close)
+       v
+   [ CLOSED ] (4) [Son Durum / Terminal]
+```
+
+| Mevcut Durum | Olay / Tetikleyici | Sonraki Durum | Yetkili Roller | Değişmezler ve Koruma Koşulları |
+| :--- | :--- | :--- | :--- | :--- |
+| `OPEN` (1) | `ACTIVATE_SESSION` | `ACTIVE` (2) | Sistem, Garson, Kasa | Yalnızca `Open` durumundaki oturumlar aktif edilebilir (`Activate()`). |
+| `ACTIVE` (2) | `REQUEST_BILL` | `BILL_REQUESTED` (3) | Müşteri, Garson, Kasa | Misafir veya personel hesap talebinde bulunur (`RequestBill()`). Yalnızca `Active` durumunda çağrılabilir. |
+| `BILL_REQUESTED` (3) | `CLOSE_SESSION` | `CLOSED` (4) | Garson, Kasa, Müdür | Hesap kapatma tamamlanır (`Close(reason)`). Son durumdur (terminal). |
+
+### DiningSession Değişmezleri:
+1. **Doğrusal Yaşam Döngüsü ve Zaman Damgası Kısıtları:** Oturum kesin olarak `Open (1) -> Active (2) -> BillRequested (3) -> Closed (4)` doğrusal akışını izler. Atlamalı doğrudan geçişler (`Open -> Closed`, `Active -> Closed` veya `BillRequested -> Active`) alan modelinde bulunmaz ve veritabanı check constraint'i `ck_dining_sessions_status_timestamps` ile zorunlu kılınır:
+   - `Open` (1): `activated_at`, `bill_requested_at`, `closed_at` alanlarının tümü `NULL` olmalıdır.
+   - `Active` (2): `activated_at` dolu olmalı; `bill_requested_at` ve `closed_at` alanları `NULL` olmalıdır.
+   - `BillRequested` (3): `activated_at` ve `bill_requested_at` dolu olmalı; `closed_at` `NULL` olmalıdır.
+   - `Closed` (4): Standart kapanışta (`merged_into_session_id IS NULL`) `activated_at`, `bill_requested_at` ve `closed_at` alanlarının tümü dolu olmalıdır.
+2. **Kronolojik Sıralama Kısıtı:** Veritabanı check constraint'i `ck_dining_sessions_chronology` ile zaman damgalarının mutlak UTC kronolojisi korunur:
+   - Standart kapanışlarda: `opened_at <= activated_at <= bill_requested_at <= closed_at`.
+   - Oturum birleştirme kapanışlarında: `opened_at <= closed_at` (ve varsa `activated_at <= closed_at`).
+3. **Masa Başına Tek Kapatılmamış Oturum:** PostgreSQL kısmi benzersiz indeksi `ix_dining_sessions_tenant_branch_table_active` (`WHERE status <> 4`) ile zorunlu kılınır. Eşzamanlı taramalar benzersizlik ihlalini yakalar ve mevcut oturuma bağlanır.
+4. **Kapatılmış (Closed) Son Durum:** `Closed` (4) durumuna geçtikten sonra durum değişiklikleri kesin olarak reddedilir (HTTP 409 Conflict).
+5. **Anında Önbellek Geçersiz Kılma:** Bir oturum kapatıldığında `InvalidateSessionCacheAsync` çağrılır ve müşteri JWT belirtecinin geçerliliği derhal sonlandırılır.
+6. **Masa Devre Dışı Bırakma Koruması:** Kapatılmamış aktif oturumu bulunan bir masanın devre dışı bırakılması engellenir (HTTP 409 Conflict).
+7. **Masa Taşıma ve Oturum Birleştirme Mekanikleri (Faz 6.4):** Oturum transferi boş ve aktif masalara atomik yönlendirme sağlar; oturum birleştirme iki masanın oturumunu hedefte birleştirerek kaynağı kontrollü bir domain operasyonu (`CloseAsMerged()`) ile terminalize eder (`Closed`, `merged_into_session_id IS NOT NULL`). Bu terminal geçiş genel `Close()` kuralını gevşetmez; yalnızca birleştirme akışında kontrollü olarak işletilir. Her hareket `tenancy.dining_session_movements` tablosunda değişmez biçimde saklanır. Deterministik UUID kilitleme sırasıyla deadlock riski önlenir.

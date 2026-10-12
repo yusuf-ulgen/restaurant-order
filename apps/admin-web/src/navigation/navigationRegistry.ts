@@ -55,11 +55,12 @@ export const NAVIGATION_REGISTRY: Record<NavigationRegistryId, NavigationRegistr
   },
   tables: {
     id: 'tables',
-    defaultLabel: 'Şube & Masalar (Yakında)',
+    defaultLabel: 'Masa Düzeni & QR',
     defaultSection: 'main',
     defaultOrder: 3,
-    defaultDisabled: true,
+    defaultDisabled: false,
     requiredPermission: 'branch.tables.manage',
+    allowedRoles: ['SuperAdmin', 'RestaurantAdmin', 'BranchManager'],
     href: '#/tables',
   },
   'dining-areas': {

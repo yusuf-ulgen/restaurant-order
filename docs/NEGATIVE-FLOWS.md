@@ -63,3 +63,29 @@ Müşteri URL veya istek gövdesini değiştirerek başka masanın hesabına ya 
 - Arşivlenmiş menü değiştirilemez. Pasif menü/kategori/ürün/varyant/grup/seçenek çalışma zamanı menüsüne alınmaz.
 - Katalog değişiklikleri ve denetim kayıtları `SaveChanges` ile tek EF iş biriminde yazılır. Başarısız kayıtta kullanılabilirlik olayı gönderilmez. Beklenmeyen API hatası ayrıntı sızdırmadan korelasyon kimlikli RFC 7807 500 döndürür.
 - Yönetici ekranında ağ hatası yeniden denemeyi, 409 yeniden yüklemeyi/yeniden denemeyi, 412 belirtecin yenilenmesini açıklayan mesajı sunar.
+
+## 5. Masa, Kat Planı ve QR Olumsuz Durum Akışları (Faz 6)
+
+- **Aktif Oturumu Olan Masanın Devre Dışı Bırakılması:** HTTP 409 Conflict ile engellenir. Kapatılmamış yemek oturumu bulunan masalar, aktif oturum `Closed` durumuna geçene kadar pasif hale getirilemez.
+- **Yinelenen Masa Kodu / Numarası:** Şube kapsamlı benzersiz indeks `ix_restaurant_tables_tenant_branch_code` ve doğrulayıcı tarafından reddedilir (HTTP 400 / 409).
+- **Sınır Dışı Yerleşim Koordinatları:** Negatif koordinatlar, 10 pikselden küçük veya 5000 pikselden büyük boyutlar, tuval sınırlarını aşan koordinatlar (`position_x + width > 10000` veya `position_y + height > 10000`), geçersiz şekiller (`shape NOT IN (1, 2, 3)`) veya geçersiz rotasyon açıları içeren yerleşim güncellemeleri HTTP 400 ValidationProblemDetails ve veritabanı kısıtları (`ck_restaurant_tables_shape`, `ck_restaurant_tables_canvas_bounds`) ile reddedilir.
+- **Oturum Zaman Damgası ve Kronoloji İhlalleri:** Veritabanı check constraint'leri (`ck_dining_sessions_status_timestamps`, `ck_dining_sessions_chronology`) doğrusal olmayan yaşam döngüsü geçişlerini, eksik/erken atanmış zaman damgalarını veya kronolojik sıra ihlallerini (`opened_at > activated_at`, `activated_at > bill_requested_at` vb.) doğrudan SQL düzeyinde engeller.
+- **Eski Eşzamanlılık Belirteci (ETag):** `If-Match` başlığı olmadan yapılan güncellemeler 412 Precondition Failed döner. Uyuşmayan belirteçlerle yapılan eşzamanlı güncellemeler 409 Conflict döner.
+- **QR İmza Tahrifatı ve Sahtecilik:** Değiştirilmiş yük alanları, bozulmuş imzalar veya bilinmeyen anahtar kimlikleri (`kid`) içeren belirteçler sabit zamanlı karşılaştırma (`CryptographicOperations.FixedTimeEquals`) yoluyla HTTP 400 Bad Request ile reddedilir.
+- **İptal Edilmiş QR Taramaları (Yenilenmiş Sürüm):** `qv < table.qr_version` içeren statik veya dinamik QR belirteçleri HTTP 400 Bad Request ile reddedilir; böylece döndürülen/yenilenen masaların eski fiziksel baskıları anında geçersiz kılınır.
+- **Süresi Dolmuş Dinamik QR Belirteçleri:** Geçerlilik süresi dolmuş belirteçler HTTP 400 Bad Request döner.
+- **Kapanmış Oturumda Dinamik QR Kullanımı:** Kapatılmış bir yemek oturumuna (`status == 4`) referans veren dinamik QR değişimi HTTP 409 Conflict ile reddedilir.
+- **Oturum Kapanmasında Belirteç İptali:** Personel bir yemek oturumunu kapattığında, `InvalidateSessionCacheAsync` Redis önbellek kaydını derhal temizler. Müşteri JWT çereziyle yapılan sonraki istekler doğrulamayı geçemez (HTTP 401 Unauthorized).
+- **Zayıf veya Eksik İmzalama Anahtarı:** Staging ve Production ortamlarında `QrSecurity:Keys` tanımlanmamışsa veya 256 bitten (32 bayt) kısaysa uygulama başlangıcı açık bir özel durumla (fail-fast) durdurulur.
+- **Hız Sınırlama (Rate Limiting) Fail-Closed:** Dağıtık kayan pencere (sliding-window) hız sınırlaması aşırı tarama girişimlerini reddeder (HTTP 429). Redis'e ulaşılamazsa yukarı akış hizmetlerini korumak için güvenli tarafta kalarak istekleri reddeder (fail-closed).
+- **Masa Taşıma ve Oturum Birleştirme Olumsuz Akışları (Faz 6.4):**
+  - Aynı masaya transfer girişimi: HTTP 400 Bad Request.
+  - Dolu veya pasif hedef masaya transfer: HTTP 400 Bad Request (dolu masalar için merge uç noktası kullanılmalıdır).
+  - Hedef masa kapasitesini aşan misafir sayısı: HTTP 400 Bad Request.
+  - `Closed` veya `BillRequested` oturumu transfer etme veya birleştirme girişimi: HTTP 400 Bad Request.
+  - Şubeler veya işletmeler arası transfer/birleştirme denemeleri: Bilgi sızdırmadan HTTP 404 Not Found / HTTP 403 Forbidden.
+  - Müşteri rolünün transfer/birleştirme uçlarını çağırması: HTTP 403 Forbidden.
+  - Eski ETag / eşzamanlılık belirteci: HTTP 409 Conflict veya 412 Precondition Failed.
+  - Karşılıklı transfer / merge yarışında deadlock: Deterministik artan UUID sıralı `FOR UPDATE` satır kilitleme ile deadlock önlenir; kaybeden yarışçı hedef masa doluluğu nedeniyle temiz hata alır.
+  - Değişmez hareket tablosunda güncelleme veya silme: Veritabanı tetikleyicisi `trg_dining_session_movements_immutable` ile engellenir.
+  - Birleştirilen kaynak oturumun müşteri belirteci: Kaynak oturum önbelleği anında geçersiz kılınır; eski müşteri tokenı ile istekler reddedilir.

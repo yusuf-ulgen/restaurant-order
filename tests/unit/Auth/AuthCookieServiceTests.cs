@@ -154,4 +154,48 @@ public class AuthCookieServiceTests
         Assert.Equal(64, token1.Length);
         Assert.NotEqual(token1, token2);
     }
+
+    [Theory]
+    [InlineData("Development", false, false)]
+    [InlineData("Development", true, true)]
+    [InlineData("Production", false, true)]
+    [InlineData("Production", true, true)]
+    public void SetCustomerSessionCookie_SetsAccessTokenAndCsrfCookies_WithCorrectAttributes(string envName, bool isHttps, bool expectedSecure)
+    {
+        var service = new AuthCookieService(CreateEnv(envName));
+        var httpContext = new DefaultHttpContext();
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(20);
+
+        service.SetCustomerSessionCookie(httpContext.Response, "customer-jwt-token-xyz", expiresAt, isHttps);
+
+        var setCookies = httpContext.Response.Headers.SetCookie.ToArray();
+        Assert.True(setCookies.Length >= 2);
+
+        var accessCookie = setCookies.FirstOrDefault(c => c != null && c.Contains(AuthCookieService.AccessTokenCookieName));
+        Assert.NotNull(accessCookie);
+        Assert.Contains("httponly", accessCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=lax", accessCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/", accessCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(expectedSecure, accessCookie.Contains("secure", StringComparison.OrdinalIgnoreCase));
+
+        var csrfCookie = setCookies.FirstOrDefault(c => c != null && c.Contains(AuthCookieService.CsrfTokenCookieName));
+        Assert.NotNull(csrfCookie);
+        Assert.DoesNotContain("httponly", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(expectedSecure, csrfCookie.Contains("secure", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ClearCustomerSessionCookie_RemovesAccessAndCsrfCookies()
+    {
+        var service = new AuthCookieService(CreateEnv("Development"));
+        var httpContext = new DefaultHttpContext();
+
+        service.ClearCustomerSessionCookie(httpContext.Response, isHttps: false);
+
+        var cookies = httpContext.Response.Headers.SetCookie.ToArray();
+        Assert.Contains(cookies, c => c != null && c.Contains(AuthCookieService.AccessTokenCookieName) && c.Contains("expires="));
+        Assert.Contains(cookies, c => c != null && c.Contains(AuthCookieService.CsrfTokenCookieName) && c.Contains("expires="));
+    }
 }
