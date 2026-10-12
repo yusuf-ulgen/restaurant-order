@@ -36,8 +36,7 @@ Kararlar `PROPOSED` durumunda başlar. `ACCEPTED` olarak işaretlenmeden önce k
 | [ADR-0007](./0007-health-checks-and-dependency-verification.md) | Altyapı Durum Denetimleri ve Bağımlılık Doğrulaması | `ACCEPTED` | Arıza kapalı canlılık/hazırlık ayrımı, sıfır sızıntılı durum kontrolleri |
 | [ADR-0008](./0008-blue-green-compose-project-isolation-and-container-dns-ingress.md) | Blue/Green Compose Projesi İzolasyon ve Konteyner DNS Giriş Yönlendirme | `ACCEPTED` | Ayrı `-p` yuva başına proje, paylaşılan harici ağ, konteyner içinden trafik geçişi |
 | [ADR-0009](./0009-authentication-and-session-strategy.md) | Kimlik Doğrulama, Oturum ve Çok İşletmeli Yetkilendirme Stratejisi | `ACCEPTED` | Personel ve Müşteri QR ayrımı, güvenilir terminaller, JWT/çerez rotasyonu, RBAC matris |
-| [ADR-0010](./0010-least-privilege-iam-login-and-security-definer.md) | En Az Ayrıcalık IAM Giriş Arama ve SECURITY DEFINER Tehdit Modeli | `ACCEPTED` | SECURITY DEFINER işlev, sabitlenmiş search_path, çalışma zamanı SELECT yasağı |
-| [ADR-0011](./0011-background-push-provider.md) | Personel ve müşteri için arka plan push sağlayıcısı | `PROPOSED` | FCM / Web Push karşılaştırması; kullanıcı sağlayıcı yanıtı bekleniyor |
+| [ADR-0011](./0011-background-push-provider.md) | Personel ve müşteri için arka plan push sağlayıcısı | `ACCEPTED` | Kullanıcı FCM ile devam etmeyi onayladı; SignalR + Redis korunur |
 | [ADR-0012](./0012-qr-security-and-customer-session-exchange.md) | Statik/Dinamik QR Güvenliği ve Müşteri Oturum Takası | `ACCEPTED` | Kurcalamaya karşı korumalı imzalı QR, anahtar rotasyonu, SVG çıktısı, fail-closed doğrulama |
 
 ---

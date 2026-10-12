@@ -21,7 +21,8 @@ Bu dizin `restaurant-order` ürün kapsamını, mimari kararlarını, iş kurall
 - [PAYMENTS-TIPS-COMMISSIONS.md](./PAYMENTS-TIPS-COMMISSIONS.md): Ödeme, hesap bölme, bahşiş ve komisyon.
 - [ORDER-ROUTING-AND-PRINTING.md](./ORDER-ROUTING-AND-PRINTING.md): İstasyon yönlendirme ve ESC/POS yazdırma.
 - [REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md): Canlı olaylar, push bildirimleri ve sesli uyarılar.
-- [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md): Personel ve müşteri push kapsamı; sağlayıcı kararı bekleyen uygulama planı.
+- [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md): Personel ve müşteri push kapsamı; FCM uygulama aşamaları.
+- [FCM-SETUP.md](./FCM-SETUP.md): İlk sunucu uyarlayıcısının yapılandırması, testleri ve kalan bağımlılıklar.
 
 ## Kalite, Operasyon ve Planlama
 

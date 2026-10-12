@@ -1,9 +1,9 @@
 # ADR-0011: Personel ve Müşteri İçin Arka Plan Push Sağlayıcısı
 
-- **Durum:** `PROPOSED`
+- **Durum:** `ACCEPTED`
 - **Tarih:** 2026-10-08
 - **Hedef kitle kararı:** Kullanıcı personel ve müşteriyi birlikte seçti.
-- **Sağlayıcı kararı:** Henüz verilmedi; kullanıcı yanıtı bekleniyor.
+- **Sağlayıcı kararı:** Kullanıcı 2026-10-08 tarihinde “sonra fcm kısmını yapmaya başlayalım” diyerek FCM ile devam etmeyi onayladı.
 - **Görev:** [#11](https://github.com/yusuf-ulgen/restaurant-order/issues/11).
 - **İlgili karar:** [ADR-0001](./0001-technology-stack.md); kabul edilmiş SignalR + Redis kararı korunur.
 
@@ -17,11 +17,11 @@ Açık uygulamada canlı sipariş/servis akışı ile uygulama arka plandayken i
 2. **SignalR + doğrudan Web Push/VAPID:** Web odaklı uygulamada Firebase SDK zorunluluğunu kaldırır; abonelik, anahtar, hata ve yeniden deneme yönetimi sunucuda sürdürülür.
 3. **Yalnızca SignalR:** Açık ekran için uygundur; arka plan push ihtiyacını tek başına karşılamaz.
 
-## Öneri ve Kabul Sınırı
+## Karar ve Kabul Sınırı
 
-**Öneri: SignalR + FCM. Bu ADR henüz kabul edilmemiştir.** Firebase Auth, Firestore veya mevcut .NET/PostgreSQL mimarisini değiştirmek önerilmez. FCM yalnızca bildirim taşıma uyarlayıcısı olarak ele alınır. Mevcut IAM outbox/webhook sözleşmesi yerinden edilmez.
+**Karar: Canlı ekran için SignalR + Redis, arka plan push için FCM.** Firebase Auth veya Firestore'a geçilmez; mevcut .NET/PostgreSQL mimarisi korunur. FCM yalnızca bildirim taşıma uyarlayıcısıdır. Mevcut IAM outbox/webhook sözleşmesi yerinden edilmez.
 
-Uygulama öncesinde kullanıcı sağlayıcıyı seçer. Ardından kayıt/iptal modeli, kalıcı teslim denemeleri, yapılandırma ve gerçek olay bağlantıları ayrı değişiklikler olarak uygulanır. Uygulanmamış masa/sipariş uçları sırf bildirimi tamamlanmış göstermek için icat edilmez.
+İlk uygulama [#14](https://github.com/yusuf-ulgen/restaurant-order/issues/14) kapsamında sunucu taşıması ve güvenli yapılandırmadır. Kayıt/iptal modeli, kalıcı teslim denemeleri, istemci izni ve gerçek olay bağlantıları #11 altında ayrı değişikliklerle devam eder. Uygulanmamış masa/sipariş uçları sırf bildirimi tamamlanmış göstermek için icat edilmez.
 
 ## Değişmez Kurallar
 
@@ -33,4 +33,4 @@ Uygulama öncesinde kullanıcı sağlayıcıyı seçer. Ardından kayıt/iptal m
 
 ## Doğrulama ve Devir
 
-Ayrıntılı olay/alıcı eşlemesi, aşamalar, hata testleri, SDK sürüm notu ve resmi kaynaklar [bildirim planındadır](../NOTIFICATIONS-PLAN.md). Bu değişiklik sadece karar taslağıdır; Firebase projesi/servis hesabı oluşturulmadı, push kodu uygulanmadı ve gerçek cihaza bildirim gönderilmedi.
+Ayrıntılı olay/alıcı eşlemesi, aşamalar ve resmi kaynaklar [bildirim planındadır](../NOTIFICATIONS-PLAN.md). İlk uyarlayıcının kurulumu ve sınırları [FCM sunucu belgesindedir](../FCM-SETUP.md). Sağlayıcının kabul edilmesi tüm bildirim akışının tamamlandığı anlamına gelmez. Kullanıcı isteğiyle geliştirme Firebase projesi oluşturuldu; kullanıcı şimdilik burada durmayı seçti. Web Push anahtarı/sunucu kimlik bilgisi oluşturulmadı ve gerçek cihaza bildirim gönderilmedi.
