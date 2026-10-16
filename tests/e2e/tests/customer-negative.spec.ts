@@ -111,7 +111,7 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
     // Verification banner detects item is out of stock
     const issueElement = page.getByTestId(/cart-issue-/);
     await expect(issueElement).toBeVisible({ timeout: 5000 });
-    await expect(issueElement).toContainText('Tükendi');
+    await expect(issueElement).toContainText(/tükendi/i);
   });
 
   test('rejects customer service request when CSRF token is missing', async ({

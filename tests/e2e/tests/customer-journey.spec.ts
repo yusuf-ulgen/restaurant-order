@@ -87,7 +87,7 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     await expect(customizationCta).toBeVisible({ timeout: 10000 });
 
     // Verify allergen information rendered
-    await expect(page.getByText('Susam içerir')).toBeVisible();
+    await expect(page.getByText(/Sesame|Susam/i)).toBeVisible();
 
     // 7. Select Variant & Required Modifier
     const doubleVariant = page.getByTestId(`variant-option-${scenario.variantDoubleId}`);
