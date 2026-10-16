@@ -88,6 +88,7 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
           Authorization: `Bearer ${scenario.adminToken}`,
           'Content-Type': 'application/json',
         },
+        data: { reasonCode: 'SoldOut', note: 'Stok tükendi' },
       }
     );
     expect(quick86Res.ok()).toBe(true);
