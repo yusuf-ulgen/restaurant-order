@@ -216,4 +216,3 @@ export interface CartValidationIssue {
   previousUnitPriceMinorUnits?: number;
   currentUnitPriceMinorUnits?: number;
 }
-

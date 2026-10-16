@@ -20,7 +20,7 @@ Bu belge, `restaurant-order` projesinde **Faz 7: Müşteri Deneyimi (Menü Gezin
 | **Faz 7.2** | Ürün Özelleştirme | **Tamamlandı** | CUST-03 Varyant seçimi, değiştirici kuralları, saf fiyat önizlemesi, müşteri notu, DraftCartLine | `feat/phase-07-customer-experience` |
 | **Faz 7.3** | Sepet ve Fiyat Önizleme | **Tamamlandı** | CUST-04 Sepet store/reducer, sessionStorage draft persistence, menü tazelik/fiyat doğrulayıcı, CartSheet | `feat/phase-07-customer-experience` |
 | **Faz 7.4** | Servis Talepleri | **Tamamlandı** | CUST-06 Servis talebi aggregate'i, RLS ve partial unique index, CSRF/Idempotency, rate limit, ServiceRequestSheet ve bill request akışı | `feat/phase-07-customer-experience` |
-| **Faz 7.5** | Sertleştirme ve Kapanış | **Planlandı** | Hata akışları, erişilebilirlik, uçtan uca doğrulamalar, güvenlik denetimi | — |
+| **Faz 7.5** | Sertleştirme ve Kapanış | **Tamamlandı** | Kod incelemesi, 15 adımlı Playwright E2E journey, negatif senaryolar, gate doğrulamaları | `feat/phase-07-customer-experience` |
 
 ---
 
@@ -136,5 +136,28 @@ Bu belge, `restaurant-order` projesinde **Faz 7: Müşteri Deneyimi (Menü Gezin
   - Gerçek PostgreSQL ve RLS rolüyle entegrasyon testleri (başarılı request, idempotency tekrarı, 409 çakışması, session/type tek açık kayıt, iptal akışı, yabancı talep 404, hesap isteme yaşam döngüsü).
   - Frontend birim ve bileşen testleri (`customerServiceApi.test.ts`, `ServiceRequestSheet.test.tsx`, `App.test.tsx`).
 
-
-
+### Faz 7.5: Sertleştirme ve Kapanış
+- [x] **Kod İncelemesi ve Güvenlik Denetimi:**
+  - Tenant, şube ve oturum izolasyonu sağlandı; müşteri JWT claim'lerinden türetilmeyen harici ID'ler reddedilir.
+  - HttpOnly ve SameSite çerezler ile oturum güvenliği; tüm mutasyonlarda double-submit CSRF koruması.
+  - Menü sözleşmeleri (`RuntimeMenuReadModel` ve `packages/contracts`) drift testleri ile korundu.
+  - XSS koruması ve güvensiz görsel URL filtrelemesi (`https://` veya göreli yol izinli, tehlikeli şemalar engelli, `dangerouslySetInnerHTML` yok).
+  - Erişilebilirlik (44px dokunma hedefleri, ARIA rolleri, `aria-live` canlı duyurular, focus trap ve klavye gezinimi).
+  - Mobil öncelikli duyarlı (responsive) tasarım.
+  - Tam integer minor-unit fiyatlandırma (`PriceAmount` / `minorUnits`), float ve aşım riskleri engellendi.
+  - Sepet taslağı (`sessionStorage` içinde sadece güvenli DTO'lar; auth/QR token veya hassas veri tutulmaz, aktif oturum kapanınca veya bozulunca otomatik temizlenir).
+  - Servis taleplerinde deterministik SHA256 yük parmak izi ve `Idempotency-Key` koruması (tekrar oynatma, 409 çakışma, tek açık talep partial unique index).
+  - Dosya boyut sınırları (< 450 satır uyarı, < 600 satır kesin kural) tüm kaynaklarda sağlandı.
+  - Üretim kodunda hiçbir mock/fake başarı kodu veya yanıltıcı simülasyon bulunmamaktadır.
+- [x] **Playwright E2E ve Negatif Testler:**
+  - `tests/e2e/tests/customer-journey.spec.ts`: Sentetik seed ile 15 adımlı gerçek browser akışı (QR okutma, oturum açma, menü, kategori, arama/filtreleme, ürün detay, varyant ve zorunlu değiştirici seçimi, sepete ekleme, miktar değiştirme, sayfa yenilemede oturum/sepet kurtarma, garson çağırma, duplicate engelleme, talep iptali, hesap isteme, URL/storage token yokluğu doğrulaması).
+  - `tests/e2e/tests/customer-negative.spec.ts`: Zorunlu değiştirici eksikliğinde ekleme engeli, bozuk sessionStorage taslağının temizlenmesi, sepetteki ürünün 86 olması durumunda sepet uyarısı, CSRF'siz istek reddi, Idempotency-Key eksikliği reddi, kapalı oturumda aktif ekranın kesilmesi.
+- [x] **Açık Mimari ve Faz Sınırları:**
+  - CUST-02 (Dijital Menü): Tamamlandı.
+  - CUST-03 (Ürün Özelleştirme): Tamamlandı.
+  - CUST-04 (Sepet Deneyimi ve Fiyat Önizleme): Tamamlandı.
+  - CUST-06 (Masa Servis Talepleri): Tamamlandı.
+  - Gerçek sipariş kalıcılığı ve yetkili sipariş oluşturma (Order aggregate): Faz 8.
+  - Canlı sipariş takibi (CUST-05): Faz 8/9.
+  - Garson / Bar / Mutfak KDS canlı bildirimleri (SignalR/FCM): Faz 9–11.
+  - **Durum:** TAMAMLANDI — CI DOĞRULANDI (COMPLETED — CI VERIFIED).

@@ -13,15 +13,22 @@ Güncelleme: 2026-10-16. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [PR #16](https://github.com/yusuf-ulgen/restaurant-order/pull/16): Faz 6 masa düzeni, kriptografik QR ve oturum yaşam döngüsü sertleştirmeleri main'e birleştirildi.
 - Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md), [Faz 6 takibi](./PHASE-6-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 7: Müşteri Deneyimi
+## Aktif Görev — Faz 7: Müşteri Deneyimi (Tamamlandı — CI Doğrulandı)
 
 - Aktif dal: `feat/phase-07-customer-experience`.
 - Takip belgesi: [Faz 7 Takibi](./PHASE-7-TRACKER.md).
-- Kapsam: QR Müşteri Web Uygulaması temel oturum kurtarma, menü inceleme, diyet/alerjen filtreleme, ürün özelleştirme, sepet ve fiyat önizleme, servis talepleri.
-- Kapsam Sınırları:
-  - Faz 7 gerçek sipariş aggregate'i (`Order`) veya sipariş kalıcılığı oluşturmaz (Faz 8 Sipariş Çekirdeği).
-  - Canlı sipariş takibi Faz 9 SignalR kapsamındadır; KDS Faz 11'e, ödeme Faz 16'ya aittir.
-  - Sahte başarılı sipariş gönderimi veya mock üretim API'si bulunamaz.
+- Tamamlanan Kapsam:
+  - CUST-02 Dijital Menü ve Kategoriler (çalışan runtime menu, Türkçe normalize arama, diyet/alerjen filtreleme).
+  - CUST-03 Ürün Özelleştirme (varyant seçimi, zorunlu/isteğe bağlı değiştirici kuralları, deterministik imza, saf integer minor-unit fiyat önizlemesi, müşteri notu).
+  - CUST-04 Sepet ve Fiyat Önizleme (sepet store/reducer, güvenli sessionStorage taslak persistence, menü tazelik/fiyat doğrulayıcı).
+  - CUST-06 Hizmet Talepleri ve Hesap İsteme (ServiceRequest aggregate, PostgreSQL RLS ve partial unique index, CSRF/Idempotency, 15s cooldown ve sliding window rate limiter, DiningSession.RequestBillAsync entegrasyonu, ServiceRequestSheet).
+  - 15 adımlı Playwright E2E customer journey (`customer-journey.spec.ts`) ve negatif güvenlik senaryoları (`customer-negative.spec.ts`).
+- Kapsam Sınırları ve Mimari İlkeler:
+  - CUST-02, CUST-03, CUST-04 ve CUST-06 tamamlandı.
+  - Gerçek sipariş aggregate'i (`Order`) kalıcılığı ve yetkili sipariş oluşturma Faz 8 (Sipariş Çekirdeği) kapsamındadır.
+  - Canlı sipariş takibi (CUST-05) Faz 8/9 SignalR kapsamındadır.
+  - Garson / Bar / Mutfak KDS canlı bildirimleri (SignalR/FCM) Faz 9–11 kapsamındadır (servis talepleri DB'de kalıcıdır, canlı iletim sonraki fazlarda bağlanacaktır).
+  - Sahte başarılı sipariş gönderimi veya mock üretim API'si bulunmamaktadır.
 
 ## Ortam ve Sınırlamalar
 
@@ -29,8 +36,8 @@ Güncelleme: 2026-10-16. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - Bu makinedeki `.local` başlatma yardımcıları ve depo dışı gizli bilgi deposu taşınabilir kurulum sözleşmesi değildir; R10 bunu izler.
 - Entegrasyon kimlik testleri geliştirme JWT anahtarını bekliyor: yalnızca test sürecinde özel `JWT_SECRET` kaldırılır, yerel altyapı ayarları korunur. `DOTNET_PROCESSOR_COUNT=2`, Docker yoklamaları için eşzamanlılığı sınırlar. Üretim ayarlarını kaldırmayın; yerel sırları commit'e eklemeyin.
 - Docker daemon yerelde çalışmıyorsa Testcontainers testleri `SKIP_TESTCONTAINERS=true` ile atlanabilir; bu durum CI konteyner doğrulamasının yerine geçmez.
-- Mevcut uyarılar: bir geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
+- Mevcut uyarılar: bir eski geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
 
 ## Sonraki Somut Adım
 
-Faz 7.0 (Temel ve Müşteri Oturum Kurtarma) doğrulaması tamamlandıktan sonra Faz 7.1 (Menü Gezinme ve Filtreler) alt aşamasına geçilecektir.
+Faz 7 tamamlandı ve CI kalite kapıları ile doğrulandı. PR incelemesinin ardından `main` dalına birleştirilerek Faz 8: Sipariş Çekirdeği (Order Aggregate, Yetkili Fiyatlandırma, Sipariş Gönderimi) geliştirmesine başlanacaktır.

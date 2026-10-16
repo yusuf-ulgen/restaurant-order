@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel } from '@restaurant-order/contracts';
-import { Card, Button, BottomSheet } from '@restaurant-order/ui';
+import { Card, Button } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
@@ -48,6 +48,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           onCallWaiter={() => setIsServiceSheetOpen(true)}
           initialMenuData={initialMenuData}
           onAddToCart={(line) => cart.addLine(line)}
+          onMenuLoaded={setRuntimeMenuData}
         />
       ) : (
         <div

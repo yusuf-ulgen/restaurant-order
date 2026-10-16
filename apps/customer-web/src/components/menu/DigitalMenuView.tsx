@@ -16,6 +16,7 @@ export interface DigitalMenuViewProps {
   onCallWaiter?: () => void;
   initialMenuData?: RuntimeMenuReadModel | null;
   onAddToCart?: (cartLine: DraftCartLine) => void;
+  onMenuLoaded?: (menu: RuntimeMenuReadModel) => void;
 }
 
 export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
@@ -25,6 +26,7 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
   onCallWaiter,
   initialMenuData = null,
   onAddToCart,
+  onMenuLoaded,
 }) => {
   const [menuData, setMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
@@ -46,6 +48,7 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
     try {
       const data = await runtimeMenuApi.getRuntimeMenu(branchId, signal);
       setMenuData(data);
+      onMenuLoaded?.(data);
       setStatus('success');
     } catch (err: unknown) {
       if (err instanceof RuntimeMenuApiError) {
@@ -59,16 +62,19 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
       }
       setStatus('error');
     }
-  }, [branchId, onSessionExpired]);
+  }, [branchId, onSessionExpired, onMenuLoaded]);
 
   useEffect(() => {
-    if (initialMenuData) return;
+    if (initialMenuData) {
+      onMenuLoaded?.(initialMenuData);
+      return;
+    }
     const controller = new AbortController();
     fetchMenu(controller.signal);
     return () => {
       controller.abort();
     };
-  }, [fetchMenu, initialMenuData]);
+  }, [fetchMenu, initialMenuData, onMenuLoaded]);
 
   // Aggregate categories and items
   const allCategories: CategoryItem[] = useMemo(() => {

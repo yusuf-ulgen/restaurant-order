@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, useMemo } from 'react';
 import type { DraftCartLine } from '@restaurant-order/contracts';
-import { cartReducer, computeCartTotals, initialCartState, type CartState } from './cartReducer';
+import { cartReducer, computeCartTotals, initialCartState } from './cartReducer';
 import { loadCartFromStorage, saveCartToStorage, clearCartFromStorage } from './cartStorage';
 
 export interface CartContextValue {

@@ -198,6 +198,7 @@ describe('ServiceRequestSheet Component (CUST-06)', () => {
       tableId: sampleSession.tableId,
       status: 'BillRequested',
       guestCount: 2,
+      createdAtUtc: sampleSession.openedAtUtc,
       openedAtUtc: sampleSession.openedAtUtc,
       concurrencyToken: 'ct-after-bill',
     };

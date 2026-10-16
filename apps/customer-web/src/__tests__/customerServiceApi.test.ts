@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { customerServiceApi, ServiceApiError } from '../api/customerServiceApi';
+import { customerServiceApi } from '../api/customerServiceApi';
 import type { ServiceRequestDto, DiningSessionDto } from '@restaurant-order/contracts';
 
 describe('customerServiceApi client tests', () => {
@@ -46,7 +46,7 @@ describe('customerServiceApi client tests', () => {
         body: JSON.stringify({ requestType: 'Water', note: '2 bardak lütfen' }),
       })
     );
-    const calledOptions = fetchMock.mock.calls[0][1];
+    const calledOptions = fetchMock.mock.calls[0]![1] as { headers: Headers };
     expect(calledOptions.headers.get('Idempotency-Key')).toBe('custom-key-1');
   });
 
@@ -113,7 +113,7 @@ describe('customerServiceApi client tests', () => {
 
     const result = await customerServiceApi.getOpenRequests();
     expect(result).toHaveLength(1);
-    expect(result[0].requestType).toBe('Waiter');
+    expect(result[0]!.requestType).toBe('Waiter');
   });
 
   it('cancelRequest sends DELETE and returns cancelled record', async () => {
@@ -149,6 +149,7 @@ describe('customerServiceApi client tests', () => {
       tableId: 'tbl-1',
       status: 'BillRequested',
       guestCount: 2,
+      createdAtUtc: '2026-10-16T20:00:00Z',
       openedAtUtc: '2026-10-16T20:00:00Z',
       concurrencyToken: 'ct-new',
     };
@@ -171,7 +172,7 @@ describe('customerServiceApi client tests', () => {
         body: JSON.stringify({ concurrencyToken: 'ct-old' }),
       })
     );
-    const calledOptions = fetchMock.mock.calls[0][1];
+    const calledOptions = fetchMock.mock.calls[0]![1] as { headers: Headers };
     expect(calledOptions.headers.get('If-Match')).toBe('"ct-old"');
   });
 });

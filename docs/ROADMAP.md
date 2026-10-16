@@ -105,15 +105,15 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 - [x] Müşteri JWT Bearer boru hattı ve önbellek güvenliği: GUID formatında olmayan `sub`, eksik `sub`, oturum claim uyuşmazlığı, gelecek tarihli `iat`, 4096 bayttan uzun token ve kapalı/birleştirilmiş oturum reddi entegrasyon testleriyle doğrulandı. Redis önbelleğinde negatif-yalnızca TTL stratejisiyle stale pozitif "1" yetkilendirmesi imkansız kılındı.
 - [x] Birim, mimari, entegrasyon ve E2E testleri: 1.422 backend birim testi, Testcontainers PostgreSQL & Redis entegrasyon testleri, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. Playwright E2E disposable servisler üzerinde 3 passed, 0 skipped olarak tamamlandı.
 
-> **Not:** Aşama 7 (Müşteri Deneyimi) geliştirme aşamasındadır; bkz. [Faz 7 Takibi](./PHASE-7-TRACKER.md).
+> **Not:** Aşama 7 (Müşteri Deneyimi) tamamlandı; bkz. [Faz 7 Takibi](./PHASE-7-TRACKER.md).
 
-### Aşama 7: Müşteri Deneyimi (Durum: Geliştirme Aşamasında)
-- [ ] Arayüz 1: QR Müşteri Web Uygulaması ve oturum kurtarma altyapısı (Faz 7.0).
-- [ ] Duyarlı menü taraması, alerjen filtreleme ve öğe arama (Faz 7.1).
-- [ ] Etkileşimli öğe değiştirici yapılandırma modalı (Faz 7.2).
-- [ ] Sepet yönetimi, yerel vergi ve fiyat önizlemesi (Faz 7.3). Not: Gerçek sipariş oluşturma ve yetkili fiyatlandırma Faz 8'e aittir.
-- [ ] Hizmet çağrısı talepleri ("Garson Çağır", "Islak Mendil İste", "Fatura İste") (Faz 7.4).
-- [ ] Sertleştirme, erişilebilirlik ve kapanış denetimi (Faz 7.5).
+### Aşama 7: Müşteri Deneyimi (Durum: COMPLETED — CI Doğrulandı)
+- [x] Arayüz 1: QR Müşteri Web Uygulaması ve oturum kurtarma altyapısı (Faz 7.0).
+- [x] Duyarlı menü taraması, alerjen filtreleme ve öğe arama CUST-02 (Faz 7.1).
+- [x] Etkileşimli öğe değiştirici yapılandırma modalı CUST-03 (Faz 7.2).
+- [x] Sepet yönetimi, güvenli draft persistence ve fiyat önizlemesi CUST-04 (Faz 7.3). Not: Gerçek sipariş oluşturma ve yetkili fiyatlandırma Faz 8'e aittir.
+- [x] Hizmet çağrısı talepleri ("Garson Çağır", "Su İste", "Peçete İste", "Yardım İste", "Hesap İste") CUST-06 (Faz 7.4).
+- [x] Sertleştirme, erişilebilirlik, 15 adımlı Playwright E2E ve negatif güvenlik denetimi (Faz 7.5).
 
 ### Aşama 8: Sipariş Çekirdeği (Durum: Planlandı)
 - [ ] Sipariş varlığı yaşam döngüsü durumu makinesi (Taslak -> Gönderildi -> Kabul Edildi -> Hazırlanıyor -> Hazır -> Sunuldu -> Ücretli -> Kapalı).

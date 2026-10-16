@@ -89,3 +89,15 @@ Müşteri URL veya istek gövdesini değiştirerek başka masanın hesabına ya 
   - Karşılıklı transfer / merge yarışında deadlock: Deterministik artan UUID sıralı `FOR UPDATE` satır kilitleme ile deadlock önlenir; kaybeden yarışçı hedef masa doluluğu nedeniyle temiz hata alır.
   - Değişmez hareket tablosunda güncelleme veya silme: Veritabanı tetikleyicisi `trg_dining_session_movements_immutable` ile engellenir.
   - Birleştirilen kaynak oturumun müşteri belirteci: Kaynak oturum önbelleği anında geçersiz kılınır; eski müşteri tokenı ile istekler reddedilir.
+
+## 6. Müşteri Deneyimi ve Hizmet Talebi Olumsuz Durum Akışları (Faz 7)
+
+- **Kapalı / İptal Edilmiş Oturumda Menü ve Sepet Erişimi:** Yemek oturumu personel tarafından kapatıldığında veya süresi dolduğunda, müşterinin sonraki API istekleri HTTP 401 Unauthorized veya session inactive hatası alır. İstemci ekranı menü ve sepet erişimini keserek oturumun kapandığını bildiren karşılama ekranına döner.
+- **Şube ve İşletme İzolasyonu İhlali:** Müşterinin başka bir şube veya işletmeye ait URL parametreleriyle menüye veya hizmet talebine erişmeye çalışması durumunda, session token ile URL parametreleri uyuşmazlığı tespit edilir ve bilgi sızdırmadan HTTP 403 Forbidden / HTTP 404 Not Found verilir.
+- **Sepetteki Ürünün Mutfak Tarafından 86 (Tükendi) Yapılması:** Müşteri ürünü sepetine ekledikten sonra mutfak ilgili ürünü veya varyantı stokta yok (86) olarak işaretlerse, sepet görünümünde kırmızı uyarı banner'ı belirir, tükenen kalem belirginleştirilir ve sipariş butonu devre dışı bırakılır.
+- **Zorunlu Seçenek / Varyant Seçilmeden Ürün Ekleme:** Varyantı veya zorunlu modifier grubu (`min_selections >= 1`) bulunan ürünlerde seçim tamamlanmadan sepete ekleme butonu istemci tarafında devre dışı bırakılır; klavye/dokunma ile zorlama durumunda erişilebilir hata mesajı verilir.
+- **Bozuk veya Manipüle Edilmiş `sessionStorage` Draft:** `sessionStorage` içindeki sepet taslağı bozuk JSON içerdiğinde, şema sürümü uyuşmadığında veya oturum ID'si uyuşmadığında uygulama çökmez; bozuk taslağı sessizce ve güvenle temizleyerek temiz boş sepetle devam eder.
+- **CSRF Korumasız Hizmet Talebi:** Hizmet talebi (garson çağırma vb.) POST isteklerinde çift gönderim (double-submit) `X-CSRF-Token` başlığı eksik veya çerezdeki değerle uyuşmuyorsa, istek arka uçta HTTP 403 Forbidden ile fail-closed reddedilir.
+- **Eksik `Idempotency-Key` Başlığı:** Hizmet talebi veya durum değişikliği uç noktalarında `Idempotency-Key` başlığı bulunmadığında istek HTTP 400 Bad Request ile reddedilir.
+- **Çift Tıklama / Ağ Tekrarı:** Kullanıcı garson çağırma butonuna arka arkaya çift tıkladığında veya ağ gecikmesinde aynı `Idempotency-Key` ile mükerrer istek gönderildiğinde, backend idempotent olarak aynı talebi döndürür ve veritabanında tek bir kayıt oluşur.
+- **API / Ağ Kesintisinde Sepet Korunması ve Sahte Başarı Gösterilmemesi:** Ağ koptuğunda veya arka uç 503 döndürdüğünde sepet taslağı `sessionStorage` içinde korunur. Kullanıcıya açık RFC 7807/ağ hatası bildirilir; sahte sipariş veya servis başarı mesajı verilmez.

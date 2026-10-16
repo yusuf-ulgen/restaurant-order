@@ -111,4 +111,3 @@ public static class SecurityAuditEventType
     public const string CustomerServiceRequestCreated = "customer_service_request_created";
     public const string CustomerServiceRequestCancelled = "customer_service_request_cancelled";
 }
-
