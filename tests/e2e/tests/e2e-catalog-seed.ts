@@ -179,7 +179,7 @@ export async function seedCustomerExperienceScenario(
   // Item 1 Metadata (Spicy, Dietary, Allergen)
   const metaRes = await request.put(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/metadata`, {
     headers: { ...authHeaders, 'If-Match': `"${burger.concurrencyToken}"` },
-    data: { spicyLevel: 1, dietaryTags: ['Glutensiz'], allergenTags: ['Susam'] },
+    data: { spicyLevel: 1, dietaryTags: ['GlutenFree'], allergenTags: ['Sesame'] },
   });
   if (!metaRes.ok()) throw new Error(`Update burger metadata failed: ${await metaRes.text()}`);
 
