@@ -38,28 +38,38 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     table.CheckConstraint("ck_service_requests_status", "status IN (1, 2, 3, 4)");
                     table.CheckConstraint("ck_service_requests_type", "request_type IN (1, 2, 3, 4)");
                     table.ForeignKey(
-                        name: "fk_service_requests_table",
-                        columns: x => new { x.tenant_id, x.branch_id, x.table_id },
-                        principalSchema: "tenancy",
-                        principalTable: "restaurant_tables",
-                        principalColumns: new[] { "tenant_id", "branch_id", "id" },
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "fk_service_requests_session",
                         columns: x => new { x.tenant_id, x.branch_id, x.dining_session_id },
                         principalSchema: "tenancy",
                         principalTable: "dining_sessions",
                         principalColumns: new[] { "tenant_id", "branch_id", "id" },
                         onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_service_requests_table",
+                        columns: x => new { x.tenant_id, x.branch_id, x.table_id },
+                        principalSchema: "tenancy",
+                        principalTable: "restaurant_tables",
+                        principalColumns: new[] { "tenant_id", "branch_id", "id" },
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "ix_service_requests_tenant_session_type_open",
+                name: "IX_service_requests_tenant_id_branch_id_dining_session_id",
                 schema: "tenancy",
                 table: "service_requests",
-                columns: new[] { "tenant_id", "dining_session_id", "request_type" },
-                unique: true,
-                filter: "status = 1");
+                columns: new[] { "tenant_id", "branch_id", "dining_session_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_service_requests_tenant_id_branch_id_table_id",
+                schema: "tenancy",
+                table: "service_requests",
+                columns: new[] { "tenant_id", "branch_id", "table_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_service_requests_tenant_branch_created",
+                schema: "tenancy",
+                table: "service_requests",
+                columns: new[] { "tenant_id", "branch_id", "created_at_utc" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_service_requests_tenant_branch_idempotency_key",
@@ -75,10 +85,12 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                 columns: new[] { "tenant_id", "dining_session_id", "status" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_service_requests_tenant_branch_created",
+                name: "ix_service_requests_tenant_session_type_open",
                 schema: "tenancy",
                 table: "service_requests",
-                columns: new[] { "tenant_id", "branch_id", "created_at_utc" });
+                columns: new[] { "tenant_id", "dining_session_id", "request_type" },
+                unique: true,
+                filter: "status = 1");
 
             migrationBuilder.Sql(@"
                 ALTER TABLE tenancy.service_requests ENABLE ROW LEVEL SECURITY;
