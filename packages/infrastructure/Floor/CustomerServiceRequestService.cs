@@ -54,8 +54,6 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
                 nameof(idempotencyKey));
         }
 
-        // 1. Rate limiting & spam prevention
-        await _rateLimiter.EnsureNotRateLimitedAsync(tenantId.Value, sessionId.Value, ct);
 
         // 2. Execute within tenant transaction under PostgreSQL RLS
         var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
@@ -138,7 +136,10 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
             return MapToDto(existingOpen);
         }
 
-        // 6. Create and persist new service request
+        // 6. Rate limiting & spam prevention (enforced on new request creations)
+        await _rateLimiter.EnsureNotRateLimitedAsync(tenantId.Value, sessionId.Value, ct);
+
+        // 7. Create and persist new service request
         var serviceRequest = ServiceRequest.Create(
             tenantId,
             branchId,

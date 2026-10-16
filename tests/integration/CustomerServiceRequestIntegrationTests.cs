@@ -239,13 +239,21 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         Assert.Equal(HttpStatusCode.OK, createRes.StatusCode);
         var dto = await createRes.Content.ReadFromJsonAsync<ServiceRequestDto>(JsonOptions);
 
-        // Foreign customer session attempting to cancel this request -> 404/403
-        var foreignSession = Guid.NewGuid();
-        var foreignCustomerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, foreignSession);
-        var foreignCancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
-            HttpMethod.Delete, $"/api/v1/customer/service-requests/{dto!.Id}", foreignCustomerToken);
-        var foreignCancelRes = await client.SendAsync(foreignCancelReq);
-        Assert.True(foreignCancelRes.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
+        // Foreign unseeded session attempting to cancel this request -> 401 Unauthorized (session validation failed)
+        var unseededSession = Guid.NewGuid();
+        var unseededCustomerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, unseededSession);
+        var unseededCancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Delete, $"/api/v1/customer/service-requests/{dto!.Id}", unseededCustomerToken);
+        var unseededCancelRes = await client.SendAsync(unseededCancelReq);
+        Assert.True(unseededCancelRes.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
+
+        // Foreign active session attempting to cancel this request -> 404 Not Found (resource isolation)
+        var (_, _, _, _, foreignActiveSessionId) = await SetupActiveSessionAsync(client);
+        var foreignActiveCustomerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, foreignActiveSessionId);
+        var foreignActiveCancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Delete, $"/api/v1/customer/service-requests/{dto.Id}", foreignActiveCustomerToken);
+        var foreignActiveCancelRes = await client.SendAsync(foreignActiveCancelReq);
+        Assert.Equal(HttpStatusCode.NotFound, foreignActiveCancelRes.StatusCode);
 
         // Own customer session cancels request -> 200 OK
         var ownCancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
