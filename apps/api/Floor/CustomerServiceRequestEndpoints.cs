@@ -26,7 +26,7 @@ public static class CustomerServiceRequestEndpoints
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Customer" });
 
         // POST /api/v1/customer/service-requests
-        group.MapPost("/", async (
+        group.MapPost("", async (
             [FromBody] CreateCustomerServiceRequest request,
             HttpContext context,
             IJwtClaimPrincipalParser parser,
@@ -105,9 +105,15 @@ public static class CustomerServiceRequestEndpoints
             {
                 return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", aex.Message);
             }
-            catch (Exception)
+            catch (JwtClaimValidationException jex)
             {
-                return ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "An error occurred while creating the service request.");
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
+            }
+            catch (Exception ex)
+            {
+                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
+                logger?.LogError(ex, "Unexpected error creating customer service request: {Message}", ex.Message);
+                return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
         .WithName("CreateCustomerServiceRequest")
@@ -152,9 +158,15 @@ public static class CustomerServiceRequestEndpoints
             {
                 return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", scpEx.Message);
             }
-            catch (Exception)
+            catch (JwtClaimValidationException jex)
             {
-                return ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "An error occurred while loading open service requests.");
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
+            }
+            catch (Exception ex)
+            {
+                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
+                logger?.LogError(ex, "Unexpected error retrieving open service requests: {Message}", ex.Message);
+                return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
         .WithName("GetOpenCustomerServiceRequests")
@@ -209,9 +221,15 @@ public static class CustomerServiceRequestEndpoints
             {
                 return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", dex.Message);
             }
-            catch (Exception)
+            catch (JwtClaimValidationException jex)
             {
-                return ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "An error occurred while cancelling the service request.");
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
+            }
+            catch (Exception ex)
+            {
+                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
+                logger?.LogError(ex, "Unexpected error cancelling service request: {Message}", ex.Message);
+                return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
         .WithName("CancelCustomerServiceRequest")

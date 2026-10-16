@@ -54,70 +54,83 @@ public static class CustomerSessionEndpoints
 
                 // 2. Query PostgreSQL source-of-truth inside tenant transaction.
                 // Enforces PostgreSQL forced Row-Level Security (RLS) under runtime roles.
-                await using var tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+                var hasAmbientTx = dbContext.Database.CurrentTransaction != null;
+                Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+                if (!hasAmbientTx)
+                {
+                    localTx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+                }
 
-                var sessionWithTable = await (
-                    from s in dbContext.DiningSessions
-                    join t in dbContext.RestaurantTables on s.TableId equals t.Id
-                    where s.TenantId == new TenantId(tenantId) &&
-                          s.BranchId == new BranchId(branchId) &&
-                          s.Id == DiningSessionId.From(sessionId) &&
-                          t.TenantId == new TenantId(tenantId) &&
-                          t.BranchId == new BranchId(branchId)
-                    select new
+                try
+                {
+                    var session = await dbContext.DiningSessions
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.TenantId == new TenantId(tenantId) &&
+                                                  s.BranchId == new BranchId(branchId) &&
+                                                  s.Id == DiningSessionId.From(sessionId), ct);
+
+                    if (session == null)
                     {
-                        SessionId = s.Id.Value,
-                        TenantId = s.TenantId.Value,
-                        BranchId = s.BranchId.Value,
-                        TableId = t.Id.Value,
-                        TableNumber = t.TableNumber,
-                        TableName = t.Name,
-                        Status = s.Status,
-                        ConcurrencyToken = s.ConcurrencyToken,
-                        GuestCount = s.GuestCount,
-                        OpenedAtUtc = s.OpenedAtUtc,
-                        MergedIntoSessionId = s.MergedIntoSessionId
-                    })
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(ct);
+                        await sessionValidator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId, ct);
+                        return ProblemResult(context, StatusCodes.Status401Unauthorized, "Session Expired", "The dining session is closed, merged, or does not exist.");
+                    }
 
-                if (sessionWithTable == null)
-                {
-                    await sessionValidator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId, ct);
-                    return ProblemResult(context, StatusCodes.Status401Unauthorized, "Session Expired", "The dining session is closed, merged, or does not exist.");
+                    if (session.Status == DiningSessionStatus.Closed || session.MergedIntoSessionId.HasValue)
+                    {
+                        await sessionValidator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId, ct);
+                        return ProblemResult(context, StatusCodes.Status401Unauthorized, "Session Expired", "The dining session has been closed or merged.");
+                    }
+
+                    var table = await dbContext.RestaurantTables
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(t => t.TenantId == new TenantId(tenantId) &&
+                                                  t.BranchId == new BranchId(branchId) &&
+                                                  t.Id == session.TableId, ct);
+
+                    if (table == null)
+                    {
+                        await sessionValidator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId, ct);
+                        return ProblemResult(context, StatusCodes.Status401Unauthorized, "Session Expired", "The assigned table was not found.");
+                    }
+
+                    if (localTx != null)
+                    {
+                        await localTx.CommitAsync(ct);
+                    }
+
+                    context.Response.Headers.ETag = $"\"{session.ConcurrencyToken:D}\"";
+
+                    var response = new CustomerSessionDto(
+                        SessionId: session.Id.Value,
+                        TenantId: session.TenantId.Value,
+                        BranchId: session.BranchId.Value,
+                        TableId: table.Id.Value,
+                        TableNumber: table.TableNumber,
+                        TableName: table.Name,
+                        SessionStatus: session.Status.ToString(),
+                        ConcurrencyToken: session.ConcurrencyToken,
+                        GuestCount: session.GuestCount,
+                        OpenedAtUtc: session.OpenedAtUtc);
+
+                    return Results.Ok(response);
                 }
-
-                if (sessionWithTable.Status == DiningSessionStatus.Closed || sessionWithTable.MergedIntoSessionId.HasValue)
+                finally
                 {
-                    await sessionValidator.InvalidateSessionCacheAsync(tenantId, branchId, sessionId, ct);
-                    return ProblemResult(context, StatusCodes.Status401Unauthorized, "Session Expired", "The dining session has been closed or merged.");
+                    if (localTx != null)
+                    {
+                        await localTx.DisposeAsync();
+                    }
                 }
-
-                await tx.CommitAsync(ct);
-
-                context.Response.Headers.ETag = $"\"{sessionWithTable.ConcurrencyToken:D}\"";
-
-                var response = new CustomerSessionDto(
-                    SessionId: sessionWithTable.SessionId,
-                    TenantId: sessionWithTable.TenantId,
-                    BranchId: sessionWithTable.BranchId,
-                    TableId: sessionWithTable.TableId,
-                    TableNumber: sessionWithTable.TableNumber,
-                    TableName: sessionWithTable.TableName,
-                    SessionStatus: sessionWithTable.Status.ToString(),
-                    ConcurrencyToken: sessionWithTable.ConcurrencyToken,
-                    GuestCount: sessionWithTable.GuestCount,
-                    OpenedAtUtc: sessionWithTable.OpenedAtUtc);
-
-                return Results.Ok(response);
             }
             catch (JwtClaimValidationException jex)
             {
                 return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "An error occurred while verifying the customer session.");
+                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerSession");
+                logger?.LogError(ex, "Unexpected error retrieving customer session: {Message}", ex.Message);
+                return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
         .RequireAuthorization(new AuthorizeAttribute { Roles = "Customer" })

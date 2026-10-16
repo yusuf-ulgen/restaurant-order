@@ -58,10 +58,17 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
         await _rateLimiter.EnsureNotRateLimitedAsync(tenantId.Value, sessionId.Value, ct);
 
         // 2. Execute within tenant transaction under PostgreSQL RLS
-        await using var tx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        }
 
-        // Advisory lock on idempotency key to prevent race conditions on concurrent identical keys
-        if (_dbContext.Database.IsNpgsql())
+        try
+        {
+            // Advisory lock on idempotency key to prevent race conditions on concurrent identical keys
+            if (_dbContext.Database.IsNpgsql())
         {
             var lockKey = $"sr-idem:{tenantId.Value:N}:{sessionId.Value:N}:{trimmedKey}";
             await _dbContext.Database.ExecuteSqlInterpolatedAsync(
@@ -108,7 +115,10 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
             }
 
             // Replay matching idempotency record
-            await tx.CommitAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
             return MapToDto(existingWithKey);
         }
 
@@ -121,7 +131,10 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
 
         if (existingOpen != null)
         {
-            await tx.CommitAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
             return MapToDto(existingOpen);
         }
 
@@ -154,10 +167,21 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
             }));
         _dbContext.SecurityAuditEvents.Add(audit);
 
-        await _dbContext.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
 
-        return MapToDto(serviceRequest);
+            return MapToDto(serviceRequest);
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<IReadOnlyList<ServiceRequestDto>> GetOpenRequestsAsync(
@@ -169,20 +193,38 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
     {
         EnsureCustomerOwnSession(tenantId, branchId, sessionId, actor);
 
-        await using var tx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        }
 
-        var list = await _dbContext.ServiceRequests
-            .AsNoTracking()
-            .Where(sr => sr.TenantId == tenantId &&
-                         sr.BranchId == branchId &&
-                         sr.DiningSessionId == sessionId &&
-                         sr.Status == ServiceRequestStatus.Open)
-            .OrderBy(sr => sr.CreatedAtUtc)
-            .ToListAsync(ct);
+        try
+        {
+            var list = await _dbContext.ServiceRequests
+                .AsNoTracking()
+                .Where(sr => sr.TenantId == tenantId &&
+                             sr.BranchId == branchId &&
+                             sr.DiningSessionId == sessionId &&
+                             sr.Status == ServiceRequestStatus.Open)
+                .OrderBy(sr => sr.CreatedAtUtc)
+                .ToListAsync(ct);
 
-        await tx.CommitAsync(ct);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(ct);
+            }
 
-        return list.Select(MapToDto).ToList();
+            return list.Select(MapToDto).ToList();
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     public async Task<ServiceRequestDto> CancelRequestAsync(
@@ -195,37 +237,55 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
     {
         EnsureCustomerOwnSession(tenantId, branchId, sessionId, actor);
 
-        await using var tx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
+        {
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: ct);
+        }
 
-        // Non-leaking resource lookup: requires tenant, branch, session, and request id match
-        var sr = await _dbContext.ServiceRequests
-            .FirstOrDefaultAsync(x => x.Id == requestId &&
-                                      x.TenantId == tenantId &&
-                                      x.BranchId == branchId &&
-                                      x.DiningSessionId == sessionId, ct)
-            ?? throw new ResourceNotFoundException($"Service request '{requestId.Value}' was not found.");
+        try
+        {
+            // Non-leaking resource lookup: requires tenant, branch, session, and request id match
+            var sr = await _dbContext.ServiceRequests
+                .FirstOrDefaultAsync(x => x.Id == requestId &&
+                                          x.TenantId == tenantId &&
+                                          x.BranchId == branchId &&
+                                          x.DiningSessionId == sessionId, ct)
+                ?? throw new ResourceNotFoundException($"Service request '{requestId.Value}' was not found.");
 
-        sr.Cancel();
+            sr.Cancel();
 
-        var audit = SecurityAuditEvent.Create(
-            tenantId,
-            SecurityAuditEventType.CustomerServiceRequestCancelled,
-            DateTimeOffset.UtcNow,
-            userId: null,
-            branchId: branchId,
-            detailsJson: JsonSerializer.Serialize(new
+            var audit = SecurityAuditEvent.Create(
+                tenantId,
+                SecurityAuditEventType.CustomerServiceRequestCancelled,
+                DateTimeOffset.UtcNow,
+                userId: null,
+                branchId: branchId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    requestId = sr.Id.Value,
+                    sessionId = sessionId.Value,
+                    tableId = sr.TableId.Value,
+                    requestType = sr.RequestType.ToString()
+                }));
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            await _dbContext.SaveChangesAsync(ct);
+            if (localTx != null)
             {
-                requestId = sr.Id.Value,
-                sessionId = sessionId.Value,
-                tableId = sr.TableId.Value,
-                requestType = sr.RequestType.ToString()
-            }));
-        _dbContext.SecurityAuditEvents.Add(audit);
+                await localTx.CommitAsync(ct);
+            }
 
-        await _dbContext.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-
-        return MapToDto(sr);
+            return MapToDto(sr);
+        }
+        finally
+        {
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
+        }
     }
 
     private static void EnsureCustomerOwnSession(
