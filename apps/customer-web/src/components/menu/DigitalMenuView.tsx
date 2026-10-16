@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RuntimeMenuReadModel, RuntimeMenuItem } from '@restaurant-order/contracts';
+import type { RuntimeMenuReadModel, RuntimeMenuItem, DraftCartLine } from '@restaurant-order/contracts';
 import { Card, EmptyState, Button, Spinner } from '@restaurant-order/ui';
 import { runtimeMenuApi, RuntimeMenuApiError } from '../../api/runtimeMenuApi';
 import { normalizeTurkishText } from '../../utils/menuUtils';
@@ -15,6 +15,7 @@ export interface DigitalMenuViewProps {
   onSessionExpired?: () => void;
   onCallWaiter?: () => void;
   initialMenuData?: RuntimeMenuReadModel | null;
+  onAddToCart?: (cartLine: DraftCartLine) => void;
 }
 
 export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
@@ -23,6 +24,7 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
   onSessionExpired,
   onCallWaiter,
   initialMenuData = null,
+  onAddToCart,
 }) => {
   const [menuData, setMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
@@ -393,6 +395,7 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
         isOpen={selectedDetailItem !== null}
         onClose={() => setSelectedDetailItem(null)}
         avoidedAllergens={avoidedAllergens}
+        onAddToCart={onAddToCart}
       />
     </div>
   );

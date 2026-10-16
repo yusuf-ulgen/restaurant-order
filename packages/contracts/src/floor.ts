@@ -256,3 +256,27 @@ export interface DiningSessionMovementDto {
   guestsMoved: number;
   createdAtUtc: string;
 }
+
+export type ServiceRequestType = 'Waiter' | 'Water' | 'Napkin' | 'Assistance';
+export type ServiceRequestStatus = 'Open' | 'Cancelled' | 'Acknowledged' | 'Completed';
+
+export interface ServiceRequestDto {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  diningSessionId: string;
+  tableId: string;
+  requestType: ServiceRequestType;
+  status: ServiceRequestStatus;
+  note?: string | null;
+  idempotencyKey: string;
+  createdAtUtc: string;
+  acknowledgedAtUtc?: string | null;
+  completedAtUtc?: string | null;
+  concurrencyToken: string;
+}
+
+export interface CreateCustomerServiceRequestInput {
+  requestType: ServiceRequestType;
+  note?: string | null;
+}

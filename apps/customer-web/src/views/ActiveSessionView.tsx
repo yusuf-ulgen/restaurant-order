@@ -2,23 +2,29 @@ import React, { useState } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel } from '@restaurant-order/contracts';
 import { Card, Button, BottomSheet } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
+import { CartProvider, useCart } from '../cart/CartContext';
+import { CartSheet } from '../components/cart/CartSheet';
+import { ServiceRequestSheet } from '../components/service/ServiceRequestSheet';
 
 export interface ActiveSessionViewProps {
   session: CustomerSessionDto;
-  onLeaveSession?: () => void;
-  initialTab?: 'menu' | 'table';
+  onLeaveSession: () => void;
   initialMenuData?: RuntimeMenuReadModel | null;
+  initialTab?: 'menu' | 'table';
 }
 
-export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
+const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   session,
   onLeaveSession,
-  initialTab = 'table',
   initialMenuData = null,
+  initialTab = 'table',
 }) => {
+  const [currentSession, setCurrentSession] = useState<CustomerSessionDto>(session);
   const [activeTab, setActiveTab] = useState<'menu' | 'table'>(initialTab);
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
-  const handleCloseServiceSheet = () => setIsServiceSheetOpen(false);
+  const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
+
+  const cart = useCart();
 
   return (
     <div
@@ -26,10 +32,10 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100%',
-        width: '100%',
-        paddingBottom: '72px', // space for bottom navigation
+        paddingBottom: '80px',
+        boxSizing: 'border-box',
       }}
-      data-testid="active-session-view"
+      data-testid="customer-active-session"
     >
       {activeTab === 'menu' ? (
         <DigitalMenuView
@@ -41,6 +47,7 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
           onSessionExpired={onLeaveSession}
           onCallWaiter={() => setIsServiceSheetOpen(true)}
           initialMenuData={initialMenuData}
+          onAddToCart={(line) => cart.addLine(line)}
         />
       ) : (
         <div
@@ -74,9 +81,11 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
                 Menüyü İncele
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
+                className="customer-action-btn-secondary"
                 onClick={() => setIsServiceSheetOpen(true)}
+                data-testid="request-service-btn"
                 style={{ minHeight: '44px' }}
               >
                 Garson Çağır
@@ -86,58 +95,27 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
         </div>
       )}
 
-      {/* Service Request Bottom Sheet */}
-      <BottomSheet
-        isOpen={isServiceSheetOpen}
-        onClose={handleCloseServiceSheet}
-        title="Garson Çağır"
-        description="Masanız için servis veya destek talebi iletin."
-      >
-        <p
-          style={{
-            fontSize: 'var(--ro-font-size-sm)',
-            color: 'var(--ro-color-text-muted)',
-            marginTop: 0,
-            marginBottom: 'var(--ro-space-3)',
-          }}
-        >
-          Servis çağrı iletimi Faz 7.4 (Servis Talepleri) kapsamında etkinleşecektir.
-        </p>
-        <div className="service-options-list" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ro-space-2)' }}>
-          <button
-            type="button"
-            className="service-option-item"
-            disabled
-            aria-disabled="true"
-            title="Su ve peçete talebi Faz 7.4'te etkinleşecektir"
-          >
-            <span>Masaya Su / Peçete Talebi (Yakında)</span>
-            <span aria-hidden="true">→</span>
-          </button>
-          <button
-            type="button"
-            className="service-option-item"
-            disabled
-            aria-disabled="true"
-            title="Hesap talebi Faz 7.4'te etkinleşecektir"
-          >
-            <span>Hesap İstiyorum (Yakında)</span>
-            <span aria-hidden="true">→</span>
-          </button>
-          <button
-            type="button"
-            className="service-option-item"
-            disabled
-            aria-disabled="true"
-            title="Garson görüşme talebi Faz 7.4'te etkinleşecektir"
-          >
-            <span>Garson ile Görüşme Talebi (Yakında)</span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      </BottomSheet>
+      {/* Cart Bottom Sheet (CUST-04) */}
+      <CartSheet
+        isOpen={cart.isCartOpen}
+        onClose={cart.closeCart}
+        runtimeMenu={runtimeMenuData || initialMenuData}
+        tableInfo={{
+          tableNumber: session.tableNumber,
+          tableName: session.tableName,
+        }}
+        onNavigateToMenu={() => setActiveTab('menu')}
+      />
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Service Request Bottom Sheet (CUST-06) */}
+      <ServiceRequestSheet
+        isOpen={isServiceSheetOpen}
+        onClose={() => setIsServiceSheetOpen(false)}
+        session={currentSession}
+        onSessionUpdated={setCurrentSession}
+      />
+
+      {/* Mobile Bottom Navigation Bar with 44px min touch targets */}
       <nav
         aria-label="Müşteri Alt Gezinme Çubuğu"
         style={{
@@ -175,12 +153,58 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
             fontSize: 'var(--ro-font-size-xs)',
             cursor: 'pointer',
             minHeight: '44px',
-            minWidth: '64px',
+            minWidth: '60px',
             gap: '2px',
           }}
         >
           <span style={{ fontSize: '18px' }} aria-hidden="true">🍽️</span>
           <span>Menü</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={cart.openCart}
+          aria-label={`Sepetim, ${cart.totalItemsCount} ürün`}
+          data-testid="bottom-nav-cart-btn"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--ro-color-text-primary)',
+            fontWeight: 'var(--ro-font-weight-regular)',
+            fontSize: 'var(--ro-font-size-xs)',
+            cursor: 'pointer',
+            minHeight: '44px',
+            minWidth: '60px',
+            gap: '2px',
+            position: 'relative',
+          }}
+        >
+          <span style={{ fontSize: '18px' }} aria-hidden="true">🛒</span>
+          <span>Sepet</span>
+          {cart.totalItemsCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                right: '12px',
+                backgroundColor: 'var(--ro-color-text-primary)',
+                color: 'var(--ro-color-surface)',
+                borderRadius: 'var(--ro-radius-full)',
+                fontSize: '10px',
+                fontWeight: 'var(--ro-font-weight-bold)',
+                padding: '1px 5px',
+                minWidth: '16px',
+                textAlign: 'center',
+              }}
+              data-testid="cart-badge-count"
+            >
+              {cart.totalItemsCount}
+            </span>
+          )}
         </button>
 
         <button
@@ -200,7 +224,7 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
             fontSize: 'var(--ro-font-size-xs)',
             cursor: 'pointer',
             minHeight: '44px',
-            minWidth: '64px',
+            minWidth: '60px',
             gap: '2px',
           }}
         >
@@ -226,7 +250,7 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
             fontSize: 'var(--ro-font-size-xs)',
             cursor: 'pointer',
             minHeight: '44px',
-            minWidth: '64px',
+            minWidth: '60px',
             gap: '2px',
           }}
         >
@@ -235,5 +259,13 @@ export const ActiveSessionView: React.FC<ActiveSessionViewProps> = ({
         </button>
       </nav>
     </div>
+  );
+};
+
+export const ActiveSessionView: React.FC<ActiveSessionViewProps> = (props) => {
+  return (
+    <CartProvider sessionId={props.session.sessionId} currency="TRY">
+      <ActiveSessionContent {...props} />
+    </CartProvider>
   );
 };

@@ -41,6 +41,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Floor.RestaurantTable> RestaurantTables => Set<RestaurantOrder.Domain.Floor.RestaurantTable>();
     public DbSet<RestaurantOrder.Domain.Floor.DiningSession> DiningSessions => Set<RestaurantOrder.Domain.Floor.DiningSession>();
     public DbSet<RestaurantOrder.Domain.Floor.DiningSessionMovement> DiningSessionMovements => Set<RestaurantOrder.Domain.Floor.DiningSessionMovement>();
+    public DbSet<RestaurantOrder.Domain.Floor.ServiceRequest> ServiceRequests => Set<RestaurantOrder.Domain.Floor.ServiceRequest>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -118,6 +119,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.RestaurantTable>().HasQueryFilter(rt => HasTenant && rt.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSession>().HasQueryFilter(ds => HasTenant && ds.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSessionMovement>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Floor.ServiceRequest>().HasQueryFilter(sr => HasTenant && sr.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);

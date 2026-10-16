@@ -186,3 +186,34 @@ export type RuntimeMenuItemDto = RuntimeMenuItem;
 export type RuntimeItemVariantDto = RuntimeItemVariant;
 export type RuntimeModifierGroupDto = RuntimeModifierGroup;
 export type RuntimeModifierOptionDto = RuntimeModifierOption;
+
+export const CUSTOMER_NOTE_MAX_LENGTH = 200;
+
+export interface DraftCartLine {
+  menuItemId: string;
+  variantId: string | null;
+  selectedModifierOptionIds: string[];
+  customerNote: string | null;
+  quantity: number;
+  unitPriceMinorUnits: number;
+  lineTotalMinorUnits: number;
+  currency: string;
+  configurationSignature: string;
+}
+
+export type CartValidationIssueType =
+  | 'item_unavailable'
+  | 'item_removed'
+  | 'variant_unavailable'
+  | 'variant_removed'
+  | 'modifier_removed'
+  | 'price_changed';
+
+export interface CartValidationIssue {
+  lineSignature: string;
+  type: CartValidationIssueType;
+  message: string;
+  previousUnitPriceMinorUnits?: number;
+  currentUnitPriceMinorUnits?: number;
+}
+

@@ -107,7 +107,7 @@ describe('Customer Web App', () => {
       expect(buttons.some((btn) => btn.textContent?.includes('Garson Çağır'))).toBe(true);
     });
 
-    it('opens BottomSheet, keeps options disabled as upcoming, and closes via close button', async () => {
+    it('opens BottomSheet, displays CUST-06 service actions, and closes via close button', async () => {
       render(<App />);
 
       const callWaiterBtn = await screen.findByRole('button', { name: 'Garson Çağır' });
@@ -117,13 +117,10 @@ describe('Customer Web App', () => {
       expect(dialog).toBeDefined();
       expect(screen.getByText('Masanız için servis veya destek talebi iletin.')).toBeDefined();
 
-      // Options must be disabled and not pretend to send a request
-      const optionBtn = screen.getByRole('button', { name: /Masaya Su \/ Peçete Talebi/ });
-      expect(optionBtn.hasAttribute('disabled')).toBe(true);
-      fireEvent.click(optionBtn);
-
-      // Dialog must NOT close on clicking disabled option
-      expect(screen.getByRole('dialog')).toBeDefined();
+      // CUST-06 service action cards
+      expect(screen.getByTestId('service-card-waiter')).toBeDefined();
+      expect(screen.getByTestId('service-card-water')).toBeDefined();
+      expect(screen.getByTestId('service-card-napkin')).toBeDefined();
 
       // Close dialog via close button
       const closeBtn = screen.getByRole('button', { name: 'Kapat' });

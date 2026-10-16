@@ -106,4 +106,9 @@ public static class SecurityAuditEventType
     public const string DiningSessionClosed = "dining_session_closed";
     public const string TableQrRotated = "table_qr_rotated";
     public const string QrExchanged = "qr_exchanged";
+
+    // Customer Service Requests (Phase 7.4)
+    public const string CustomerServiceRequestCreated = "customer_service_request_created";
+    public const string CustomerServiceRequestCancelled = "customer_service_request_cancelled";
 }
+
