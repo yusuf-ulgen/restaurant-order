@@ -61,12 +61,13 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           }}
           data-testid="table-overview-tab"
         >
-          <Card padding="md">
-            <h2 className="customer-card-title">Hoş Geldiniz</h2>
-            <p className="customer-card-text">
-              <strong>Masa {session.tableNumber} ({session.tableName})</strong> için oturumunuz aktif.
-              Menüyü inceleyebilir, ürünleri filtreleyebilir ve servis talebinde bulunabilirsiniz.
-            </p>
+          <div data-testid="session-welcome-view">
+            <Card padding="md">
+              <h2 className="customer-card-title">Hoş Geldiniz</h2>
+              <p className="customer-card-text">
+                <strong>Masa {session.tableNumber} ({session.tableName})</strong> için oturumunuz aktif.
+                Menüyü inceleyebilir, ürünleri filtreleyebilir ve servis talebinde bulunabilirsiniz.
+              </p>
             <div
               className="customer-actions"
               style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ro-space-3)' }}
@@ -93,6 +94,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
               </Button>
             </div>
           </Card>
+          </div>
         </div>
       )}
 

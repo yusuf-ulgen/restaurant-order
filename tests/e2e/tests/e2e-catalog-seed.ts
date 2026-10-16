@@ -120,7 +120,11 @@ export async function seedCustomerExperienceScenario(
   // 4. Create Menu & Activate
   const menuRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus`, {
     headers: authHeaders,
-    data: { name: `Müşteri Menüsü ${Date.now()}`, description: 'Faz 7 E2E Test Menüsü' },
+    data: {
+      name: `Müşteri Menüsü ${Date.now()}`,
+      slug: `musteri-menusu-${Date.now()}`,
+      description: 'Faz 7 E2E Test Menüsü',
+    },
   });
   if (!menuRes.ok()) throw new Error(`Create menu failed: ${await menuRes.text()}`);
   const menu = await menuRes.json();
@@ -133,14 +137,24 @@ export async function seedCustomerExperienceScenario(
   // 5. Categories
   const catBurgerRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/categories`, {
     headers: authHeaders,
-    data: { name: 'Burgerler', description: 'Gurme Burgerler', sortOrder: 1 },
+    data: {
+      name: 'Burgerler',
+      slug: `burgerler-${Date.now()}`,
+      description: 'Gurme Burgerler',
+      sortOrder: 1,
+    },
   });
   if (!catBurgerRes.ok()) throw new Error(`Create category burger failed: ${await catBurgerRes.text()}`);
   const catBurger = await catBurgerRes.json();
 
   const catDrinkRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/categories`, {
     headers: authHeaders,
-    data: { name: 'İçecekler', description: 'Soğuk İçecekler', sortOrder: 2 },
+    data: {
+      name: 'İçecekler',
+      slug: `icecekler-${Date.now()}`,
+      description: 'Soğuk İçecekler',
+      sortOrder: 2,
+    },
   });
   if (!catDrinkRes.ok()) throw new Error(`Create category drink failed: ${await catDrinkRes.text()}`);
   const catDrink = await catDrinkRes.json();
