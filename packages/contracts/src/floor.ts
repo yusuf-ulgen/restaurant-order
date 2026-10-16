@@ -191,6 +191,23 @@ export interface QrExchangeResponse {
 }
 
 /**
+ * Safe customer session metadata returned by GET /api/v1/customer/session.
+ * Does not contain access tokens, credentials, or cross-tenant internals.
+ */
+export interface CustomerSessionDto {
+  sessionId: string;
+  tenantId: string;
+  branchId: string;
+  tableId: string;
+  tableNumber: string;
+  tableName: string;
+  sessionStatus: DiningSessionStatus;
+  concurrencyToken: string;
+  guestCount: number;
+  openedAtUtc: string;
+}
+
+/**
  * Request payload to transfer a dining session to another available table.
  *
  * - `targetTableConcurrencyToken`: Optional. Server acquires deterministic row-level locks

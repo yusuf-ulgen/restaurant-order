@@ -44,7 +44,7 @@ Hedeflenen tam yemek yaşam döngüsü:
 5. Kasa hesabı böler ve ödemeyi kaydeder.
 6. Masa oturumu kapanır; masa `AVAILABLE` olur.
 
-Bu hedef, mevcut E2E süitinin tüm akışı kapsadığı iddiası değildir; mevcut iki E2E testi HTTP sağlık sorgularıdır.
+Bu hedef, mevcut E2E süitinin tüm akışı kapsadığı iddiası değildir; mevcut Playwright E2E testleri HTTP sağlık ve müşteri masa karşılama (CUST-01) QR akışlarını doğrular.
 
 ## 3. Zorunlu Kritik Yollar
 

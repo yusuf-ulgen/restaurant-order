@@ -211,6 +211,22 @@ public record QrExchangeResult(
     string TableName);
 
 /// <summary>
+/// Safe customer session metadata returned by GET /api/v1/customer/session.
+/// Does not leak access tokens, credentials, or cross-tenant internals.
+/// </summary>
+public record CustomerSessionDto(
+    Guid SessionId,
+    Guid TenantId,
+    Guid BranchId,
+    Guid TableId,
+    string TableNumber,
+    string TableName,
+    string SessionStatus,
+    Guid ConcurrencyToken,
+    int GuestCount,
+    DateTimeOffset OpenedAtUtc);
+
+/// <summary>
 /// Request payload to transfer a dining session to another active table.
 /// TargetTableConcurrencyToken is optional because deterministic row-level locks
 /// (SELECT ... FOR UPDATE in ascending UUID order) provide transactional isolation.

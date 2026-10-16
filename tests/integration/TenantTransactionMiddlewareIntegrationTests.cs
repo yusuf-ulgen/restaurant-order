@@ -30,6 +30,8 @@ public class TenantTransactionMiddlewareIntegrationTests : IClassFixture<Testcon
     [Fact]
     public async Task InvokeAsync_When200Ok_CommitsTransactionAndClearsSession()
     {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+
         var tenantId = Guid.NewGuid();
         var mockAccessor = new Mock<ITenantContextAccessor>();
         mockAccessor.Setup(a => a.TenantContext).Returns(new TenantContext(tenantId, isAuthenticated: true));
@@ -56,6 +58,8 @@ public class TenantTransactionMiddlewareIntegrationTests : IClassFixture<Testcon
     [Fact]
     public async Task InvokeAsync_WhenErrorStatusCode_RollsBackTransactionAndClearsSession()
     {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+
         var tenantId = Guid.NewGuid();
         var mockAccessor = new Mock<ITenantContextAccessor>();
         mockAccessor.Setup(a => a.TenantContext).Returns(new TenantContext(tenantId, isAuthenticated: true));
@@ -82,6 +86,8 @@ public class TenantTransactionMiddlewareIntegrationTests : IClassFixture<Testcon
     [Fact]
     public async Task InvokeAsync_WhenExceptionThrown_RollsBackTransactionAndRethrows()
     {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+
         var tenantId = Guid.NewGuid();
         var mockAccessor = new Mock<ITenantContextAccessor>();
         mockAccessor.Setup(a => a.TenantContext).Returns(new TenantContext(tenantId, isAuthenticated: true));

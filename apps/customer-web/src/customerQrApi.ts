@@ -83,6 +83,7 @@ export const customerQrApi = {
   resolveQr: async (token: string): Promise<QrResolveResponse> => {
     const res = await fetch(`/api/v1/qr/resolve?token=${encodeURIComponent(token)}`, {
       method: 'GET',
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     });
 
@@ -97,6 +98,7 @@ export const customerQrApi = {
   exchangeQr: async (token: string): Promise<QrExchangeResponse> => {
     const res = await fetch('/api/v1/qr/exchange', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
