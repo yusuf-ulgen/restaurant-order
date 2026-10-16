@@ -248,8 +248,8 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         Assert.True(unseededCancelRes.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.NotFound or HttpStatusCode.Forbidden);
 
         // Foreign active session attempting to cancel this request -> 404 Not Found (resource isolation)
-        var (_, _, _, _, foreignActiveSessionId) = await SetupActiveSessionAsync(client);
-        var foreignActiveCustomerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, foreignActiveSessionId);
+        var (fTenantId, fBranchId, _, _, foreignActiveSessionId) = await SetupActiveSessionAsync(client);
+        var foreignActiveCustomerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(fTenantId, fBranchId, foreignActiveSessionId);
         var foreignActiveCancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Delete, $"/api/v1/customer/service-requests/{dto.Id}", foreignActiveCustomerToken);
         var foreignActiveCancelRes = await client.SendAsync(foreignActiveCancelReq);
