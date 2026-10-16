@@ -108,3 +108,81 @@ export interface ProblemDetailsContract {
   status?: number;
   correlationId?: string;
 }
+
+export interface RuntimeModifierOption {
+  id: string;
+  name: string;
+  priceDeltaMinorUnits: number;
+  sortOrder: number;
+  isDefault: boolean;
+}
+
+export interface RuntimeModifierGroup {
+  id: string;
+  name: string;
+  minSelections: number;
+  maxSelections: number;
+  sortOrder: number;
+  options: RuntimeModifierOption[];
+}
+
+export interface RuntimeItemVariant {
+  id: string;
+  name: string;
+  code: string;
+  absolutePriceMinorUnits: number;
+  sortOrder: number;
+  isDefault: boolean;
+  isAvailable: boolean;
+  expectedAvailableAtUtc: string | null;
+}
+
+export interface RuntimeMenuItem {
+  id: string;
+  name: string;
+  slug: string;
+  shortDescription: string | null;
+  fullDescription: string | null;
+  imageUrl: string | null;
+  basePriceMinorUnits: number;
+  sortOrder: number;
+  spicyLevel: number;
+  dietaryTags: string[];
+  allergenTags: string[];
+  isAvailable: boolean;
+  expectedAvailableAtUtc: string | null;
+  variants: RuntimeItemVariant[];
+  modifierGroups: RuntimeModifierGroup[];
+}
+
+export interface RuntimeMenuCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sortOrder: number;
+  items: RuntimeMenuItem[];
+}
+
+export interface RuntimeMenu {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  sortOrder: number;
+  categories: RuntimeMenuCategory[];
+}
+
+export interface RuntimeMenuReadModel {
+  branchId: string;
+  currency: string;
+  menus: RuntimeMenu[];
+}
+
+// Dto aliases matching backend C# records
+export type RuntimeMenuDto = RuntimeMenu;
+export type RuntimeMenuCategoryDto = RuntimeMenuCategory;
+export type RuntimeMenuItemDto = RuntimeMenuItem;
+export type RuntimeItemVariantDto = RuntimeItemVariant;
+export type RuntimeModifierGroupDto = RuntimeModifierGroup;
+export type RuntimeModifierOptionDto = RuntimeModifierOption;

@@ -5,7 +5,7 @@ import {
   EmptyState,
   AppShell,
 } from '@restaurant-order/ui';
-import type { CustomerSessionDto, QrExchangeResponse } from '@restaurant-order/contracts';
+import type { CustomerSessionDto, QrExchangeResponse, RuntimeMenuReadModel } from '@restaurant-order/contracts';
 import { useCustomerSession } from '../session/CustomerSessionContext';
 import { ActiveSessionView } from '../views/ActiveSessionView';
 import { ExpiredSessionView } from '../views/ExpiredSessionView';
@@ -20,6 +20,8 @@ export interface CustomerAppShellProps {
   token?: string;
   isQrLanding?: boolean;
   children?: React.ReactNode;
+  initialTab?: 'menu' | 'table';
+  initialMenuData?: RuntimeMenuReadModel | null;
 }
 
 export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
@@ -28,6 +30,8 @@ export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
   token,
   isQrLanding,
   children,
+  initialTab,
+  initialMenuData,
 }) => {
   const {
     status,
@@ -140,7 +144,12 @@ export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
           />
         )
       ) : status === 'active' && session ? (
-        <ActiveSessionView session={session} onLeaveSession={clearSession} />
+        <ActiveSessionView
+          session={session}
+          onLeaveSession={clearSession}
+          initialTab={initialTab}
+          initialMenuData={initialMenuData}
+        />
       ) : (
         <UnauthenticatedQrView />
       )}

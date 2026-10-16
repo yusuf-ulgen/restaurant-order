@@ -36,17 +36,20 @@ describe('Customer Web App', () => {
       expect(screen.getByText('Oturum Açık')).toBeDefined();
     });
 
-    it('renders welcome card with action buttons, where menu is disabled as upcoming', async () => {
+    it('renders welcome card with action buttons, where menu button navigates to digital menu', async () => {
       render(<App />);
 
       expect(await screen.findByText('Hoş Geldiniz')).toBeDefined();
       const menuBtn = screen.getByRole('button', { name: /Menüyü İncele/ });
       expect(menuBtn).toBeDefined();
-      expect(menuBtn.hasAttribute('disabled')).toBe(true);
+      expect(menuBtn.hasAttribute('disabled')).toBe(false);
 
       const callWaiterBtn = screen.getByRole('button', { name: 'Garson Çağır' });
       expect(callWaiterBtn).toBeDefined();
       expect(callWaiterBtn.hasAttribute('disabled')).toBe(false);
+
+      fireEvent.click(menuBtn);
+      expect(await screen.findByTestId('digital-menu-view')).toBeDefined();
     });
   });
 
