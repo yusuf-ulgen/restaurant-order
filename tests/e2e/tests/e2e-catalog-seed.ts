@@ -243,6 +243,10 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: { name: 'Karamelize Soğan', priceDeltaMinorUnits: 1500, sortOrder: 1, isDefault: false },
   });
+  await request.post(`/api/v1/catalog/branches/${branchId}/modifier-groups/${optMod.id}/options`, {
+    headers: authHeaders,
+    data: { name: 'Mantar', priceDeltaMinorUnits: 1500, sortOrder: 2, isDefault: false },
+  });
 
   const tokenAfterOptMod = await getBurgerToken();
   const assignOptRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/modifier-groups`, {
