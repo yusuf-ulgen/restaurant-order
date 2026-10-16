@@ -186,17 +186,26 @@ export async function seedCustomerExperienceScenario(
   // Item 1 Variants
   const vSingleRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/variants`, {
     headers: authHeaders,
-    data: { name: 'Tek Köfte', shortCode: 'SNG', absolutePriceMinorUnits: 18000, sortOrder: 1, isDefault: true },
+    data: { name: 'Tek Köfte', code: 'SNG', absolutePriceMinorUnits: 18000, sortOrder: 1, isDefault: true },
   });
   if (!vSingleRes.ok()) throw new Error(`Create variant single failed: ${await vSingleRes.text()}`);
   const vSingle = await vSingleRes.json();
 
   const vDoubleRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/variants`, {
     headers: authHeaders,
-    data: { name: 'Çift Köfte', shortCode: 'DBL', absolutePriceMinorUnits: 25000, sortOrder: 2, isDefault: false },
+    data: { name: 'Çift Köfte', code: 'DBL', absolutePriceMinorUnits: 25000, sortOrder: 2, isDefault: false },
   });
   if (!vDoubleRes.ok()) throw new Error(`Create variant double failed: ${await vDoubleRes.text()}`);
   const vDouble = await vDoubleRes.json();
+
+  // Helper to fetch latest item concurrency token
+  const getBurgerToken = async (): Promise<string> => {
+    const res = await request.get(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}`, {
+      headers: authHeaders,
+    });
+    const data = await res.json();
+    return data.concurrencyToken as string;
+  };
 
   // Item 1 Required Modifier Group
   const reqModRes = await request.post(`/api/v1/catalog/branches/${branchId}/modifier-groups`, {
@@ -214,10 +223,13 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: { name: 'Kaşar', priceDeltaMinorUnits: 2000, sortOrder: 2, isDefault: false },
   });
-  await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/modifier-groups`, {
-    headers: authHeaders,
+
+  const tokenAfterReqMod = await getBurgerToken();
+  const assignReqRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/modifier-groups`, {
+    headers: { ...authHeaders, 'If-Match': `"${tokenAfterReqMod}"` },
     data: { modifierGroupId: reqMod.id, sortOrder: 1 },
   });
+  if (!assignReqRes.ok()) throw new Error(`Assign req modifier group failed: ${await assignReqRes.text()}`);
 
   // Item 1 Optional Modifier Group
   const optModRes = await request.post(`/api/v1/catalog/branches/${branchId}/modifier-groups`, {
@@ -231,10 +243,13 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: { name: 'Karamelize Soğan', priceDeltaMinorUnits: 1500, sortOrder: 1, isDefault: false },
   });
-  await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/modifier-groups`, {
-    headers: authHeaders,
+
+  const tokenAfterOptMod = await getBurgerToken();
+  const assignOptRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${burger.id}/modifier-groups`, {
+    headers: { ...authHeaders, 'If-Match': `"${tokenAfterOptMod}"` },
     data: { modifierGroupId: optMod.id, sortOrder: 2 },
   });
+  if (!assignOptRes.ok()) throw new Error(`Assign opt modifier group failed: ${await assignOptRes.text()}`);
 
   // 7. Item 2: Ayran (Drink, no image)
   const drinkRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items`, {
@@ -269,7 +284,7 @@ export async function seedCustomerExperienceScenario(
   const quick86Res = await request.post(
     `/api/v1/catalog/branches/${branchId}/menus/${menu.id}/items/${oosItem.id}/quick-86`,
     {
-      headers: authHeaders,
+      headers: { ...authHeaders, 'If-Match': `"${oosItem.concurrencyToken}"` },
       data: { reasonCode: 'SoldOut', note: 'Stok tükendi' },
     }
   );

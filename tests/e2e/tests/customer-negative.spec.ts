@@ -81,12 +81,24 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
     await page.getByTestId('add-to-cart-cta-btn').click();
 
     // Now mark the burger item 86 on backend
+    const burgerGetRes = await request.get(
+      `/api/v1/catalog/branches/${scenario.branchId}/menus/${scenario.menuId}/items/${scenario.itemBurgerId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${scenario.adminToken}`,
+        },
+      }
+    );
+    expect(burgerGetRes.ok()).toBe(true);
+    const burgerData = await burgerGetRes.json();
+
     const quick86Res = await request.post(
       `/api/v1/catalog/branches/${scenario.branchId}/menus/${scenario.menuId}/items/${scenario.itemBurgerId}/quick-86`,
       {
         headers: {
           Authorization: `Bearer ${scenario.adminToken}`,
           'Content-Type': 'application/json',
+          'If-Match': `"${burgerData.concurrencyToken}"`,
         },
         data: { reasonCode: 'SoldOut', note: 'Stok tükendi' },
       }
