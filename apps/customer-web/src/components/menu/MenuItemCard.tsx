@@ -55,10 +55,20 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
       padding="none"
       className="menu-item-card"
       data-testid={`menu-item-card-${item.id}`}
+      onClick={() => onSelect(item)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(item);
+        }
+      }}
       style={{
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        cursor: 'pointer',
         border: hasAllergenWarning ? '1px solid var(--ro-color-warning, #f59e0b)' : '1px solid var(--ro-color-border)',
         opacity: item.isAvailable ? 1 : 0.75,
         backgroundColor: 'var(--ro-color-surface)',

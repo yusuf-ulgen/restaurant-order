@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel } from '@restaurant-order/contracts';
 import { Card, Button } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
 import { ServiceRequestSheet } from '../components/service/ServiceRequestSheet';
+import { runtimeMenuApi } from '../api/runtimeMenuApi';
 
 export interface ActiveSessionViewProps {
   session: CustomerSessionDto;
@@ -25,6 +26,15 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
 
   const cart = useCart();
+
+  useEffect(() => {
+    if (cart.isCartOpen && session.branchId) {
+      runtimeMenuApi
+        .getRuntimeMenu(session.branchId)
+        .then((freshMenu) => setRuntimeMenuData(freshMenu))
+        .catch(() => {});
+    }
+  }, [cart.isCartOpen, session.branchId]);
 
   return (
     <div
