@@ -43,7 +43,7 @@ public static class CustomerServiceRequestEndpoints
 
                 if (!TryParseRequestType(wireDto.RequestType, out var requestType, out var typeError))
                 {
-                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", typeError ?? "Invalid request payload.");
+                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", typeError!);
                 }
 
                 var request = new CreateCustomerServiceRequest(requestType, wireDto.Note);
@@ -260,7 +260,7 @@ public static class CustomerServiceRequestEndpoints
 
         if (element.ValueKind == JsonValueKind.String)
         {
-            var str = element.GetString()?.Trim();
+            var str = element.GetString()!.Trim();
             if (string.IsNullOrEmpty(str))
             {
                 errorDetail = "requestType string cannot be empty. Allowed values: Waiter, Water, Napkin, Assistance.";

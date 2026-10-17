@@ -321,8 +321,12 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         Assert.Equal(HttpStatusCode.BadRequest, srRes.StatusCode);
     }
 
-    [Fact]
-    public async Task CreateServiceRequest_InvalidStringEnum_Returns400ProblemDetails()
+    [Theory]
+    [InlineData("{\"requestType\":\"InvalidServiceType\",\"note\":\"Test\"}", "Invalid requestType")]
+    [InlineData("{\"requestType\":999,\"note\":\"Test\"}", "Invalid numeric requestType")]
+    [InlineData("{\"requestType\":\"\",\"note\":\"Test\"}", "requestType string cannot be empty")]
+    [InlineData("{\"requestType\":true,\"note\":\"Test\"}", "requestType is required")]
+    public async Task CreateServiceRequest_MalformedRequestTypePayloads_Returns400(string payload, string expectedMessage)
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
@@ -333,22 +337,18 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, "/api/v1/customer/service-requests", customerToken);
-        req.Headers.Add("Idempotency-Key", $"sr-invalid-{Guid.NewGuid():N}");
-        req.Content = new StringContent(
-            "{\"requestType\":\"InvalidServiceType\",\"note\":\"Test\"}",
-            System.Text.Encoding.UTF8,
-            "application/json");
+        req.Headers.Add("Idempotency-Key", $"sr-malformed-{Guid.NewGuid():N}");
+        req.Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
 
         var response = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Invalid requestType", body);
+        Assert.Contains(expectedMessage, body);
     }
 
     [Fact]
-    public async Task CreateServiceRequest_UndefinedNumericEnum_Returns400ProblemDetails()
+    public async Task CreateServiceRequest_ValidNumericEnum_SucceedsWith200()
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
@@ -359,17 +359,46 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, "/api/v1/customer/service-requests", customerToken);
-        req.Headers.Add("Idempotency-Key", $"sr-invalid-num-{Guid.NewGuid():N}");
-        req.Content = new StringContent(
-            "{\"requestType\":999,\"note\":\"Test\"}",
-            System.Text.Encoding.UTF8,
-            "application/json");
+        req.Headers.Add("Idempotency-Key", $"sr-num-ok-{Guid.NewGuid():N}");
+        req.Content = new StringContent("{\"requestType\":1,\"note\":\"Numeric ok\"}", System.Text.Encoding.UTF8, "application/json");
 
         var response = await client.SendAsync(req);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dto = await response.Content.ReadFromJsonAsync<ServiceRequestDto>(JsonOptions);
+        Assert.Equal("Waiter", dto!.RequestType);
+    }
 
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Invalid numeric requestType", body);
+    [Fact]
+    public async Task CreateServiceRequest_StaffRole_Returns403Forbidden()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, _, adminToken, _, _) = await SetupActiveSessionAsync(client);
+
+        var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post, "/api/v1/customer/service-requests", adminToken);
+        req.Headers.Add("Idempotency-Key", $"sr-staff-{Guid.NewGuid():N}");
+        req.Content = new StringContent("{\"requestType\":\"Water\"}", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetOpenServiceRequests_StaffRole_Returns403Forbidden()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, _, adminToken, _, _) = await SetupActiveSessionAsync(client);
+
+        var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Get, "/api/v1/customer/service-requests/open", adminToken);
+
+        var response = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }
