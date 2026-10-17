@@ -336,7 +336,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 INSERT INTO tenancy.branch_item_availabilities (id, tenant_id, branch_id, menu_item_id, item_variant_id, is_available, reason_code, note, changed_by_user_id, changed_at, concurrency_token)
-                VALUES (gen_random_uuid(), @tenantId, @branchId, @menuItemId, NULL, false, 'StockOut', '86 out of stock', gen_random_uuid(), NOW(), gen_random_uuid());";
+                VALUES (gen_random_uuid(), @tenantId, @branchId, @menuItemId, NULL, false, 1, '86 out of stock', gen_random_uuid(), NOW(), gen_random_uuid());";
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
             cmd.Parameters.AddWithValue("menuItemId", menuItemId);
@@ -420,8 +420,8 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, opened_at_utc, activated_at_utc, concurrency_token)
-                VALUES (@sId, @tenantId, @branchId, @tableId, 2, NOW(), NOW(), gen_random_uuid());";
+                INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, concurrency_token)
+                VALUES (@sId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), gen_random_uuid());";
             cmd.Parameters.AddWithValue("sId", foreignSessionId);
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
