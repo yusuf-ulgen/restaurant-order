@@ -65,11 +65,11 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
             INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
             VALUES (@branchId, @tenantId, @brandId, 'Staff Branch', @branchSlug, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid());
 
-            INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, slug, area_type, sort_order, created_at, concurrency_token)
-            VALUES (@areaId, @tenantId, @branchId, 'Main Hall', @areaSlug, 'Indoor', 1, NOW(), gen_random_uuid());
+            INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
+            VALUES (@areaId, @tenantId, @branchId, 'Main Hall', @areaSlug, 1, 1, true, NOW(), gen_random_uuid());
 
-            INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, capacity, is_active, public_code, created_at, concurrency_token)
-            VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-02', 4, true, md5(random()::text), NOW(), gen_random_uuid());
+            INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+            VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-02', 'Table 2', md5(random()::text), 4, 100, 100, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
 
             INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, created_at_utc, concurrency_token)
             VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());
