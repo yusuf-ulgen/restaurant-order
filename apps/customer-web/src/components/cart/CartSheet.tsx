@@ -12,6 +12,7 @@ export interface CartSheetProps {
   runtimeMenu: RuntimeMenuReadModel | null;
   tableInfo?: { tableNumber: string; tableName: string };
   onNavigateToMenu?: () => void;
+  onProceedToConfirmation?: () => void;
 }
 
 export const CartSheet: React.FC<CartSheetProps> = ({
@@ -20,6 +21,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   runtimeMenu,
   tableInfo,
   onNavigateToMenu,
+  onProceedToConfirmation,
 }) => {
   const {
     lines,
@@ -246,36 +248,26 @@ export const CartSheet: React.FC<CartSheetProps> = ({
               Tüm Sepeti Temizle
             </button>
 
-            {/* Phase 8 Border: Order Submission CTA */}
+            {/* Order Confirmation CTA */}
             <Button
               type="button"
               variant="primary"
               size="lg"
-              disabled={true}
-              aria-disabled="true"
+              disabled={verification.hasBlockingIssues}
+              aria-disabled={verification.hasBlockingIssues}
+              onClick={() => {
+                onProceedToConfirmation?.();
+              }}
               data-testid="submit-order-cta-btn"
               style={{
                 minHeight: '48px',
                 width: '100%',
-                opacity: 0.7,
-                cursor: 'not-allowed',
+                opacity: verification.hasBlockingIssues ? 0.6 : 1,
+                cursor: verification.hasBlockingIssues ? 'not-allowed' : 'pointer',
               }}
             >
-              Siparişi Gönder • {formatCurrency(subtotalMinorUnits, currency)}
+              Siparişi Onayla • {formatCurrency(subtotalMinorUnits, currency)}
             </Button>
-
-            {/* Informational Product Copy for Phase 8 Transition */}
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--ro-color-text-muted)',
-                textAlign: 'center',
-                lineHeight: 1.4,
-              }}
-              data-testid="phase8-order-notice"
-            >
-              Sepetiniz hazır. Dijital sipariş gönderim akışı Faz 8 kapsamında hizmete sunulacaktır.
-            </div>
           </div>
         )}
       </div>

@@ -119,10 +119,9 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
     await expect(issueElement).toContainText(/tükendi/i);
   });
 
-  test('rejects customer service request when CSRF token is missing', async ({
+  test('rejects unauthenticated customer service request with 401 Unauthorized', async ({
     request,
   }) => {
-    // Attempting unauthenticated or un-CSRFed service request returns 401 or 403 Forbidden
     const res = await request.post('/api/v1/customer/service-requests', {
       headers: {
         'Content-Type': 'application/json',
@@ -133,13 +132,12 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
       },
     });
 
-    expect([401, 403]).toContain(res.status());
+    expect(res.status()).toBe(401);
   });
 
-  test('rejects customer service request when Idempotency-Key header is missing', async ({
+  test('rejects unauthenticated customer service request missing Idempotency-Key with 401 Unauthorized', async ({
     request,
   }) => {
-    // Attempting POST without Idempotency-Key returns 400, 401 or 403
     const res = await request.post('/api/v1/customer/service-requests', {
       headers: {
         'Content-Type': 'application/json',
@@ -149,7 +147,23 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
       },
     });
 
-    expect([400, 401, 403]).toContain(res.status());
+    expect(res.status()).toBe(401);
+  });
+
+  test('rejects unauthenticated customer order creation with 401 Unauthorized', async ({
+    request,
+  }) => {
+    const res = await request.post('/api/v1/customer/orders', {
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'unauth-order-key',
+      },
+      data: {
+        items: [{ menuItemId: '00000000-0000-0000-0000-000000000001', quantity: 1 }],
+      },
+    });
+
+    expect(res.status()).toBe(401);
   });
 
   test('closed dining session cuts off customer active session and menu access', async ({

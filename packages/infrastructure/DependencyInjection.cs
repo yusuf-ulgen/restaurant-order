@@ -134,6 +134,12 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Floor.IServiceRequestRateLimiter, RestaurantOrder.Infrastructure.Floor.RedisServiceRequestRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Floor.ICustomerServiceRequestService, RestaurantOrder.Infrastructure.Floor.CustomerServiceRequestService>();
 
+        // Order Services (Phase 8)
+        services.AddScoped<RestaurantOrder.Application.Orders.Pricing.IOrderPricingEngine, RestaurantOrder.Infrastructure.Orders.Pricing.OrderPricingEngine>();
+        services.AddScoped<RestaurantOrder.Application.Orders.ICustomerOrderService, RestaurantOrder.Infrastructure.Orders.CustomerOrderService>();
+        services.AddScoped<RestaurantOrder.Application.Orders.IStaffOrderService, RestaurantOrder.Infrastructure.Orders.StaffOrderService>();
+        services.AddScoped<RestaurantOrder.Application.Orders.IOrderLifecycleService, RestaurantOrder.Infrastructure.Orders.OrderLifecycleService>();
+
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
         services.AddHttpClient();

@@ -286,7 +286,7 @@ describe('CartSheet & Validator Integration Tests', () => {
       expect(screen.getByTestId('cart-empty-state')).toBeDefined();
     });
 
-    it('enforces Phase 8 boundary: CTA is disabled with informative copy and no mock order ID', () => {
+    it('enables order confirmation CTA and triggers onProceedToConfirmation without blocking issues', () => {
       const preseededDraft = {
         version: 1,
         sessionId: 'test-session',
@@ -295,6 +295,7 @@ describe('CartSheet & Validator Integration Tests', () => {
         savedAt: Date.now(),
       };
       window.sessionStorage.setItem('ro_customer_cart_draft', JSON.stringify(preseededDraft));
+      const onProceedMock = vi.fn();
 
       render(
         <CartProvider sessionId="test-session">
@@ -302,15 +303,17 @@ describe('CartSheet & Validator Integration Tests', () => {
             isOpen={true}
             onClose={vi.fn()}
             runtimeMenu={sampleRuntimeMenu}
+            onProceedToConfirmation={onProceedMock}
           />
         </CartProvider>
       );
 
       const ctaBtn = screen.getByTestId('submit-order-cta-btn') as HTMLButtonElement;
-      expect(ctaBtn.disabled).toBe(true);
+      expect(ctaBtn.disabled).toBe(false);
+      expect(ctaBtn.textContent).toContain('Siparişi Onayla');
 
-      const notice = screen.getByTestId('phase8-order-notice');
-      expect(notice.textContent).toContain('Faz 8 kapsamında');
+      fireEvent.click(ctaBtn);
+      expect(onProceedMock).toHaveBeenCalledTimes(1);
     });
 
     it('displays human-readable item, variant, and modifier names instead of raw technical IDs', () => {

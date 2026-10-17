@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import type { CustomerSessionDto, RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import type { CustomerSessionDto, RuntimeMenuReadModel, CustomerOrderResponseDto } from '@restaurant-order/contracts';
 import { Card, Button } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
 import { ServiceRequestSheet } from '../components/service/ServiceRequestSheet';
+import { OrderConfirmationSheet } from '../components/cart/OrderConfirmationSheet';
+import { OrderSuccessSheet } from '../components/cart/OrderSuccessSheet';
+import { OrderHistorySheet } from '../components/cart/OrderHistorySheet';
 import { runtimeMenuApi } from '../api/runtimeMenuApi';
 
 export interface ActiveSessionViewProps {
@@ -23,6 +26,10 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [currentSession, setCurrentSession] = useState<CustomerSessionDto>(session);
   const [activeTab, setActiveTab] = useState<'menu' | 'table'>(initialTab);
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
+  const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [lastPlacedOrder, setLastPlacedOrder] = useState<CustomerOrderResponseDto | null>(null);
   const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
 
   const cart = useCart();
@@ -76,7 +83,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
               <h2 className="customer-card-title">Hoş Geldiniz</h2>
               <p className="customer-card-text">
                 <strong>Masa {session.tableNumber} ({session.tableName})</strong> için oturumunuz aktif.
-                Menüyü inceleyebilir, ürünleri filtreleyebilir ve servis talebinde bulunabilirsiniz.
+                Menüyü inceleyebilir, ürünleri sepetinize ekleyip sipariş verebilir ve servis talebinde bulunabilirsiniz.
               </p>
             <div
               className="customer-actions"
@@ -91,6 +98,16 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
                 style={{ minHeight: '44px' }}
               >
                 Menüyü İncele
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                className="customer-action-btn-secondary"
+                onClick={() => setIsHistoryOpen(true)}
+                data-testid="view-orders-tab-btn"
+                style={{ minHeight: '44px' }}
+              >
+                Masa Siparişlerim
               </Button>
               <Button
                 variant="secondary"
@@ -118,6 +135,46 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           tableName: session.tableName,
         }}
         onNavigateToMenu={() => setActiveTab('menu')}
+        onProceedToConfirmation={() => {
+          cart.closeCart();
+          setIsConfirmationOpen(true);
+        }}
+      />
+
+      {/* Order Confirmation Bottom Sheet (Phase 8.4) */}
+      <OrderConfirmationSheet
+        isOpen={isConfirmationOpen}
+        onClose={() => setIsConfirmationOpen(false)}
+        tableInfo={{
+          tableNumber: session.tableNumber,
+          tableName: session.tableName,
+        }}
+        runtimeMenu={runtimeMenuData || initialMenuData}
+        onOrderSuccess={(order) => {
+          setLastPlacedOrder(order);
+          setIsSuccessOpen(true);
+        }}
+        onSessionExpired={onLeaveSession}
+      />
+
+      {/* Order Success Bottom Sheet (Phase 8.4) */}
+      <OrderSuccessSheet
+        isOpen={isSuccessOpen}
+        onClose={() => setIsSuccessOpen(false)}
+        order={lastPlacedOrder}
+        onViewOrders={() => setIsHistoryOpen(true)}
+        onBrowseMenu={() => setActiveTab('menu')}
+      />
+
+      {/* Order History Bottom Sheet (Phase 8.4) */}
+      <OrderHistorySheet
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        tableInfo={{
+          tableNumber: session.tableNumber,
+          tableName: session.tableName,
+        }}
+        onSessionExpired={onLeaveSession}
       />
 
       {/* Service Request Bottom Sheet (CUST-06) */}

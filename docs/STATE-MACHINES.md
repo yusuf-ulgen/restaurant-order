@@ -85,6 +85,19 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 | `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Garson masaya teslimi doğrular. |
 | `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Resmî denetim kaydı ve gerekçe gerekir. |
 
+> **Faz 8 Sipariş Çekirdeği ve Deterministik Durum Türetme (Order.DeriveStatus):**
+> - `Order/OrderItem` yalnızca `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served` ve `Cancelled` durumlarını izler.
+> - Sipariş (`Order`) aggregate genel durumu, kalemlerinin (`OrderItem`) durumlarından deterministik türetilir:
+>   1. Tüm kalemler `Cancelled` ise -> Sipariş durumu `Cancelled`.
+>   2. İptal edilmemiş tüm aktif kalemler `Served` ise -> Sipariş durumu `Served`.
+>   3. Herhangi bir kalem `Ready` ise ve hiçbir kalem `InPreparation` değilse -> Sipariş durumu `Ready`.
+>   4. Herhangi bir kalem `InPreparation` ise veya karışık hazırlık evresindeyse (`Submitted` ile `Ready`/`Served` bir arada) -> Sipariş durumu `InPreparation`.
+>   5. Yalnızca `Submitted` durumundaki kalemler varsa -> Sipariş durumu `Submitted`.
+> - İstasyon fişinin istasyon tarafından kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
+> - `Paid`, sipariş durumu değildir; ilerideki `Bill` (Hesap/Adisyon) durumudur.
+> - `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` veya `OrderItem` durumları arasında yer almaz.
+> - Her durum geçişinde `Order.ConcurrencyToken` yenilenir; eski ETag / `If-Match` ile yapılan istekler `409 Conflict` veya `412 Precondition Failed` ile korunur.
+
 ---
 
 ## 4. Hesap ve Ödeme Durum Makinesi

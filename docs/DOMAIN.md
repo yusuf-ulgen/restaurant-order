@@ -51,10 +51,12 @@
 
 ### 3.5. Sipariş ve Hazırlık Fişi
 
-- **Order:** `branch_id`, `table_session_id`, `order_source` ile bağlı sipariş; kaynak müşteri QR, garson veya POS olabilir.
-- **OrderItem:** Siparişteki `MenuItem`/`ItemVariant` örneği; seçilen ekler ve müşteri notlarını içerir.
-- **StationTicket (KitchenTicket / BarTicket):** Siparişin belirli mutfak/bar istasyonuna yönlendirilen alt kümesi.
-- **TicketItem:** Hazırlık fişinin tek kalemi; sırada, hazırlanıyor, hazır, servis edildi veya iptal durumunu taşır.
+- **Order:** `tenant_id`, `branch_id`, `dining_session_id`, `table_id`, `round_number` ve `order_source` (`Customer`, `Staff`) ile bağlı sipariş aggregate'idir. Sunucu otoriter finansal snapshot'ları (`SubtotalMinorUnits`, `TaxMinorUnits`, `ServiceChargeMinorUnits`, `TotalMinorUnits`), para birimi, `IdempotencyKey`, `RequestFingerprint` ve `ConcurrencyToken` taşır. Genel durumu (`OrderStatus`: `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served`, `Cancelled`), kalemlerinin durumlarından deterministik türetilir (`Order.DeriveStatus`).
+- **OrderItem:** Siparişteki satır kalemi. `menu_item_id`, `item_variant_id`, ürün/varyant ad snapshot'ları, miktar, birim fiyat, vergi oranı baz puanı (`TaxRateBasisPoints`), hazırlık istasyonu (`PreparationStationId`), müşteri notu sanitizasyonu ve satır durumu (`OrderItemStatus`) taşır.
+- **OrderItemModifier:** Kaleme seçilen ek malzeme snapshot'ı. `modifier_group_id`, `modifier_option_id`, grup adı, seçenek adı ve `price_delta_minor_units` değerlerini değişmez olarak saklar.
+- **OrderAuditEntry:** Sipariş oluşturma, durum geçişi veya kalem iptali/zayiatı anında üretilen değişmez (immutable) denetim kaydıdır. PostgreSQL trigger'ı ile UPDATE/DELETE engellenmiştir. Güvenlik ve veri koruması gereği serbest metin müşteri notları audit detaylarına kopyalanmaz; maskeli metadata saklanır.
+- **StationTicket (KitchenTicket / BarTicket):** Gelecekteki Faz 11 KDS aşamasına ait olup siparişin belirli mutfak/bar istasyonuna yönlendirilen alt kümesini temsil eder.
+- **TicketItem:** İstasyon fişinin tek kalemi; istasyon ekranında hazırlık durumunu izler.
 
 ### 3.6. Hesap, Ödeme ve Bahşiş
 
@@ -98,3 +100,20 @@ Masalar, bileşik yabancı anahtar (composite foreign key) bütünlüğü ile i�
 ## Faz 7 Müşteri Deneyimi ve Hizmet Talebi (ServiceRequest) Bütünlüğü
 
 Hizmet talepleri (`ServiceRequest`), müşteri oturumundan (`DiningSession`) personele iletilen çağrıları yöneten bağımsız bir alandır. Bileşik yabancı anahtar (`tenant_id`, `branch_id`, `dining_session_id`, `table_id`) ve PostgreSQL RLS ile tam yalıtılır. Hizmet talebi türleri (`Waiter`, `Water`, `Napkin`, `Assistance`) taşır; hesap isteme (`RequestBillAsync`) ise DiningSession yaşam döngüsü durumu (`BillRequested`) üzerinden doğrudan yönetilir ve ServiceRequest içine kopyalanmaz. İstemci tarafından gönderilen `Idempotency-Key` başlığı (`tenant_id, idempotency_key` benzersiz indeksi) ile mükerrer tıklamalarda ve ağ tekrarlarında mükerrer kayıt oluşumu engellenir. Yaşam döngüsü `Open -> Cancelled` (ve operasyon fazlarında `Acknowledged -> Completed`) durumlarını izler. Müşteri sepet taslağı yalnızca istemci tarafında (`sessionStorage`) oturum ID'sine bağlı olarak tutulur; gerçek sipariş kaydı (order persistence) ve veritabanı sipariş modelleri Faz 8 kapsamındadır.
+
+## Faz 8 Sipariş Çekirdeği (Order Core) ve Yaşam Döngüsü Bütünlüğü
+
+Siparişler (`Order`), bir yemek oturumu (`DiningSession`) kapsamında misafir veya personel tarafından başlatılan, otoriter sunucu doğrulamasına tabi satış sözleşmeleridir. `Order` ve `OrderItem` varlıkları şu yaşam döngüsü durumlarını izler:
+- `Draft`: Sepet/taslak aşaması (müşteri tarafında `sessionStorage`, personel tarafında arayüz durumu).
+- `Submitted`: Sunucu tarafında yetkili fiyatlandırma motoru (`OrderPricingEngine`) ve katalog/86-stok doğrulamaları yapılarak veritabanına yazılmış kesinleşmiş sipariş.
+- `InPreparation`: Mutfak veya bar istasyonunda hazırlık sürecine alınmış sipariş/kalem.
+- `Ready`: Hazırlığı tamamlanmış, masaya servise hazır sipariş/kalem.
+- `Served`: Masaya teslim edilmiş sipariş/kalem.
+- `Cancelled`: Hazırlık öncesi veya yetkili personel/yönetici onayıyla iptal edilmiş sipariş/kalem.
+
+**Sınırlar ve Mimari Ayrım:**
+- Hazırlık fişinin kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
+- `Paid`, bir sipariş durumu değildir; ilerideki `Bill` (Hesap/Ödeme) alanına aittir.
+- `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` durumlarında yer almaz.
+- Faz 8'de KDS hazırlık ekranları ve yönlendirme (Faz 11), SignalR canlı bildirimleri (Faz 9), fiş yazdırma (Faz 12), adisyon/hesap motoru (Faz 13) ve ödeme/bahşiş/komisyon (Faz 16) yapılmayacaktır.
+- Sipariş gönderildiğinde veritabanında gerçek, denetlenebilir `Order`, `OrderItem` ve `OrderItemModifier` kayıtları oluşur; sahte başarılı sipariş veya mock üretim API'si yer almaz.

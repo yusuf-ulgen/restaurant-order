@@ -101,3 +101,19 @@ Müşteri URL veya istek gövdesini değiştirerek başka masanın hesabına ya 
 - **Eksik `Idempotency-Key` Başlığı:** Hizmet talebi veya durum değişikliği uç noktalarında `Idempotency-Key` başlığı bulunmadığında istek HTTP 400 Bad Request ile reddedilir.
 - **Çift Tıklama / Ağ Tekrarı:** Kullanıcı garson çağırma butonuna arka arkaya çift tıkladığında veya ağ gecikmesinde aynı `Idempotency-Key` ile mükerrer istek gönderildiğinde, backend idempotent olarak aynı talebi döndürür ve veritabanında tek bir kayıt oluşur.
 - **API / Ağ Kesintisinde Sepet Korunması ve Sahte Başarı Gösterilmemesi:** Ağ koptuğunda veya arka uç 503 döndürdüğünde sepet taslağı `sessionStorage` içinde korunur. Kullanıcıya açık RFC 7807/ağ hatası bildirilir; sahte sipariş veya servis başarı mesajı verilmez.
+
+## 7. Sipariş Çekirdeği Olumsuz Durum Akışları (Faz 8)
+
+- **İstemci Fiyat Manipülasyonu ve Fiyat Değişikliği Yarışı:** İstemciden gelen birim fiyat veya tutarlar asla güvenilmez. Sepette beklenen fiyat ile yetkili katalog fiyatı uyuşmadığında istek `409 Conflict` (`ORDER_PRICE_CHANGED`) ile reddedilir; güncel ve önceki fiyat bilgisi Problem Details içinde güvenle sunulur.
+- **Sipariş Anında Ürünün/Varyantın 86 (Tükendi) Olması:** Sepet onaylanırken ürün veya varyant mutfak tarafından stokta yok (86) veya pasif yapılmışsa, veritabanı işlemi `409 Conflict` (`ITEM_OUT_OF_STOCK`) ile reddedilir.
+- **Zorunlu Değiştirici (Modifier) Eksikliği:** Ürüne atanmış zorunlu bir değiştirici grubu (`min_selections >= 1`) için yeterli seçim yapılmadığında istek `400 Bad Request` (`INVALID_MODIFIER_SELECTION`) ile reddedilir.
+- **Yinelenen Değiştirici Seçimi:** Aynı seçenek kimliğinin mükerrer gönderilmesi durumunda istek `400 Bad Request` (`DUPLICATE_MODIFIER_SELECTION`) ile reddedilir.
+- **Aktif Olmayan / Kapanmış / Hesap İstenmiş Oturumda Sipariş:** Yemek oturumu `Active` durumda değilse (`Open`, `BillRequested`, `Closed`, `Merged`), sipariş isteği `409 Conflict` (`SESSION_NOT_ACTIVE`) ile engellenir.
+- **Şube Sipariş Alımının Devre Dışı Olması:** Şube ayarlarında `IsOrderTakingEnabled = false` ise sipariş gönderimi `403 Forbidden` (`ORDER_TAKING_DISABLED`) ile engellenir.
+- **Yinelenen Idempotency Key Çakışması:** Aynı `Idempotency-Key` farklı bir oturum veya farklı bir sipariş sepeti içeriğiyle yeniden kullanılırsa `409 Conflict` (`IDEMPOTENCY_CONFLICT`) döner.
+- **Aynı Masadan Eşzamanlı İki Farklı Sipariş:** PostgreSQL advisory lock (`pg_advisory_xact_lock(hashtext('order_session_' || sessionId))`) sayesinde yarış durumları sıralanır; iki sipariş de veri kaybı olmadan sırayla `RoundNumber: 1` ve `RoundNumber: 2` olarak kaydedilir.
+- **Çift Tıklama ve Ağ Tekrarı Replay:** Aynı anahtar ve aynı sepet parmak iziyle gelen mükerrer isteklerde veritabanında yeni sipariş oluşturulmaz; mevcut sipariş `200 OK` (veya `201 Created`) ile döndürülür.
+- **Ağ Kesintisinde ve 503 Durumunda Sepet Korunması:** API'ye erişilemediğinde veya `503 Service Unavailable` (`DISTRIBUTED_SECURITY_STATE_UNAVAILABLE`) alındığında sepet taslağı silinmez; kullanıcıya hata açıkça gösterilir ve sahte sipariş başarısı üretilmez.
+- **Personel İptali ile Hazırlık Yarışı:** Mutfak sipariş kalemini hazırlığa aldığında (`InPreparation`), sıradan personelin hazırlık öncesi iptal isteği `409 Conflict` veya `403 Forbidden` ile reddedilir. Hazırlık aşamasındaki kalemler yalnızca yönetici yetkisi veya 4-haneli yönetici PIN doğrulaması ile zayiat gerekçesi (`WASTE_CANCEL`) belirtilerek void edilebilir.
+- **Zaten İptal Edilmiş Kalemin Tekrar İptali:** İptal edilmiş bir kalem tekrar iptal edilmeye çalışıldığında açık domain hatası ile `400 Bad Request` (`OrderItem is already cancelled`) döner.
+- **Çapraz Oturum / Çapraz Şube İzolasyonu:** Başka bir masanın veya şubenin sipariş kimliği istendiğinde bilgi sızdırmadan `404 Not Found` döner.

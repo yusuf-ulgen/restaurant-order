@@ -21,6 +21,7 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
 
   test('executes complete 15-step customer journey with persistent security and draft recovery', async ({
     page,
+    request,
   }) => {
     // 1. QR scan: visit landing URL with signed token
     await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
@@ -136,7 +137,96 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('cart-badge-count')).toHaveText('2');
 
-    // 11. Create Waiter Call Service Request
+    // 10b. Phase 8.4: Open Cart, Review and Submit Real Order
+    await cartNavBtn.click();
+    const confirmOrderCta = page.getByTestId('submit-order-cta-btn');
+    await expect(confirmOrderCta).toBeVisible({ timeout: 5000 });
+    await confirmOrderCta.click();
+
+    const submitBtn = page.getByTestId('confirm-and-submit-order-btn');
+    await expect(submitBtn).toBeVisible({ timeout: 5000 });
+
+    const [orderResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/customer/orders') &&
+          res.request().method() === 'POST'
+      ),
+      submitBtn.click(),
+    ]);
+
+    const orderStatus = orderResponse.status();
+    if (orderStatus !== 201) {
+      const errBody = await orderResponse.text();
+      throw new Error(`Expected 201 Created from POST /api/v1/customer/orders but got ${orderStatus}: ${errBody}`);
+    }
+    expect(orderStatus).toBe(201);
+
+    // Verify Order Success Sheet
+    const successSheet = page.getByTestId('order-success-sheet');
+    await expect(successSheet).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('order-status-badge')).toContainText('Submitted');
+    await expect(page.getByTestId('order-round-number')).toContainText('1');
+
+    // Close Success Sheet via return-to-menu
+    await page.getByTestId('return-to-menu-btn').click();
+    await expect(successSheet).not.toBeVisible();
+
+    // Verify cart is cleared after successful submission
+    await expect(page.getByTestId('cart-badge-count')).not.toBeVisible();
+
+    // 13. Page reload (Sayfa yenileme)
+    await page.reload();
+    await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
+
+    // 14. View placed order in Order History Sheet (Sipariş geçmişinden aynı siparişi görüntüleme)
+    const viewOrdersBtn = page.getByTestId('view-orders-tab-btn');
+    await expect(viewOrdersBtn).toBeVisible({ timeout: 5000 });
+    await viewOrdersBtn.click();
+
+    const historySheet = page.getByTestId('order-history-sheet');
+    await expect(historySheet).toBeVisible({ timeout: 5000 });
+
+    const orderRoundCard = page.getByTestId('order-history-card-round-1');
+    await expect(orderRoundCard).toBeVisible({ timeout: 5000 });
+    await expect(orderRoundCard).toContainText('Gourmet Burger');
+    await expect(orderRoundCard).toContainText('Mutfak Onayı Bekliyor');
+
+    // Close Order History Sheet
+    await page.getByLabel('Kapat').first().click();
+    await expect(historySheet).not.toBeVisible();
+
+    // 15. Verify single order persisted in backend database (Veritabanında tek sipariş bulunduğunu doğrulama)
+    const sessionsRes = await request.get(
+      `/api/v1/floor/branches/${scenario.branchId}/tables/${scenario.tableId}/sessions`,
+      {
+        headers: {
+          Authorization: `Bearer ${scenario.adminToken}`,
+        },
+      }
+    );
+    expect(sessionsRes.ok()).toBe(true);
+    const sessions = await sessionsRes.json();
+    const activeSession = sessions.find((s: { status: string }) => s.status === 'Active' || s.status === 'Open');
+    expect(activeSession).toBeDefined();
+
+    const dbOrdersRes = await request.get(
+      `/api/v1/floor/branches/${scenario.branchId}/sessions/${activeSession.id}/orders`,
+      {
+        headers: {
+          Authorization: `Bearer ${scenario.adminToken}`,
+        },
+      }
+    );
+    expect(dbOrdersRes.ok()).toBe(true);
+    const dbOrders = await dbOrdersRes.json();
+    expect(dbOrders).toHaveLength(1);
+    expect(dbOrders[0].roundNumber).toBe(1);
+    expect(dbOrders[0].status).toBe('Submitted');
+    expect(dbOrders[0].items).toHaveLength(1);
+    expect(dbOrders[0].items[0].quantity).toBe(2);
+
+    // 16. Create Waiter Call Service Request
     const waiterNavBtn = page.getByTestId('bottom-nav-waiter-btn');
     await waiterNavBtn.click();
 
@@ -208,7 +298,8 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     expect(localStorageKeys).not.toContain('jwt');
     expect(sessionStorageKeys).not.toContain('access_token');
     expect(sessionStorageKeys).not.toContain('jwt');
-    expect(sessionStorageKeys).toContain(CART_STORAGE_KEY);
+    // Since order was successfully submitted in Phase 8, the cart draft is cleanly cleared from sessionStorage
+    expect(sessionStorageKeys).not.toContain(CART_STORAGE_KEY);
   });
 
   test('allows requesting bill immediately after QR exchange without page reload using authentic concurrency token', async ({

@@ -131,6 +131,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for service requests table and tenant isolation (Phase 7)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261017171715_AddOrdersAndOrderPersistence.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for orders and order persistence (Phase 8.1)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }
