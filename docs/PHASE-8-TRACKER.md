@@ -17,7 +17,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | :--- | :--- | :--- | :--- | :--- |
 | **Faz 8.0** | Hazırlık ve Kapsam | **Tamamlandı** | Yol haritası, durum makineleri ve alan modeli hizalaması, takip belgesi, GitHub Issue #18 ve dal hazırlığı | `feat/phase-08-order-core` |
 | **Faz 8.1** | Order Domain Modeli ve Persistence | **Tamamlandı** | `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` aggregate, EF Core yapılandırması, RLS, immutable trigger ve testler | `feat/phase-08-order-core` |
-| **Faz 8.2** | Yetkili Fiyatlandırma ve Katalog Doğrulama | **Başlanmadı** | Sunucu otoriter `OrderPricingEngine`, menü/ürün/varyant/modifier aktiflik kontrolleri, Hızlı-86 stok doğrulaması | `feat/phase-08-order-core` |
+| **Faz 8.2** | Yetkili Fiyatlandırma ve Katalog Doğrulama | **Tamamlandı** | Sunucu otoriter `OrderPricingEngine`, minor-unit deterministik finans motoru, aktif katalog doğrulama, Hızlı-86 ve istemci fiyat değişikliği atomik koruması | `feat/phase-08-order-core` |
 | **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Başlanmadı** | `POST /api/v1/customer/orders`, `Idempotency-Key`, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi | `feat/phase-08-order-core` |
 | **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Başlanmadı** | `CartSheet` onaylama akışı, sipariş gönderimi, yüklenme/hata durumları, sepet temizliği ve sipariş özeti görünümü | `feat/phase-08-order-core` |
 | **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Başlanmadı** | Personel sipariş oluşturma, masa siparişleri sorgulama ve sipariş durumu geçiş altyapısı | `feat/phase-08-order-core` |
@@ -52,12 +52,23 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Blue/Green geriye dönük uyumlu `AddOrdersAndOrderPersistence` genişletici migration'ı oluşturuldu.
 
 ### Faz 8.2: Yetkili Fiyatlandırma ve Katalog Doğrulama
-- [ ] **OrderPricingEngine:**
-  - İstemciden gelen taslak fiyatlarını kesinlikle kabul etmeyen, sunucu tarafında otoriter fiyat hesaplama.
-  - Aktif menü, kategori, ürün, varyant ve modifier seçeneklerinin doğrulanması.
-  - Min/max seçim sınırlarının zorunlu denetimi.
-  - Şube Hızlı-86 (stokta yok) durumundaki ürün ve varyantların sipariş edilmesini engelleyen guardrails.
-  - Şube vergi ve servis ücreti oranlarının hesaplanması.
+- [x] **OrderPricingEngine & Minor-Unit Finans Motoru:**
+  - İstemciden gelen ad, birim fiyat, satır toplamı, vergi, servis ücreti ve genel toplam değerleri güvenilir kabul edilmez; sunucu tarafında aktif katalog ve şube ayarlarından otoriter olarak hesaplanır.
+  - `OrderPricingCalculator`: Saf minor-unit (`long`) ve basis point (`int`, bps) tabanlı deterministik Half-Up yuvarlama (`(numerator + denominator / 2) / denominator`).
+  - `PricesIncludeTax = true` durumunda vergi dahil ayrıştırma, `false` durumunda vergi ekleme formülü.
+  - Servis ücreti (`ServiceChargeRateBps`) vergi sonrası ürün brüt toplamına uygulanır.
+  - Tek transaction içinde tam doğrulama:
+    - `DiningSession` aktifliği ve işletme/şube mülkiyeti (`SESSION_NOT_ACTIVE`).
+    - `BranchSettings.IsOrderTakingEnabled` sipariş alım kapısı (`ORDER_TAKING_DISABLED`).
+    - Aktif menü, aktif kategori ve aktif ürün kontrolü (`ITEM_NOT_ACTIVE`).
+    - Şube Hızlı-86 (stokta yok) ürün ve varyant engeli (`ITEM_OUT_OF_STOCK`).
+    - Varyantın ilgili ürüne ait olduğunu doğrulama (`INVALID_VARIANT`).
+    - Ürüne atanmış modifier grupları, min/max seçim sınırları ve seçenek aktifliği kontrolü (`INVALID_MODIFIER_SELECTION`).
+    - Yinelenen modifier kimliği seçimi engeli (`DUPLICATE_MODIFIER`).
+    - Şube para birimi ile istemci uyuşmazlığı denetimi (`CURRENCY_MISMATCH`).
+  - Fiyat değişikliği koruması (`ORDER_PRICE_CHANGED`): İstemcinin beklediği birim fiyat yetkili fiyattan farklıysa sipariş atomik olarak reddedilir; etkilenen satır, beklenen fiyat ve güncel fiyat hata nesnesinde güvenle taşınır.
+  - Katalog fiyatı siparişten sonra değişse bile siparişe ait finansal snapshot'ın değişmezliği garantilendi.
+
 
 ### Faz 8.3: Müşteri Sipariş API'si ve Eşzamanlılık
 - [ ] **POST /api/v1/customer/orders:**
