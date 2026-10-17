@@ -420,8 +420,8 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, concurrency_token)
-                VALUES (@sId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), gen_random_uuid());";
+                INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, created_at_utc, concurrency_token)
+                VALUES (@sId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());";
             cmd.Parameters.AddWithValue("sId", foreignSessionId);
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
