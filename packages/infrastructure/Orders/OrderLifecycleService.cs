@@ -164,69 +164,88 @@ public sealed class OrderLifecycleService : IOrderLifecycleService
         Action<Order, OrderItem?, DateTimeOffset> transitionAction,
         CancellationToken cancellationToken)
     {
-        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-
-        var order = await _dbContext.Orders
-            .Include(o => o.Items)
-                .ThenInclude(i => i.Modifiers)
-            .FirstOrDefaultAsync(
-                o => o.TenantId == tenantId &&
-                     o.BranchId == branchId &&
-                     o.Id == orderId,
-                cancellationToken);
-
-        if (order == null)
+        // Begin tenant transaction if no ambient transaction exists
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
         {
-            throw new ResourceNotFoundException("Order not found.");
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: cancellationToken);
         }
 
-        if (order.ConcurrencyToken != concurrencyToken)
+        try
         {
-            throw new ConcurrencyConflictException("Order has been modified by another process. Concurrency conflict detected.");
+            var order = await _dbContext.Orders
+                .Include(o => o.Items)
+                    .ThenInclude(i => i.Modifiers)
+                .FirstOrDefaultAsync(
+                    o => o.TenantId == tenantId &&
+                         o.BranchId == branchId &&
+                         o.Id == orderId,
+                    cancellationToken);
+
+            if (order == null)
+            {
+                throw new ResourceNotFoundException("Order not found.");
+            }
+
+            if (order.ConcurrencyToken != concurrencyToken)
+            {
+                throw new ConcurrencyConflictException("Order has been modified by another process. Concurrency conflict detected.");
+            }
+
+            OrderItem? targetItem = null;
+            if (itemId != null)
+            {
+                targetItem = order.Items.FirstOrDefault(i => i.Id == itemId)
+                    ?? throw new ResourceNotFoundException("Order item not found.");
+            }
+
+            var previousStatus = order.Status;
+            var nowUtc = DateTimeOffset.UtcNow;
+
+            transitionAction(order, targetItem, nowUtc);
+
+            var auditDetails = new
+            {
+                action,
+                targetItemId = targetItem?.Id.Value,
+                targetItemName = targetItem?.ItemName,
+                previousStatus = previousStatus.ToString(),
+                newStatus = order.Status.ToString(),
+                orderTotalMinorUnits = order.TotalMinorUnits
+            };
+
+            var audit = OrderAuditEntry.Record(
+                tenantId,
+                order.Id,
+                order.DiningSessionId,
+                actorId,
+                actorRole,
+                action,
+                previousStatus,
+                order.Status,
+                reason: $"Lifecycle transition {action}",
+                detailsJson: JsonSerializer.Serialize(auditDetails),
+                nowUtc: nowUtc);
+
+            _dbContext.OrderAuditEntries.Add(audit);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            if (localTx != null)
+            {
+                await localTx.CommitAsync(cancellationToken);
+            }
+
+            var dto = MapToDto(order);
+            return new OrderLifecycleResult(dto, action, nowUtc);
         }
-
-        OrderItem? targetItem = null;
-        if (itemId != null)
+        finally
         {
-            targetItem = order.Items.FirstOrDefault(i => i.Id == itemId)
-                ?? throw new ResourceNotFoundException("Order item not found.");
+            if (localTx != null)
+            {
+                await localTx.DisposeAsync();
+            }
         }
-
-        var previousStatus = order.Status;
-        var nowUtc = DateTimeOffset.UtcNow;
-
-        transitionAction(order, targetItem, nowUtc);
-
-        var auditDetails = new
-        {
-            action,
-            targetItemId = targetItem?.Id.Value,
-            targetItemName = targetItem?.ItemName,
-            previousStatus = previousStatus.ToString(),
-            newStatus = order.Status.ToString(),
-            orderTotalMinorUnits = order.TotalMinorUnits
-        };
-
-        var audit = OrderAuditEntry.Record(
-            tenantId,
-            order.Id,
-            order.DiningSessionId,
-            actorId,
-            actorRole,
-            action,
-            previousStatus,
-            order.Status,
-            reason: $"Lifecycle transition {action}",
-            detailsJson: JsonSerializer.Serialize(auditDetails),
-            nowUtc: nowUtc);
-
-        _dbContext.OrderAuditEntries.Add(audit);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
-
-        var dto = MapToDto(order);
-        return new OrderLifecycleResult(dto, action, nowUtc);
     }
 
     private static StaffOrderResponseDto MapToDto(Order order)

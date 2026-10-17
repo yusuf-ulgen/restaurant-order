@@ -39,15 +39,23 @@ public sealed partial class StaffOrderService
             throw new ConcurrencyPreconditionException("If-Match header or concurrency token is required.");
         }
 
-        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-
-        if (_dbContext.Database.IsNpgsql())
+        // Begin tenant transaction if no ambient transaction exists
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
         {
-            var lockKey = $"order_session_{sessionId.Value:D}";
-            await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))",
-                cancellationToken);
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: cancellationToken);
         }
+
+        try
+        {
+            if (_dbContext.Database.IsNpgsql())
+            {
+                var lockKey = $"order_session_{sessionId.Value:D}";
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))",
+                    cancellationToken);
+            }
 
         var order = await _dbContext.Orders
             .Include(o => o.Items)
@@ -155,10 +163,21 @@ public sealed partial class StaffOrderService
         _dbContext.OrderAuditEntries.Add(audit);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        if (localTx != null)
+        {
+            await localTx.CommitAsync(cancellationToken);
+        }
 
         return MapToDto(order);
     }
+    finally
+    {
+        if (localTx != null)
+        {
+            await localTx.DisposeAsync();
+        }
+    }
+}
 
     private async Task<(Guid SupervisorId, string SupervisorRole)> VerifySupervisorAsync(
         TenantId tenantId,

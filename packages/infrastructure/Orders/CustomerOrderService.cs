@@ -65,42 +65,52 @@ public sealed class CustomerOrderService : ICustomerOrderService
 
         var fingerprint = ComputeRequestFingerprint(sessionId, request);
 
-        // Begin transaction with advisory locking to ensure round sequence consistency
-        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-
-        if (_dbContext.Database.IsNpgsql())
+        // Begin tenant transaction if no ambient transaction exists
+        var hasAmbientTx = _dbContext.Database.CurrentTransaction != null;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? localTx = null;
+        if (!hasAmbientTx)
         {
-            var lockKey = $"order_session_{sessionId.Value:D}";
-            await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))",
-                cancellationToken);
+            localTx = await _dbContext.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: cancellationToken);
         }
 
-        // 1. Verify dining session state
-        var session = await _dbContext.DiningSessions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId && s.Id == sessionId, cancellationToken);
-
-        if (session == null || session.Status != DiningSessionStatus.Active)
+        try
         {
-            throw OrderPricingException.SessionNotActive(sessionId.Value);
-        }
-
-        // 2. Idempotency Check
-        var existingOrder = await _dbContext.Orders
-            .Include(o => o.Items)
-                .ThenInclude(i => i.Modifiers)
-            .FirstOrDefaultAsync(o => o.TenantId == tenantId && o.IdempotencyKey == sanitizedKey, cancellationToken);
-
-        if (existingOrder != null)
-        {
-            if (existingOrder.DiningSessionId == sessionId &&
-                string.Equals(existingOrder.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+            if (_dbContext.Database.IsNpgsql())
             {
-                // Identical replay: return existing order
-                await tx.RollbackAsync(cancellationToken);
-                return new CreateCustomerOrderResult(MapToDto(existingOrder), IsReplay: true);
+                var lockKey = $"order_session_{sessionId.Value:D}";
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))",
+                    cancellationToken);
             }
+
+            // 1. Verify dining session state
+            var session = await _dbContext.DiningSessions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId && s.Id == sessionId, cancellationToken);
+
+            if (session == null || session.Status != DiningSessionStatus.Active)
+            {
+                throw OrderPricingException.SessionNotActive(sessionId.Value);
+            }
+
+            // 2. Idempotency Check
+            var existingOrder = await _dbContext.Orders
+                .Include(o => o.Items)
+                    .ThenInclude(i => i.Modifiers)
+                .FirstOrDefaultAsync(o => o.TenantId == tenantId && o.IdempotencyKey == sanitizedKey, cancellationToken);
+
+            if (existingOrder != null)
+            {
+                if (existingOrder.DiningSessionId == sessionId &&
+                    string.Equals(existingOrder.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+                {
+                    // Identical replay: return existing order
+                    if (localTx != null)
+                    {
+                        await localTx.RollbackAsync(cancellationToken);
+                    }
+                    return new CreateCustomerOrderResult(MapToDto(existingOrder), IsReplay: true);
+                }
 
             throw new IdempotencyConflictException("The provided Idempotency-Key has already been used for a different order payload or session.");
         }
@@ -207,10 +217,21 @@ public sealed class CustomerOrderService : ICustomerOrderService
         _dbContext.OrderAuditEntries.Add(audit);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await tx.CommitAsync(cancellationToken);
+        if (localTx != null)
+        {
+            await localTx.CommitAsync(cancellationToken);
+        }
 
         return new CreateCustomerOrderResult(MapToDto(order), IsReplay: false);
     }
+    finally
+    {
+        if (localTx != null)
+        {
+            await localTx.DisposeAsync();
+        }
+    }
+}
 
     public async Task<IReadOnlyList<CustomerOrderResponseDto>> GetOrdersAsync(
         TenantId tenantId,

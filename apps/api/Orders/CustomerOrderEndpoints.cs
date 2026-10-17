@@ -193,7 +193,7 @@ public static class CustomerOrderEndpoints
             DomainException dex =>
                 ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", dex.Message),
 
-            _ => ProblemResult(context, StatusCodes.Status500InternalServerError, "Internal Server Error", "Beklenmeyen bir hata oluştu.")
+            _ => FloorEndpointHelpers.HandleException(ex, context)
         };
     }
 

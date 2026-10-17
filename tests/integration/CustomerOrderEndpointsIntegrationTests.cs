@@ -66,6 +66,9 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
             VALUES (@branchId, @tenantId, @brandId, 'Order Branch', @branchSlug, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid());
 
+            INSERT INTO tenancy.branch_settings (id, tenant_id, branch_id, timezone, currency, default_locale, supported_locales, prices_include_tax, default_tax_rate_bps, is_service_charge_enabled, service_charge_rate_bps, is_order_taking_enabled, created_at, concurrency_token)
+            VALUES (gen_random_uuid(), @tenantId, @branchId, 'Europe/Istanbul', 'TRY', 'tr-TR', '[""tr-TR""]', true, 0, false, 0, true, NOW(), gen_random_uuid());
+
             INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
             VALUES (@areaId, @tenantId, @branchId, 'Main Hall', @areaSlug, 1, 1, true, NOW(), gen_random_uuid());
 
@@ -76,7 +79,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());
 
             INSERT INTO tenancy.menus (id, tenant_id, branch_id, name, slug, status, sort_order, created_at, concurrency_token)
-            VALUES (@menuId, @tenantId, @branchId, 'Main Menu', @menuSlug, 1, 1, NOW(), gen_random_uuid());
+            VALUES (@menuId, @tenantId, @branchId, 'Main Menu', @menuSlug, 2, 1, NOW(), gen_random_uuid());
 
             INSERT INTO tenancy.menu_categories (id, tenant_id, branch_id, menu_id, name, slug, sort_order, is_active, created_at, concurrency_token)
             VALUES (@categoryId, @tenantId, @branchId, @menuId, 'Burgers', @catSlug, 1, true, NOW(), gen_random_uuid());
@@ -365,7 +368,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         {
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "UPDATE tenancy.dining_sessions SET status = 3 WHERE id = @id";
+            cmd.CommandText = "UPDATE tenancy.dining_sessions SET status = 3, bill_requested_at_utc = NOW() WHERE id = @id";
             cmd.Parameters.AddWithValue("id", sessionId);
             await cmd.ExecuteNonQueryAsync();
         }

@@ -183,7 +183,14 @@ public class RestaurantOrderDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         var tx = await Database.BeginTransactionAsync(isolationLevel, cancellationToken);
-        await SetTenantSessionAsync(tenantId, cancellationToken);
+        if (Database.IsNpgsql())
+        {
+            await SetTenantSessionAsync(tenantId, cancellationToken);
+        }
+        else
+        {
+            _transactionTenantId = tenantId;
+        }
         return new TenantDbContextTransaction(tx, this);
     }
 
