@@ -34,8 +34,10 @@ public partial class CustomerOrderEndpointsIntegrationTests
                 INSERT INTO tenancy.modifier_options (id, tenant_id, branch_id, modifier_group_id, name, price_delta_minor_units, is_active, sort_order, is_default, created_at, concurrency_token)
                 VALUES (@modOptionId, @tenantId, @branchId, @modGroupId, 'Ketçap', 0, true, 1, false, NOW(), gen_random_uuid());
 
-                INSERT INTO tenancy.menu_item_modifier_group_assignments (menu_item_id, modifier_group_id, sort_order)
-                VALUES (@menuItemId, @modGroupId, 1);
+                INSERT INTO tenancy.menu_item_modifier_group_assignments (tenant_id, branch_id, menu_id, menu_item_id, modifier_group_id, sort_order, created_at)
+                SELECT @tenantId, @branchId, menu_id, id, @modGroupId, 1, NOW()
+                FROM tenancy.menu_items
+                WHERE id = @menuItemId;
             ";
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
@@ -85,8 +87,10 @@ public partial class CustomerOrderEndpointsIntegrationTests
                 INSERT INTO tenancy.modifier_options (id, tenant_id, branch_id, modifier_group_id, name, price_delta_minor_units, is_active, sort_order, is_default, created_at, concurrency_token)
                 VALUES (@modOptionId, @tenantId, @branchId, @modGroupId, 'Şeker', 0, true, 1, false, NOW(), gen_random_uuid());
 
-                INSERT INTO tenancy.menu_item_modifier_group_assignments (menu_item_id, modifier_group_id, sort_order)
-                VALUES (@menuItemId, @modGroupId, 1);
+                INSERT INTO tenancy.menu_item_modifier_group_assignments (tenant_id, branch_id, menu_id, menu_item_id, modifier_group_id, sort_order, created_at)
+                SELECT @tenantId, @branchId, menu_id, id, @modGroupId, 1, NOW()
+                FROM tenancy.menu_items
+                WHERE id = @menuItemId;
             ";
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
