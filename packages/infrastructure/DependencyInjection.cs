@@ -137,6 +137,8 @@ public static class DependencyInjection
         // Order Services (Phase 8)
         services.AddScoped<RestaurantOrder.Application.Orders.Pricing.IOrderPricingEngine, RestaurantOrder.Infrastructure.Orders.Pricing.OrderPricingEngine>();
         services.AddScoped<RestaurantOrder.Application.Orders.ICustomerOrderService, RestaurantOrder.Infrastructure.Orders.CustomerOrderService>();
+        services.AddScoped<RestaurantOrder.Application.Orders.IStaffOrderService, RestaurantOrder.Infrastructure.Orders.StaffOrderService>();
+        services.AddScoped<RestaurantOrder.Application.Orders.IOrderLifecycleService, RestaurantOrder.Infrastructure.Orders.OrderLifecycleService>();
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();

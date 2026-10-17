@@ -179,6 +179,17 @@ public sealed class OrderItem
         UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
     }
 
+    public void RecallToPreparation(DateTimeOffset? nowUtc = null)
+    {
+        if (Status != OrderItemStatus.Ready)
+        {
+            throw new DomainException($"Cannot recall OrderItem to preparation from status '{Status}'. Only Ready items can transition to InPreparation.");
+        }
+
+        Status = OrderItemStatus.InPreparation;
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
+
     public void MarkServed(DateTimeOffset? nowUtc = null)
     {
         if (Status != OrderItemStatus.Ready)
@@ -187,6 +198,43 @@ public sealed class OrderItem
         }
 
         Status = OrderItemStatus.Served;
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
+
+    public void CancelPrePrep(string reason, DateTimeOffset? nowUtc = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new DomainException("Reason is required to cancel an order item.");
+        }
+
+        if (Status == OrderItemStatus.Cancelled)
+        {
+            throw new DomainException("OrderItem is already cancelled.");
+        }
+
+        if (Status != OrderItemStatus.Submitted && Status != OrderItemStatus.Draft)
+        {
+            throw new DomainException($"Cannot cancel OrderItem in status '{Status}' without supervisor void authority. Regular cancellation is only allowed for Submitted items.");
+        }
+
+        Status = OrderItemStatus.Cancelled;
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
+
+    public void VoidBySupervisor(string reason, DateTimeOffset? nowUtc = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new DomainException("Reason is required to void an order item.");
+        }
+
+        if (Status == OrderItemStatus.Cancelled)
+        {
+            throw new DomainException("OrderItem is already cancelled.");
+        }
+
+        Status = OrderItemStatus.Cancelled;
         UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
     }
 

@@ -11,7 +11,7 @@ namespace RestaurantOrder.Domain.Orders;
 /// Order aggregate root representing a customer or staff placed round of ordering
 /// within an active dining session.
 /// </summary>
-public sealed class Order
+public sealed partial class Order
 {
     public const int MaxIdempotencyKeyLength = 100;
     public const int MaxFingerprintLength = 64;

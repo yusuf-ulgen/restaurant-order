@@ -117,10 +117,31 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Playwright E2E akışı (`tests/e2e/tests/customer-journey.spec.ts` 10b) gerçek sipariş gönderimi ve doğrulamasıyla güncellendi.
 
 ### Faz 8.5: Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı
-- [ ] **Personel Sipariş Uç Noktaları:**
-  - Garson ve kasiyer rolleri için masa oturumuna sipariş ekleme uç noktaları.
-  - Masa oturumuna ait siparişleri ve durumlarını listeleme (`GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders`).
-  - Sipariş ve kalem durumu geçişleri (`CancelItem`, `BumpStatus`).
+- [x] **Personel Uç Noktaları (`StaffOrderEndpoints`):**
+  - `POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders`: Aktif masa oturumuna yetkili personel siparişi oluşturma (`OrderSource.Staff`), artan tur numarası, ETag başlığı.
+  - `GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders`: Oturuma ait siparişleri ve tur dökümlerini listeleme.
+  - `GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}`: Sipariş detayını finansal snapshot ve kalemleriyle görüntüleme.
+  - `POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}/items/{itemId}/cancel`: Zorunlu ETag/concurrency token ile kalem iptali (hazırlık öncesi veya yönetici zayiat iptali).
+- [x] **RBAC ve Yetkilendirme Kuralları:**
+  - Sipariş oluşturma: `orders.staff.create` (RestaurantAdmin, BranchManager, Cashier, Waiter).
+  - Hazırlık öncesi iptal: `orders.items.cancel_pre_prep` (RestaurantAdmin, BranchManager, Cashier, Waiter).
+  - Hazırlıktaki/hazır/servis edilen kalemi iptal: `orders.items.void_in_prep` (RestaurantAdmin, BranchManager veya doğrulanmış 4-hane yönetici PIN akışı).
+  - Müşteri personel uç noktalarından kesinlikle men edildi (`403 Forbidden`).
+  - Waiter / Cashier / BranchManager için atanmış şube kapsamı zorunlu kılındı.
+  - Feature flag'lerin asla ek yetki vermemesi sağlandı.
+- [x] **İptal ve Zayiat Güvenliği:**
+  - `Submitted` durumundaki kalem yetkili personel tarafından gerekçe belirtilerek iptal edilebilir.
+  - `InPreparation`, `Ready` veya `Served` durumundaki kalem yalnızca yönetici yetkisi veya geçerli yönetici PIN doğrulaması ile iptal edilebilir (`WASTE_CANCEL`).
+  - İptal audit kaydında aktör, zaman, zorunlu gerekçe, önceki durum ve snapshot tutarı saklanır; müşteri serbest metin notu kesinlikle audit log'a kopyalanmaz.
+  - Çift iptal açık domain hatası ile engellenir (`OrderItem is already cancelled`).
+- [x] **Yaşam Döngüsü ve Deterministik Durum Türetme:**
+  - `Draft -> Submitted`, `Submitted -> InPreparation`, `Submitted -> Cancelled`, `InPreparation -> Ready`, `InPreparation -> Cancelled (supervisor)`, `Ready -> InPreparation (recall)`, `Ready -> Served`, `Ready -> Cancelled (supervisor)`, `Served -> Cancelled (supervisor)` geçişleri domain seviyesinde uygulandı.
+  - Sipariş aggregate genel durumu (`OrderStatus`), kalemlerinin durumlarından deterministik türetildi (`Order.DeriveStatus`); karışık durumlarda erken tamamlama veya veri kaybı önlendi.
+  - Phase 11 KDS hazırlığı için `IOrderLifecycleService` application service sınırları oluşturuldu.
+- [x] **Eşzamanlılık ve Yalıtım:**
+  - Zorunlu `If-Match` / Concurrency Token: Eski veya uyuşmayan token `409 Conflict` / `412 Precondition Failed` döner.
+  - Hazırlığa alma ile iptal yarışında yalnızca biri başarılı olur; hazırlık commit edildikten sonra sıradan personel iptali reddedilir.
+  - Cross-tenant / cross-branch erişim bilgi sızdırmadan `404 Not Found` ile engellendi.
 
 ### Faz 8.6: Negatif Akışlar, E2E, Güvenlik ve Kapanış
 - [ ] **Test ve Doğrulama:**
