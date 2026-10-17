@@ -98,3 +98,20 @@ Masalar, bileşik yabancı anahtar (composite foreign key) bütünlüğü ile i�
 ## Faz 7 Müşteri Deneyimi ve Hizmet Talebi (ServiceRequest) Bütünlüğü
 
 Hizmet talepleri (`ServiceRequest`), müşteri oturumundan (`DiningSession`) personele iletilen çağrıları yöneten bağımsız bir alandır. Bileşik yabancı anahtar (`tenant_id`, `branch_id`, `dining_session_id`, `table_id`) ve PostgreSQL RLS ile tam yalıtılır. Hizmet talebi türleri (`Waiter`, `Water`, `Napkin`, `Assistance`) taşır; hesap isteme (`RequestBillAsync`) ise DiningSession yaşam döngüsü durumu (`BillRequested`) üzerinden doğrudan yönetilir ve ServiceRequest içine kopyalanmaz. İstemci tarafından gönderilen `Idempotency-Key` başlığı (`tenant_id, idempotency_key` benzersiz indeksi) ile mükerrer tıklamalarda ve ağ tekrarlarında mükerrer kayıt oluşumu engellenir. Yaşam döngüsü `Open -> Cancelled` (ve operasyon fazlarında `Acknowledged -> Completed`) durumlarını izler. Müşteri sepet taslağı yalnızca istemci tarafında (`sessionStorage`) oturum ID'sine bağlı olarak tutulur; gerçek sipariş kaydı (order persistence) ve veritabanı sipariş modelleri Faz 8 kapsamındadır.
+
+## Faz 8 Sipariş Çekirdeği (Order Core) ve Yaşam Döngüsü Bütünlüğü
+
+Siparişler (`Order`), bir yemek oturumu (`DiningSession`) kapsamında misafir veya personel tarafından başlatılan, otoriter sunucu doğrulamasına tabi satış sözleşmeleridir. `Order` ve `OrderItem` varlıkları şu yaşam döngüsü durumlarını izler:
+- `Draft`: Sepet/taslak aşaması (müşteri tarafında `sessionStorage`, personel tarafında arayüz durumu).
+- `Submitted`: Sunucu tarafında yetkili fiyatlandırma motoru (`OrderPricingEngine`) ve katalog/86-stok doğrulamaları yapılarak veritabanına yazılmış kesinleşmiş sipariş.
+- `InPreparation`: Mutfak veya bar istasyonunda hazırlık sürecine alınmış sipariş/kalem.
+- `Ready`: Hazırlığı tamamlanmış, masaya servise hazır sipariş/kalem.
+- `Served`: Masaya teslim edilmiş sipariş/kalem.
+- `Cancelled`: Hazırlık öncesi veya yetkili personel/yönetici onayıyla iptal edilmiş sipariş/kalem.
+
+**Sınırlar ve Mimari Ayrım:**
+- Hazırlık fişinin kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
+- `Paid`, bir sipariş durumu değildir; ilerideki `Bill` (Hesap/Ödeme) alanına aittir.
+- `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` durumlarında yer almaz.
+- Faz 8'de KDS hazırlık ekranları ve yönlendirme (Faz 11), SignalR canlı bildirimleri (Faz 9), fiş yazdırma (Faz 12), adisyon/hesap motoru (Faz 13) ve ödeme/bahşiş/komisyon (Faz 16) yapılmayacaktır.
+- Sipariş gönderildiğinde veritabanında gerçek, denetlenebilir `Order`, `OrderItem` ve `OrderItemModifier` kayıtları oluşur; sahte başarılı sipariş veya mock üretim API'si yer almaz.

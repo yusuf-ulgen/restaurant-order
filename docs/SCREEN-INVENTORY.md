@@ -11,7 +11,7 @@
 | `CUST-05` | **Canlı Sipariş Takibi** | Müşteri | Hazırlık aşamalarını takip edin, oturumdaki geçmiş siparişleri inceleyin. | Durum zaman çizelgesi (Alındı -> Hazırlanıyor -> Sunuldu), tahmini hazırlık süresi. | Planlandı (Faz 8/9) |
 | `CUST-06` | **Hizmet Talebi Modu** | Müşteri | Garson isteyin, su/peçete isteyin, yardım isteyin veya fatura isteyin. | İşlem düğmeleri ("Garson Çağır", "Fatura İste"), onay isteği, açık talep durumu. | Tamamlandı (Faz 7.4) |
 
-> **Faz Sınırları Notu:** CUST-01, CUST-02, CUST-03, CUST-04 ve CUST-06 tamamlanmıştır. Gerçek sipariş oluşturma ve yetkili fiyatlandırma Faz 8'e, CUST-05 canlı sipariş takibi Faz 8/9'a, garsona canlı bildirim iletimi ise Faz 9–11'e aittir.
+> **Faz Sınırları Notu:** CUST-01, CUST-02, CUST-03, CUST-04 ve CUST-06 tamamlanmıştır. Gerçek sipariş oluşturma, yetkili fiyatlandırma ve sipariş yaşam döngüsü (`Draft`, `Submitted`, `InPreparation`, `Ready`, `Served`, `Cancelled`) Faz 8'e aittir. KDS istasyon fişi kabulü (`StationTicket.Acknowledged`) Faz 11'e, CUST-05 canlı sipariş takibi ve SignalR bildirimleri Faz 8/9'a, faturanın ödenmesi (`Paid`) ve kapanması (`Closed`) ise Faz 13/16'ya aittir.
 
 ---
 

@@ -39,6 +39,10 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 Faz 7: Müşteri Deneyimi [Tamamlandı — CI Doğrulandı]
   Dijital menü, arama, filtreler, ürün özelleştirme ve sepet;
   servis talepleri ve hesap isteme akışı; 15 adımlı E2E doğrulandı.
+        ↓
+Faz 8: Sipariş Çekirdeği [Geliştirme Başlatıldı]
+  Order aggregate ve persistence, yetkili sunucu fiyatlandırması;
+  müşteri/personel sipariş API'si, advisory lock eşzamanlılığı.
 ```
 
 ---
@@ -119,11 +123,16 @@ Faz 7: Müşteri Deneyimi [Tamamlandı — CI Doğrulandı]
 - [x] Hizmet çağrısı talepleri ("Garson Çağır", "Su İste", "Peçete İste", "Yardım İste", "Hesap İste") CUST-06 (Faz 7.4).
 - [x] Sertleştirme, erişilebilirlik, 15 adımlı Playwright E2E ve negatif güvenlik denetimi (Faz 7.5).
 
-### Aşama 8: Sipariş Çekirdeği (Durum: Planlandı)
-- [ ] Sipariş varlığı yaşam döngüsü durumu makinesi (Taslak -> Gönderildi -> Kabul Edildi -> Hazırlanıyor -> Hazır -> Sunuldu -> Ücretli -> Kapalı).
-- [ ] Satır öğesinin değişmezliği ve denetim günlüğünün düzenlenmesi.
-- [ ] Sipariş fiyatı hesaplama motoru (taban, değiştiriciler, vergiler, hizmet ücretleri).
-- [ ] Eş zamanlı masa siparişlerinde yarış durumunun önlenmesi.
+> **Not:** Sipariş durum uyuşmazlığı giderilmiştir: `Order/OrderItem` yalnızca `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served`, `Cancelled` durumlarını izler. İstasyon fişi kabulü (`Acknowledged`) `StationTicket`'a, `Paid` ve `Closed` ise `Bill` ve `DiningSession` yaşam döngülerine aittir. KDS, SignalR, yazdırma ve ödeme sonraki fazlara aittir. Bkz. [Faz 8 Takibi](./PHASE-8-TRACKER.md).
+
+### Aşama 8: Sipariş Çekirdeği (Durum: Başlatıldı — Faz 8.0 Hazırlığı)
+- [x] Hazırlık, kapsam sınırları, durum makinesi hizalaması ve takip belgesi (Faz 8.0).
+- [ ] Sipariş varlığı yaşam döngüsü durum makinesi (`Draft` -> `Submitted` -> `InPreparation` -> `Ready` -> `Served`, `Cancelled`) ve persistence (Faz 8.1).
+- [ ] Otoriter sunucu fiyatlandırma motoru (Pricing Engine) ve Hızlı-86 katalog doğrulaması (Faz 8.2).
+- [ ] Müşteri sipariş API'si, PostgreSQL advisory lock eşzamanlılığı ve idempotency (Faz 8.3).
+- [ ] Müşteri sipariş gönderme ve sepet onaylama arayüzü (Faz 8.4).
+- [ ] Personel sipariş API'si ve yaşam döngüsü altyapısı (Faz 8.5).
+- [ ] Negatif akışlar, E2E browser doğrulaması ve güvenlik sertleştirmesi (Faz 8.6).
 
 ### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Planlandı)
 - [ ] ASP.NET Core SignalR hub'ı şu şekilde bölümlendirilmiştir: `tenant_id` ve `branch_id`.

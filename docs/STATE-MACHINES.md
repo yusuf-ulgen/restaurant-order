@@ -85,6 +85,14 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 | `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Garson masaya teslimi doğrular. |
 | `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Resmî denetim kaydı ve gerekçe gerekir. |
 
+> **Faz 8 Kapsam ve Durum Ayrımı Notu:**
+> - `Order/OrderItem` yalnızca `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served` ve `Cancelled` durumlarını izler.
+> - İstasyon fişinin istasyon tarafından kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
+> - `Paid`, sipariş durumu değildir; ilerideki `Bill` (Hesap/Adisyon) durumudur.
+> - `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` veya `OrderItem` durumları arasında yer almaz.
+> - Faz 8'de KDS, SignalR, yazdırma, hesap, ödeme, bahşiş ve komisyon entegrasyonu yapılmayacaktır.
+> - Sipariş gönderildiğinde gerçek veritabanı kaydı oluşacak; sahte başarı veya mock production endpoint olmayacaktır.
+
 ---
 
 ## 4. Hesap ve Ödeme Durum Makinesi
