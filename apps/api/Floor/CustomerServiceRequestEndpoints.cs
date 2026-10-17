@@ -36,11 +36,6 @@ public static class CustomerServiceRequestEndpoints
         {
             try
             {
-                if (wireDto == null)
-                {
-                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", "Request body is required.");
-                }
-
                 if (!TryParseRequestType(wireDto.RequestType, out var requestType, out var typeError))
                 {
                     return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", typeError!);
@@ -112,10 +107,6 @@ public static class CustomerServiceRequestEndpoints
             catch (DomainException dex)
             {
                 return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", dex.Message);
-            }
-            catch (ArgumentException aex)
-            {
-                return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", aex.Message);
             }
             catch (JwtClaimValidationException jex)
             {

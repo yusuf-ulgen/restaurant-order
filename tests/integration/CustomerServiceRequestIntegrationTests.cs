@@ -135,8 +135,10 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         Assert.Equal(dto.Id, list[0].Id);
     }
 
-    [Fact]
-    public async Task CreateServiceRequest_MissingIdempotencyKey_Returns400()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public async Task CreateServiceRequest_MissingOrWhitespaceIdempotencyKey_Returns400(string? headerValue)
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
@@ -147,7 +149,10 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, "/api/v1/customer/service-requests", customerToken);
-        // Omit Idempotency-Key header
+        if (headerValue != null)
+        {
+            req.Headers.Add("Idempotency-Key", headerValue);
+        }
         req.Content = JsonContent.Create(new CreateCustomerServiceRequest(ServiceRequestType.Waiter, null));
 
         var response = await client.SendAsync(req);
@@ -285,6 +290,12 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
         Assert.Equal(HttpStatusCode.OK, ownCancelRes.StatusCode);
         var cancelledDto = await ownCancelRes.Content.ReadFromJsonAsync<ServiceRequestDto>(JsonOptions);
         Assert.Equal("Cancelled", cancelledDto!.Status);
+
+        // Cancelling already cancelled request -> 400 Bad Request (DomainException)
+        var cancelAgainReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Delete, $"/api/v1/customer/service-requests/{dto.Id}", customerToken);
+        var cancelAgainRes = await client.SendAsync(cancelAgainReq);
+        Assert.Equal(HttpStatusCode.BadRequest, cancelAgainRes.StatusCode);
     }
 
     [Fact]
@@ -397,6 +408,22 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Get, "/api/v1/customer/service-requests/open", adminToken);
+
+        var response = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CancelServiceRequest_StaffRole_Returns403Forbidden()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
+        var (_, _, adminToken, _, _) = await SetupActiveSessionAsync(client);
+
+        var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Delete, $"/api/v1/customer/service-requests/{Guid.NewGuid()}", adminToken);
 
         var response = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
