@@ -86,12 +86,35 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - ETag / Concurrency Token başlığı döner.
   - Finansal snapshot ve kalem detayları (modifierlar, fiyatlar, toplamlar) eksiksiz sunulur.
 
-### Faz 8.4: Müşteri Sipariş Gönderme Arayüzü
-- [ ] **Müşteri Arayüzü (`CartSheet`, `ActiveSessionView`):**
-  - "Siparişi Gönder" eylemi, sipariş onay penceresi ve özet görünümü.
-  - Çift tıklama engeli (client-side in-flight guard).
-  - Başarılı sipariş sonrası istemci sepet taslağının (`sessionStorage`) güvenle temizlenmesi.
-  - Ağ hatası veya yetkili fiyat değişikliğinde anlaşılır hata bildirimi ve sepetin korunması.
+### Faz 8.4: Müşteri Sipariş Gönderme Deneyimi
+- [x] **Contracts ve API Client (`packages/contracts`, `apps/customer-web`):**
+  - Sipariş sözleşmeleri modüler `packages/contracts/src/customer-orders.ts` içine ayrıldı ve dışa aktarıldı.
+  - Backend C# (`CustomerOrderContractDriftTests.cs`) ve frontend TS (`customerOrderContract.test.ts`) çift yönlü drift testleri eklendi.
+  - `apps/customer-web/src/api/customerOrderApi.ts`: `submitOrder`, `getOrders`, `getOrderById` endpoint client'ları oluşturuldu; CSRF ve `Idempotency-Key` başlıkları bağlandı.
+  - Problem Details hata kodları kullanıcı dostu Türkçe hata mesajlarına dönüştürüldü (`mapOrderProblemToUserMessage`). Teknik GUID'ler arayüzden gizlendi.
+- [x] **Sepet Onay ve Sipariş Akışı:**
+  - `OrderConfirmationSheet.tsx`: Ürünler, varyantlar, modifier adları, müşteri notları, miktarlar, ara toplam, vergi, servis ücreti ve genel toplam dökümü.
+  - `OrderSuccessSheet.tsx`: Sipariş numarası / round number (`Tur #1`) ve `Submitted` ("Mutfak Onayı Bekliyor") durum rozeti.
+  - Yalnızca backend `201 Created` / `200 OK` yanıt verdikten sonra başarı ekranı gösterilir ve sepet taslağı (`sessionStorage`) temizlenir.
+- [x] **Idempotency, Çift Tıklama ve Tekrar Deneme Güvenliği:**
+  - Ağ tekrarlarında aynı payload için oluşturulan `Idempotency-Key` korunur (`cartSignature` tabanlı stabil key).
+  - Buton in-flight durumunda devre dışı bırakılarak çift tıklama ile mükerrer sipariş oluşumu engellenir.
+  - Ağ hatasında veya doğrulama başarısızlığında sepet kesinlikle korunur, temizlenmez.
+  - Başarılı replay response'u (`200 OK`) gerçek başarı olarak işlenir, ikinci sipariş gösterilmez.
+- [x] **Negatif Akışlar ve Erişilebilirlik:**
+  - `ORDER_PRICE_CHANGED`: Güncel fiyatlar bildirilir, kullanıcının yeniden onayı istenir.
+  - `ITEM_OUT_OF_STOCK`: Tükendiği bildirilen ürün işaretlenir, diğer ürünler korunur.
+  - `INVALID_MODIFIER_SELECTION`: İlgili ürünün düzenlenmesi uyarısı verilir.
+  - `ORDER_TAKING_DISABLED`: Sipariş gönderimi kapatılır, menü inceleme korunur.
+  - `SESSION_NOT_ACTIVE`: Oturumun kapandığı bildirilir.
+  - 503 / ağ kesintisinde sahte başarı gösterilmez, sepet korunur.
+  - Ekran okuyucu uyumluluğu için `role="alert"` ve otomatik hata odağı (`focus()`) uygulandı.
+- [x] **Sipariş Geçmişi Görünümü (`OrderHistorySheet.tsx`):**
+  - Aktif oturumdaki turları listeleyen temel görünüm; manuel "🔄 Yenile" butonu eklendi.
+  - Round number, oluşturulma zamanı, ürün detayları ve durum rozetleri gösterilir; Phase 9 SignalR canlı KDS bilgisi not düşüldü.
+- [x] **Testler:**
+  - Birim, bileşen ve API testleri (`OrderSubmission.test.tsx`, `OrderNegativeAndHistory.test.tsx`, `customerOrderApi.test.ts`, `customerOrderContract.test.ts`).
+  - Playwright E2E akışı (`tests/e2e/tests/customer-journey.spec.ts` 10b) gerçek sipariş gönderimi ve doğrulamasıyla güncellendi.
 
 ### Faz 8.5: Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı
 - [ ] **Personel Sipariş Uç Noktaları:**

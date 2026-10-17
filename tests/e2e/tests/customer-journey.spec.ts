@@ -136,6 +136,39 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('cart-badge-count')).toHaveText('2');
 
+    // 10b. Phase 8.4: Open Cart, Review and Submit Real Order
+    await cartNavBtn.click();
+    const confirmOrderCta = page.getByTestId('submit-order-cta-btn');
+    await expect(confirmOrderCta).toBeVisible({ timeout: 5000 });
+    await confirmOrderCta.click();
+
+    const submitBtn = page.getByTestId('confirm-and-submit-order-btn');
+    await expect(submitBtn).toBeVisible({ timeout: 5000 });
+
+    const [orderResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/customer/orders') &&
+          res.request().method() === 'POST'
+      ),
+      submitBtn.click(),
+    ]);
+
+    expect(orderResponse.status()).toBe(201);
+
+    // Verify Order Success Sheet
+    const successSheet = page.getByTestId('order-success-sheet');
+    await expect(successSheet).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('order-status-badge')).toContainText('Submitted');
+    await expect(page.getByTestId('order-round-number')).toContainText('1');
+
+    // Close Success Sheet via return-to-menu
+    await page.getByTestId('return-to-menu-btn').click();
+    await expect(successSheet).not.toBeVisible();
+
+    // Verify cart is cleared after successful submission
+    await expect(page.getByTestId('cart-badge-count')).not.toBeVisible();
+
     // 11. Create Waiter Call Service Request
     const waiterNavBtn = page.getByTestId('bottom-nav-waiter-btn');
     await waiterNavBtn.click();
