@@ -298,7 +298,8 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     expect(localStorageKeys).not.toContain('jwt');
     expect(sessionStorageKeys).not.toContain('access_token');
     expect(sessionStorageKeys).not.toContain('jwt');
-    expect(sessionStorageKeys).toContain(CART_STORAGE_KEY);
+    // Since order was successfully submitted in Phase 8, the cart draft is cleanly cleared from sessionStorage
+    expect(sessionStorageKeys).not.toContain(CART_STORAGE_KEY);
   });
 
   test('allows requesting bill immediately after QR exchange without page reload using authentic concurrency token', async ({
