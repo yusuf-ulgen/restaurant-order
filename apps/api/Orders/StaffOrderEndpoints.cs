@@ -30,7 +30,7 @@ public static class StaffOrderEndpoints
             .RequireAuthorization(new AuthorizeAttribute { Roles = "RestaurantAdmin,BranchManager,Cashier,Waiter" });
 
         // POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders
-        group.MapPost("", async (
+        group.MapPost("", (
             Guid branchId,
             Guid sessionId,
             [FromBody] CreateStaffOrderRequest request,
@@ -38,85 +38,24 @@ public static class StaffOrderEndpoints
             IJwtClaimPrincipalParser parser,
             ITenantContext tenantContext,
             IStaffOrderService staffOrderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
-
-                if (!context.Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
-                    string.IsNullOrWhiteSpace(rawKey))
-                {
-                    return Results.Problem(
-                        statusCode: StatusCodes.Status400BadRequest,
-                        title: "Bad Request",
-                        detail: "Idempotency-Key header is required.");
-                }
-
-                var idempotencyKey = rawKey.ToString().Trim();
-                var result = await staffOrderService.CreateStaffOrderAsync(
-                    tenantId,
-                    new BranchId(branchId),
-                    new DiningSessionId(sessionId),
-                    request,
-                    idempotencyKey,
-                    actor,
-                    ct);
-
-                context.Response.Headers.ETag = $"\"{result.Order.ConcurrencyToken:D}\"";
-
-                if (result.IsReplay)
-                {
-                    return Results.Ok(result.Order);
-                }
-
-                return Results.Created(
-                    $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{result.Order.Id}",
-                    result.Order);
-            }
-            catch (Exception ex)
-            {
-                return HandleException(ex, context);
-            }
-        })
+            CancellationToken ct) => CreateStaffOrderAsync(branchId, sessionId, request, context, parser, tenantContext, staffOrderService, ct))
         .WithName("CreateStaffOrder")
         .WithSummary("Create a staff round of ordering for an active dining session");
 
         // GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders
-        group.MapGet("", async (
+        group.MapGet("", (
             Guid branchId,
             Guid sessionId,
             HttpContext context,
             IJwtClaimPrincipalParser parser,
             ITenantContext tenantContext,
             IStaffOrderService staffOrderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
-
-                var orders = await staffOrderService.GetSessionOrdersAsync(
-                    tenantId,
-                    new BranchId(branchId),
-                    new DiningSessionId(sessionId),
-                    actor,
-                    ct);
-
-                return Results.Ok(orders);
-            }
-            catch (Exception ex)
-            {
-                return HandleException(ex, context);
-            }
-        })
+            CancellationToken ct) => GetSessionStaffOrdersAsync(branchId, sessionId, context, parser, tenantContext, staffOrderService, ct))
         .WithName("GetSessionStaffOrders")
         .WithSummary("List all orders for an active dining session");
 
         // GET /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}
-        group.MapGet("/{orderId:guid}", async (
+        group.MapGet("/{orderId:guid}", (
             Guid branchId,
             Guid sessionId,
             Guid orderId,
@@ -124,34 +63,12 @@ public static class StaffOrderEndpoints
             IJwtClaimPrincipalParser parser,
             ITenantContext tenantContext,
             IStaffOrderService staffOrderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
-
-                var order = await staffOrderService.GetOrderByIdAsync(
-                    tenantId,
-                    new BranchId(branchId),
-                    new DiningSessionId(sessionId),
-                    new OrderId(orderId),
-                    actor,
-                    ct);
-
-                context.Response.Headers.ETag = $"\"{order.ConcurrencyToken:D}\"";
-                return Results.Ok(order);
-            }
-            catch (Exception ex)
-            {
-                return HandleException(ex, context);
-            }
-        })
+            CancellationToken ct) => GetStaffOrderByIdAsync(branchId, sessionId, orderId, context, parser, tenantContext, staffOrderService, ct))
         .WithName("GetStaffOrderById")
         .WithSummary("Get order details for an active dining session");
 
         // POST /api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}/items/{itemId}/cancel
-        group.MapPost("/{orderId:guid}/items/{itemId:guid}/cancel", async (
+        group.MapPost("/{orderId:guid}/items/{itemId:guid}/cancel", (
             Guid branchId,
             Guid sessionId,
             Guid orderId,
@@ -161,40 +78,164 @@ public static class StaffOrderEndpoints
             IJwtClaimPrincipalParser parser,
             ITenantContext tenantContext,
             IStaffOrderService staffOrderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
-                var concurrencyToken = FloorEndpointHelpers.ExtractConcurrencyToken(request?.ConcurrencyToken, context.Request);
-
-                var updatedOrder = await staffOrderService.CancelOrderItemAsync(
-                    tenantId,
-                    new BranchId(branchId),
-                    new DiningSessionId(sessionId),
-                    new OrderId(orderId),
-                    new OrderItemId(itemId),
-                    request!,
-                    concurrencyToken,
-                    actor,
-                    ct);
-
-                context.Response.Headers.ETag = $"\"{updatedOrder.ConcurrencyToken:D}\"";
-                return Results.Ok(updatedOrder);
-            }
-            catch (Exception ex)
-            {
-                return HandleException(ex, context);
-            }
-        })
+            CancellationToken ct) => CancelStaffOrderItemAsync(branchId, sessionId, orderId, itemId, request, context, parser, tenantContext, staffOrderService, ct))
         .WithName("CancelStaffOrderItem")
         .WithSummary("Cancel a pre-prep item or supervisor void an in-prep/ready/served item");
 
         return app;
     }
 
-    private static IResult HandleException(Exception ex, HttpContext context)
+    internal static async Task<IResult> CreateStaffOrderAsync(
+        Guid branchId,
+        Guid sessionId,
+        CreateStaffOrderRequest request,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ITenantContext tenantContext,
+        IStaffOrderService staffOrderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+            if (!context.Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
+                string.IsNullOrWhiteSpace(rawKey))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Bad Request",
+                    detail: "Idempotency-Key header is required.");
+            }
+
+            var idempotencyKey = rawKey.ToString().Trim();
+            var result = await staffOrderService.CreateStaffOrderAsync(
+                tenantId,
+                new BranchId(branchId),
+                new DiningSessionId(sessionId),
+                request,
+                idempotencyKey,
+                actor,
+                ct);
+
+            context.Response.Headers.ETag = $"\"{result.Order.ConcurrencyToken:D}\"";
+
+            if (result.IsReplay)
+            {
+                return Results.Ok(result.Order);
+            }
+
+            return Results.Created(
+                $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{result.Order.Id}",
+                result.Order);
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> GetSessionStaffOrdersAsync(
+        Guid branchId,
+        Guid sessionId,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ITenantContext tenantContext,
+        IStaffOrderService staffOrderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+            var orders = await staffOrderService.GetSessionOrdersAsync(
+                tenantId,
+                new BranchId(branchId),
+                new DiningSessionId(sessionId),
+                actor,
+                ct);
+
+            return Results.Ok(orders);
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> GetStaffOrderByIdAsync(
+        Guid branchId,
+        Guid sessionId,
+        Guid orderId,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ITenantContext tenantContext,
+        IStaffOrderService staffOrderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+            var order = await staffOrderService.GetOrderByIdAsync(
+                tenantId,
+                new BranchId(branchId),
+                new DiningSessionId(sessionId),
+                new OrderId(orderId),
+                actor,
+                ct);
+
+            context.Response.Headers.ETag = $"\"{order.ConcurrencyToken:D}\"";
+            return Results.Ok(order);
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> CancelStaffOrderItemAsync(
+        Guid branchId,
+        Guid sessionId,
+        Guid orderId,
+        Guid itemId,
+        CancelOrderItemRequest request,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ITenantContext tenantContext,
+        IStaffOrderService staffOrderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+            var concurrencyToken = FloorEndpointHelpers.ExtractConcurrencyToken(request?.ConcurrencyToken, context.Request);
+
+            var updatedOrder = await staffOrderService.CancelOrderItemAsync(
+                tenantId,
+                new BranchId(branchId),
+                new DiningSessionId(sessionId),
+                new OrderId(orderId),
+                new OrderItemId(itemId),
+                request!,
+                concurrencyToken,
+                actor,
+                ct);
+
+            context.Response.Headers.ETag = $"\"{updatedOrder.ConcurrencyToken:D}\"";
+            return Results.Ok(updatedOrder);
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, context);
+        }
+    }
+
+    internal static IResult HandleException(Exception ex, HttpContext context)
     {
         var correlationId = context.TraceIdentifier;
         var extensions = new Dictionary<string, object?>

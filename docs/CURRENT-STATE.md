@@ -27,7 +27,7 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - **Faz 8.4:** Müşteri sipariş onay ve gönderim deneyimi (`OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`), stabil idempotency key, sepet koruması ve temizliği.
   - **Faz 8.5:** Personel sipariş uç noktaları (`StaffOrderEndpoints`), RBAC matrisi (`orders.staff.create`, `orders.items.cancel_pre_prep`, `orders.items.void_in_prep`), deterministik `Order.DeriveStatus`, supervisor void ve PIN doğrulama akışı.
   - **Faz 8.6:** 15 adımlı pozitif E2E akışı (DB tek sipariş doğrulaması dahil), negatif güvenlik ve eşzamanlılık testleri, kalite kapıları (Gate 1–6) doğrulaması.
-- Sırada: PR #19 oluşturulması, CI doğrulaması ve Faz 9 (Canlı Olaylar ve Bildirimler) hazırlığı.
+- Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) CI doğrulaması ve Faz 9 (Canlı Olaylar ve Bildirimler) hazırlığı.
 
 ## Ortam ve Sınırlamalar
 
@@ -39,4 +39,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 8 başarıyla tamamlanmıştır. Son commit'lerin `feat/phase-08-order-core` dalına push edilmesi ve `main` hedefine PR açılması gerekmektedir. PR'ın CI üzerinden yeşil geçmesinden sonra Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.
+Faz 8 başarıyla tamamlanmıştır. Branch coverage ve sertleştirme commit'lerinin `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki CI akışının onaylanması gerekmektedir. Kullanıcı onayı sonrasında `main` dalına merge edilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.

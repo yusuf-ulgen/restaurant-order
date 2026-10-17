@@ -173,13 +173,15 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Dead code, eski mock ve TODO ile gizlenmiş davranış bırakılmadı.
   - Drift testleri ile backend ve frontend sözleşmeleri mühürlendi.
 - [x] **Kalite Kapıları ve Doğrulama:**
-  - File size gate: 1043 dosya < 600 satır (`PASS`).
-  - Docs & links validation: 0 bozuk bağlantı (`PASS`).
+  - File size gate: 1045 dosya < 600 satır (`PASS`).
+  - Docs & links validation: 64 dosya, 0 bozuk bağlantı (`PASS`).
   - Secret scanning: 0 sızıntı (`PASS`).
   - ESLint: 0 hata, 0 uyarı (`PASS`).
   - TypeScript typecheck: 7/7 proje Done (`PASS`).
   - Architecture tests: 10/10 (`PASS`).
-  - Unit tests: 1620/1620 (`PASS`).
-  - Frontend unit/component tests: 342/342 (`PASS`).
+  - Backend Unit tests: 1636/1636 (`PASS`).
+  - Backend Integration tests: 362/362 (`PASS`).
+  - Frontend unit/component tests: 501/501 (`PASS`).
+  - E2E Playwright Browser tests: 12/12 (`PASS`).
   - Quality gates: 114 test (`PASS`).
   - Production release build: `pnpm build` (`PASS`).

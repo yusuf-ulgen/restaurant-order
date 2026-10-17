@@ -26,156 +26,177 @@ public static class CustomerOrderEndpoints
             .RequireAuthorization(new AuthorizeAttribute { Roles = "Customer" });
 
         // POST /api/v1/customer/orders
-        group.MapPost("", async (
+        group.MapPost("", (
             [FromBody] CreateCustomerOrderRequest request,
             HttpContext context,
             IJwtClaimPrincipalParser parser,
             IPermissionRegistry permissionRegistry,
             ICustomerOrderService orderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                if (actor.Role != AuthRole.Customer)
-                {
-                    return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may place QR orders.");
-                }
-
-                if (!permissionRegistry.IsPermitted(actor, Permissions.OrdersQrCreate))
-                {
-                    return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Missing permission 'orders.qr.create'.");
-                }
-
-                if (!actor.Scope.TenantId.HasValue ||
-                    !actor.Scope.BranchId.HasValue ||
-                    !actor.Scope.TableSessionId.HasValue)
-                {
-                    return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
-                }
-
-                if (!context.Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
-                    string.IsNullOrWhiteSpace(rawKey))
-                {
-                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", "Idempotency-Key header is required.");
-                }
-
-                var idempotencyKey = rawKey.ToString().Trim();
-                var tenantId = new TenantId(actor.Scope.TenantId.Value);
-                var branchId = new BranchId(actor.Scope.BranchId.Value);
-                var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
-
-                var result = await orderService.CreateOrderAsync(
-                    tenantId,
-                    branchId,
-                    sessionId,
-                    request,
-                    idempotencyKey,
-                    actor,
-                    ct);
-
-                context.Response.Headers.ETag = $"\"{result.Order.ConcurrencyToken:D}\"";
-
-                if (result.IsReplay)
-                {
-                    return Results.Ok(result.Order);
-                }
-
-                return Results.Created($"/api/v1/customer/orders/{result.Order.Id}", result.Order);
-            }
-            catch (Exception ex)
-            {
-                return HandleOrderException(ex, context);
-            }
-        })
+            CancellationToken ct) => CreateCustomerOrderAsync(request, context, parser, permissionRegistry, orderService, ct))
         .WithName("CreateCustomerOrder")
         .WithSummary("Place a new customer round of ordering with authoritative pricing and idempotency.");
 
         // GET /api/v1/customer/orders
-        group.MapGet("", async (
+        group.MapGet("", (
             HttpContext context,
             IJwtClaimPrincipalParser parser,
             ICustomerOrderService orderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                if (actor.Role != AuthRole.Customer)
-                {
-                    return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may view session orders.");
-                }
-
-                if (!actor.Scope.TenantId.HasValue ||
-                    !actor.Scope.BranchId.HasValue ||
-                    !actor.Scope.TableSessionId.HasValue)
-                {
-                    return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
-                }
-
-                var tenantId = new TenantId(actor.Scope.TenantId.Value);
-                var branchId = new BranchId(actor.Scope.BranchId.Value);
-                var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
-
-                var orders = await orderService.GetOrdersAsync(tenantId, branchId, sessionId, ct);
-                return Results.Ok(orders);
-            }
-            catch (Exception ex)
-            {
-                return HandleOrderException(ex, context);
-            }
-        })
+            CancellationToken ct) => GetCustomerOrdersAsync(context, parser, orderService, ct))
         .WithName("GetCustomerOrders")
         .WithSummary("List all orders placed in the customer's active dining session.");
 
         // GET /api/v1/customer/orders/{orderId:guid}
-        group.MapGet("/{orderId:guid}", async (
+        group.MapGet("/{orderId:guid}", (
             [FromRoute] Guid orderId,
             HttpContext context,
             IJwtClaimPrincipalParser parser,
             ICustomerOrderService orderService,
-            CancellationToken ct) =>
-        {
-            try
-            {
-                var actor = FloorEndpointHelpers.GetActor(context, parser);
-                if (actor.Role != AuthRole.Customer)
-                {
-                    return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may view order details.");
-                }
-
-                if (!actor.Scope.TenantId.HasValue ||
-                    !actor.Scope.BranchId.HasValue ||
-                    !actor.Scope.TableSessionId.HasValue)
-                {
-                    return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
-                }
-
-                var tenantId = new TenantId(actor.Scope.TenantId.Value);
-                var branchId = new BranchId(actor.Scope.BranchId.Value);
-                var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
-
-                var order = await orderService.GetOrderByIdAsync(tenantId, branchId, sessionId, new OrderId(orderId), ct);
-                if (order == null)
-                {
-                    return ProblemResult(context, StatusCodes.Status404NotFound, "Not Found", "Order was not found in your active session.");
-                }
-
-                context.Response.Headers.ETag = $"\"{order.ConcurrencyToken:D}\"";
-                return Results.Ok(order);
-            }
-            catch (Exception ex)
-            {
-                return HandleOrderException(ex, context);
-            }
-        })
+            CancellationToken ct) => GetCustomerOrderByIdAsync(orderId, context, parser, orderService, ct))
         .WithName("GetCustomerOrderById")
         .WithSummary("Retrieve a specific order from the customer's active dining session.");
 
         return app;
     }
 
-    private static IResult HandleOrderException(Exception ex, HttpContext context)
+    internal static async Task<IResult> CreateCustomerOrderAsync(
+        CreateCustomerOrderRequest request,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        IPermissionRegistry permissionRegistry,
+        ICustomerOrderService orderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            if (actor.Role != AuthRole.Customer)
+            {
+                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may place QR orders.");
+            }
+
+            if (!permissionRegistry.IsPermitted(actor, Permissions.OrdersQrCreate))
+            {
+                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Missing permission 'orders.qr.create'.");
+            }
+
+            if (!actor.Scope.TenantId.HasValue ||
+                !actor.Scope.BranchId.HasValue ||
+                !actor.Scope.TableSessionId.HasValue)
+            {
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
+            }
+
+            if (!context.Request.Headers.TryGetValue("Idempotency-Key", out var rawKey) ||
+                string.IsNullOrWhiteSpace(rawKey))
+            {
+                return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", "Idempotency-Key header is required.");
+            }
+
+            var idempotencyKey = rawKey.ToString().Trim();
+            var tenantId = new TenantId(actor.Scope.TenantId.Value);
+            var branchId = new BranchId(actor.Scope.BranchId.Value);
+            var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
+
+            var result = await orderService.CreateOrderAsync(
+                tenantId,
+                branchId,
+                sessionId,
+                request,
+                idempotencyKey,
+                actor,
+                ct);
+
+            context.Response.Headers.ETag = $"\"{result.Order.ConcurrencyToken:D}\"";
+
+            if (result.IsReplay)
+            {
+                return Results.Ok(result.Order);
+            }
+
+            return Results.Created($"/api/v1/customer/orders/{result.Order.Id}", result.Order);
+        }
+        catch (Exception ex)
+        {
+            return HandleOrderException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> GetCustomerOrdersAsync(
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ICustomerOrderService orderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            if (actor.Role != AuthRole.Customer)
+            {
+                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may view session orders.");
+            }
+
+            if (!actor.Scope.TenantId.HasValue ||
+                !actor.Scope.BranchId.HasValue ||
+                !actor.Scope.TableSessionId.HasValue)
+            {
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
+            }
+
+            var tenantId = new TenantId(actor.Scope.TenantId.Value);
+            var branchId = new BranchId(actor.Scope.BranchId.Value);
+            var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
+
+            var orders = await orderService.GetOrdersAsync(tenantId, branchId, sessionId, ct);
+            return Results.Ok(orders);
+        }
+        catch (Exception ex)
+        {
+            return HandleOrderException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> GetCustomerOrderByIdAsync(
+        Guid orderId,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ICustomerOrderService orderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            if (actor.Role != AuthRole.Customer)
+            {
+                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", "Only customers may view order details.");
+            }
+
+            if (!actor.Scope.TenantId.HasValue ||
+                !actor.Scope.BranchId.HasValue ||
+                !actor.Scope.TableSessionId.HasValue)
+            {
+                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", "Customer token is missing required session claims.");
+            }
+
+            var tenantId = new TenantId(actor.Scope.TenantId.Value);
+            var branchId = new BranchId(actor.Scope.BranchId.Value);
+            var sessionId = new DiningSessionId(actor.Scope.TableSessionId.Value);
+
+            var order = await orderService.GetOrderByIdAsync(tenantId, branchId, sessionId, new OrderId(orderId), ct);
+            if (order == null)
+            {
+                return ProblemResult(context, StatusCodes.Status404NotFound, "Not Found", "Order was not found in your active session.");
+            }
+
+            context.Response.Headers.ETag = $"\"{order.ConcurrencyToken:D}\"";
+            return Results.Ok(order);
+        }
+        catch (Exception ex)
+        {
+            return HandleOrderException(ex, context);
+        }
+    }
+
+    internal static IResult HandleOrderException(Exception ex, HttpContext context)
     {
         return ex switch
         {
@@ -197,7 +218,7 @@ public static class CustomerOrderEndpoints
         };
     }
 
-    private static IResult MapPricingException(OrderPricingException ex, HttpContext context)
+    internal static IResult MapPricingException(OrderPricingException ex, HttpContext context)
     {
         var (status, title) = ex.ErrorCode switch
         {
@@ -241,7 +262,7 @@ public static class CustomerOrderEndpoints
         return ProblemResult(context, status, title, ex.Message, ex.ErrorCode, extensions);
     }
 
-    private static IResult ProblemResult(
+    internal static IResult ProblemResult(
         HttpContext context,
         int status,
         string title,
