@@ -2,14 +2,16 @@
 
 ## 1. Arayüz 1: QR Müşteri Web Uygulaması (Mobil Öncelikli Misafir Uygulaması)
 
-| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
-| :--- | :--- | :--- | :--- | :--- |
-| `CUST-01` | **Masa Karşılama Ekranı** | Müşteri | QR'yi tarayın, şube ve masa bilgilerini görüntüleyin, menüye girin. | Şube adı, masa numarası, karşılama notu, aktif dil seçici. |
-| `CUST-02` | **Dijital Menü ve Kategoriler** | Müşteri | Kategorilere göz atın, öğeleri arayın, diyete/alerjenlere göre filtreleyin. | Kategori çubuğu, ürün kartları (fotoğraf, başlık, fiyat, 86 Rozet). |
-| `CUST-03` | **Ürün Özelleştirme Penceresi** | Müşteri | Çeşitleri seçin, gerekli/isteğe bağlı değiştiricileri seçin, not ekleyin. | Baz fiyat, değiştirici gruplar, dinamik toplam fiyat, "Sepete Ekle" CTA. |
-| `CUST-04` | **Sepet ve Sipariş İncelemesi** | Müşteri | Miktarları ayarlayın, değiştiricileri gözden geçirin, siparişi mutfağa gönderin. | Satır öğeleri, seçilen değiştiriciler, alt toplam, vergi tahmini, gönder düğmesi. |
-| `CUST-05` | **Canlı Sipariş Takibi** | Müşteri | Hazırlık aşamalarını takip edin, oturumdaki geçmiş siparişleri inceleyin. | Durum zaman çizelgesi (Alındı -> Hazırlanıyor -> Sunuldu), tahmini hazırlık süresi. |
-| `CUST-06` | **Hizmet Talebi Modu** | Müşteri | Garson isteyin, ıslak mendil isteyin veya fatura isteyin. | İşlem düğmeleri ("Garson Çağır", "Fatura İste"), onay isteği. |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler | Durum |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `CUST-01` | **Masa Karşılama Ekranı** | Müşteri | QR'yi tarayın, şube ve masa bilgilerini görüntüleyin, menüye girin. | Şube adı, masa numarası, karşılama notu, aktif dil seçici. | Tamamlandı (Faz 6) |
+| `CUST-02` | **Dijital Menü ve Kategoriler** | Müşteri | Kategorilere göz atın, öğeleri arayın, diyete/alerjenlere göre filtreleyin. | Kategori çubuğu, ürün kartları (fotoğraf, başlık, fiyat, 86 Rozet). | Tamamlandı (Faz 7.1) |
+| `CUST-03` | **Ürün Özelleştirme Penceresi** | Müşteri | Çeşitleri seçin, gerekli/isteğe bağlı değiştiricileri seçin, not ekleyin. | Baz fiyat, değiştirici gruplar, dinamik toplam fiyat, "Sepete Ekle" CTA. | Tamamlandı (Faz 7.2) |
+| `CUST-04` | **Sepet ve Sipariş İncelemesi** | Müşteri | Miktarları ayarlayın, değiştiricileri gözden geçirin, fiyat önizlemesi yapın. | Satır öğeleri, seçilen değiştiriciler, alt toplam, vergi/fiyat önizlemesi. | Tamamlandı (Faz 7.3, sipariş gönderimi Faz 8) |
+| `CUST-05` | **Canlı Sipariş Takibi** | Müşteri | Hazırlık aşamalarını takip edin, oturumdaki geçmiş siparişleri inceleyin. | Durum zaman çizelgesi (Alındı -> Hazırlanıyor -> Sunuldu), tahmini hazırlık süresi. | Planlandı (Faz 8/9) |
+| `CUST-06` | **Hizmet Talebi Modu** | Müşteri | Garson isteyin, su/peçete isteyin, yardım isteyin veya fatura isteyin. | İşlem düğmeleri ("Garson Çağır", "Fatura İste"), onay isteği, açık talep durumu. | Tamamlandı (Faz 7.4) |
+
+> **Faz Sınırları Notu:** CUST-01, CUST-02, CUST-03, CUST-04 ve CUST-06 tamamlanmıştır. Gerçek sipariş oluşturma ve yetkili fiyatlandırma Faz 8'e, CUST-05 canlı sipariş takibi Faz 8/9'a, garsona canlı bildirim iletimi ise Faz 9–11'e aittir.
 
 ---
 

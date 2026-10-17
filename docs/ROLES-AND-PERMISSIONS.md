@@ -67,12 +67,17 @@ Kimlik doğrulama sütunu başlangıç önerisini korur; uygulanmış güvenilir
 | Faturayı Tutar veya Öğeye Göre Böl | `billing.bill.split` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
 | Sipariş İndirimi Uygula | `billing.discount.apply` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Geri Ödemeye İzin Ver | `billing.refund.authorize` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
+| **Müşteri Servis Talepleri (Faz 7)** | | | | | | | | | |
+| Servis / Garson Çağrısı Oluştur | `service.request.create` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `O` |
+| Servis Çağrısını İptal Et | `service.request.cancel` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` | `O` |
+| Servis Çağrılarını Yönet (Kabul/Tamamla) | `service.request.manage` | `✗` | `✓` | `✓` | `✓` | `✗` | `✗` | `✓` | `✗` |
 | **Personel ve Analitik** | | | | | | | | | |
 | Personeli Yönetin ve Rolleri Atayın | `branch.staff.manage` | `✗` | `✓` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` |
 | Günlük Şube Gelirlerini Görüntüle | `reports.branch.revenue` | `✗` | `✓` | `✓` | `O` | `✗` | `✗` | `✗` | `✗` |
 | Çoklu Şube Raporlarını Görüntüle | `reports.tenant.multi_branch` | `✗` | `✓` | `✗` | `✗` | `✗` | `✗` | `✗` | `✗` |
 
 ---
+
 
 ## 3. Yetkilendirme Güvenlik Kuralları
 
@@ -85,3 +90,4 @@ Kimlik doğrulama sütunu başlangıç önerisini korur; uygulanmış güvenilir
 7. **Atomik token tüketimi:** Davet ve parola sıfırlama tokenları `UPDATE ... WHERE is_consumed = FALSE RETURNING ...` ile tek atomik adımda tüketilir; eşzamanlı kullanımda yalnızca biri başarılıdır. Ham tokenlar API yanıtına yazılmaz; ayrı güvenli kanaldan iletilir.
 8. **Özellik bayrağı yetki değildir:** `order_acceptance`, `service_charge` gibi bayraklar işlevi değiştirir; RBAC vermez veya aşmaz. `branch.configuration.manage` olmadan bayrak değeri ne olursa olsun yapılandırma değiştirilemez.
 9. **Şube kapsamı:** BranchManager'ın `O` yönetim yetkileri atanmış şubeyle sınırlıdır. Başka şubenin yapılandırması, alanları, istasyonları veya saatleri için okuma/değiştirme `403 Forbidden` döndürür.
+10. **Müşteri servis talepleri:** Müşteri servis çağrısı oluşturma (`service.request.create`) ve iptal etme (`service.request.cancel`) hakları yalnızca müşterinin kendi etkin masa oturumuyla (`O`) sınırlıdır. Personel servis çağrısı kabul ve tamamlama yetkileri sonraki operasyon fazında etkinleştirilecektir.

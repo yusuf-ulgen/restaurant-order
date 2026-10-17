@@ -60,6 +60,12 @@ public static class CustomerTokenValidationHelper
             return false;
         }
 
+        // /api/v1/customer/session endpoint'i veritabani uzerinden kapanmis oturumlari kontrol edip RFC 7807 Session Expired dondurur
+        if (context.HttpContext.Request.Path.StartsWithSegments("/api/v1/customer/session"))
+        {
+            return true;
+        }
+
         try
         {
             var customerValidator = context.HttpContext.RequestServices.GetRequiredService<ICustomerSessionValidator>();

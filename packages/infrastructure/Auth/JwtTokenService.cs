@@ -121,7 +121,10 @@ public sealed class JwtTokenService : IJwtTokenGenerator
             RequireExpirationTime = true,
             ClockSkew = TimeSpan.FromSeconds(Math.Max(0, _settings.ClockSkewSeconds)),
             ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
-            RequireSignedTokens = true
+            RequireSignedTokens = true,
+            RoleClaimType = JwtClaimNames.Role,
+            NameClaimType = JwtClaimNames.Subject
         };
     }
+
 }

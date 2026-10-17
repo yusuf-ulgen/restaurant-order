@@ -191,6 +191,23 @@ export interface QrExchangeResponse {
 }
 
 /**
+ * Safe customer session metadata returned by GET /api/v1/customer/session.
+ * Does not contain access tokens, credentials, or cross-tenant internals.
+ */
+export interface CustomerSessionDto {
+  sessionId: string;
+  tenantId: string;
+  branchId: string;
+  tableId: string;
+  tableNumber: string;
+  tableName: string;
+  sessionStatus: DiningSessionStatus;
+  concurrencyToken: string;
+  guestCount: number;
+  openedAtUtc: string;
+}
+
+/**
  * Request payload to transfer a dining session to another available table.
  *
  * - `targetTableConcurrencyToken`: Optional. Server acquires deterministic row-level locks
@@ -238,4 +255,28 @@ export interface DiningSessionMovementDto {
   idempotencyKey: string;
   guestsMoved: number;
   createdAtUtc: string;
+}
+
+export type ServiceRequestType = 'Waiter' | 'Water' | 'Napkin' | 'Assistance';
+export type ServiceRequestStatus = 'Open' | 'Cancelled' | 'Acknowledged' | 'Completed';
+
+export interface ServiceRequestDto {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  diningSessionId: string;
+  tableId: string;
+  requestType: ServiceRequestType;
+  status: ServiceRequestStatus;
+  note?: string | null;
+  idempotencyKey: string;
+  createdAtUtc: string;
+  acknowledgedAtUtc?: string | null;
+  completedAtUtc?: string | null;
+  concurrencyToken: string;
+}
+
+export interface CreateCustomerServiceRequestInput {
+  requestType: ServiceRequestType;
+  note?: string | null;
 }

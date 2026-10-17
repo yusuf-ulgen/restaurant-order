@@ -2418,6 +2418,103 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.ServiceRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcknowledgedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("acknowledged_at_utc");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("DiningSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dining_session_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<int>("RequestType")
+                        .HasColumnType("integer")
+                        .HasColumnName("request_type");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("table_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_service_requests_tenant_branch_created");
+
+                    b.HasIndex("TenantId", "BranchId", "DiningSessionId");
+
+                    b.HasIndex("TenantId", "BranchId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_requests_tenant_branch_idempotency_key");
+
+                    b.HasIndex("TenantId", "BranchId", "TableId");
+
+                    b.HasIndex("TenantId", "DiningSessionId", "RequestType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_requests_tenant_session_type_open")
+                        .HasFilter("status = 1");
+
+                    b.HasIndex("TenantId", "DiningSessionId", "Status")
+                        .HasDatabaseName("ix_service_requests_tenant_session_status");
+
+                    b.ToTable("service_requests", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_service_requests_status", "status IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("ck_service_requests_type", "request_type IN (1, 2, 3, 4)");
+                        });
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.Tenants.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3116,6 +3213,25 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_restaurant_tables_dining_areas_tenant_branch_area");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Floor.ServiceRequest", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Floor.DiningSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "DiningSessionId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_requests_session");
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.RestaurantTable", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "TableId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_requests_table");
                 });
 
             modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>

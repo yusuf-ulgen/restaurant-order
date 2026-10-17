@@ -35,6 +35,10 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
   HMAC-SHA256 statik ve dinamik QR oluşturma ve rotasyonu;
   yemek oturumu durum makinesi (Açık -> Etkin -> Fatura İstendi -> Kapalı);
   ADM-04 Kat Planı Yönetimi ve CUST-01 Masa Karşılama arayüzü.
+        ↓
+Faz 7: Müşteri Deneyimi [Tamamlandı — CI Doğrulandı]
+  Dijital menü, arama, filtreler, ürün özelleştirme ve sepet;
+  servis talepleri ve hesap isteme akışı; 15 adımlı E2E doğrulandı.
 ```
 
 ---
@@ -105,14 +109,15 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 - [x] Müşteri JWT Bearer boru hattı ve önbellek güvenliği: GUID formatında olmayan `sub`, eksik `sub`, oturum claim uyuşmazlığı, gelecek tarihli `iat`, 4096 bayttan uzun token ve kapalı/birleştirilmiş oturum reddi entegrasyon testleriyle doğrulandı. Redis önbelleğinde negatif-yalnızca TTL stratejisiyle stale pozitif "1" yetkilendirmesi imkansız kılındı.
 - [x] Birim, mimari, entegrasyon ve E2E testleri: 1.422 backend birim testi, Testcontainers PostgreSQL & Redis entegrasyon testleri, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. Playwright E2E disposable servisler üzerinde 3 passed, 0 skipped olarak tamamlandı.
 
-> **Not:** Aşama 7 henüz başlamamıştır; Aşama 6 kapanış denetimindedir.
+> **Not:** Aşama 7 (Müşteri Deneyimi) tamamlandı ve GitHub CI üzerinde doğrulandı (Run 39038756673); bkz. [Faz 7 Takibi](./PHASE-7-TRACKER.md).
 
-### Aşama 7: Müşteri Deneyimi (Durum: Planlandı)
-- [ ] Arayüz 1: QR Müşteri Web Uygulamasının tam uygulaması.
-- [ ] Duyarlı menü taraması, alerjen filtreleme ve öğe arama.
-- [ ] Etkileşimli öğe değiştirici yapılandırma modu.
-- [ ] Sepet yönetimi, vergi hesaplaması ve sipariş gönderimi.
-- [ ] Hizmet çağrısı talepleri ("Garson Çağır", "Islak Mendil İste", "Fatura İste").
+### Aşama 7: Müşteri Deneyimi (Durum: Tamamlandı — GitHub CI Doğrulandı)
+- [x] Arayüz 1: QR Müşteri Web Uygulaması ve oturum kurtarma altyapısı (Faz 7.0).
+- [x] Duyarlı menü taraması, alerjen filtreleme ve öğe arama CUST-02 (Faz 7.1).
+- [x] Etkileşimli öğe değiştirici yapılandırma modalı CUST-03 (Faz 7.2).
+- [x] Sepet yönetimi, güvenli draft persistence ve fiyat önizlemesi CUST-04 (Faz 7.3). Not: Gerçek sipariş oluşturma ve yetkili fiyatlandırma Faz 8'e aittir.
+- [x] Hizmet çağrısı talepleri ("Garson Çağır", "Su İste", "Peçete İste", "Yardım İste", "Hesap İste") CUST-06 (Faz 7.4).
+- [x] Sertleştirme, erişilebilirlik, 15 adımlı Playwright E2E ve negatif güvenlik denetimi (Faz 7.5).
 
 ### Aşama 8: Sipariş Çekirdeği (Durum: Planlandı)
 - [ ] Sipariş varlığı yaşam döngüsü durumu makinesi (Taslak -> Gönderildi -> Kabul Edildi -> Hazırlanıyor -> Hazır -> Sunuldu -> Ücretli -> Kapalı).

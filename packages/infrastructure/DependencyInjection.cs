@@ -131,6 +131,8 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Floor.ICustomerSessionValidator, RestaurantOrder.Infrastructure.Floor.CustomerSessionValidator>();
         services.AddScoped<RestaurantOrder.Application.Floor.IQrPublicService, RestaurantOrder.Infrastructure.Floor.QrPublicService>();
         services.AddScoped<RestaurantOrder.Application.Floor.IFloorService, RestaurantOrder.Infrastructure.Floor.FloorService>();
+        services.AddScoped<RestaurantOrder.Application.Floor.IServiceRequestRateLimiter, RestaurantOrder.Infrastructure.Floor.RedisServiceRequestRateLimiter>();
+        services.AddScoped<RestaurantOrder.Application.Floor.ICustomerServiceRequestService, RestaurantOrder.Infrastructure.Floor.CustomerServiceRequestService>();
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();

@@ -245,4 +245,28 @@ public class CustomerTokenValidationHelperTests
         var result = await CustomerTokenValidationHelper.ValidateCustomerTokenAsync(context);
         Assert.True(result);
     }
+
+    [Fact]
+    public async Task ValidateCustomerTokenAsync_WhenPathIsCustomerSession_ReturnsTrue_WithoutCallingValidator()
+    {
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        var claims = new List<Claim>
+        {
+            new("tenant_id", tenantId.ToString()),
+            new("branch_id", branchId.ToString()),
+            new("table_session_id", sessionId.ToString()),
+            new("sub", sessionId.ToString())
+        };
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"));
+        var context = CreateContext(principal);
+        context.HttpContext.Request.Path = "/api/v1/customer/session";
+
+        var result = await CustomerTokenValidationHelper.ValidateCustomerTokenAsync(context);
+        Assert.True(result);
+        _validatorMock.Verify(v => v.ValidateSessionActiveAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }
