@@ -27,6 +27,7 @@ public static class OrderPricingTestHelper
         var dbName = $"OrderPricingDb_{Guid.NewGuid():N}";
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
             .UseInMemoryDatabase(databaseName: dbName)
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
         var tenantContext = new TenantContext(tenantId.Value, isAuthenticated: true);

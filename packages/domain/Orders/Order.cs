@@ -115,12 +115,82 @@ public sealed class Order
             calculatedTotal = calculatedSubtotal + calculatedTax + serviceChargeMinorUnits;
         }
 
+        return CreateSubmittedWithTotals(
+            tenantId,
+            branchId,
+            diningSessionId,
+            tableId,
+            roundNumber,
+            orderSource,
+            currency,
+            sanitizedKey,
+            items,
+            calculatedSubtotal,
+            calculatedTax,
+            serviceChargeMinorUnits,
+            calculatedTotal,
+            nowUtc,
+            requestFingerprint);
+    }
+
+    /// <summary>
+    /// Creates a newly submitted Order with authoritative pricing snapshots calculated by the pricing engine.
+    /// </summary>
+    public static Order CreateSubmittedWithTotals(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId diningSessionId,
+        RestaurantTableId tableId,
+        int roundNumber,
+        OrderSource orderSource,
+        Currency currency,
+        string idempotencyKey,
+        IReadOnlyList<OrderItem> items,
+        long subtotalMinorUnits,
+        long taxMinorUnits,
+        long serviceChargeMinorUnits,
+        long totalMinorUnits,
+        DateTimeOffset? nowUtc = null,
+        string? requestFingerprint = null)
+    {
+        if (roundNumber <= 0)
+        {
+            throw new DomainException($"Round number must be greater than zero. Received: {roundNumber}.");
+        }
+
+        if (items == null || items.Count == 0)
+        {
+            throw new DomainException("Cannot submit an empty order. An order must contain at least one item.");
+        }
+
+        if (subtotalMinorUnits < 0 || taxMinorUnits < 0 || serviceChargeMinorUnits < 0 || totalMinorUnits < 0)
+        {
+            throw new DomainException("Financial snapshot totals cannot be negative.");
+        }
+
+        var sanitizedKey = string.IsNullOrWhiteSpace(idempotencyKey)
+            ? throw new DomainException("Idempotency key is required for order submission.")
+            : idempotencyKey.Trim();
+
+        if (sanitizedKey.Length > MaxIdempotencyKeyLength)
+        {
+            throw new DomainException($"Idempotency key cannot exceed {MaxIdempotencyKeyLength} characters.");
+        }
+
+        foreach (var item in items)
+        {
+            if (item.TenantId != tenantId)
+            {
+                throw new DomainException("All order items must belong to the same tenant as the order.");
+            }
+        }
+
         var orderId = OrderId.New();
         var creationTime = nowUtc ?? DateTimeOffset.UtcNow;
 
         var computedFingerprint = !string.IsNullOrWhiteSpace(requestFingerprint)
             ? requestFingerprint.Trim()
-            : ComputeFingerprint(tenantId, branchId, diningSessionId, tableId, roundNumber, orderSource, currency, items.Count, calculatedTotal, sanitizedKey);
+            : ComputeFingerprint(tenantId, branchId, diningSessionId, tableId, roundNumber, orderSource, currency, items.Count, totalMinorUnits, sanitizedKey);
 
         var order = new Order
         {
@@ -133,10 +203,10 @@ public sealed class Order
             OrderSource = orderSource,
             Currency = currency,
             Status = OrderStatus.Submitted,
-            SubtotalMinorUnits = calculatedSubtotal,
-            TaxMinorUnits = calculatedTax,
+            SubtotalMinorUnits = subtotalMinorUnits,
+            TaxMinorUnits = taxMinorUnits,
             ServiceChargeMinorUnits = serviceChargeMinorUnits,
-            TotalMinorUnits = calculatedTotal,
+            TotalMinorUnits = totalMinorUnits,
             IdempotencyKey = sanitizedKey,
             RequestFingerprint = computedFingerprint,
             ConcurrencyToken = Guid.NewGuid(),
@@ -147,7 +217,6 @@ public sealed class Order
 
         foreach (var item in items)
         {
-            // Transition item status to Submitted matching order status
             if (item.Status == OrderItemStatus.Draft)
             {
                 item.MarkSubmitted(creationTime);

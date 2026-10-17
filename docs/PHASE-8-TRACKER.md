@@ -18,7 +18,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | **Faz 8.0** | Hazırlık ve Kapsam | **Tamamlandı** | Yol haritası, durum makineleri ve alan modeli hizalaması, takip belgesi, GitHub Issue #18 ve dal hazırlığı | `feat/phase-08-order-core` |
 | **Faz 8.1** | Order Domain Modeli ve Persistence | **Tamamlandı** | `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` aggregate, EF Core yapılandırması, RLS, immutable trigger ve testler | `feat/phase-08-order-core` |
 | **Faz 8.2** | Yetkili Fiyatlandırma ve Katalog Doğrulama | **Tamamlandı** | Sunucu otoriter `OrderPricingEngine`, minor-unit deterministik finans motoru, aktif katalog doğrulama, Hızlı-86 ve istemci fiyat değişikliği atomik koruması | `feat/phase-08-order-core` |
-| **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Başlanmadı** | `POST /api/v1/customer/orders`, `Idempotency-Key`, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi | `feat/phase-08-order-core` |
+| **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Tamamlandı** | `POST /api/v1/customer/orders`, `GET /api/v1/customer/orders`, `GET /api/v1/customer/orders/{orderId}`, `Idempotency-Key` replay & conflict, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi, RFC 7807 hata yanıtları, audit not redaction | `feat/phase-08-order-core` |
 | **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Başlanmadı** | `CartSheet` onaylama akışı, sipariş gönderimi, yüklenme/hata durumları, sepet temizliği ve sipariş özeti görünümü | `feat/phase-08-order-core` |
 | **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Başlanmadı** | Personel sipariş oluşturma, masa siparişleri sorgulama ve sipariş durumu geçiş altyapısı | `feat/phase-08-order-core` |
 | **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Başlanmadı** | 15 adımlı E2E yolculuğunun gerçek sipariş gönderimiyle birleşimi, negatif güvenlik testleri, kapı kontrolleri ve kapanış | `feat/phase-08-order-core` |
@@ -69,14 +69,22 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Fiyat değişikliği koruması (`ORDER_PRICE_CHANGED`): İstemcinin beklediği birim fiyat yetkili fiyattan farklıysa sipariş atomik olarak reddedilir; etkilenen satır, beklenen fiyat ve güncel fiyat hata nesnesinde güvenle taşınır.
   - Katalog fiyatı siparişten sonra değişse bile siparişe ait finansal snapshot'ın değişmezliği garantilendi.
 
-
 ### Faz 8.3: Müşteri Sipariş API'si ve Eşzamanlılık
-- [ ] **POST /api/v1/customer/orders:**
-  - Customer rolü ve oturum claim kapsamı zorunluluğu (`tenantId`, `branchId`, `tableSessionId`).
-  - Double-submit CSRF koruması ve zorunlu `Idempotency-Key` başlığı.
-  - Eşzamanlı istek yarış durumlarını önlemek için PostgreSQL advisory lock (`pg_advisory_xact_lock`).
-  - Yalnızca `Active` durumdaki yemek oturumlarında sipariş kabulü (`Open`, `BillRequested` veya `Closed` durumlarında ret).
-  - Rate limiting koruması.
+- [x] **POST /api/v1/customer/orders:**
+  - Customer rolü ve oturum claim kapsamı zorunluluğu (`tenantId`, `branchId`, `tableSessionId`). Request body içinden tenant/branch/session ID kabul edilmez.
+  - Double-submit CSRF koruması (`CsrfValidationMiddleware`) ve zorunlu `Idempotency-Key` başlığı.
+  - Eşzamanlı istek yarış durumlarını önlemek için PostgreSQL advisory transaction lock (`pg_advisory_xact_lock(hashtext('order_session_' || sessionId))`).
+  - Round number artışı ve benzersizliği: Aynı oturumdan gelen eşzamanlı istekler sırayla `1`, `2` şeklinde benzersiz atanır; siparişler birbirini ezmez.
+  - Idempotency fingerprinting: Aynı key + aynı payload replay (`200 OK` veya `201 Created`), mükerrer kayıt oluşmaz. Aynı key + farklı payload ise `409 Conflict` (`IDEMPOTENCY_CONFLICT`) döner.
+  - Yalnızca `Active` durumdaki yemek oturumlarında sipariş kabulü (`Open`, `BillRequested`, `Closed`, `Merged` durumlarında ret, `SESSION_NOT_ACTIVE`).
+  - Fiyat motoru entegrasyonu: Sipariş doğrudan `Submitted` durumunda kalıcılaşır; sahte `Draft` kaydı üretilmez.
+  - RFC 7807 standart hata yanıtları ve correlation ID desteği (`ITEM_OUT_OF_STOCK`, `ORDER_PRICE_CHANGED`, `INVALID_MODIFIER_SELECTION`, `ORDER_TAKING_DISABLED`, `SESSION_NOT_ACTIVE`, `IDEMPOTENCY_CONFLICT`, `DISTRIBUTED_SECURITY_STATE_UNAVAILABLE`).
+  - Güvenlik audit kaydı: Sipariş oluşturma olayı değişmez `OrderAuditEntry` üretir. Müşteri serbest metin notu audit günlüğünden tamamen maskelenir (`hasNotes` güvenli boolean metadata saklanır).
+- [x] **GET /api/v1/customer/orders & GET /api/v1/customer/orders/{orderId}:**
+  - Müşteri yalnızca kendi aktif oturumuna ait siparişleri görebilir.
+  - Farklı oturuma ait sipariş istendiğinde bilgi sızdırmadan `404 Not Found` döner.
+  - ETag / Concurrency Token başlığı döner.
+  - Finansal snapshot ve kalem detayları (modifierlar, fiyatlar, toplamlar) eksiksiz sunulur.
 
 ### Faz 8.4: Müşteri Sipariş Gönderme Arayüzü
 - [ ] **Müşteri Arayüzü (`CartSheet`, `ActiveSessionView`):**
