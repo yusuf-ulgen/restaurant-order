@@ -16,7 +16,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | Alt Aşama | Başlık | Durum | Temel Çıktı | Commit / PR |
 | :--- | :--- | :--- | :--- | :--- |
 | **Faz 8.0** | Hazırlık ve Kapsam | **Tamamlandı** | Yol haritası, durum makineleri ve alan modeli hizalaması, takip belgesi, GitHub Issue #18 ve dal hazırlığı | `feat/phase-08-order-core` |
-| **Faz 8.1** | Order Domain Modeli ve Persistence | **Başlanmadı** | `Order`, `OrderItem`, `OrderItemModifier` aggregate, value object'ler, EF Core yapılandırması, RLS ve migrasyon | `feat/phase-08-order-core` |
+| **Faz 8.1** | Order Domain Modeli ve Persistence | **Tamamlandı** | `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` aggregate, EF Core yapılandırması, RLS, immutable trigger ve testler | `feat/phase-08-order-core` |
 | **Faz 8.2** | Yetkili Fiyatlandırma ve Katalog Doğrulama | **Başlanmadı** | Sunucu otoriter `OrderPricingEngine`, menü/ürün/varyant/modifier aktiflik kontrolleri, Hızlı-86 stok doğrulaması | `feat/phase-08-order-core` |
 | **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Başlanmadı** | `POST /api/v1/customer/orders`, `Idempotency-Key`, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi | `feat/phase-08-order-core` |
 | **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Başlanmadı** | `CartSheet` onaylama akışı, sipariş gönderimi, yüklenme/hata durumları, sepet temizliği ve sipariş özeti görünümü | `feat/phase-08-order-core` |
@@ -35,16 +35,21 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - `docs/CURRENT-STATE.md`, `docs/ROADMAP.md`, `docs/STATE-MACHINES.md`, `docs/DOMAIN.md` ve `docs/SCREEN-INVENTORY.md` sipariş durum sınırlarıyla hizalandı.
 
 ### Faz 8.1: Order Domain Modeli ve Persistence
-- [ ] **Order Domain Aggregate:**
-  - `Order`, `OrderItem`, `OrderItemModifier` varlıkları ve kimlik sınıfları (`OrderId`, `OrderItemId`).
-  - İntihar/silme korumalı, değişmez (immutable) satır yapısı.
-  - Durum makinesi: `Draft` -> `Submitted` -> `InPreparation` -> `Ready` -> `Served` (ve `Cancelled`).
-  - Para birimi ve tam sayı alt para birimi (`minorUnits`) fiyat saklama.
-- [ ] **Veritabanı ve PostgreSQL RLS:**
-  - `tenancy.orders`, `tenancy.order_items`, `tenancy.order_item_modifiers` tabloları.
-  - `tenant_id`, `branch_id`, `dining_session_id`, `table_id` composite foreign key'ler.
+- [x] **Order Domain Aggregate:**
+  - `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` modelleri ve strongly-typed kimlik sınıfları (`OrderId`, `OrderItemId`).
+  - Değişmez (immutable) snapshot yapısı: `MenuItemId`, `ItemVariantId`, adlar, birim fiyat, modifier delta toplamı, satır toplamı ve vergi snapshot'ı.
+  - Durum makinesi: `Draft` -> `Submitted` -> `InPreparation` -> `Ready` -> `Served` (ve yalnızca yetkili personel için `Cancelled`). Müşteri doğrudan sipariş iptal edemez.
+  - `long` minor-unit ve `checked` taşma koruması ile negatif/taşan parasal tutarlar engellendi.
+  - Müşteri notu sanitizasyonu: HTML enjeksiyonu ve kontrol karakterleri engellendi (max 500 karakter).
+  - Boş sipariş gönderimi ve 1–99 harici miktarlar domain seviyesinde engellendi.
+- [x] **Veritabanı ve PostgreSQL RLS:**
+  - `tenancy.orders`, `tenancy.order_items`, `tenancy.order_item_modifiers`, `tenancy.order_audit_entries` tabloları.
+  - Unique bileşik indeksler: `(tenant_id, dining_session_id, round_number)` ve `(tenant_id, idempotency_key)`.
+  - Composite foreign key'ler ve katalog geçmişi koruması (`OnDelete(DeleteBehavior.Restrict)`).
   - PostgreSQL Row Level Security (RLS) politikaları ve `FORCE ROW LEVEL SECURITY`.
-  - Idempotency ve oturum bazlı partial index'ler.
+  - `order_audit_entries` üzerinde UPDATE ve DELETE işlemlerini kesin olarak engelleyen PostgreSQL trigger fonksiyonu (`prevent_order_audit_update_delete`).
+  - EF Core Global Query Filter secondary defense-in-depth katmanı.
+  - Blue/Green geriye dönük uyumlu `AddOrdersAndOrderPersistence` genişletici migration'ı oluşturuldu.
 
 ### Faz 8.2: Yetkili Fiyatlandırma ve Katalog Doğrulama
 - [ ] **OrderPricingEngine:**
