@@ -57,10 +57,10 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO tenancy.tenants (id, name, slug, status, created_at, concurrency_token)
-            VALUES (@tenantId, 'Staff Race Tenant', @tenantSlug, 1, NOW(), gen_random_uuid());
+            VALUES (@tenantId, 'Staff Race Tenant', @tenantSlug, 'Active', NOW(), gen_random_uuid());
 
-            INSERT INTO tenancy.brands (id, tenant_id, name, slug, created_at, concurrency_token)
-            VALUES (@brandId, @tenantId, 'Staff Brand', @brandSlug, NOW(), gen_random_uuid());
+            INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
+            VALUES (@brandId, @tenantId, 'Staff Brand', @brandSlug, 'Active', NOW(), gen_random_uuid());
 
             INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, created_at, concurrency_token)
             VALUES (@branchId, @tenantId, @brandId, 'Staff Branch', @branchSlug, 'Europe/Istanbul', 'TRY', NOW(), gen_random_uuid());
@@ -71,8 +71,8 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
             INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, capacity, is_active, public_code, created_at, concurrency_token)
             VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-02', 4, true, md5(random()::text), NOW(), gen_random_uuid());
 
-            INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, created_at_utc, concurrency_token)
-            VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), gen_random_uuid());
+            INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, created_at_utc, concurrency_token)
+            VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());
 
             INSERT INTO tenancy.menus (id, tenant_id, branch_id, name, slug, status, sort_order, created_at, concurrency_token)
             VALUES (@menuId, @tenantId, @branchId, 'Staff Menu', @menuSlug, 1, 1, NOW(), gen_random_uuid());
