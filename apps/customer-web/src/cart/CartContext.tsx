@@ -58,8 +58,10 @@ export const CartProvider: React.FC<CartProviderProps> = ({
 
   // Persist non-sensitive cart lines to sessionStorage whenever state changes
   useEffect(() => {
-    if (state.sessionId) {
+    if (state.sessionId && state.lines.length > 0) {
       saveCartToStorage(state);
+    } else if (state.sessionId && state.lines.length === 0) {
+      clearCartFromStorage();
     }
   }, [state]);
 

@@ -160,6 +160,11 @@ export function loadCartFromStorage(activeSessionId: string): CartState | null {
 export function saveCartToStorage(state: CartState): void {
   if (!state.sessionId) return;
 
+  if (!state.lines || state.lines.length === 0) {
+    clearCartFromStorage();
+    return;
+  }
+
   try {
     if (typeof window === 'undefined' || !window.sessionStorage) {
       return;

@@ -236,16 +236,16 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     await expect(billConfirmBox).toBeVisible();
 
     const submitBillBtn = page.getByTestId('submit-confirm-btn-bill');
-    const [serviceResponse] = await Promise.all([
+    const [billResponse] = await Promise.all([
       page.waitForResponse(
         (res) =>
-          res.url().includes('/api/v1/customer/service-requests') &&
+          res.url().includes('/request-bill') &&
           res.request().method() === 'POST'
       ),
       submitBillBtn.click(),
     ]);
 
-    expect(serviceResponse.status()).toBe(200);
+    expect(billResponse.status()).toBe(200);
 
     // 4. Verify bill requested badge appears immediately
     const billBadge = page.getByTestId('badge-bill-requested');

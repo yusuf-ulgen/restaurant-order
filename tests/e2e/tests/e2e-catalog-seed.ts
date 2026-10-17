@@ -117,6 +117,19 @@ export async function seedCustomerExperienceScenario(
   const qrData = await qrRes.json();
   const qrToken = qrData.token;
 
+  // 3b. Open and activate session on table so customer interacts with an active dining session
+  const openSessionRes = await request.post(`/api/v1/floor/branches/${branchId}/tables/${table.id}/sessions`, {
+    headers: authHeaders,
+    data: { guestCount: 2 },
+  });
+  if (!openSessionRes.ok()) throw new Error(`Open session failed: ${await openSessionRes.text()}`);
+  const openSession = await openSessionRes.json();
+
+  const activateSessionRes = await request.post(`/api/v1/floor/branches/${branchId}/sessions/${openSession.id}/activate`, {
+    headers: { ...authHeaders, 'If-Match': `"${openSession.concurrencyToken}"` },
+  });
+  if (!activateSessionRes.ok()) throw new Error(`Activate session failed: ${await activateSessionRes.text()}`);
+
   // 4. Create Menu & Activate
   const menuRes = await request.post(`/api/v1/catalog/branches/${branchId}/menus`, {
     headers: authHeaders,
