@@ -190,7 +190,7 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     const orderRoundCard = page.getByTestId('order-history-card-round-1');
     await expect(orderRoundCard).toBeVisible({ timeout: 5000 });
     await expect(orderRoundCard).toContainText('Gourmet Burger');
-    await expect(orderRoundCard).toContainText('Submitted');
+    await expect(orderRoundCard).toContainText('Mutfak Onayı Bekliyor');
 
     // Close Order History Sheet
     await page.getByLabel('Kapat').first().click();
