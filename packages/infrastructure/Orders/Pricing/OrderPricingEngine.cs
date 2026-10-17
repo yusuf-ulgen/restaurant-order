@@ -52,7 +52,29 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId, cancellationToken);
 
-        if (settings == null || !settings.IsOrderTakingEnabled)
+        if (settings == null)
+        {
+            var branch = await _dbContext.Branches
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.TenantId == tenantId && b.Id == branchId, cancellationToken);
+
+            if (branch == null)
+            {
+                throw new DomainException($"Branch '{branchId.Value}' was not found.");
+            }
+
+            settings = BranchSettings.Create(
+                tenantId,
+                branchId,
+                timezone: branch.Timezone.Id,
+                currency: branch.Currency.Code,
+                pricesIncludeTax: true,
+                defaultTaxRateBps: BasisPointsRate.DefaultTaxRateBps,
+                isServiceChargeEnabled: false,
+                serviceChargeRateBps: 0,
+                isOrderTakingEnabled: true);
+        }
+        else if (!settings.IsOrderTakingEnabled)
         {
             throw OrderPricingException.OrderTakingDisabled();
         }

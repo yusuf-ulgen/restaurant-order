@@ -40,7 +40,7 @@ Faz 7: Müşteri Deneyimi [Tamamlandı — CI Doğrulandı]
   Dijital menü, arama, filtreler, ürün özelleştirme ve sepet;
   servis talepleri ve hesap isteme akışı; 15 adımlı E2E doğrulandı.
         ↓
-Faz 8: Sipariş Çekirdeği [Geliştirme Başlatıldı]
+Faz 8: Sipariş Çekirdeği [Tamamlandı — PR #19 Açık, CI Doğrulandı]
   Order aggregate ve persistence, yetkili sunucu fiyatlandırması;
   müşteri/personel sipariş API'si, advisory lock eşzamanlılığı.
 ```

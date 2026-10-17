@@ -155,7 +155,12 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
       submitBtn.click(),
     ]);
 
-    expect(orderResponse.status()).toBe(201);
+    const orderStatus = orderResponse.status();
+    if (orderStatus !== 201) {
+      const errBody = await orderResponse.text();
+      throw new Error(`Expected 201 Created from POST /api/v1/customer/orders but got ${orderStatus}: ${errBody}`);
+    }
+    expect(orderStatus).toBe(201);
 
     // Verify Order Success Sheet
     const successSheet = page.getByTestId('order-success-sheet');
