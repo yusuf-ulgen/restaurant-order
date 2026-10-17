@@ -51,10 +51,12 @@
 
 ### 3.5. Sipariş ve Hazırlık Fişi
 
-- **Order:** `branch_id`, `table_session_id`, `order_source` ile bağlı sipariş; kaynak müşteri QR, garson veya POS olabilir.
-- **OrderItem:** Siparişteki `MenuItem`/`ItemVariant` örneği; seçilen ekler ve müşteri notlarını içerir.
-- **StationTicket (KitchenTicket / BarTicket):** Siparişin belirli mutfak/bar istasyonuna yönlendirilen alt kümesi.
-- **TicketItem:** Hazırlık fişinin tek kalemi; sırada, hazırlanıyor, hazır, servis edildi veya iptal durumunu taşır.
+- **Order:** `tenant_id`, `branch_id`, `dining_session_id`, `table_id`, `round_number` ve `order_source` (`Customer`, `Staff`) ile bağlı sipariş aggregate'idir. Sunucu otoriter finansal snapshot'ları (`SubtotalMinorUnits`, `TaxMinorUnits`, `ServiceChargeMinorUnits`, `TotalMinorUnits`), para birimi, `IdempotencyKey`, `RequestFingerprint` ve `ConcurrencyToken` taşır. Genel durumu (`OrderStatus`: `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served`, `Cancelled`), kalemlerinin durumlarından deterministik türetilir (`Order.DeriveStatus`).
+- **OrderItem:** Siparişteki satır kalemi. `menu_item_id`, `item_variant_id`, ürün/varyant ad snapshot'ları, miktar, birim fiyat, vergi oranı baz puanı (`TaxRateBasisPoints`), hazırlık istasyonu (`PreparationStationId`), müşteri notu sanitizasyonu ve satır durumu (`OrderItemStatus`) taşır.
+- **OrderItemModifier:** Kaleme seçilen ek malzeme snapshot'ı. `modifier_group_id`, `modifier_option_id`, grup adı, seçenek adı ve `price_delta_minor_units` değerlerini değişmez olarak saklar.
+- **OrderAuditEntry:** Sipariş oluşturma, durum geçişi veya kalem iptali/zayiatı anında üretilen değişmez (immutable) denetim kaydıdır. PostgreSQL trigger'ı ile UPDATE/DELETE engellenmiştir. Güvenlik ve veri koruması gereği serbest metin müşteri notları audit detaylarına kopyalanmaz; maskeli metadata saklanır.
+- **StationTicket (KitchenTicket / BarTicket):** Gelecekteki Faz 11 KDS aşamasına ait olup siparişin belirli mutfak/bar istasyonuna yönlendirilen alt kümesini temsil eder.
+- **TicketItem:** İstasyon fişinin tek kalemi; istasyon ekranında hazırlık durumunu izler.
 
 ### 3.6. Hesap, Ödeme ve Bahşiş
 

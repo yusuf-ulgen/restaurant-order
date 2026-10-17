@@ -110,4 +110,15 @@ Müşteri deneyimi ve hizmet talebi doğrulaması; TypeScript sözleşme ve drif
 
 - **Frontend Birim / Bileşen:** CUST-01 Karşılama, CUST-02 Menü ve Kategoriler, CUST-03 Ürün Özelleştirme ve Varyant/Modifier seçimi, CUST-04 Sepet İncelemesi ve `sessionStorage` draft kurtarma/temizleme, CUST-06 Hizmet Talepleri ve DiningSession fatura talebi akışları kapsamlı Vitest testleriyle doğrulanır.
 - **E2E Playwright Doğrulaması (`tests/e2e`):** Deterministik sentetik seed (`e2e-catalog-seed.ts`) üzerinden tam 15 adımlı müşteri yolculuğu (`customer-journey.spec.ts`) ve olumsuz durum senaryoları (`customer-negative.spec.ts`) çalıştırılır. QR tarama, oturum kurtarma, menü filtreleme, ürün özelleştirme, sepet yönetimi, garson çağırma, duplicate koruması, iptal ve hesap isteme adımları gerçek tarayıcıda test edilir; raw token veya QR sızıntısı olmaması teyit edilir.
-- **Sertleştirme ve Sınırlar:** Gerçek sipariş gönderimi (order submission/persistence) Faz 8 kapsamındadır ve Faz 7'de test edilmez ya da iddia edilmez. Canlı KDS/garson SignalR bildirimleri Faz 9–11 kapsamındadır.
+- **Sertleştirme ve Sınırlar:** Canlı KDS/garson SignalR bildirimleri Faz 9–11 kapsamındadır.
+
+## Faz 8 Sipariş Çekirdeği Doğrulaması
+
+Sipariş çekirdeği doğrulaması; arka uç alan/birim testlerini, PostgreSQL 16 Testcontainers entegrasyon testlerini, TypeScript sözleşme ve drift testlerini, ön uç bileşen testlerini (`apps/customer-web`) ve tam E2E Playwright kullanıcı ve olumsuz durum senaryolarını kapsar.
+
+- **Alan ve Yetkili Fiyatlandırma Motoru:** İstemciden gelen birim fiyat, ara toplam, vergi, servis ücreti veya genel toplam asla kabul edilmez; sunucu tarafı katalog ve şube ayarlarından tek veritabanı işleminde hesaplanır. 86 yapılmış, pasif, geçersiz ürün/varyant veya uyumsuz modifier seçimleri anında `400 Bad Request` ile reddedilir.
+- **İdempotency ve Deterministik Parmak İzi:** `Idempotency-Key` başlığı ve SHA-256 tabanlı kanonik istek parmak izi ile deterministik yeniden oynatma (`200 OK` / `201 Created`) garanti edilir. Aynı anahtarla farklı gövde gönderilirse `409 Conflict` üretilir.
+- **Eşzamanlılık ve Güvenlik:** Kapanmış veya fatura istenmiş (`BillRequested`) masalarda sipariş oluşturma reddedilir. Masadan gelen eşzamanlı iki sipariş iki ayrı round (`RoundNumber`) olarak sıra numarası alır. Ham SQL unique violation hataları dışarı 500 sızdırılmaz; `CONCURRENCY_CONFLICT` (409) Problem Details olarak döner.
+- **E2E 15 Adımlı Yolculuk ve Negatif Akışlar (`tests/e2e`):** Deterministik katalog seed üzerinden QR tarama, oturum girişi, menü, ürün özelleştirme, sepet, onay modalı, backend `201 Created` doğrulaması, sipariş turu görüntüleme, sepet temizliği, sayfa yenileme, sipariş geçmişinden görüntüleme ve veritabanında tek sipariş oluştuğunun doğrulanması (15 adım) eksiksiz test edilir. Negatif akışlarda gevşek durum kodları (ör. `[400, 401, 403]`) yerine kesin sözleşme kodları (`401`, `400`, `409`) assert edilir.
+- **Personel Siparişi ve İptal Yaşam Döngüsü:** Waiter ve yetkili roller için hazırlık öncesi (`PendingPreparation`) kalem iptali (`orders.items.cancel_pre_prep`) ve hazırlık aşamasında yönetici yetkili void (`orders.items.void_in_prep`) yaşam döngüsü kuralları entegrasyon testleriyle doğrulanmıştır. Müşteri notları audit log'da hashlenerek/maskelenerek PII sızıntısı önlenir.
+

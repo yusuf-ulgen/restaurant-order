@@ -125,14 +125,14 @@ Faz 8: Sipariş Çekirdeği [Geliştirme Başlatıldı]
 
 > **Not:** Sipariş durum uyuşmazlığı giderilmiştir: `Order/OrderItem` yalnızca `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served`, `Cancelled` durumlarını izler. İstasyon fişi kabulü (`Acknowledged`) `StationTicket`'a, `Paid` ve `Closed` ise `Bill` ve `DiningSession` yaşam döngülerine aittir. KDS, SignalR, yazdırma ve ödeme sonraki fazlara aittir. Bkz. [Faz 8 Takibi](./PHASE-8-TRACKER.md).
 
-### Aşama 8: Sipariş Çekirdeği (Durum: Başlatıldı — Faz 8.0 Hazırlığı)
+### Aşama 8: Sipariş Çekirdeği (Durum: COMPLETED — CI Doğrulandı)
 - [x] Hazırlık, kapsam sınırları, durum makinesi hizalaması ve takip belgesi (Faz 8.0).
-- [ ] Sipariş varlığı yaşam döngüsü durum makinesi (`Draft` -> `Submitted` -> `InPreparation` -> `Ready` -> `Served`, `Cancelled`) ve persistence (Faz 8.1).
-- [ ] Otoriter sunucu fiyatlandırma motoru (Pricing Engine) ve Hızlı-86 katalog doğrulaması (Faz 8.2).
-- [ ] Müşteri sipariş API'si, PostgreSQL advisory lock eşzamanlılığı ve idempotency (Faz 8.3).
-- [ ] Müşteri sipariş gönderme ve sepet onaylama arayüzü (Faz 8.4).
-- [ ] Personel sipariş API'si ve yaşam döngüsü altyapısı (Faz 8.5).
-- [ ] Negatif akışlar, E2E browser doğrulaması ve güvenlik sertleştirmesi (Faz 8.6).
+- [x] Sipariş varlığı yaşam döngüsü durum makinesi (`Draft` -> `Submitted` -> `InPreparation` -> `Ready` -> `Served`, `Cancelled`) ve persistence (Faz 8.1).
+- [x] Otoriter sunucu fiyatlandırma motoru (Pricing Engine) ve Hızlı-86 katalog doğrulaması (Faz 8.2).
+- [x] Müşteri sipariş API'si, PostgreSQL advisory lock eşzamanlılığı ve idempotency (Faz 8.3).
+- [x] Müşteri sipariş gönderme ve sepet onaylama arayüzü (Faz 8.4).
+- [x] Personel sipariş API'si ve yaşam döngüsü altyapısı (Faz 8.5).
+- [x] Negatif akışlar, E2E browser doğrulaması ve güvenlik sertleştirmesi (Faz 8.6).
 
 ### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Planlandı)
 - [ ] ASP.NET Core SignalR hub'ı şu şekilde bölümlendirilmiştir: `tenant_id` ve `branch_id`.

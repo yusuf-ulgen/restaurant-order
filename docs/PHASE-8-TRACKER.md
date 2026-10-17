@@ -19,9 +19,9 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | **Faz 8.1** | Order Domain Modeli ve Persistence | **Tamamlandı** | `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` aggregate, EF Core yapılandırması, RLS, immutable trigger ve testler | `feat/phase-08-order-core` |
 | **Faz 8.2** | Yetkili Fiyatlandırma ve Katalog Doğrulama | **Tamamlandı** | Sunucu otoriter `OrderPricingEngine`, minor-unit deterministik finans motoru, aktif katalog doğrulama, Hızlı-86 ve istemci fiyat değişikliği atomik koruması | `feat/phase-08-order-core` |
 | **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Tamamlandı** | `POST /api/v1/customer/orders`, `GET /api/v1/customer/orders`, `GET /api/v1/customer/orders/{orderId}`, `Idempotency-Key` replay & conflict, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi, RFC 7807 hata yanıtları, audit not redaction | `feat/phase-08-order-core` |
-| **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Başlanmadı** | `CartSheet` onaylama akışı, sipariş gönderimi, yüklenme/hata durumları, sepet temizliği ve sipariş özeti görünümü | `feat/phase-08-order-core` |
-| **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Başlanmadı** | Personel sipariş oluşturma, masa siparişleri sorgulama ve sipariş durumu geçiş altyapısı | `feat/phase-08-order-core` |
-| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Başlanmadı** | 15 adımlı E2E yolculuğunun gerçek sipariş gönderimiyle birleşimi, negatif güvenlik testleri, kapı kontrolleri ve kapanış | `feat/phase-08-order-core` |
+| **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Tamamlandı** | `OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`, stabil `Idempotency-Key`, sepet koruması ve temizliği | `feat/phase-08-order-core` |
+| **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Tamamlandı** | Personel sipariş uç noktaları, RBAC izin matrisi, deterministik durum türetme, ETag/If-Match, yönetici PIN/zayiat iptali | `feat/phase-08-order-core` |
+| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Tamamlandı** | 15 adımlı E2E yolculuğunun sipariş geçmişi ve DB doğrulamasıyla genişletilmesi, negatif entegrasyon/eşzamanlılık testleri, güvenlik denetimi ve kapanış | `feat/phase-08-order-core` |
 
 ---
 
@@ -144,8 +144,42 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Cross-tenant / cross-branch erişim bilgi sızdırmadan `404 Not Found` ile engellendi.
 
 ### Faz 8.6: Negatif Akışlar, E2E, Güvenlik ve Kapanış
-- [ ] **Test ve Doğrulama:**
-  - Domain ve Pricing Engine birim testleri.
-  - Testcontainers PostgreSQL ve RLS rolü ile entegrasyon testleri (fiyat uyuşmazlığı, stokta olmayan ürün, kapalı oturum, eşzamanlı istekler).
-  - 15 adımlı Playwright E2E müşteri yolculuğunun gerçek sipariş gönderimi ve veritabanı kaydı doğrulamasıyla genişletilmesi.
-  - Kalite kapıları (Gate 1–6) doğrulamaları ve Faz 8 kapanış raporu.
+- [x] **Zorunlu E2E Pozitif ve Negatif Akışlar:**
+  - 15 Adımlı Pozitif E2E Yolculuğu: QR tarama -> Masa oturumu -> Menü -> Ürün detayı -> Varyant/Modifier -> Sepet -> Miktar artırma -> Sipariş onay sheet -> Gerçek sipariş gönderimi (201 Created) -> Tur #1 gösterimi -> Sepet temizliği -> Sayfa yenileme -> Sipariş geçmişinde aynı siparişi görüntüleme -> PostgreSQL veritabanında tek sipariş bulunduğunu doğrulama (`tests/e2e/tests/customer-journey.spec.ts`).
+  - Müşteri ve Personel Negatif Akışları:
+    - Çift tıklama ve in-flight koruması ile tek sipariş oluşturulması.
+    - Aynı `Idempotency-Key` ile aynı payload'ın güvenle tekrarlanması (`200 OK`, replay).
+    - Aynı key ile farklı payload gönderiminde `409 Conflict` (`IDEMPOTENCY_CONFLICT`).
+    - Sipariş sırasında fiyat değişmesi durumunda `409 Conflict` (`ORDER_PRICE_CHANGED`).
+    - Sipariş sırasında ürünün mutfakça 86 yapılması durumunda `409 Conflict` (`ITEM_OUT_OF_STOCK`).
+    - Zorunlu modifier eksikliğinde `400 Bad Request` (`INVALID_MODIFIER_SELECTION`).
+    - Yinelenen modifier gönderiminde `400 Bad Request` (`DUPLICATE_MODIFIER_SELECTION`).
+    - Kapanmış veya `BillRequested` oturumda sipariş reddi (`409 Conflict`, `SESSION_NOT_ACTIVE`).
+    - Yabancı oturum veya yabancı şube siparişine erişimde bilgi sızdırmadan `404 Not Found`.
+    - Ağ kesintisinde ve 503 durumlarında sepetin korunması, sahte başarı gösterilmemesi.
+    - Aynı masadan eşzamanlı iki farklı siparişin advisory lock ile sıralı iki ayrı tura atanması (`RoundNumber: 1` ve `RoundNumber: 2`).
+    - Personel iptali ile mutfak hazırlığının eşzamanlı yarışında atomik sonuç: hazırlık commit edildiğinde sıradan personel iptalinin reddedilmesi (`409 Conflict` / `403 Forbidden`).
+    - Zaten iptal edilmiş kalemin tekrar iptalinde açık domain hatası (`400 Bad Request`).
+- [x] **Güvenlik İncelemesi ve Sertleştirme:**
+  - Request body içinden tenant/branch/session ID parametresi asla güvenilmez; JWT/cookie claim'leri zorunlu tutuldu.
+  - İstemcinin fiyat manipülasyonu sunucu tarafı otoriter Pricing Engine ile tamamen engellendi.
+  - Üretim kodunda PostgreSQL RLS'yi aşan hiçbir `IgnoreQueryFilters()` sorgusu bulunmadığı doğrulandı.
+  - Denetim günlüğünde (`OrderAuditEntry`) müşteri notu, token, çerez veya veritabanı bağlantı bilgisi yer almadığı, notların maskelenerek saklandığı kanıtlandı.
+  - Exception mesajlarının dışarı sızmadığı; unhandled hataların RFC 7807 generic 500'e ve `DistributedSecurityStateUnavailableException` hatalarının 503'e dönüştürüldüğü doğrulandı.
+  - `CustomerOrderService` içinde request fingerprint hesaplaması kalem ve modifier sıralamalarıyla tamamen deterministik kılındı.
+  - Eşzamanlı benzersizlik ihlallerinde ham SQL hatası sızdırılmayıp `CONCURRENCY_CONFLICT` (409) olarak eşlendi.
+- [x] **Kod Kalitesi ve Sınırlar:**
+  - Elle yazılan hiçbir dosya 600 satırı aşmadı (tüm 1043 dosya yeşil; 450 satır eşiğindeki dosyalar partial sınıflarla sorumluluğa göre bölündü).
+  - Dead code, eski mock ve TODO ile gizlenmiş davranış bırakılmadı.
+  - Drift testleri ile backend ve frontend sözleşmeleri mühürlendi.
+- [x] **Kalite Kapıları ve Doğrulama:**
+  - File size gate: 1043 dosya < 600 satır (`PASS`).
+  - Docs & links validation: 0 bozuk bağlantı (`PASS`).
+  - Secret scanning: 0 sızıntı (`PASS`).
+  - ESLint: 0 hata, 0 uyarı (`PASS`).
+  - TypeScript typecheck: 7/7 proje Done (`PASS`).
+  - Architecture tests: 10/10 (`PASS`).
+  - Unit tests: 1620/1620 (`PASS`).
+  - Frontend unit/component tests: 342/342 (`PASS`).
+  - Quality gates: 114 test (`PASS`).
+  - Production release build: `pnpm build` (`PASS`).

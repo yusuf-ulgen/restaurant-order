@@ -252,7 +252,12 @@ public sealed class CustomerOrderService : ICustomerOrderService
 
     private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateCustomerOrderRequest request)
     {
-        var sortedItems = request.Items.Select(i => new
+        var sortedItems = request.Items
+            .OrderBy(i => i.MenuItemId)
+            .ThenBy(i => i.ItemVariantId ?? Guid.Empty)
+            .ThenBy(i => i.Quantity)
+            .ThenBy(i => i.CustomerNote ?? string.Empty)
+            .Select(i => new
         {
             mId = i.MenuItemId,
             vId = i.ItemVariantId,

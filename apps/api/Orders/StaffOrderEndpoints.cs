@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Api.Floor;
 using RestaurantOrder.Api.Tenancy;
@@ -261,6 +262,17 @@ public static class StaffOrderEndpoints
                     title: "Bad Request",
                     detail: de.Message,
                     extensions: extensions),
+
+            DbUpdateException =>
+                Results.Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Conflict",
+                    detail: "Eşzamanlı işlem çakışması tespit edildi. Lütfen tekrar deneyiniz.",
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["errorCode"] = "CONCURRENCY_CONFLICT",
+                        ["correlationId"] = correlationId
+                    }),
 
             _ => FloorEndpointHelpers.HandleException(ex, context)
         };
