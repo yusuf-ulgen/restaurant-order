@@ -163,8 +163,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
         // 1. In context of Tenant 1: order is visible
         await using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tId, false); SELECT COUNT(*) FROM tenancy.orders;";
+            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tId, false);";
             cmd.Parameters.AddWithValue("tId", tenantId1.ToString());
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM tenancy.orders;";
             var count1 = Convert.ToInt32(await cmd.ExecuteScalarAsync());
             Assert.True(count1 >= 1);
         }
@@ -172,8 +177,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
         // 2. In context of Tenant 2: order from Tenant 1 is NOT visible
         await using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tId, false); SELECT COUNT(*) FROM tenancy.orders;";
+            cmd.CommandText = "SELECT set_config('app.current_tenant_id', @tId, false);";
             cmd.Parameters.AddWithValue("tId", tenantId2.ToString());
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM tenancy.orders;";
             var count2 = Convert.ToInt32(await cmd.ExecuteScalarAsync());
             Assert.Equal(0, count2);
         }

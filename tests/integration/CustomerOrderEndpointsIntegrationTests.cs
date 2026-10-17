@@ -327,15 +327,19 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
 
-        var (tenantId, branchId, _, sessionId, menuItemId) = await SetupSessionAndCatalogAsync();
+        var (tenantId, branchId, tableId, sessionId, menuItemId) = await SetupSessionAndCatalogAsync();
 
-        // 86 the item
+        // 86 the item via branch_item_availabilities
         await using (var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
         {
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "UPDATE tenancy.menu_items SET is_active = false WHERE id = @id";
-            cmd.Parameters.AddWithValue("id", menuItemId);
+            cmd.CommandText = @"
+                INSERT INTO tenancy.branch_item_availabilities (id, tenant_id, branch_id, menu_item_id, item_variant_id, is_available, reason_code, note, changed_by_user_id, changed_at, concurrency_token)
+                VALUES (gen_random_uuid(), @tenantId, @branchId, @menuItemId, NULL, false, 'StockOut', '86 out of stock', gen_random_uuid(), NOW(), gen_random_uuid());";
+            cmd.Parameters.AddWithValue("tenantId", tenantId);
+            cmd.Parameters.AddWithValue("branchId", branchId);
+            cmd.Parameters.AddWithValue("menuItemId", menuItemId);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -395,7 +399,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
 
-        var (tenantId, branchId, _, sessionId, menuItemId) = await SetupSessionAndCatalogAsync();
+        var (tenantId, branchId, tableId, sessionId, menuItemId) = await SetupSessionAndCatalogAsync();
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
@@ -409,8 +413,21 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var created = await res.Content.ReadFromJsonAsync<CustomerOrderResponseDto>(JsonOptions);
 
-        // Another session token
+        // Another session token (must exist in DB as active session so it passes session auth middleware)
         var foreignSessionId = Guid.NewGuid();
+        await using (var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, opened_at_utc, activated_at_utc, concurrency_token)
+                VALUES (@sId, @tenantId, @branchId, @tableId, 2, NOW(), NOW(), gen_random_uuid());";
+            cmd.Parameters.AddWithValue("sId", foreignSessionId);
+            cmd.Parameters.AddWithValue("tenantId", tenantId);
+            cmd.Parameters.AddWithValue("branchId", branchId);
+            cmd.Parameters.AddWithValue("tableId", tableId);
+            await cmd.ExecuteNonQueryAsync();
+        }
         var foreignToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, foreignSessionId);
 
         var foreignReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Get, $"/api/v1/customer/orders/{created!.Id}", foreignToken);

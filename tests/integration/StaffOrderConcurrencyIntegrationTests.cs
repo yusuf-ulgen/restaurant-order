@@ -143,7 +143,7 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
             .Options;
         await using (var db = new RestaurantOrderDbContext(dbOptions))
         {
-            var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Id));
+            var order = await db.Orders.IgnoreQueryFilters().Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Id));
             order.StartPreparation();
             await db.SaveChangesAsync();
         }
@@ -157,8 +157,7 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
         cancelReq.Content = JsonContent.Create(new CancelOrderItemRequest("Müşteri vazgeçti"));
 
         var cancelRes = await client.SendAsync(cancelReq);
-        // Either 409 Concurrency Conflict (due to changed concurrency token) or 403 Forbidden (waiter cannot void in-prep item)
-        Assert.True(cancelRes.StatusCode == HttpStatusCode.Conflict || cancelRes.StatusCode == HttpStatusCode.Forbidden);
+        Assert.Equal(HttpStatusCode.Conflict, cancelRes.StatusCode);
 
         // 4. Supervisor/Manager voids the in-prep item with supervisor authority
         // Get fresh order concurrency token

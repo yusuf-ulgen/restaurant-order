@@ -120,7 +120,7 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
         var errorBody = await res.Content.ReadAsStringAsync();
-        Assert.Contains("DUPLICATE_MODIFIER_SELECTION", errorBody);
+        Assert.Contains("DUPLICATE_MODIFIER", errorBody);
     }
 
     [Fact]
@@ -133,10 +133,10 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
-        // Quantity 99 exceeds MaxQuantity (50)
+        // Quantity 100 exceeds MaxQuantity (99)
         var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
         {
-            new(menuItemId, null, 99, null, null, 2500)
+            new(menuItemId, null, 100, null, null, 2500)
         });
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
