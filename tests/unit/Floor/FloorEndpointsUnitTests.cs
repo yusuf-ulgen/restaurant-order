@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using RestaurantOrder.Api.Floor;
+using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
@@ -35,6 +36,11 @@ public class FloorEndpointsUnitTests
         var argEx = FloorEndpointHelpers.HandleException(new ArgumentException("Route branch mismatch"));
         AssertProblem(argEx, StatusCodes.Status400BadRequest);
 
+        var securityEx = FloorEndpointHelpers.HandleException(new DistributedSecurityStateUnavailableException("Redis fail"));
+        var securityProblem = AssertProblem(securityEx, StatusCodes.Status503ServiceUnavailable);
+        Assert.Equal("Service Unavailable", securityProblem.ProblemDetails.Title);
+        Assert.Equal("https://httpstatuses.com/503", securityProblem.ProblemDetails.Type);
+
         var genericEx = FloorEndpointHelpers.HandleException(new InvalidOperationException("Internal db failure"));
         var genericProblem = AssertProblem(genericEx, StatusCodes.Status500InternalServerError);
         Assert.Equal("An unexpected error occurred while processing your request.", genericProblem.ProblemDetails.Detail);
@@ -53,6 +59,28 @@ public class FloorEndpointsUnitTests
 
         Assert.Equal("An unexpected error occurred while processing your request.", problem.ProblemDetails.Detail);
         Assert.DoesNotContain("Secret db string", problem.ProblemDetails.Detail);
+        Assert.Equal(correlationId, problem.ProblemDetails.Extensions["correlationId"]?.ToString());
+        Assert.Equal(correlationId, httpContext.Response.Headers["X-Correlation-Id"].ToString());
+    }
+
+    [Fact]
+    public void HandleException_WithDistributedSecurityStateUnavailableException_Returns503AndMasksDetails()
+    {
+        var httpContext = new DefaultHttpContext();
+        var correlationId = Guid.NewGuid().ToString("D");
+        httpContext.Request.Headers["X-Correlation-Id"] = correlationId;
+
+        var sensitiveMessage = "Redis connection refused on redis-cluster-prod.internal:6379";
+        var ex = new DistributedSecurityStateUnavailableException(sensitiveMessage);
+
+        var result = FloorEndpointHelpers.HandleException(ex, httpContext);
+        var problem = AssertProblem(result, StatusCodes.Status503ServiceUnavailable);
+
+        Assert.Equal("Service Unavailable", problem.ProblemDetails.Title);
+        Assert.Equal("https://httpstatuses.com/503", problem.ProblemDetails.Type);
+        Assert.Equal("Security and rate limiting services are temporarily unavailable. Please try again later.", problem.ProblemDetails.Detail);
+        Assert.DoesNotContain("redis", problem.ProblemDetails.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("6379", problem.ProblemDetails.Detail);
         Assert.Equal(correlationId, problem.ProblemDetails.Extensions["correlationId"]?.ToString());
         Assert.Equal(correlationId, httpContext.Response.Headers["X-Correlation-Id"].ToString());
     }

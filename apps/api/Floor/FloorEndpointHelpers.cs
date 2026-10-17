@@ -117,6 +117,13 @@ internal static class FloorEndpointHelpers
                 ex.Message,
                 correlationId);
         }
+        else if (ex is DistributedSecurityStateUnavailableException)
+        {
+            logger?.LogWarning(
+                ex,
+                "Security or rate-limiting state store is temporarily unavailable. CorrelationId: {CorrelationId}",
+                correlationId);
+        }
         else
         {
             logger?.LogError(
@@ -132,6 +139,12 @@ internal static class FloorEndpointHelpers
 
         return ex switch
         {
+            DistributedSecurityStateUnavailableException => Results.Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Service Unavailable",
+                detail: "Security and rate limiting services are temporarily unavailable. Please try again later.",
+                type: "https://httpstatuses.com/503",
+                extensions: extensions),
             ResourceNotFoundException rnfe => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Not Found", detail: rnfe.Message, type: "https://httpstatuses.com/404", extensions: extensions),
             DuplicateCodeException dce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: dce.Message, type: "https://httpstatuses.com/409", extensions: extensions),
             ConcurrencyConflictException cce => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Conflict", detail: cce.Message, type: "https://httpstatuses.com/409", extensions: extensions),
