@@ -134,6 +134,7 @@ public class CustomerServiceRequestConcurrencyIntegrationTests : IClassFixture<T
         await using var db = new RestaurantOrderDbContext(dbOptions);
 
         var openRecords = await db.ServiceRequests
+            .IgnoreQueryFilters()
             .Where(sr => sr.TenantId == new TenantId(tenantId) &&
                          sr.DiningSessionId == new DiningSessionId(sessionId) &&
                          sr.RequestType == ServiceRequestType.Water &&

@@ -112,6 +112,7 @@ public class CustomerServiceRequestIntegrationTests : IClassFixture<Testcontaine
             .Options;
         await using var auditDb = new RestaurantOrderDbContext(dbOptions);
         var audit = await auditDb.SecurityAuditEvents
+            .IgnoreQueryFilters()
             .Where(a => a.TenantId == new TenantId(tenantId) && a.EventType == SecurityAuditEventType.CustomerServiceRequestCreated)
             .OrderByDescending(a => a.CreatedAtUtc)
             .FirstOrDefaultAsync();
