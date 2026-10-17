@@ -216,6 +216,141 @@ describe('Cart Reducer & Storage Unit Tests', () => {
       expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
     });
 
+    it('clears storage and returns null when selectedModifierOptionIds contains non-string items', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            selectedModifierOptionIds: ['opt-1', 12345], // Contains number
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when quantity is not a safe integer', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            quantity: 1.5, // float
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when unit price is negative or not safe integer', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            unitPriceMinorUnits: -100,
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when lineTotalMinorUnits !== unitPriceMinorUnits * quantity', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            quantity: 2,
+            unitPriceMinorUnits: 15000,
+            lineTotalMinorUnits: 99999, // Inconsistent mathematical total
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when customerNote exceeds CUSTOMER_NOTE_MAX_LENGTH', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            customerNote: 'x'.repeat(201), // exceeds 200 chars
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when customerNote is not string or null', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            customerNote: 12345, // invalid type
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
+    it('clears storage and returns null when configurationSignature is forged or mismatched', () => {
+      const corruptedPayload = {
+        version: CART_STORAGE_SCHEMA_VERSION,
+        sessionId: 'session-123',
+        currency: 'TRY',
+        lines: [
+          {
+            ...sampleLine1,
+            configurationSignature: 'FORGED_SIGNATURE_ATTEMPT',
+          },
+        ],
+      };
+      window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(corruptedPayload));
+
+      const restored = loadCartFromStorage('session-123');
+      expect(restored).toBeNull();
+      expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).toBeNull();
+    });
+
     it('clears cart draft via clearCartFromStorage', () => {
       const state: CartState = {
         sessionId: 'session-123',

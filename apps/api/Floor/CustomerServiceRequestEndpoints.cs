@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -27,7 +28,7 @@ public static class CustomerServiceRequestEndpoints
 
         // POST /api/v1/customer/service-requests
         group.MapPost("", async (
-            [FromBody] CreateCustomerServiceRequest request,
+            [FromBody] CreateCustomerServiceRequestWireDto wireDto,
             HttpContext context,
             IJwtClaimPrincipalParser parser,
             ICustomerServiceRequestService service,
@@ -35,6 +36,17 @@ public static class CustomerServiceRequestEndpoints
         {
             try
             {
+                if (wireDto == null)
+                {
+                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", "Request body is required.");
+                }
+
+                if (!TryParseRequestType(wireDto.RequestType, out var requestType, out var typeError))
+                {
+                    return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", typeError ?? "Invalid request payload.");
+                }
+
+                var request = new CreateCustomerServiceRequest(requestType, wireDto.Note);
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 if (actor.Role != AuthRole.Customer)
                 {
@@ -238,6 +250,51 @@ public static class CustomerServiceRequestEndpoints
         return app;
     }
 
+    private static bool TryParseRequestType(
+        JsonElement element,
+        out ServiceRequestType requestType,
+        out string? errorDetail)
+    {
+        requestType = default;
+        errorDetail = null;
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var str = element.GetString()?.Trim();
+            if (string.IsNullOrEmpty(str))
+            {
+                errorDetail = "requestType string cannot be empty. Allowed values: Waiter, Water, Napkin, Assistance.";
+                return false;
+            }
+
+            if (Enum.TryParse<ServiceRequestType>(str, ignoreCase: true, out var parsed) &&
+                Enum.IsDefined(typeof(ServiceRequestType), parsed))
+            {
+                requestType = parsed;
+                return true;
+            }
+
+            errorDetail = $"Invalid requestType '{str}'. Allowed values: Waiter, Water, Napkin, Assistance.";
+            return false;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number)
+        {
+            if (element.TryGetInt32(out var numeric) &&
+                Enum.IsDefined(typeof(ServiceRequestType), numeric))
+            {
+                requestType = (ServiceRequestType)numeric;
+                return true;
+            }
+
+            errorDetail = $"Invalid numeric requestType '{element.GetRawText()}'. Allowed values: 1 (Waiter), 2 (Water), 3 (Napkin), 4 (Assistance).";
+            return false;
+        }
+
+        errorDetail = "requestType is required and must be a string (e.g. 'Waiter') or valid integer.";
+        return false;
+    }
+
     private static IResult ProblemResult(HttpContext context, int status, string title, string detail)
     {
         return Results.Json(new
@@ -249,4 +306,14 @@ public static class CustomerServiceRequestEndpoints
             instance = context.Request.Path.Value
         }, statusCode: status, contentType: "application/problem+json");
     }
+}
+
+/// <summary>
+/// Wire DTO accepting either string ("Waiter") or numeric representation for customer service requests.
+/// Prevents changing global enum serialization while safely binding browser requests.
+/// </summary>
+public sealed class CreateCustomerServiceRequestWireDto
+{
+    public JsonElement RequestType { get; set; }
+    public string? Note { get; set; }
 }

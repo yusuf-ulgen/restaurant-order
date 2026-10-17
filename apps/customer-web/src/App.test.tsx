@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from './App';
-import { customerQrApi } from './customerQrApi';
+import { customerQrApi, clearCustomerSession } from './customerQrApi';
 import { customerSessionApi, CustomerSessionApiError } from './api/customerSessionApi';
 import { useSessionStateCleanup } from './session/CustomerSessionContext';
 import type { CustomerSessionDto } from '@restaurant-order/contracts';
@@ -24,6 +24,7 @@ describe('Customer Web App', () => {
     vi.restoreAllMocks();
     localStorage.clear();
     sessionStorage.clear();
+    clearCustomerSession();
     vi.spyOn(customerSessionApi, 'getCurrentSession').mockResolvedValue(mockDefaultSession);
   });
 
@@ -172,6 +173,20 @@ describe('Customer Web App', () => {
         tableName: 'Teras 7',
       });
 
+      const realSession: CustomerSessionDto = {
+        sessionId: 'sess-1',
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        tableId: 'real-table-uuid-777',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+        sessionStatus: 'Active',
+        concurrencyToken: 'real-etag-token-abc',
+        guestCount: 3,
+        openedAtUtc: '2026-10-17T12:00:00Z',
+      };
+      const getSessionSpy = vi.spyOn(customerSessionApi, 'getCurrentSession').mockResolvedValue(realSession);
+
       render(<App token="landing-token" />);
 
       const btn = await screen.findByTestId('continue-to-table-btn');
@@ -179,6 +194,40 @@ describe('Customer Web App', () => {
 
       expect(await screen.findByText('Masa T-07 • Teras 7')).toBeDefined();
       expect(screen.getByText('Oturum Açık')).toBeDefined();
+      expect(getSessionSpy).toHaveBeenCalled();
+    });
+
+    it('does not create synthetic active session when session recovery fails after QR exchange', async () => {
+      vi.spyOn(customerQrApi, 'resolveQr').mockResolvedValue({
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        brandName: 'Gurme Restoran',
+        branchName: 'Kadıköy',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+        mode: 'static',
+        hasActiveSession: false,
+        activeSessionStatus: null,
+      });
+      vi.spyOn(customerQrApi, 'exchangeQr').mockResolvedValue({
+        sessionId: 'sess-1',
+        sessionStatus: 'Active',
+        accessTokenExpiresAt: '2026-10-10T16:00:00Z',
+        tenantId: 'tenant-1',
+        branchId: 'branch-1',
+        tableNumber: 'T-07',
+        tableName: 'Teras 7',
+      });
+      vi.spyOn(customerSessionApi, 'getCurrentSession').mockResolvedValue(null);
+
+      render(<App token="landing-token" />);
+
+      const btn = await screen.findByTestId('continue-to-table-btn');
+      fireEvent.click(btn);
+
+      // Should display session error or retry, NOT synthetic active session
+      expect(await screen.findByText(/Oturum bilgileri doğrulanamadı/)).toBeDefined();
+      expect(screen.queryByTestId('customer-active-session')).toBeNull();
     });
   });
 

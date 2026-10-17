@@ -194,6 +194,9 @@ importers:
       '@restaurant-order/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@restaurant-order/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@types/node':
         specifier: ^22.13.9
         version: 22.20.3

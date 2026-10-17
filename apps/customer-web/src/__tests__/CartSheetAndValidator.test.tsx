@@ -4,6 +4,7 @@ import type { RuntimeMenuReadModel, DraftCartLine } from '@restaurant-order/cont
 import { verifyCartAgainstRuntimeMenu } from '../cart/cartValidator';
 import { CartProvider } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
+import { generateConfigurationSignature } from '../utils/customizationUtils';
 
 describe('CartSheet & Validator Integration Tests', () => {
   const sampleRuntimeMenu: RuntimeMenuReadModel = {
@@ -310,6 +311,84 @@ describe('CartSheet & Validator Integration Tests', () => {
 
       const notice = screen.getByTestId('phase8-order-notice');
       expect(notice.textContent).toContain('Faz 8 kapsamında');
+    });
+
+    it('displays human-readable item, variant, and modifier names instead of raw technical IDs', () => {
+      const preseededDraft = {
+        version: 1,
+        sessionId: 'test-session',
+        currency: 'TRY',
+        lines: [sampleLine],
+        savedAt: Date.now(),
+      };
+      window.sessionStorage.setItem('ro_customer_cart_draft', JSON.stringify(preseededDraft));
+
+      render(
+        <CartProvider sessionId="test-session">
+          <CartSheet
+            isOpen={true}
+            onClose={vi.fn()}
+            runtimeMenu={sampleRuntimeMenu}
+          />
+        </CartProvider>
+      );
+
+      // Verifies human readable names are present
+      expect(screen.getByTestId(`cart-item-name-${sampleLine.configurationSignature}`).textContent).toBe('Klasik Burger');
+      expect(screen.getByTestId(`cart-item-variant-${sampleLine.configurationSignature}`).textContent).toBe('(Tek Köfte)');
+      expect(screen.getByTestId(`cart-item-modifiers-${sampleLine.configurationSignature}`).textContent).toBe('Mayonez');
+
+      // Verifies technical UUIDs are not rendered
+      expect(screen.queryByText('item-burger')).toBeNull();
+      expect(screen.queryByText('var-single')).toBeNull();
+      expect(screen.queryByText('opt-mayo')).toBeNull();
+    });
+
+    it('displays friendly fallback text when item is removed from menu without exposing raw UUID', () => {
+      const orphanSig = generateConfigurationSignature({
+        menuItemId: 'uuid-orphan-item-1234',
+        variantId: 'uuid-orphan-variant-5678',
+        selectedModifierOptionIds: ['uuid-orphan-mod-9999'],
+        customerNote: null,
+      });
+
+      const orphanLine: DraftCartLine = {
+        menuItemId: 'uuid-orphan-item-1234',
+        variantId: 'uuid-orphan-variant-5678',
+        selectedModifierOptionIds: ['uuid-orphan-mod-9999'],
+        customerNote: null,
+        quantity: 1,
+        unitPriceMinorUnits: 10000,
+        lineTotalMinorUnits: 10000,
+        currency: 'TRY',
+        configurationSignature: orphanSig,
+      };
+
+      const preseededDraft = {
+        version: 1,
+        sessionId: 'test-session',
+        currency: 'TRY',
+        lines: [orphanLine],
+        savedAt: Date.now(),
+      };
+      window.sessionStorage.setItem('ro_customer_cart_draft', JSON.stringify(preseededDraft));
+
+      render(
+        <CartProvider sessionId="test-session">
+          <CartSheet
+            isOpen={true}
+            onClose={vi.fn()}
+            runtimeMenu={sampleRuntimeMenu}
+          />
+        </CartProvider>
+      );
+
+      // Verifies fallback name
+      expect(screen.getByTestId(`cart-item-name-${orphanLine.configurationSignature}`).textContent).toBe('Menüden Kaldırılan Ürün');
+      // Verifies raw technical UUID is never shown
+      expect(screen.queryByText('uuid-orphan-item-1234')).toBeNull();
+      expect(screen.queryByText('uuid-orphan-variant-5678')).toBeNull();
+      expect(screen.queryByText('uuid-orphan-mod-9999')).toBeNull();
     });
   });
 });

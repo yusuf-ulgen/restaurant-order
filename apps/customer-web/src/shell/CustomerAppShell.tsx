@@ -5,7 +5,7 @@ import {
   EmptyState,
   AppShell,
 } from '@restaurant-order/ui';
-import type { CustomerSessionDto, QrExchangeResponse, RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import type { QrExchangeResponse, RuntimeMenuReadModel } from '@restaurant-order/contracts';
 import { useCustomerSession } from '../session/CustomerSessionContext';
 import { ActiveSessionView } from '../views/ActiveSessionView';
 import { ExpiredSessionView } from '../views/ExpiredSessionView';
@@ -37,13 +37,15 @@ export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
     status,
     session,
     error,
-    setSession,
     clearSession,
     resetToUnauthenticated,
+    refreshSession,
     retry,
   } = useCustomerSession();
 
-  const [welcomeSession, setWelcomeSession] = useState<QrExchangeResponse | null>(null);
+  const [welcomeSession] = useState<QrExchangeResponse | null>(null);
+  const [isResolvingSession, setIsResolvingSession] = useState(false);
+  const [exchangeError, setExchangeError] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
 
   if (initialError) {
     throw new Error('Aktif oturum yüklenemedi.');
@@ -65,21 +67,20 @@ export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
     (hasQrInUrl() && !session && !welcomeSession)
   );
 
-  const handleSessionReady = (qrSession: QrExchangeResponse) => {
-    setWelcomeSession(qrSession);
-    const sessionDto: CustomerSessionDto = {
-      sessionId: qrSession.sessionId,
-      tenantId: qrSession.tenantId,
-      branchId: qrSession.branchId,
-      tableId: qrSession.sessionId,
-      tableNumber: qrSession.tableNumber,
-      tableName: qrSession.tableName,
-      sessionStatus: qrSession.sessionStatus,
-      concurrencyToken: qrSession.sessionId,
-      guestCount: 1,
-      openedAtUtc: new Date().toISOString(),
-    };
-    setSession(sessionDto);
+  const handleSessionReady = async (_qrSession: QrExchangeResponse) => {
+    setIsResolvingSession(true);
+    setExchangeError(null);
+    try {
+      const realSession = await refreshSession();
+      if (!realSession) {
+        setExchangeError({ message: 'Oturum bilgileri doğrulanamadı. Lütfen QR kodunu yeniden tarayın.' });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Oturum alınırken bir hata oluştu.';
+      setExchangeError({ message: msg });
+    } finally {
+      setIsResolvingSession(false);
+    }
   };
 
   const currentDisplaySession = session || (welcomeSession ? {
@@ -111,7 +112,18 @@ export const CustomerAppShell: React.FC<CustomerAppShellProps> = ({
       }}
     >
       {children}
-      {isQrRoute && !session ? (
+      {isResolvingSession ? (
+        <SessionLoadingView message="Masa oturumu hazırlanıyor..." />
+      ) : exchangeError ? (
+        <SessionErrorView
+          message={exchangeError.message}
+          retryAfterSeconds={exchangeError.retryAfterSeconds}
+          onRetry={() => {
+            setExchangeError(null);
+            refreshSession();
+          }}
+        />
+      ) : isQrRoute && !session ? (
         <TableWelcomeView
           initialToken={token}
           onSessionReady={handleSessionReady}

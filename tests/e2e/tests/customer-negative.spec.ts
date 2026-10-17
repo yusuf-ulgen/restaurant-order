@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { CART_STORAGE_KEY } from '@restaurant-order/contracts';
 import {
   seedCustomerExperienceScenario,
   cleanupCustomerScenario,
@@ -48,10 +49,10 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
     await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
     await page.getByTestId('continue-to-table-btn').click();
 
-    // Inject corrupted draft into sessionStorage
-    await page.evaluate(() => {
-      sessionStorage.setItem('restaurant_order_cart_draft_v1', 'INVALID_CORRUPTED_JSON_<<<>>>');
-    });
+    // Inject corrupted draft into sessionStorage using the authoritative production key
+    await page.evaluate((key) => {
+      sessionStorage.setItem(key, 'INVALID_CORRUPTED_JSON_<<<>>>');
+    }, CART_STORAGE_KEY);
 
     await page.reload();
     await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
@@ -59,6 +60,10 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
     // Open Cart: should gracefully handle corrupted draft by falling back to clean empty state
     await page.getByTestId('bottom-nav-cart-btn').click();
     await expect(page.getByTestId('cart-empty-state')).toBeVisible({ timeout: 5000 });
+
+    // Assert that the corrupt entry was truly and permanently removed from sessionStorage
+    const storedAfter = await page.evaluate((key) => sessionStorage.getItem(key), CART_STORAGE_KEY);
+    expect(storedAfter).toBeNull();
   });
 
   test('warns in cart when an item in cart is marked out of stock (86) on backend', async ({

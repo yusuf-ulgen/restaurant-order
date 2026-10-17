@@ -65,110 +65,140 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
 
         try
         {
-            // Advisory lock on idempotency key to prevent race conditions on concurrent identical keys
+            // Advisory lock on idempotency key and session+requestType to serialize concurrent requests
             if (_dbContext.Database.IsNpgsql())
-        {
-            var lockKey = $"sr-idem:{tenantId.Value:N}:{sessionId.Value:N}:{trimmedKey}";
-            await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))", ct);
-        }
-
-        // 3. Verify session state from database source of truth
-        var session = await _dbContext.DiningSessions
-            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId && s.Id == sessionId, ct)
-            ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found in branch '{branchId.Value}'.");
-
-        if (session.Status == DiningSessionStatus.Closed || session.MergedIntoSessionId.HasValue)
-        {
-            throw new DomainException("Cannot submit service request for a closed or merged dining session.");
-        }
-
-        if (session.Status == DiningSessionStatus.BillRequested)
-        {
-            throw new DomainException("Cannot submit service request for a dining session with bill requested.");
-        }
-
-        var sanitizedNote = ServiceRequest.ValidateAndSanitizeNote(request.Note);
-        var expectedFingerprint = ServiceRequest.ComputeFingerprint(
-            tenantId,
-            branchId,
-            sessionId,
-            session.TableId,
-            request.RequestType,
-            sanitizedNote);
-
-        // 4. Idempotency Check: Existing key check
-        var existingWithKey = await _dbContext.ServiceRequests
-            .FirstOrDefaultAsync(sr => sr.TenantId == tenantId &&
-                                       sr.BranchId == branchId &&
-                                       sr.IdempotencyKey == trimmedKey, ct);
-
-        if (existingWithKey != null)
-        {
-            if (!ServiceRequest.MatchesFingerprint(existingWithKey.RequestFingerprint, expectedFingerprint) ||
-                existingWithKey.DiningSessionId != sessionId)
             {
-                throw new ConcurrencyConflictException(
-                    $"Idempotency key '{trimmedKey}' was already used with a different request payload or session.");
+                var lockKey = $"sr-idem:{tenantId.Value:N}:{sessionId.Value:N}:{trimmedKey}";
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))", ct);
+
+                var sessionTypeLockKey = $"sr-type:{tenantId.Value:N}:{sessionId.Value:N}:{(int)request.RequestType}";
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({sessionTypeLockKey}))", ct);
             }
 
-            // Replay matching idempotency record
-            if (localTx != null)
+            // 3. Verify session state from database source of truth
+            var session = await _dbContext.DiningSessions
+                .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId && s.Id == sessionId, ct)
+                ?? throw new ResourceNotFoundException($"Dining session '{sessionId.Value}' was not found in branch '{branchId.Value}'.");
+
+            if (session.Status == DiningSessionStatus.Closed || session.MergedIntoSessionId.HasValue)
             {
-                await localTx.CommitAsync(ct);
+                throw new DomainException("Cannot submit service request for a closed or merged dining session.");
             }
-            return MapToDto(existingWithKey);
-        }
 
-        // 5. Open request deduplication: if an open request of the same type already exists, return it safely
-        var existingOpen = await _dbContext.ServiceRequests
-            .FirstOrDefaultAsync(sr => sr.TenantId == tenantId &&
-                                       sr.DiningSessionId == sessionId &&
-                                       sr.RequestType == request.RequestType &&
-                                       sr.Status == ServiceRequestStatus.Open, ct);
-
-        if (existingOpen != null)
-        {
-            if (localTx != null)
+            if (session.Status == DiningSessionStatus.BillRequested)
             {
-                await localTx.CommitAsync(ct);
+                throw new DomainException("Cannot submit service request for a dining session with bill requested.");
             }
-            return MapToDto(existingOpen);
-        }
 
-        // 6. Rate limiting & spam prevention (enforced on new request creations)
-        await _rateLimiter.EnsureNotRateLimitedAsync(tenantId.Value, sessionId.Value, ct);
+            var sanitizedNote = ServiceRequest.ValidateAndSanitizeNote(request.Note);
+            var expectedFingerprint = ServiceRequest.ComputeFingerprint(
+                tenantId,
+                branchId,
+                sessionId,
+                session.TableId,
+                request.RequestType,
+                sanitizedNote);
 
-        // 7. Create and persist new service request
-        var serviceRequest = ServiceRequest.Create(
-            tenantId,
-            branchId,
-            sessionId,
-            session.TableId,
-            request.RequestType,
-            sanitizedNote,
-            trimmedKey);
+            // 4. Idempotency Check: Existing key check
+            var existingWithKey = await _dbContext.ServiceRequests
+                .FirstOrDefaultAsync(sr => sr.TenantId == tenantId &&
+                                           sr.BranchId == branchId &&
+                                           sr.IdempotencyKey == trimmedKey, ct);
 
-        _dbContext.ServiceRequests.Add(serviceRequest);
-
-        // 7. Security audit event
-        var audit = SecurityAuditEvent.Create(
-            tenantId,
-            SecurityAuditEventType.CustomerServiceRequestCreated,
-            DateTimeOffset.UtcNow,
-            userId: null,
-            branchId: branchId,
-            detailsJson: JsonSerializer.Serialize(new
+            if (existingWithKey != null)
             {
-                requestId = serviceRequest.Id.Value,
-                sessionId = sessionId.Value,
-                tableId = session.TableId.Value,
-                requestType = serviceRequest.RequestType.ToString(),
-                note = serviceRequest.Note
-            }));
-        _dbContext.SecurityAuditEvents.Add(audit);
+                if (!ServiceRequest.MatchesFingerprint(existingWithKey.RequestFingerprint, expectedFingerprint) ||
+                    existingWithKey.DiningSessionId != sessionId)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Idempotency key '{trimmedKey}' was already used with a different request payload or session.");
+                }
 
-            await _dbContext.SaveChangesAsync(ct);
+                // Replay matching idempotency record
+                if (localTx != null)
+                {
+                    await localTx.CommitAsync(ct);
+                }
+                return MapToDto(existingWithKey);
+            }
+
+            // 5. Open request deduplication: if an open request of the same type already exists, return it safely
+            var existingOpen = await _dbContext.ServiceRequests
+                .FirstOrDefaultAsync(sr => sr.TenantId == tenantId &&
+                                           sr.DiningSessionId == sessionId &&
+                                           sr.RequestType == request.RequestType &&
+                                           sr.Status == ServiceRequestStatus.Open, ct);
+
+            if (existingOpen != null)
+            {
+                if (localTx != null)
+                {
+                    await localTx.CommitAsync(ct);
+                }
+                return MapToDto(existingOpen);
+            }
+
+            // 6. Rate limiting & spam prevention (enforced on new request creations)
+            await _rateLimiter.EnsureNotRateLimitedAsync(tenantId.Value, sessionId.Value, ct);
+
+            // 7. Create and persist new service request
+            var serviceRequest = ServiceRequest.Create(
+                tenantId,
+                branchId,
+                sessionId,
+                session.TableId,
+                request.RequestType,
+                sanitizedNote,
+                trimmedKey);
+
+            _dbContext.ServiceRequests.Add(serviceRequest);
+
+            // 8. Security audit event (strictly redact note content for customer privacy)
+            var audit = SecurityAuditEvent.Create(
+                tenantId,
+                SecurityAuditEventType.CustomerServiceRequestCreated,
+                DateTimeOffset.UtcNow,
+                userId: null,
+                branchId: branchId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    requestId = serviceRequest.Id.Value,
+                    sessionId = sessionId.Value,
+                    tableId = session.TableId.Value,
+                    requestType = serviceRequest.RequestType.ToString(),
+                    hasNote = !string.IsNullOrWhiteSpace(serviceRequest.Note)
+                }));
+            _dbContext.SecurityAuditEvents.Add(audit);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pex && pex.SqlState == "23505")
+            {
+                // Unique constraint violation on partial open index ix_service_requests_tenant_session_type_open.
+                // Concurrent race created the open record; safely fetch and return it.
+                var raceOpen = await _dbContext.ServiceRequests
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(sr => sr.TenantId == tenantId &&
+                                               sr.DiningSessionId == sessionId &&
+                                               sr.RequestType == request.RequestType &&
+                                               sr.Status == ServiceRequestStatus.Open, ct);
+
+                if (raceOpen != null)
+                {
+                    if (localTx != null)
+                    {
+                        await localTx.CommitAsync(ct);
+                    }
+                    return MapToDto(raceOpen);
+                }
+
+                throw;
+            }
+
             if (localTx != null)
             {
                 await localTx.CommitAsync(ct);

@@ -176,6 +176,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
                 <CartItemRow
                   key={line.configurationSignature}
                   line={line}
+                  runtimeMenu={runtimeMenu}
                   issue={lineIssue}
                   onUpdateQuantity={updateQuantity}
                   onRemoveLine={removeLine}

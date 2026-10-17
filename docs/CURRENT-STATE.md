@@ -13,7 +13,7 @@ Güncelleme: 2026-10-16. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [PR #16](https://github.com/yusuf-ulgen/restaurant-order/pull/16): Faz 6 masa düzeni, kriptografik QR ve oturum yaşam döngüsü sertleştirmeleri main'e birleştirildi.
 - Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md), [Faz 6 takibi](./PHASE-6-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 7: Müşteri Deneyimi (Tamamlandı — CI Doğrulandı)
+## Aktif Görev — Faz 7: Müşteri Deneyimi (Geliştirme Tamamlandı — GitHub CI Doğrulaması Bekleniyor)
 
 - Aktif dal: `feat/phase-07-customer-experience`.
 - Takip belgesi: [Faz 7 Takibi](./PHASE-7-TRACKER.md).
@@ -40,4 +40,4 @@ Güncelleme: 2026-10-16. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 7 tamamlandı ve CI kalite kapıları ile doğrulandı. PR incelemesinin ardından `main` dalına birleştirilerek Faz 8: Sipariş Çekirdeği (Order Aggregate, Yetkili Fiyatlandırma, Sipariş Gönderimi) geliştirmesine başlanacaktır.
+Faz 7 geliştirmesi ve yerel kapı kontrolleri tamamlandı; GitHub CI doğrulaması bekleniyor. CI başarıyla tamamlandıktan ve PR incelendikten sonra `main` dalına birleştirilerek Faz 8: Sipariş Çekirdeği (Order Aggregate, Yetkili Fiyatlandırma, Sipariş Gönderimi) geliştirmesine başlanacaktır.

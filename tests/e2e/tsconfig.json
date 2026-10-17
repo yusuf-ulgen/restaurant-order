@@ -3,6 +3,7 @@
   "extends": "@restaurant-order/config/tsconfig.node.json",
   "compilerOptions": {
     "rootDir": "./",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "noEmit": true
   },
   "include": ["**/*.ts"]

@@ -105,9 +105,9 @@ Faz 6: Masalar, QR ve Oturumlar [Tamamlandı — CI Doğrulandı]
 - [x] Müşteri JWT Bearer boru hattı ve önbellek güvenliği: GUID formatında olmayan `sub`, eksik `sub`, oturum claim uyuşmazlığı, gelecek tarihli `iat`, 4096 bayttan uzun token ve kapalı/birleştirilmiş oturum reddi entegrasyon testleriyle doğrulandı. Redis önbelleğinde negatif-yalnızca TTL stratejisiyle stale pozitif "1" yetkilendirmesi imkansız kılındı.
 - [x] Birim, mimari, entegrasyon ve E2E testleri: 1.422 backend birim testi, Testcontainers PostgreSQL & Redis entegrasyon testleri, 10 mimari testi, 359 frontend birim testi (0 konsol uyarısı), 0 derleme uyarısı. Playwright E2E disposable servisler üzerinde 3 passed, 0 skipped olarak tamamlandı.
 
-> **Not:** Aşama 7 (Müşteri Deneyimi) tamamlandı; bkz. [Faz 7 Takibi](./PHASE-7-TRACKER.md).
+> **Not:** Aşama 7 (Müşteri Deneyimi) geliştirmesi tamamlandı, GitHub CI doğrulaması bekleniyor; bkz. [Faz 7 Takibi](./PHASE-7-TRACKER.md).
 
-### Aşama 7: Müşteri Deneyimi (Durum: COMPLETED — CI Doğrulandı)
+### Aşama 7: Müşteri Deneyimi (Durum: Geliştirme Tamamlandı — GitHub CI Doğrulaması Bekleniyor)
 - [x] Arayüz 1: QR Müşteri Web Uygulaması ve oturum kurtarma altyapısı (Faz 7.0).
 - [x] Duyarlı menü taraması, alerjen filtreleme ve öğe arama CUST-02 (Faz 7.1).
 - [x] Etkileşimli öğe değiştirici yapılandırma modalı CUST-03 (Faz 7.2).

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { RuntimeMenuItem } from '@restaurant-order/contracts';
-import { Card, Badge, Button } from '@restaurant-order/ui';
+import { Card, Badge } from '@restaurant-order/ui';
 import { formatCurrency, sanitizeImageUrl } from '../../utils/menuUtils';
 
 export interface MenuItemCardProps {
@@ -19,13 +19,12 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const [imageFailed, setImageFailed] = useState(false);
   const safeImageUrl = sanitizeImageUrl(item.imageUrl);
 
-  // Calculate starting price across variants if any exist
-  const variantPrices = (item.variants || [])
-    .filter((v) => v.isAvailable)
-    .map((v) => v.absolutePriceMinorUnits);
+  // Calculate starting price strictly across available variants if variants exist
+  const availableVariants = (item.variants || []).filter((v) => v.isAvailable);
+  const variantPrices = availableVariants.map((v) => v.absolutePriceMinorUnits);
 
   const minPrice = variantPrices.length > 0
-    ? Math.min(item.basePriceMinorUnits, ...variantPrices)
+    ? Math.min(...variantPrices)
     : item.basePriceMinorUnits;
 
   const hasMultiplePrices = variantPrices.length > 1 && Math.max(...variantPrices) > minPrice;
@@ -58,6 +57,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
       onClick={() => onSelect(item)}
       role="button"
       tabIndex={0}
+      aria-label={`${item.name} ürün detayını incele`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -268,21 +268,27 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
             )}
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onSelect(item)}
+          <span
+            aria-hidden="true"
             data-testid={`inspect-item-btn-${item.id}`}
-            aria-label={`${item.name} ürün detayını incele`}
             style={{
-              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '36px',
               paddingLeft: 'var(--ro-space-3)',
               paddingRight: 'var(--ro-space-3)',
+              borderRadius: 'var(--ro-radius-md)',
+              border: '1px solid var(--ro-color-border)',
+              backgroundColor: 'transparent',
+              color: 'var(--ro-color-text-primary)',
+              fontSize: 'var(--ro-font-size-sm)',
+              fontWeight: 'var(--ro-font-weight-semibold)',
+              pointerEvents: 'none',
             }}
           >
             İncele
-          </Button>
+          </span>
         </div>
       </div>
     </Card>

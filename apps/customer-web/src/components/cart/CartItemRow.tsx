@@ -1,17 +1,87 @@
-import React, { useState } from 'react';
-import type { DraftCartLine, CartValidationIssue } from '@restaurant-order/contracts';
+import React, { useState, useMemo } from 'react';
+import type { DraftCartLine, CartValidationIssue, RuntimeMenuReadModel, RuntimeMenuItem } from '@restaurant-order/contracts';
 import { formatCurrency } from '../../utils/menuUtils';
 
 export interface CartItemRowProps {
   line: DraftCartLine;
+  runtimeMenu?: RuntimeMenuReadModel | null;
   issue?: CartValidationIssue;
   onUpdateQuantity: (signature: string, quantity: number) => void;
   onRemoveLine: (signature: string) => void;
   currency: string;
 }
 
+export interface CartItemDisplayInfo {
+  itemName: string;
+  variantName: string | null;
+  modifierOptionNames: string[];
+  isItemRemoved: boolean;
+}
+
+export function resolveCartItemDisplay(
+  line: DraftCartLine,
+  runtimeMenu?: RuntimeMenuReadModel | null
+): CartItemDisplayInfo {
+  if (!runtimeMenu?.menus) {
+    return {
+      itemName: 'Seçilen Ürün',
+      variantName: line.variantId ? 'Seçilen Varyant' : null,
+      modifierOptionNames: line.selectedModifierOptionIds.map(() => 'Ek Seçenek'),
+      isItemRemoved: false,
+    };
+  }
+
+  let foundItem: RuntimeMenuItem | null = null;
+  for (const menu of runtimeMenu.menus) {
+    for (const cat of menu.categories) {
+      const match = cat.items.find((item) => item.id === line.menuItemId);
+      if (match) {
+        foundItem = match;
+        break;
+      }
+    }
+    if (foundItem) break;
+  }
+
+  if (!foundItem) {
+    return {
+      itemName: 'Menüden Kaldırılan Ürün',
+      variantName: null,
+      modifierOptionNames: [],
+      isItemRemoved: true,
+    };
+  }
+
+  let variantName: string | null = null;
+  if (line.variantId) {
+    const v = foundItem.variants.find((variant) => variant.id === line.variantId);
+    variantName = v ? v.name : 'Seçenek';
+  }
+
+  const modifierOptionNames: string[] = [];
+  for (const optId of line.selectedModifierOptionIds) {
+    let optName: string | null = null;
+    for (const group of foundItem.modifierGroups) {
+      const opt = group.options.find((o) => o.id === optId);
+      if (opt) {
+        optName = opt.name;
+        break;
+      }
+    }
+    modifierOptionNames.push(optName || 'Ek Lezzet');
+  }
+
+  return {
+    itemName: foundItem.name,
+    variantName,
+    modifierOptionNames,
+    isItemRemoved: false,
+  };
+}
+
 export const CartItemRow: React.FC<CartItemRowProps> = ({
   line,
+  runtimeMenu,
   issue,
   onUpdateQuantity,
   onRemoveLine,
@@ -19,13 +89,19 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const displayInfo = useMemo(
+    () => resolveCartItemDisplay(line, runtimeMenu),
+    [line, runtimeMenu]
+  );
+
   const isBlocking =
-    issue &&
-    (issue.type === 'item_removed' ||
-      issue.type === 'item_unavailable' ||
-      issue.type === 'variant_removed' ||
-      issue.type === 'variant_unavailable' ||
-      issue.type === 'modifier_removed');
+    displayInfo.isItemRemoved ||
+    (issue &&
+      (issue.type === 'item_removed' ||
+        issue.type === 'item_unavailable' ||
+        issue.type === 'variant_removed' ||
+        issue.type === 'variant_unavailable' ||
+        issue.type === 'modifier_removed'));
 
   return (
     <div
@@ -61,18 +137,20 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
               fontWeight: 'var(--ro-font-weight-bold)',
               color: 'var(--ro-color-text-primary)',
             }}
+            data-testid={`cart-item-name-${line.configurationSignature}`}
           >
-            {line.menuItemId}
+            {displayInfo.itemName}
           </span>
-          {line.variantId && (
+          {displayInfo.variantName && (
             <span
               style={{
                 marginLeft: 'var(--ro-space-1)',
                 fontSize: 'var(--ro-font-size-xs)',
                 color: 'var(--ro-color-text-muted)',
               }}
+              data-testid={`cart-item-variant-${line.configurationSignature}`}
             >
-              ({line.variantId})
+              ({displayInfo.variantName})
             </span>
           )}
         </div>
@@ -90,14 +168,15 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
       </div>
 
       {/* Selected modifiers list if any */}
-      {line.selectedModifierOptionIds.length > 0 && (
+      {displayInfo.modifierOptionNames.length > 0 && (
         <div
           style={{
             fontSize: 'var(--ro-font-size-xs)',
             color: 'var(--ro-color-text-secondary)',
           }}
+          data-testid={`cart-item-modifiers-${line.configurationSignature}`}
         >
-          {line.selectedModifierOptionIds.join(', ')}
+          {displayInfo.modifierOptionNames.join(', ')}
         </div>
       )}
 
@@ -258,7 +337,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            aria-label={`${line.menuItemId} ürününü sepetten çıkar`}
+            aria-label={`${displayInfo.itemName} ürününü sepetten çıkar`}
             data-testid={`remove-line-${line.configurationSignature}`}
             style={{
               background: 'transparent',

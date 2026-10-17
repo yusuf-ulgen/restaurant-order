@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { CART_STORAGE_KEY } from '@restaurant-order/contracts';
 import {
   seedCustomerExperienceScenario,
   cleanupCustomerScenario,
@@ -152,7 +153,16 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     }
 
     const submitConfirmBtn = page.getByTestId('submit-confirm-btn-waiter');
-    await submitConfirmBtn.click();
+    const [serviceResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/customer/service-requests') &&
+          res.request().method() === 'POST'
+      ),
+      submitConfirmBtn.click(),
+    ]);
+
+    expect(serviceResponse.status()).toBe(200);
 
     // Verify Open Badge
     const openBadge = page.getByTestId('badge-open-waiter');
@@ -198,6 +208,47 @@ test.describe('Customer Experience End-to-End Journey (CUST-02, CUST-03, CUST-04
     expect(localStorageKeys).not.toContain('jwt');
     expect(sessionStorageKeys).not.toContain('access_token');
     expect(sessionStorageKeys).not.toContain('jwt');
-    expect(sessionStorageKeys).toContain('restaurant_order_cart_draft_v1');
+    expect(sessionStorageKeys).toContain(CART_STORAGE_KEY);
+  });
+
+  test('allows requesting bill immediately after QR exchange without page reload using authentic concurrency token', async ({
+    page,
+  }) => {
+    // 1. Scan QR and exchange
+    await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
+    const continueBtn = page.getByTestId('continue-to-table-btn');
+    await expect(continueBtn).toBeVisible();
+    await continueBtn.click();
+
+    // 2. Wait for active session view resolved from real GET /api/v1/customer/session
+    const sessionOverview = page.getByTestId('customer-active-session');
+    await expect(sessionOverview).toBeVisible({ timeout: 10000 });
+
+    // 3. Immediately request bill without reloading page
+    const waiterNavBtn = page.getByTestId('bottom-nav-waiter-btn');
+    await waiterNavBtn.click();
+
+    const billActionBtn = page.getByTestId('action-btn-bill');
+    await expect(billActionBtn).toBeVisible();
+    await billActionBtn.click();
+
+    const billConfirmBox = page.getByTestId('confirm-box-bill');
+    await expect(billConfirmBox).toBeVisible();
+
+    const submitBillBtn = page.getByTestId('submit-confirm-btn-bill');
+    const [serviceResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/customer/service-requests') &&
+          res.request().method() === 'POST'
+      ),
+      submitBillBtn.click(),
+    ]);
+
+    expect(serviceResponse.status()).toBe(200);
+
+    // 4. Verify bill requested badge appears immediately
+    const billBadge = page.getByTestId('badge-bill-requested');
+    await expect(billBadge).toBeVisible({ timeout: 10000 });
   });
 });

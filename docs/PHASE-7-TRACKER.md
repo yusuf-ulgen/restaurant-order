@@ -20,7 +20,7 @@ Bu belge, `restaurant-order` projesinde **Faz 7: Müşteri Deneyimi (Menü Gezin
 | **Faz 7.2** | Ürün Özelleştirme | **Tamamlandı** | CUST-03 Varyant seçimi, değiştirici kuralları, saf fiyat önizlemesi, müşteri notu, DraftCartLine | `feat/phase-07-customer-experience` |
 | **Faz 7.3** | Sepet ve Fiyat Önizleme | **Tamamlandı** | CUST-04 Sepet store/reducer, sessionStorage draft persistence, menü tazelik/fiyat doğrulayıcı, CartSheet | `feat/phase-07-customer-experience` |
 | **Faz 7.4** | Servis Talepleri | **Tamamlandı** | CUST-06 Servis talebi aggregate'i, RLS ve partial unique index, CSRF/Idempotency, rate limit, ServiceRequestSheet ve bill request akışı | `feat/phase-07-customer-experience` |
-| **Faz 7.5** | Sertleştirme ve Kapanış | **Tamamlandı** | Kod incelemesi, 15 adımlı Playwright E2E journey, negatif senaryolar, gate doğrulamaları | `feat/phase-07-customer-experience` |
+| **Faz 7.5** | Sertleştirme ve Kapanış | **Doğrulama Bekleniyor** | Kod incelemesi, 15 adımlı Playwright E2E journey, negatif senaryolar, gate doğrulamaları | `feat/phase-07-customer-experience` |
 
 ---
 
@@ -160,4 +160,4 @@ Bu belge, `restaurant-order` projesinde **Faz 7: Müşteri Deneyimi (Menü Gezin
   - Gerçek sipariş kalıcılığı ve yetkili sipariş oluşturma (Order aggregate): Faz 8.
   - Canlı sipariş takibi (CUST-05): Faz 8/9.
   - Garson / Bar / Mutfak KDS canlı bildirimleri (SignalR/FCM): Faz 9–11.
-  - **Durum:** TAMAMLANDI — CI DOĞRULANDI (COMPLETED — CI VERIFIED).
+  - **Durum:** Geliştirme Tamamlandı — GitHub CI Doğrulaması Bekleniyor.

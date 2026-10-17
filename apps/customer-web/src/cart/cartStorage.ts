@@ -1,8 +1,13 @@
-import type { DraftCartLine } from '@restaurant-order/contracts';
+import {
+  type DraftCartLine,
+  CUSTOMER_NOTE_MAX_LENGTH,
+  CART_STORAGE_KEY,
+  CART_STORAGE_SCHEMA_VERSION,
+} from '@restaurant-order/contracts';
 import type { CartState } from './cartReducer';
+import { generateConfigurationSignature } from '../utils/customizationUtils';
 
-export const CART_STORAGE_KEY = 'ro_customer_cart_draft';
-export const CART_STORAGE_SCHEMA_VERSION = 1;
+export { CART_STORAGE_KEY, CART_STORAGE_SCHEMA_VERSION };
 
 export interface PersistedCartPayload {
   version: number;
@@ -13,29 +18,72 @@ export interface PersistedCartPayload {
 }
 
 /**
- * Validates the shape of restored cart line items.
+ * Validates the shape and integrity of restored cart line items.
+ * Strictly verifies modifier string array, safe integers, mathematical consistency,
+ * customer note bounds, and canonical configuration signature.
  */
 function isValidCartLine(line: unknown): line is DraftCartLine {
   if (!line || typeof line !== 'object') return false;
   const l = line as Record<string, unknown>;
 
-  return (
-    typeof l.menuItemId === 'string' &&
-    (l.variantId === null || typeof l.variantId === 'string') &&
-    Array.isArray(l.selectedModifierOptionIds) &&
-    (l.customerNote === null || typeof l.customerNote === 'string') &&
-    typeof l.quantity === 'number' &&
-    Number.isInteger(l.quantity) &&
-    l.quantity >= 1 &&
-    typeof l.unitPriceMinorUnits === 'number' &&
-    Number.isInteger(l.unitPriceMinorUnits) &&
-    l.unitPriceMinorUnits >= 0 &&
-    typeof l.lineTotalMinorUnits === 'number' &&
-    Number.isInteger(l.lineTotalMinorUnits) &&
-    l.lineTotalMinorUnits >= 0 &&
-    typeof l.currency === 'string' &&
-    typeof l.configurationSignature === 'string'
-  );
+  // Basic types
+  if (typeof l.menuItemId !== 'string' || l.menuItemId.trim() === '') return false;
+  if (l.variantId !== null && typeof l.variantId !== 'string') return false;
+  if (typeof l.currency !== 'string' || l.currency.trim() === '') return false;
+  if (typeof l.configurationSignature !== 'string') return false;
+
+  // Selected modifiers must be an array composed strictly of strings
+  if (!Array.isArray(l.selectedModifierOptionIds)) return false;
+  if (!l.selectedModifierOptionIds.every((id) => typeof id === 'string' && id.trim() !== '')) {
+    return false;
+  }
+
+  // Customer note length and type
+  if (l.customerNote !== null) {
+    if (typeof l.customerNote !== 'string') return false;
+    if (l.customerNote.length > CUSTOMER_NOTE_MAX_LENGTH) return false;
+  }
+
+  // Quantities and prices must be safe integers
+  if (
+    typeof l.quantity !== 'number' ||
+    !Number.isSafeInteger(l.quantity) ||
+    l.quantity < 1 ||
+    l.quantity > 99
+  ) {
+    return false;
+  }
+
+  if (
+    typeof l.unitPriceMinorUnits !== 'number' ||
+    !Number.isSafeInteger(l.unitPriceMinorUnits) ||
+    l.unitPriceMinorUnits < 0
+  ) {
+    return false;
+  }
+
+  if (
+    typeof l.lineTotalMinorUnits !== 'number' ||
+    !Number.isSafeInteger(l.lineTotalMinorUnits) ||
+    l.lineTotalMinorUnits < 0
+  ) {
+    return false;
+  }
+
+  // Exact mathematical integrity: lineTotal === unitPrice * quantity
+  if (l.lineTotalMinorUnits !== l.unitPriceMinorUnits * l.quantity) {
+    return false;
+  }
+
+  // Canonical configuration signature verification
+  const expectedSig = generateConfigurationSignature({
+    menuItemId: l.menuItemId,
+    variantId: l.variantId as string | null,
+    selectedModifierOptionIds: l.selectedModifierOptionIds as string[],
+    customerNote: l.customerNote as string | null,
+  });
+
+  return l.configurationSignature === expectedSig;
 }
 
 /**

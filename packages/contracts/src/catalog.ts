@@ -188,6 +188,8 @@ export type RuntimeModifierGroupDto = RuntimeModifierGroup;
 export type RuntimeModifierOptionDto = RuntimeModifierOption;
 
 export const CUSTOMER_NOTE_MAX_LENGTH = 200;
+export const CART_STORAGE_KEY = 'ro_customer_cart_draft';
+export const CART_STORAGE_SCHEMA_VERSION = 1;
 
 export interface DraftCartLine {
   menuItemId: string;
