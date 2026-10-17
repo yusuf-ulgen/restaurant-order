@@ -96,26 +96,12 @@ public static class CustomerServiceRequestEndpoints
             {
                 return ProblemResult(context, StatusCodes.Status409Conflict, "Conflict", cex.Message);
             }
-            catch (ResourceNotFoundException nfex)
-            {
-                return ProblemResult(context, StatusCodes.Status404NotFound, "Not Found", nfex.Message);
-            }
-            catch (InvalidAuthorizationScopeException scpEx)
-            {
-                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", scpEx.Message);
-            }
             catch (DomainException dex)
             {
                 return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", dex.Message);
             }
-            catch (JwtClaimValidationException jex)
-            {
-                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
-            }
             catch (Exception ex)
             {
-                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
-                logger?.LogError(ex, "Unexpected error creating customer service request: {Message}", ex.Message);
                 return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
@@ -157,18 +143,8 @@ public static class CustomerServiceRequestEndpoints
 
                 return Results.Ok(list);
             }
-            catch (InvalidAuthorizationScopeException scpEx)
-            {
-                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", scpEx.Message);
-            }
-            catch (JwtClaimValidationException jex)
-            {
-                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
-            }
             catch (Exception ex)
             {
-                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
-                logger?.LogError(ex, "Unexpected error retrieving open service requests: {Message}", ex.Message);
                 return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
@@ -216,22 +192,12 @@ public static class CustomerServiceRequestEndpoints
             {
                 return ProblemResult(context, StatusCodes.Status404NotFound, "Not Found", nfex.Message);
             }
-            catch (InvalidAuthorizationScopeException scpEx)
-            {
-                return ProblemResult(context, StatusCodes.Status403Forbidden, "Forbidden", scpEx.Message);
-            }
             catch (DomainException dex)
             {
                 return ProblemResult(context, StatusCodes.Status400BadRequest, "Bad Request", dex.Message);
             }
-            catch (JwtClaimValidationException jex)
-            {
-                return ProblemResult(context, StatusCodes.Status401Unauthorized, "Unauthorized", $"Invalid session claims: {jex.Message}");
-            }
             catch (Exception ex)
             {
-                var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("RestaurantOrder.Api.Floor.CustomerServiceRequests");
-                logger?.LogError(ex, "Unexpected error cancelling service request: {Message}", ex.Message);
                 return FloorEndpointHelpers.HandleException(ex, context);
             }
         })
