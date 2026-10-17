@@ -413,19 +413,24 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var created = await res.Content.ReadFromJsonAsync<CustomerOrderResponseDto>(JsonOptions);
 
-        // Another session token (must exist in DB as active session so it passes session auth middleware)
+        // Another session token on a distinct table (must exist in DB as active session so it passes session auth middleware)
+        var foreignTableId = Guid.NewGuid();
         var foreignSessionId = Guid.NewGuid();
         await using (var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
         {
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
+                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+                SELECT @foreignTableId, @tenantId, @branchId, id, 'T-99', 'Table 99', md5(random()::text), 4, 200, 100, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW()
+                FROM tenancy.dining_areas WHERE branch_id = @branchId LIMIT 1;
+
                 INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, created_at_utc, concurrency_token)
-                VALUES (@sId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());";
+                VALUES (@sId, @tenantId, @branchId, @foreignTableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());";
+            cmd.Parameters.AddWithValue("foreignTableId", foreignTableId);
             cmd.Parameters.AddWithValue("sId", foreignSessionId);
             cmd.Parameters.AddWithValue("tenantId", tenantId);
             cmd.Parameters.AddWithValue("branchId", branchId);
-            cmd.Parameters.AddWithValue("tableId", tableId);
             await cmd.ExecuteNonQueryAsync();
         }
         var foreignToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, foreignSessionId);
