@@ -63,8 +63,8 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
             INSERT INTO tenancy.brands (id, tenant_id, name, slug, status, created_at, concurrency_token)
             VALUES (@brandId, @tenantId, 'Order Brand', @brandSlug, 'Active', NOW(), gen_random_uuid());
 
-            INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, created_at, concurrency_token)
-            VALUES (@branchId, @tenantId, @brandId, 'Order Branch', @branchSlug, 'Europe/Istanbul', 'TRY', NOW(), gen_random_uuid());
+            INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token)
+            VALUES (@branchId, @tenantId, @brandId, 'Order Branch', @branchSlug, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid());
 
             INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, slug, area_type, sort_order, created_at, concurrency_token)
             VALUES (@areaId, @tenantId, @branchId, 'Main Hall', @areaSlug, 'Indoor', 1, NOW(), gen_random_uuid());
