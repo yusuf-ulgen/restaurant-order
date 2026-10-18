@@ -22,6 +22,7 @@ public class RuntimeMenuContractDriftTests
             DefaultTaxRateBps: 1000,
             IsServiceChargeEnabled: true,
             ServiceChargeRateBps: 500,
+            PricingPolicyFingerprint: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             Menus: new[]
             {
                 new RuntimeMenuDto(
@@ -112,6 +113,8 @@ public class RuntimeMenuContractDriftTests
         Assert.True(sceProp.GetBoolean());
         Assert.True(root.TryGetProperty("serviceChargeRateBps", out var scProp));
         Assert.Equal(500, scProp.GetInt32());
+        Assert.True(root.TryGetProperty("pricingPolicyFingerprint", out var ppfProp));
+        Assert.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", ppfProp.GetString());
         Assert.True(root.TryGetProperty("menus", out var menusProp));
         Assert.Equal(1, menusProp.GetArrayLength());
 

@@ -1,15 +1,44 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace RestaurantOrder.Application.Orders;
 
 /// <summary>
 /// Canonical deterministic idempotency fingerprint generator for customer and staff orders.
-/// Guarantees order-independent normalization, full payload capture, and SHA-256 64-char lowercase hex.
+/// Serializes a typed canonical payload to deterministic JSON without manual string delimiters,
+/// neutralizing note injection, distinguishing null from "null", preserving duplicate items,
+/// and ensuring order-independence of items and modifiers.
 /// </summary>
 public static class OrderFingerprintGenerator
 {
-    public static string ComputeCustomerOrderFingerprint(Guid sessionId, IEnumerable<CustomerOrderItemRequest> items)
+    private static readonly JsonSerializerOptions CanonicalJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
+
+    public sealed record CanonicalModifier(string GroupId, string OptionId);
+
+    public sealed record CanonicalOrderItem(
+        string MenuItemId,
+        string? ItemVariantId,
+        int Quantity,
+        string? CustomerNote,
+        long? ClientExpectedUnitPriceMinorUnits,
+        IReadOnlyList<CanonicalModifier> Modifiers);
+
+    public sealed record CanonicalOrderPayload(
+        string SessionId,
+        IReadOnlyList<CanonicalOrderItem> Items,
+        string? PricingPolicyFingerprint,
+        long? ClientExpectedTotalMinorUnits);
+
+    public static string ComputeCustomerOrderFingerprint(
+        Guid sessionId,
+        IEnumerable<CustomerOrderItemRequest> items,
+        string? pricingPolicyFingerprint = null,
+        long? clientExpectedTotalMinorUnits = null)
     {
         var canonicalItems = items.Select(i => CanonicalizeItem(
             i.MenuItemId,
@@ -19,10 +48,14 @@ public static class OrderFingerprintGenerator
             i.ClientExpectedUnitPriceMinorUnits,
             i.SelectedModifiers?.Select(m => (m.ModifierGroupId, m.ModifierOptionId))));
 
-        return ComputeFingerprint(sessionId, canonicalItems);
+        return ComputeFingerprint(sessionId, canonicalItems, pricingPolicyFingerprint, clientExpectedTotalMinorUnits);
     }
 
-    public static string ComputeStaffOrderFingerprint(Guid sessionId, IEnumerable<StaffOrderItemRequest> items)
+    public static string ComputeStaffOrderFingerprint(
+        Guid sessionId,
+        IEnumerable<StaffOrderItemRequest> items,
+        string? pricingPolicyFingerprint = null,
+        long? clientExpectedTotalMinorUnits = null)
     {
         var canonicalItems = items.Select(i => CanonicalizeItem(
             i.MenuItemId,
@@ -32,10 +65,10 @@ public static class OrderFingerprintGenerator
             i.ClientExpectedUnitPriceMinorUnits,
             i.SelectedModifiers?.Select(m => (m.ModifierGroupId, m.ModifierOptionId))));
 
-        return ComputeFingerprint(sessionId, canonicalItems);
+        return ComputeFingerprint(sessionId, canonicalItems, pricingPolicyFingerprint, clientExpectedTotalMinorUnits);
     }
 
-    private static string CanonicalizeItem(
+    private static CanonicalOrderItem CanonicalizeItem(
         Guid menuItemId,
         Guid? itemVariantId,
         int quantity,
@@ -43,26 +76,65 @@ public static class OrderFingerprintGenerator
         long? clientExpectedUnitPriceMinorUnits,
         IEnumerable<(Guid GroupId, Guid OptionId)>? selectedModifiers)
     {
-        var variantStr = itemVariantId.HasValue ? itemVariantId.Value.ToString("D") : "null";
-        var normalizedNote = string.IsNullOrWhiteSpace(customerNote) ? "null" : customerNote.Trim();
-        var expPriceStr = clientExpectedUnitPriceMinorUnits.HasValue ? clientExpectedUnitPriceMinorUnits.Value.ToString() : "null";
-
-        var modifierPairs = selectedModifiers?
+        var sortedModifiers = (selectedModifiers ?? Enumerable.Empty<(Guid GroupId, Guid OptionId)>())
             .OrderBy(m => m.GroupId)
             .ThenBy(m => m.OptionId)
-            .Select(m => $"{m.GroupId:D}>{m.OptionId:D}") ?? Enumerable.Empty<string>();
+            .Select(m => new CanonicalModifier(m.GroupId.ToString("D"), m.OptionId.ToString("D")))
+            .ToList();
 
-        var modifierStr = string.Join(";", modifierPairs);
-
-        return $"{menuItemId:D}|{variantStr}|{quantity}|{normalizedNote}|{expPriceStr}|[{modifierStr}]";
+        return new CanonicalOrderItem(
+            menuItemId.ToString("D"),
+            itemVariantId?.ToString("D"),
+            quantity,
+            NormalizeNote(customerNote),
+            clientExpectedUnitPriceMinorUnits,
+            sortedModifiers);
     }
 
-    private static string ComputeFingerprint(Guid sessionId, IEnumerable<string> canonicalItems)
+    private static string ComputeFingerprint(
+        Guid sessionId,
+        IEnumerable<CanonicalOrderItem> items,
+        string? pricingPolicyFingerprint,
+        long? clientExpectedTotalMinorUnits)
     {
-        var sortedItems = canonicalItems.OrderBy(s => s, StringComparer.Ordinal).ToList();
-        var payload = $"session:{sessionId:D}|items:[{string.Join(",", sortedItems)}]";
+        // Sort items deterministically based on their individual canonical JSON representation
+        // Duplicate items are preserved because each item maps to its own list element
+        var sortedItems = items
+            .Select(item => (Item: item, Json: JsonSerializer.Serialize(item, CanonicalJsonOptions)))
+            .OrderBy(pair => pair.Json, StringComparer.Ordinal)
+            .Select(pair => pair.Item)
+            .ToList();
 
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        var normalizedPolicyFingerprint = NormalizePolicyFingerprint(pricingPolicyFingerprint);
+
+        var payload = new CanonicalOrderPayload(
+            sessionId.ToString("D"),
+            sortedItems,
+            normalizedPolicyFingerprint,
+            clientExpectedTotalMinorUnits);
+
+        var payloadJson = JsonSerializer.Serialize(payload, CanonicalJsonOptions);
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson));
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    private static string? NormalizeNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return null;
+        }
+
+        return note.Trim();
+    }
+
+    private static string? NormalizePolicyFingerprint(string? fingerprint)
+    {
+        if (string.IsNullOrWhiteSpace(fingerprint))
+        {
+            return null;
+        }
+
+        return fingerprint.Trim().ToLowerInvariant();
     }
 }

@@ -229,6 +229,7 @@ public class CatalogAvailabilityEndpointsUnitTests
             DefaultTaxRateBps: 1000,
             IsServiceChargeEnabled: false,
             ServiceChargeRateBps: 0,
+            PricingPolicyFingerprint: "test-fingerprint",
             Menus: new List<RuntimeMenuDto>
             {
                 new(

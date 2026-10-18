@@ -18,6 +18,8 @@ public sealed class OrderPricingException : DomainException
     public const string CodeSessionNotActive = "SESSION_NOT_ACTIVE";
     public const string CodeCurrencyMismatch = "CURRENCY_MISMATCH";
     public const string CodeItemNotActive = "ITEM_NOT_ACTIVE";
+    public const string CodePricingPolicyChanged = "ORDER_PRICING_POLICY_CHANGED";
+    public const string CodeOrderTotalChanged = "ORDER_TOTAL_CHANGED";
 
     public string ErrorCode { get; }
     public MenuItemId? MenuItemId { get; }
@@ -117,5 +119,21 @@ public sealed class OrderPricingException : DomainException
             CodeItemNotActive,
             $"Menü öğesi ({menuItemId.Value}) veya bağlı olduğu menü/kategori şu anda aktif değil.",
             menuItemId);
+    }
+
+    public static OrderPricingException PricingPolicyChanged(string? expectedFingerprint, string actualFingerprint)
+    {
+        return new OrderPricingException(
+            CodePricingPolicyChanged,
+            $"Fiyatlandırma veya vergi/servis politikası değişti. Lütfen sepetinizi güncelleyin. Beklenen: '{expectedFingerprint}', Güncel: '{actualFingerprint}'.");
+    }
+
+    public static OrderPricingException OrderTotalChanged(long expectedTotal, long actualTotal)
+    {
+        return new OrderPricingException(
+            CodeOrderTotalChanged,
+            $"Sipariş genel toplamı değişti. Beklenen: {expectedTotal}, Güncel: {actualTotal}.",
+            expectedUnitPriceMinorUnits: expectedTotal,
+            actualUnitPriceMinorUnits: actualTotal);
     }
 }

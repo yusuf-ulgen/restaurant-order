@@ -18,6 +18,8 @@ export interface CustomerOrderItemRequest {
 
 export interface CreateCustomerOrderRequest {
   items: CustomerOrderItemRequest[];
+  clientPricingPolicyFingerprint?: string | null;
+  clientExpectedTotalMinorUnits?: number | null;
 }
 
 export interface CustomerOrderItemModifierDto {

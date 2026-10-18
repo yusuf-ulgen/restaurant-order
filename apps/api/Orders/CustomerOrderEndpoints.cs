@@ -236,6 +236,8 @@ public static class CustomerOrderEndpoints
         var (status, title) = ex.ErrorCode switch
         {
             OrderPricingException.CodePriceChanged => (StatusCodes.Status409Conflict, "Order Price Changed"),
+            OrderPricingException.CodePricingPolicyChanged => (StatusCodes.Status409Conflict, "Pricing Policy Changed"),
+            OrderPricingException.CodeOrderTotalChanged => (StatusCodes.Status409Conflict, "Order Total Changed"),
             OrderPricingException.CodeItemOutOfStock => (StatusCodes.Status409Conflict, "Item Out of Stock"),
             OrderPricingException.CodeOrderTakingDisabled => (StatusCodes.Status403Forbidden, "Order Taking Disabled"),
             OrderPricingException.CodeSessionNotActive => (StatusCodes.Status409Conflict, "Session Not Active"),

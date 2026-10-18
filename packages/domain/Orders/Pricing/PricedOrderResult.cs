@@ -16,6 +16,7 @@ public sealed class PricedOrderResult
     public bool PricesIncludeTax { get; }
     public int DefaultTaxRateBps { get; }
     public int ServiceChargeRateBps { get; }
+    public string PricingPolicyFingerprint { get; }
     public IReadOnlyList<PricedOrderLineItem> LineItems { get; }
 
     public PricedOrderResult(
@@ -27,7 +28,8 @@ public sealed class PricedOrderResult
         bool pricesIncludeTax,
         int defaultTaxRateBps,
         int serviceChargeRateBps,
-        IReadOnlyList<PricedOrderLineItem> lineItems)
+        IReadOnlyList<PricedOrderLineItem> lineItems,
+        string pricingPolicyFingerprint = "")
     {
         SubtotalMinorUnits = subtotalMinorUnits;
         TaxMinorUnits = taxMinorUnits;
@@ -38,5 +40,6 @@ public sealed class PricedOrderResult
         DefaultTaxRateBps = defaultTaxRateBps;
         ServiceChargeRateBps = serviceChargeRateBps;
         LineItems = lineItems;
+        PricingPolicyFingerprint = pricingPolicyFingerprint;
     }
 }

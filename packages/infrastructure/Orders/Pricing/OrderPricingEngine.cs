@@ -30,6 +30,8 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
         BranchId branchId,
         DiningSessionId sessionId,
         IReadOnlyList<ClientOrderItemDraft> items,
+        string? clientPricingPolicyFingerprint = null,
+        long? clientExpectedTotalMinorUnits = null,
         CancellationToken cancellationToken = default)
     {
         if (items == null || items.Count == 0)
@@ -47,36 +49,31 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
             throw OrderPricingException.SessionNotActive(sessionId.Value);
         }
 
-        // 2. Verify Branch Settings and Order Taking Gate
+        // 2. Load Branch, Settings, and Resolve Effective Pricing Policy
+        var branch = await _dbContext.Branches
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.TenantId == tenantId && b.Id == branchId, cancellationToken);
+
+        if (branch == null)
+        {
+            throw new DomainException($"Branch '{branchId.Value}' was not found.");
+        }
+
         var settings = await _dbContext.BranchSettings
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId, cancellationToken);
 
-        if (settings == null)
-        {
-            var branch = await _dbContext.Branches
-                .AsNoTracking()
-                .FirstOrDefaultAsync(b => b.TenantId == tenantId && b.Id == branchId, cancellationToken);
+        var effectivePolicy = EffectiveBranchPricingPolicy.Create(branch, settings);
 
-            if (branch == null)
-            {
-                throw new DomainException($"Branch '{branchId.Value}' was not found.");
-            }
-
-            settings = BranchSettings.Create(
-                tenantId,
-                branchId,
-                timezone: branch.Timezone.Id,
-                currency: branch.Currency.Code,
-                pricesIncludeTax: true,
-                defaultTaxRateBps: BasisPointsRate.DefaultTaxRateBps,
-                isServiceChargeEnabled: false,
-                serviceChargeRateBps: 0,
-                isOrderTakingEnabled: true);
-        }
-        else if (!settings.IsOrderTakingEnabled)
+        if (!effectivePolicy.IsOrderTakingEnabled)
         {
             throw OrderPricingException.OrderTakingDisabled();
+        }
+
+        if (!string.IsNullOrEmpty(clientPricingPolicyFingerprint) &&
+            !string.Equals(clientPricingPolicyFingerprint, effectivePolicy.PricingPolicyFingerprint, StringComparison.Ordinal))
+        {
+            throw OrderPricingException.PricingPolicyChanged(clientPricingPolicyFingerprint, effectivePolicy.PricingPolicyFingerprint);
         }
 
         // 3. Load and Validate Active Catalog Hierarchy
@@ -284,8 +281,8 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
                 itemBasePriceMinorUnits,
                 modifierSum,
                 draft.Quantity,
-                settings.DefaultTaxRateBps,
-                settings.PricesIncludeTax);
+                effectivePolicy.DefaultTaxRateBps,
+                effectivePolicy.PricesIncludeTax);
 
             pricedLineItems.Add(new PricedOrderLineItem(
                 menuItem.Id,
@@ -298,7 +295,7 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
                 lineTotal,
                 netSubtotal,
                 tax,
-                settings.DefaultTaxRateBps,
+                effectivePolicy.DefaultTaxRateBps,
                 menuItem.PreparationStationId?.Value,
                 draft.CustomerNote,
                 lineModifiers));
@@ -319,18 +316,24 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
         var (serviceCharge, grandTotal) = OrderPricingCalculator.CalculateOrderTotals(
             totalNetSubtotal,
             totalTax,
-            settings.IsServiceChargeEnabled,
-            settings.ServiceChargeRateBps);
+            effectivePolicy.IsServiceChargeEnabled,
+            effectivePolicy.ServiceChargeRateBps);
+
+        if (clientExpectedTotalMinorUnits.HasValue && clientExpectedTotalMinorUnits.Value != grandTotal)
+        {
+            throw OrderPricingException.OrderTotalChanged(clientExpectedTotalMinorUnits.Value, grandTotal);
+        }
 
         return new PricedOrderResult(
             totalNetSubtotal,
             totalTax,
             serviceCharge,
             grandTotal,
-            settings.Currency,
-            settings.PricesIncludeTax,
-            settings.DefaultTaxRateBps,
-            settings.ServiceChargeRateBps,
-            pricedLineItems);
+            branch.Currency,
+            effectivePolicy.PricesIncludeTax,
+            effectivePolicy.DefaultTaxRateBps,
+            effectivePolicy.ServiceChargeRateBps,
+            pricedLineItems,
+            effectivePolicy.PricingPolicyFingerprint);
     }
 }

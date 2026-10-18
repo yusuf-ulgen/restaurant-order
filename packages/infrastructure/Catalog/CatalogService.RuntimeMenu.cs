@@ -3,6 +3,7 @@ using RestaurantOrder.Application.Catalog;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Catalog;
+using RestaurantOrder.Domain.Orders.Pricing;
 using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Infrastructure.Catalog;
@@ -17,15 +18,12 @@ public partial class CatalogService
     {
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
-        // Fetch branch pricing settings
+        // Resolve effective branch pricing policy
         var settings = await _dbContext.BranchSettings
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId, ct);
 
-        var pricesIncludeTax = settings?.PricesIncludeTax ?? true;
-        var defaultTaxRateBps = settings?.DefaultTaxRateBps ?? 0;
-        var isServiceChargeEnabled = settings?.IsServiceChargeEnabled ?? false;
-        var serviceChargeRateBps = settings?.ServiceChargeRateBps ?? 0;
+        var pricingPolicy = EffectiveBranchPricingPolicy.Create(branch, settings);
 
         // Fetch active menus
         var menus = await _dbContext.Menus
@@ -38,11 +36,12 @@ public partial class CatalogService
         {
             return new RuntimeMenuReadModel(
                 BranchId: branchId.Value,
-                Currency: branch.Currency.Code,
-                PricesIncludeTax: pricesIncludeTax,
-                DefaultTaxRateBps: defaultTaxRateBps,
-                IsServiceChargeEnabled: isServiceChargeEnabled,
-                ServiceChargeRateBps: serviceChargeRateBps,
+                Currency: pricingPolicy.Currency,
+                PricesIncludeTax: pricingPolicy.PricesIncludeTax,
+                DefaultTaxRateBps: pricingPolicy.DefaultTaxRateBps,
+                IsServiceChargeEnabled: pricingPolicy.IsServiceChargeEnabled,
+                ServiceChargeRateBps: pricingPolicy.ServiceChargeRateBps,
+                PricingPolicyFingerprint: pricingPolicy.PricingPolicyFingerprint,
                 Menus: Array.Empty<RuntimeMenuDto>());
         }
 
@@ -230,11 +229,12 @@ public partial class CatalogService
 
         return new RuntimeMenuReadModel(
             BranchId: branchId.Value,
-            Currency: branch.Currency.Code,
-            PricesIncludeTax: pricesIncludeTax,
-            DefaultTaxRateBps: defaultTaxRateBps,
-            IsServiceChargeEnabled: isServiceChargeEnabled,
-            ServiceChargeRateBps: serviceChargeRateBps,
+            Currency: pricingPolicy.Currency,
+            PricesIncludeTax: pricingPolicy.PricesIncludeTax,
+            DefaultTaxRateBps: pricingPolicy.DefaultTaxRateBps,
+            IsServiceChargeEnabled: pricingPolicy.IsServiceChargeEnabled,
+            ServiceChargeRateBps: pricingPolicy.ServiceChargeRateBps,
+            PricingPolicyFingerprint: pricingPolicy.PricingPolicyFingerprint,
             Menus: runtimeMenus);
     }
 }

@@ -129,6 +129,8 @@ public sealed class CustomerOrderService : ICustomerOrderService
             branchId,
             sessionId,
             clientDrafts,
+            request.ClientPricingPolicyFingerprint,
+            request.ClientExpectedTotalMinorUnits,
             cancellationToken);
 
         // 4. Determine next round number within session
@@ -273,7 +275,11 @@ public sealed class CustomerOrderService : ICustomerOrderService
 
     private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateCustomerOrderRequest request)
     {
-        return OrderFingerprintGenerator.ComputeCustomerOrderFingerprint(sessionId.Value, request.Items);
+        return OrderFingerprintGenerator.ComputeCustomerOrderFingerprint(
+            sessionId.Value,
+            request.Items,
+            request.ClientPricingPolicyFingerprint,
+            request.ClientExpectedTotalMinorUnits);
     }
 
     private static CustomerOrderResponseDto MapToDto(Order order)

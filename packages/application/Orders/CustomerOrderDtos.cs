@@ -22,7 +22,9 @@ public sealed record CustomerOrderItemRequest(
 /// Customer order creation payload.
 /// </summary>
 public sealed record CreateCustomerOrderRequest(
-    IReadOnlyList<CustomerOrderItemRequest> Items);
+    IReadOnlyList<CustomerOrderItemRequest> Items,
+    string? ClientPricingPolicyFingerprint = null,
+    long? ClientExpectedTotalMinorUnits = null);
 
 /// <summary>
 /// DTO representing an order modifier snapshot.

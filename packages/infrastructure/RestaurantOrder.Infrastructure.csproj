@@ -25,4 +25,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="RestaurantOrder.UnitTests" />
+    <InternalsVisibleTo Include="RestaurantOrder.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

@@ -180,6 +180,7 @@ export interface RuntimeMenuReadModel {
   defaultTaxRateBps: number;
   isServiceChargeEnabled: boolean;
   serviceChargeRateBps: number;
+  pricingPolicyFingerprint: string;
   menus: RuntimeMenu[];
 }
 

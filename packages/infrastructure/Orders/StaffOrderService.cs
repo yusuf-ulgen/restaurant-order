@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Orders;
 using RestaurantOrder.Application.Orders.Pricing;
@@ -24,21 +25,49 @@ public sealed partial class StaffOrderService : IStaffOrderService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IOrderPricingEngine _pricingEngine;
     private readonly IPermissionRegistry _permissionRegistry;
-    private readonly IPinHasher _pinHasher;
-    private readonly Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? _serviceScopeFactory;
+    private readonly ISupervisorPinService _supervisorPinService;
 
     public StaffOrderService(
         RestaurantOrderDbContext dbContext,
         IOrderPricingEngine pricingEngine,
         IPermissionRegistry permissionRegistry,
-        IPinHasher pinHasher,
-        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory = null)
+        ISupervisorPinService supervisorPinService)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _pricingEngine = pricingEngine ?? throw new ArgumentNullException(nameof(pricingEngine));
         _permissionRegistry = permissionRegistry ?? throw new ArgumentNullException(nameof(permissionRegistry));
-        _pinHasher = pinHasher ?? throw new ArgumentNullException(nameof(pinHasher));
-        _serviceScopeFactory = serviceScopeFactory;
+        _supervisorPinService = supervisorPinService ?? throw new ArgumentNullException(nameof(supervisorPinService));
+    }
+
+    internal StaffOrderService(
+        RestaurantOrderDbContext dbContext,
+        IOrderPricingEngine pricingEngine,
+        IPermissionRegistry permissionRegistry,
+        IPinHasher pinHasher,
+        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory = null)
+        : this(
+            dbContext,
+            pricingEngine,
+            permissionRegistry,
+            CreateScopeSupervisorService(dbContext, pinHasher, permissionRegistry, serviceScopeFactory))
+    {
+    }
+
+    private static ISupervisorPinService CreateScopeSupervisorService(
+        RestaurantOrderDbContext dbContext,
+        IPinHasher pinHasher,
+        IPermissionRegistry permissionRegistry,
+        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory)
+    {
+        if (serviceScopeFactory != null)
+        {
+            return new SupervisorPinService(serviceScopeFactory, pinHasher, permissionRegistry);
+        }
+
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(dbContext);
+        var sp = services.BuildServiceProvider();
+        return new SupervisorPinService(sp.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(), pinHasher, permissionRegistry);
     }
 
     public async Task<CreateStaffOrderResult> CreateStaffOrderAsync(
@@ -144,6 +173,8 @@ public sealed partial class StaffOrderService : IStaffOrderService
             branchId,
             sessionId,
             clientDrafts,
+            request.ClientPricingPolicyFingerprint,
+            request.ClientExpectedTotalMinorUnits,
             cancellationToken);
 
         // 4. Determine next round number
@@ -334,7 +365,11 @@ public sealed partial class StaffOrderService : IStaffOrderService
 
     private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateStaffOrderRequest request)
     {
-        return OrderFingerprintGenerator.ComputeStaffOrderFingerprint(sessionId.Value, request.Items);
+        return OrderFingerprintGenerator.ComputeStaffOrderFingerprint(
+            sessionId.Value,
+            request.Items,
+            request.ClientPricingPolicyFingerprint,
+            request.ClientExpectedTotalMinorUnits);
     }
 
     private static StaffOrderResponseDto MapToDto(Order order)

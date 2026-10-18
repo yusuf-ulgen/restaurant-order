@@ -47,8 +47,8 @@ public class OrderFingerprintGeneratorTests
             }, 5000)
         };
 
-        var custFp = OrderFingerprintGenerator.ComputeCustomerOrderFingerprint(_sessionId, customerItems);
-        var staffFp = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, staffItems);
+        var custFp = OrderFingerprintGenerator.ComputeCustomerOrderFingerprint(_sessionId, customerItems, "policy-1", 5000);
+        var staffFp = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, staffItems, "policy-1", 5000);
 
         Assert.Equal(custFp, staffFp);
     }
@@ -87,6 +87,50 @@ public class OrderFingerprintGeneratorTests
     }
 
     [Fact]
+    public void Fingerprint_NullNote_AndLiteralNullStringNote_ProduceDifferentHash()
+    {
+        var itemNull = new StaffOrderItemRequest(_menuItemId1, null, 1, null, null, 2000);
+        var itemLiteralNull = new StaffOrderItemRequest(_menuItemId1, null, 1, "null", null, 2000);
+
+        var fpNull = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemNull });
+        var fpLiteralNull = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemLiteralNull });
+
+        Assert.NotEqual(fpNull, fpLiteralNull);
+    }
+
+    [Fact]
+    public void Fingerprint_WhitespaceNote_NormalizesIdenticallyToNull()
+    {
+        var itemNull = new StaffOrderItemRequest(_menuItemId1, null, 1, null, null, 2000);
+        var itemEmpty = new StaffOrderItemRequest(_menuItemId1, null, 1, "", null, 2000);
+        var itemSpaces = new StaffOrderItemRequest(_menuItemId1, null, 1, "   \t  ", null, 2000);
+
+        var fpNull = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemNull });
+        var fpEmpty = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemEmpty });
+        var fpSpaces = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemSpaces });
+
+        Assert.Equal(fpNull, fpEmpty);
+        Assert.Equal(fpNull, fpSpaces);
+    }
+
+    [Fact]
+    public void Fingerprint_SpecialCharactersInNote_DoNotCauseCollisions()
+    {
+        var noteA = "| , [ ] : ; > \" \\";
+        var noteB = "Different note with | , [ ]";
+
+        var itemA = new StaffOrderItemRequest(_menuItemId1, null, 1, noteA, null, 2000);
+        var itemB = new StaffOrderItemRequest(_menuItemId1, null, 1, noteB, null, 2000);
+
+        var fpA = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA });
+        var fpB = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemB });
+
+        Assert.NotEqual(fpA, fpB);
+        Assert.Equal(64, fpA.Length);
+        Assert.Equal(64, fpB.Length);
+    }
+
+    [Fact]
     public void Fingerprint_CustomerNoteChanged_ProducesDifferentFingerprint()
     {
         var item1 = new StaffOrderItemRequest(_menuItemId1, null, 1, "Az tuzlu", null, 2000);
@@ -120,6 +164,28 @@ public class OrderFingerprintGeneratorTests
 
         // Two lines with itemA (duplicate lines)
         var fp2 = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA, itemA });
+
+        Assert.NotEqual(fp1, fp2);
+    }
+
+    [Fact]
+    public void Fingerprint_ExpectedTotalChanged_ProducesDifferentFingerprint()
+    {
+        var itemA = new StaffOrderItemRequest(_menuItemId1, null, 1, null, null, 2000);
+
+        var fp1 = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA }, "policy-1", 2000);
+        var fp2 = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA }, "policy-1", 2500);
+
+        Assert.NotEqual(fp1, fp2);
+    }
+
+    [Fact]
+    public void Fingerprint_PricingPolicyFingerprintChanged_ProducesDifferentFingerprint()
+    {
+        var itemA = new StaffOrderItemRequest(_menuItemId1, null, 1, null, null, 2000);
+
+        var fp1 = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA }, "policy-alpha", 2000);
+        var fp2 = OrderFingerprintGenerator.ComputeStaffOrderFingerprint(_sessionId, new[] { itemA }, "policy-beta", 2000);
 
         Assert.NotEqual(fp1, fp2);
     }

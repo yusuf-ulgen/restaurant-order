@@ -46,6 +46,7 @@ public sealed record RuntimeMenuReadModel(
     int DefaultTaxRateBps,
     bool IsServiceChargeEnabled,
     int ServiceChargeRateBps,
+    string PricingPolicyFingerprint,
     IReadOnlyList<RuntimeMenuDto> Menus);
 
 public sealed record RuntimeMenuDto(

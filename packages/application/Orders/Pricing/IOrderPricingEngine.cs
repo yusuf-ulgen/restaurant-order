@@ -20,5 +20,7 @@ public interface IOrderPricingEngine
         BranchId branchId,
         DiningSessionId sessionId,
         IReadOnlyList<ClientOrderItemDraft> items,
+        string? clientPricingPolicyFingerprint = null,
+        long? clientExpectedTotalMinorUnits = null,
         CancellationToken cancellationToken = default);
 }
