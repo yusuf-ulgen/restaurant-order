@@ -101,7 +101,7 @@ public class StaffOrderSupervisorPinConcurrencyIntegrationTests : IClassFixture<
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, brandId, branchId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var (areaId, tableId) = (Guid.NewGuid(), Guid.NewGuid());
+        var areaId = Guid.NewGuid();
         var (menuId, categoryId, menuItemId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 
         await using (var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
@@ -119,8 +119,6 @@ public class StaffOrderSupervisorPinConcurrencyIntegrationTests : IClassFixture<
                 VALUES (gen_random_uuid(), @tenantId, @branchId, 'Europe/Istanbul', 'TRY', 'tr-TR', '[""tr-TR""]', true, 1000, false, 0, true, NOW(), gen_random_uuid());
                 INSERT INTO tenancy.dining_areas (id, tenant_id, branch_id, name, code, area_type, sort_order, is_active, created_at, concurrency_token)
                 VALUES (@areaId, @tenantId, @branchId, 'Main Hall', @areaSlug, 1, 1, true, NOW(), gen_random_uuid());
-                INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
-                VALUES (@tableId, @tenantId, @branchId, @areaId, 'T-01', 'Table 1', md5(random()::text), 4, 100, 100, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
                 INSERT INTO tenancy.menus (id, tenant_id, branch_id, name, slug, status, sort_order, created_at, concurrency_token)
                 VALUES (@menuId, @tenantId, @branchId, 'Concur Menu', @menuSlug, 2, 1, NOW(), gen_random_uuid());
                 INSERT INTO tenancy.menu_categories (id, tenant_id, branch_id, menu_id, name, slug, sort_order, is_active, created_at, concurrency_token)
@@ -136,7 +134,6 @@ public class StaffOrderSupervisorPinConcurrencyIntegrationTests : IClassFixture<
             cmd.Parameters.AddWithValue("branchSlug", $"br-{Guid.NewGuid():N}");
             cmd.Parameters.AddWithValue("areaId", areaId);
             cmd.Parameters.AddWithValue("areaSlug", $"a-{Guid.NewGuid():N}");
-            cmd.Parameters.AddWithValue("tableId", tableId);
             cmd.Parameters.AddWithValue("menuId", menuId);
             cmd.Parameters.AddWithValue("menuSlug", $"m-{Guid.NewGuid():N}");
             cmd.Parameters.AddWithValue("categoryId", categoryId);
@@ -149,24 +146,30 @@ public class StaffOrderSupervisorPinConcurrencyIntegrationTests : IClassFixture<
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
 
-        // 1. Create 5 distinct dining sessions, each with its own order and in-prep item
+        // 1. Create 5 distinct dining sessions, each on its own distinct table with its own order and in-prep item
         const int concurrentCount = 5;
         var sessionOrders = new List<(Guid sessionId, Guid orderId, Guid itemId, string token)>();
 
         for (int i = 0; i < concurrentCount; i++)
         {
+            var tableId = Guid.NewGuid();
             var sessionId = Guid.NewGuid();
             await using (var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString))
             {
                 await conn.OpenAsync();
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
+                    INSERT INTO tenancy.restaurant_tables (id, tenant_id, branch_id, dining_area_id, table_number, name, public_code, capacity, position_x, position_y, width, height, rotation_degrees, shape, is_active, qr_version, concurrency_token, created_at)
+                    VALUES (@tableId, @tenantId, @branchId, @areaId, @tableNumber, @tableName, md5(random()::text), 4, 100, 100, 100, 100, 0, 1, true, 1, gen_random_uuid(), NOW());
                     INSERT INTO tenancy.dining_sessions (id, tenant_id, branch_id, table_id, status, guest_count, opened_at_utc, activated_at_utc, created_at_utc, concurrency_token)
                     VALUES (@sessionId, @tenantId, @branchId, @tableId, 2, 2, NOW(), NOW(), NOW(), gen_random_uuid());";
                 cmd.Parameters.AddWithValue("sessionId", sessionId);
                 cmd.Parameters.AddWithValue("tenantId", tenantId);
                 cmd.Parameters.AddWithValue("branchId", branchId);
+                cmd.Parameters.AddWithValue("areaId", areaId);
                 cmd.Parameters.AddWithValue("tableId", tableId);
+                cmd.Parameters.AddWithValue("tableNumber", $"T-0{i + 1}");
+                cmd.Parameters.AddWithValue("tableName", $"Table {i + 1}");
                 await cmd.ExecuteNonQueryAsync();
             }
 
