@@ -14,7 +14,7 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [Issue #18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), [PR #17](https://github.com/yusuf-ulgen/restaurant-order/pull/17): Faz 7 müşteri deneyimi, sepet taslağı, servis talepleri ve güvenlik sertleştirmeleri main'e birleştirildi.
 - Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 8: Sipariş Çekirdeği (Kapanış Doğrulamasında)
+## Aktif Görev — Faz 8: Sipariş Çekirdeği (Tamamlandı)
 
 - Aktif dal: `feat/phase-08-order-core`.
 - GitHub Issue: [#18](https://github.com/yusuf-ulgen/restaurant-order/issues/18).

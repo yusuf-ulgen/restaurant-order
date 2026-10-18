@@ -21,7 +21,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Tamamlandı** | `POST /api/v1/customer/orders`, `GET /api/v1/customer/orders`, `GET /api/v1/customer/orders/{orderId}`, `Idempotency-Key` replay & conflict, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi, RFC 7807 hata yanıtları, audit not redaction | `feat/phase-08-order-core` |
 | **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Tamamlandı** | `OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`, stabil `Idempotency-Key`, sepet koruması ve temizliği | `feat/phase-08-order-core` |
 | **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Tamamlandı** | Personel sipariş uç noktaları, RBAC izin matrisi, deterministik durum türetme, ETag/If-Match, yönetici PIN/zayiat iptali | `feat/phase-08-order-core` |
-| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Kapanış Düzeltmelerinde** | 15 adımlı E2E yolculuğunun sipariş geçmişi ve DB doğrulamasıyla genişletilmesi, negatif entegrasyon/eşzamanlılık testleri, güvenlik denetimi ve kapanış | `feat/phase-08-order-core` |
+| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Tamamlandı** | 15 adımlı E2E yolculuğunun sipariş geçmişi ve DB doğrulamasıyla genişletilmesi, negatif entegrasyon/eşzamanlılık testleri, güvenlik denetimi ve kapanış | `feat/phase-08-order-core` |
 
 ---
 
@@ -185,4 +185,4 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Frontend test coverage (customer-web): Stmts: %93,5, Branch: %83,0, Funcs: %88,41, Lines: %93,5 (`PASS`, tüm eşikler > %80).
   - Quality gates: 114 test (`PASS`, 1 atlandı: Docker konteyner akışı).
   - Production release build: `pnpm build` (`PASS`).
-  - CI / GitHub Actions: Exact HEAD commit iş akışı doğrulaması bekleniyor (CI yeşil olmadan faz tamamlandı sayılmaz).
+  - CI / GitHub Actions: Exact HEAD commit iş akışı tamamlandı ve yeşil ([Run #39134518875](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/39134518875), `PASS`).
