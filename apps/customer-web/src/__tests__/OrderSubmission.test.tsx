@@ -8,6 +8,10 @@ describe('Phase 8.4 Customer Order Submission & Idempotency Tests', () => {
   const sampleRuntimeMenu: RuntimeMenuReadModel = {
     branchId: 'branch-1',
     currency: 'TRY',
+    pricesIncludeTax: true,
+    defaultTaxRateBps: 1000,
+    isServiceChargeEnabled: false,
+    serviceChargeRateBps: 0,
     menus: [
       {
         id: 'menu-1',

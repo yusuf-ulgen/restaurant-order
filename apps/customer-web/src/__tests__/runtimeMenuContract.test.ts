@@ -14,6 +14,10 @@ describe('Runtime Menu Contracts & Drift Validation', () => {
     const rawPayload: RuntimeMenuReadModel = {
       branchId: 'b1111111-1111-1111-1111-111111111111',
       currency: 'TRY',
+      pricesIncludeTax: true,
+      defaultTaxRateBps: 1000,
+      isServiceChargeEnabled: true,
+      serviceChargeRateBps: 500,
       menus: [
         {
           id: 'm2222222-2222-2222-2222-222222222222',
@@ -93,6 +97,10 @@ describe('Runtime Menu Contracts & Drift Validation', () => {
 
     expect(rawPayload.branchId).toBe('b1111111-1111-1111-1111-111111111111');
     expect(rawPayload.currency).toBe('TRY');
+    expect(rawPayload.pricesIncludeTax).toBe(true);
+    expect(rawPayload.defaultTaxRateBps).toBe(1000);
+    expect(rawPayload.isServiceChargeEnabled).toBe(true);
+    expect(rawPayload.serviceChargeRateBps).toBe(500);
     expect(rawPayload.menus.length).toBe(1);
 
     const menu: RuntimeMenu = rawPayload.menus[0]!;

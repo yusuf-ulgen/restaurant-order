@@ -10,6 +10,10 @@ describe('CartSheet & Validator Integration Tests', () => {
   const sampleRuntimeMenu: RuntimeMenuReadModel = {
     branchId: 'branch-1',
     currency: 'TRY',
+    pricesIncludeTax: true,
+    defaultTaxRateBps: 1000,
+    isServiceChargeEnabled: false,
+    serviceChargeRateBps: 0,
     menus: [
       {
         id: 'menu-1',

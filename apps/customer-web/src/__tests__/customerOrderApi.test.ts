@@ -190,6 +190,34 @@ describe('Customer Order API Client & Error Mapping', () => {
     expect(orders[0]!.id).toBe('ord-123');
   });
 
+  it('handles getOrders HTTP failure', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        status: 500,
+        detail: 'Database error',
+        extensions: { errorCode: 'INTERNAL_ERROR' },
+      }),
+      headers: new Headers(),
+    });
+
+    await expect(customerOrderApi.getOrders()).rejects.toThrow(CustomerOrderApiError);
+  });
+
+  it('handles getOrders network failure', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network drop'));
+
+    try {
+      await customerOrderApi.getOrders();
+      expect.fail('Should have thrown');
+    } catch (err) {
+      const error = err as CustomerOrderApiError;
+      expect(error.errorCode).toBe('NETWORK_ERROR');
+      expect(error.userMessage).toContain('Sipariş geçmişi yüklenemedi');
+    }
+  });
+
   it('fetches single order by id', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -200,5 +228,33 @@ describe('Customer Order API Client & Error Mapping', () => {
 
     const order = await customerOrderApi.getOrderById('ord-123');
     expect(order.id).toBe('ord-123');
+  });
+
+  it('handles getOrderById HTTP error', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        status: 404,
+        detail: 'Order not found',
+        extensions: { errorCode: 'ORDER_NOT_FOUND' },
+      }),
+      headers: new Headers(),
+    });
+
+    await expect(customerOrderApi.getOrderById('ord-nonexistent')).rejects.toThrow(CustomerOrderApiError);
+  });
+
+  it('handles getOrderById network failure', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection lost'));
+
+    try {
+      await customerOrderApi.getOrderById('ord-123');
+      expect.fail('Should have thrown');
+    } catch (err) {
+      const error = err as CustomerOrderApiError;
+      expect(error.errorCode).toBe('NETWORK_ERROR');
+      expect(error.userMessage).toContain('Sipariş detayları yüklenemedi');
+    }
   });
 });

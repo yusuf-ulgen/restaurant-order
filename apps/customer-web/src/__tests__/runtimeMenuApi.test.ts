@@ -17,6 +17,10 @@ describe('runtimeMenuApi client', () => {
     const mockData: RuntimeMenuReadModel = {
       branchId: 'b-123',
       currency: 'TRY',
+      pricesIncludeTax: true,
+      defaultTaxRateBps: 1000,
+      isServiceChargeEnabled: false,
+      serviceChargeRateBps: 0,
       menus: [],
     };
 

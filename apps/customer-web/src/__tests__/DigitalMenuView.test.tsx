@@ -7,6 +7,10 @@ import type { RuntimeMenuReadModel } from '@restaurant-order/contracts';
 const mockRuntimeMenu: RuntimeMenuReadModel = {
   branchId: 'test-branch-id',
   currency: 'TRY',
+  pricesIncludeTax: true,
+  defaultTaxRateBps: 1000,
+  isServiceChargeEnabled: false,
+  serviceChargeRateBps: 0,
   menus: [
     {
       id: 'menu-1',
@@ -274,6 +278,10 @@ describe('DigitalMenuView (CUST-02)', () => {
     vi.spyOn(runtimeMenuApi, 'getRuntimeMenu').mockResolvedValue({
       branchId: 'test-branch-id',
       currency: 'TRY',
+      pricesIncludeTax: true,
+      defaultTaxRateBps: 1000,
+      isServiceChargeEnabled: false,
+      serviceChargeRateBps: 0,
       menus: [],
     });
 
