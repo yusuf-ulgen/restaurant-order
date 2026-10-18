@@ -187,8 +187,11 @@ public class CustomerOrderEndpointsUnitTests
         var r3 = CustomerOrderEndpoints.HandleOrderException(new DistributedSecurityStateUnavailableException("Redis fail"), context);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, Assert.IsAssignableFrom<IStatusCodeHttpResult>(r3).StatusCode);
 
-        var r4 = CustomerOrderEndpoints.HandleOrderException(new DbUpdateException("DB update conflict"), context);
+        var r4 = CustomerOrderEndpoints.HandleOrderException(new DbUpdateConcurrencyException("DB concurrency conflict"), context);
         Assert.Equal(StatusCodes.Status409Conflict, Assert.IsAssignableFrom<IStatusCodeHttpResult>(r4).StatusCode);
+
+        var rGenericDb = CustomerOrderEndpoints.HandleOrderException(new DbUpdateException("Unexpected DB update failure"), context);
+        Assert.Equal(StatusCodes.Status500InternalServerError, Assert.IsAssignableFrom<IStatusCodeHttpResult>(rGenericDb).StatusCode);
 
         var r5 = CustomerOrderEndpoints.HandleOrderException(new DomainException("Domain violation"), context);
         Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsAssignableFrom<IStatusCodeHttpResult>(r5).StatusCode);

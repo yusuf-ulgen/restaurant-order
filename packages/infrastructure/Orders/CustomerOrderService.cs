@@ -273,29 +273,7 @@ public sealed class CustomerOrderService : ICustomerOrderService
 
     private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateCustomerOrderRequest request)
     {
-        var sortedItems = request.Items
-            .OrderBy(i => i.MenuItemId)
-            .ThenBy(i => i.ItemVariantId ?? Guid.Empty)
-            .ThenBy(i => i.Quantity)
-            .ThenBy(i => i.CustomerNote ?? string.Empty)
-            .Select(i => new
-        {
-            mId = i.MenuItemId,
-            vId = i.ItemVariantId,
-            qty = i.Quantity,
-            note = i.CustomerNote?.Trim(),
-            exp = i.ClientExpectedUnitPriceMinorUnits,
-            mods = i.SelectedModifiers?
-                .OrderBy(m => m.ModifierGroupId)
-                .ThenBy(m => m.ModifierOptionId)
-                .Select(m => new { g = m.ModifierGroupId, o = m.ModifierOptionId })
-                .ToList()
-        }).ToList();
-
-        var payload = JsonSerializer.Serialize(new { s = sessionId.Value, items = sortedItems });
-        using var sha = SHA256.Create();
-        var hashBytes = sha.ComputeHash(Encoding.UTF8.GetBytes(payload));
-        return Convert.ToHexString(hashBytes).ToLowerInvariant()[..Order.MaxFingerprintLength];
+        return OrderFingerprintGenerator.ComputeCustomerOrderFingerprint(sessionId.Value, request.Items);
     }
 
     private static CustomerOrderResponseDto MapToDto(Order order)

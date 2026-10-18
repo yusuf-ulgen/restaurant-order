@@ -367,4 +367,71 @@ public class OrderPersistenceIntegrationTests : IClassFixture<TestcontainersFixt
         Assert.Contains(orderAId, visibleOrderIds);
         Assert.DoesNotContain(orderBId, visibleOrderIds);
     }
+
+    [Fact]
+    public async Task OrderItem_Persistence_ModifierPriceNotDoubleCounted()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+        await EnsureMigrationsAppliedAsync();
+
+        await using var ownerConn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
+        await ownerConn.OpenAsync();
+        var (tenantId, branchId, tableId, sessionId, menuItemId) = await SeedBaseHierarchyAsync(ownerConn);
+
+        var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+            .UseNpgsql(_fixture.DatabaseConnectionString)
+            .Options;
+
+        var tenantContext = new TenantContext(tenantId);
+        await using var context = new RestaurantOrderDbContext(options, tenantContext);
+
+        var orderId = OrderId.New();
+        var orderItemId = OrderItemId.New();
+        var modifier = OrderItemModifier.Create(
+            orderItemId,
+            Guid.NewGuid(),
+            "Cheese Group",
+            Guid.NewGuid(),
+            "Extra Cheese",
+            priceDeltaMinorUnits: 1000L);
+
+        var item = OrderItem.Create(
+            orderId,
+            new TenantId(tenantId),
+            new MenuItemId(menuItemId),
+            null,
+            "Cheeseburger",
+            null,
+            quantity: 2,
+            unitPriceMinorUnits: 4000L,
+            taxRateBasisPoints: 1000,
+            modifiers: new[] { modifier });
+
+        var order = Order.CreateSubmitted(
+            new TenantId(tenantId),
+            new BranchId(branchId),
+            new DiningSessionId(sessionId),
+            new RestaurantTableId(tableId),
+            roundNumber: 1,
+            OrderSource.Customer,
+            Currency.Default,
+            idempotencyKey: $"key-{Guid.NewGuid():N}",
+            new[] { item });
+
+        context.Orders.Add(order);
+        await context.SaveChangesAsync();
+
+        // Reload from database
+        await using var verifyContext = new RestaurantOrderDbContext(options, tenantContext);
+        var loadedOrder = await verifyContext.Orders
+            .Include(o => o.Items)
+            .ThenInclude(i => i.Modifiers)
+            .FirstAsync(o => o.Id == order.Id);
+
+        var loadedItem = loadedOrder.Items.First();
+        Assert.Equal(4000L, loadedItem.UnitPriceMinorUnits);
+        Assert.Equal(1000L, loadedItem.ModifierTotalMinorUnits);
+        Assert.Equal(10000L, loadedItem.LineTotalMinorUnits);
+        Assert.Equal(10000L, loadedOrder.SubtotalMinorUnits);
+    }
 }

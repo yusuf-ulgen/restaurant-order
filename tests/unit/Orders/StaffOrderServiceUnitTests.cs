@@ -256,7 +256,122 @@ public class StaffOrderServiceUnitTests
                 actor));
     }
 
-    private static MenuItem SeedMenuItem(RestaurantOrderDbContext db, TenantId tenantId, BranchId branchId)
+    [Fact]
+    public async Task CreateStaffOrderAsync_OnlyNoteChanged_ThrowsIdempotencyConflict()
+    {
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
+        var item = SeedMenuItem(db, tenantId, branchId);
+
+        var pricingEngine = new OrderPricingEngine(db);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
+
+        var req1 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 1", null, 2000) });
+        var req2 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 2", null, 2000) });
+
+        await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-1", actor);
+
+        await Assert.ThrowsAsync<IdempotencyConflictException>(() =>
+            staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req2, "staff-key-1", actor));
+    }
+
+    [Fact]
+    public async Task CreateStaffOrderAsync_OnlyExpectedPriceChanged_ThrowsIdempotencyConflict()
+    {
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
+        var item = SeedMenuItem(db, tenantId, branchId);
+
+        var pricingEngine = new OrderPricingEngine(db);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
+
+        var req1 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000) });
+        var req2 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2500) });
+
+        await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-price", actor);
+
+        await Assert.ThrowsAsync<IdempotencyConflictException>(() =>
+            staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req2, "staff-key-price", actor));
+    }
+
+    [Fact]
+    public async Task CreateStaffOrderAsync_ItemOrderReversed_ReturnsReplay()
+    {
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
+        var item1 = SeedMenuItem(db, tenantId, branchId);
+        var item2 = MenuItem.Create(tenantId, branchId, item1.MenuId, item1.CategoryId, "Calzone", "calzone", PriceAmount.FromMinorUnits(3000), sortOrder: 2, isActive: true);
+        db.MenuItems.Add(item2);
+        db.SaveChanges();
+
+        var pricingEngine = new OrderPricingEngine(db);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
+
+        var req1 = new CreateStaffOrderRequest(new[]
+        {
+            new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000),
+            new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000)
+        });
+
+        var req2 = new CreateStaffOrderRequest(new[]
+        {
+            new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000),
+            new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000)
+        });
+
+        var res1 = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-order", actor);
+        var res2 = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req2, "staff-key-order", actor);
+
+        Assert.False(res1.IsReplay);
+        Assert.True(res2.IsReplay);
+        Assert.Equal(res1.Order.Id, res2.Order.Id);
+    }
+
+    [Fact]
+    public async Task CreateStaffOrderAsync_Base4000_Modifier1000_Quantity2_YieldsExpectedSnapshotTotals()
+    {
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
+        var menu = Menu.Create(tenantId, branchId, "Menu", "menu", sortOrder: 1, status: MenuStatus.Active);
+        db.Menus.Add(menu);
+        var cat = MenuCategory.Create(tenantId, branchId, menu.Id, "Burgers", "burgers", sortOrder: 1, isActive: true);
+        db.MenuCategories.Add(cat);
+        var item = MenuItem.Create(tenantId, branchId, menu.Id, cat.Id, "Burger", "burger", PriceAmount.FromMinorUnits(4000), sortOrder: 1, isActive: true);
+        db.MenuItems.Add(item);
+
+        var group = ModifierGroup.Create(tenantId, branchId, "Extra", 0, 2, sortOrder: 1, isActive: true);
+        db.ModifierGroups.Add(group);
+        db.MenuItemModifierGroupAssignments.Add(MenuItemModifierGroupAssignment.Create(tenantId, branchId, menu.Id, item.Id, group.Id, sortOrder: 1));
+        var opt = ModifierOption.Create(tenantId, branchId, group.Id, "Cheese", PriceAmount.FromMinorUnits(1000), sortOrder: 1, isActive: true);
+        db.ModifierOptions.Add(opt);
+        db.SaveChanges();
+
+        var pricingEngine = new OrderPricingEngine(db);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
+
+        var request = new CreateStaffOrderRequest(new[]
+        {
+            new StaffOrderItemRequest(
+                item.Id.Value,
+                null,
+                2,
+                null,
+                new[] { new StaffSelectedModifierRequest(group.Id.Value, opt.Id.Value) },
+                5000)
+        });
+
+        var result = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-mod-snap", actor);
+
+        Assert.Equal(10000, result.Order.TotalMinorUnits);
+        Assert.Single(result.Order.Items);
+        var itemDto = result.Order.Items[0];
+        Assert.Equal(4000, itemDto.UnitPriceMinorUnits);
+        Assert.Equal(1000, itemDto.ModifierTotalMinorUnits);
+        Assert.Equal(10000, itemDto.LineTotalMinorUnits);
+        Assert.Equal(2, itemDto.Quantity);
+    }
+
+    internal static MenuItem SeedMenuItem(RestaurantOrderDbContext db, TenantId tenantId, BranchId branchId)
     {
         var menu = Menu.Create(tenantId, branchId, "Main Menu", "main-menu", sortOrder: 1, status: MenuStatus.Active);
         db.Menus.Add(menu);

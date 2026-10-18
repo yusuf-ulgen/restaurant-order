@@ -304,7 +304,18 @@ public static class StaffOrderEndpoints
                     detail: de.Message,
                     extensions: extensions),
 
-            DbUpdateException =>
+            DbUpdateConcurrencyException =>
+                Results.Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Conflict",
+                    detail: "Eşzamanlı işlem çakışması tespit edildi. Lütfen tekrar deneyiniz.",
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["errorCode"] = "CONCURRENCY_CONFLICT",
+                        ["correlationId"] = correlationId
+                    }),
+
+            DbUpdateException dbEx when IsKnownOrderConstraintViolation(dbEx) =>
                 Results.Problem(
                     statusCode: StatusCodes.Status409Conflict,
                     title: "Conflict",
@@ -317,5 +328,15 @@ public static class StaffOrderEndpoints
 
             _ => FloorEndpointHelpers.HandleException(ex, context)
         };
+    }
+
+    internal static bool IsKnownOrderConstraintViolation(DbUpdateException dbEx)
+    {
+        if (dbEx.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            return pgEx.ConstraintName is "ix_orders_tenant_session_round" or "ix_orders_tenant_idempotency_key";
+        }
+
+        return false;
     }
 }

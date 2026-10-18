@@ -264,19 +264,19 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
             }
 
             // Detect Client Price Manipulation / Price Change Race
-            long authoritativeUnitPrice;
+            long effectiveUnitPrice;
             checked
             {
-                authoritativeUnitPrice = itemBasePriceMinorUnits + modifierSum;
+                effectiveUnitPrice = itemBasePriceMinorUnits + modifierSum;
             }
 
-            if (draft.ClientExpectedUnitPriceMinorUnits.HasValue && draft.ClientExpectedUnitPriceMinorUnits.Value != authoritativeUnitPrice)
+            if (draft.ClientExpectedUnitPriceMinorUnits.HasValue && draft.ClientExpectedUnitPriceMinorUnits.Value != effectiveUnitPrice)
             {
                 throw OrderPricingException.PriceChanged(
                     menuItem.Id,
                     draft.ItemVariantId,
                     draft.ClientExpectedUnitPriceMinorUnits.Value,
-                    authoritativeUnitPrice);
+                    effectiveUnitPrice);
             }
 
             // Calculate item financials
@@ -293,7 +293,7 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
                 menuItem.Name,
                 selectedVariant?.Name,
                 draft.Quantity,
-                authoritativeUnitPrice,
+                itemBasePriceMinorUnits,
                 modifierSum,
                 lineTotal,
                 netSubtotal,

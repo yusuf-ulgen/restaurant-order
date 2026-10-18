@@ -208,7 +208,10 @@ public static class CustomerOrderEndpoints
             DistributedSecurityStateUnavailableException =>
                 ProblemResult(context, StatusCodes.Status503ServiceUnavailable, "Service Unavailable", "Güvenlik altyapısı şu anda kullanılamıyor, lütfen kısa süre sonra tekrar deneyiniz.", "DISTRIBUTED_SECURITY_STATE_UNAVAILABLE"),
 
-            DbUpdateException =>
+            DbUpdateConcurrencyException =>
+                ProblemResult(context, StatusCodes.Status409Conflict, "Conflict", "Eşzamanlı işlem çakışması tespit edildi. Lütfen tekrar deneyiniz.", "CONCURRENCY_CONFLICT"),
+
+            DbUpdateException dbEx when IsKnownOrderConstraintViolation(dbEx) =>
                 ProblemResult(context, StatusCodes.Status409Conflict, "Conflict", "Eşzamanlı işlem çakışması tespit edildi. Lütfen tekrar deneyiniz.", "CONCURRENCY_CONFLICT"),
 
             DomainException dex =>
@@ -216,6 +219,16 @@ public static class CustomerOrderEndpoints
 
             _ => FloorEndpointHelpers.HandleException(ex, context)
         };
+    }
+
+    internal static bool IsKnownOrderConstraintViolation(DbUpdateException dbEx)
+    {
+        if (dbEx.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            return pgEx.ConstraintName is "ix_orders_tenant_session_round" or "ix_orders_tenant_idempotency_key";
+        }
+
+        return false;
     }
 
     internal static IResult MapPricingException(OrderPricingException ex, HttpContext context)

@@ -126,8 +126,11 @@ public class StaffOrderEndpointsUnitTests
         var r8 = StaffOrderEndpoints.HandleException(new DomainException("Domain error"), context);
         Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsAssignableFrom<IStatusCodeHttpResult>(r8).StatusCode);
 
-        var r9 = StaffOrderEndpoints.HandleException(new DbUpdateException("DB conflict"), context);
+        var r9 = StaffOrderEndpoints.HandleException(new DbUpdateConcurrencyException("DB concurrency conflict"), context);
         Assert.Equal(StatusCodes.Status409Conflict, Assert.IsAssignableFrom<IStatusCodeHttpResult>(r9).StatusCode);
+
+        var rGenericDb = StaffOrderEndpoints.HandleException(new DbUpdateException("DB unexpected failure"), context);
+        Assert.Equal(StatusCodes.Status500InternalServerError, Assert.IsAssignableFrom<IStatusCodeHttpResult>(rGenericDb).StatusCode);
 
         var r10 = StaffOrderEndpoints.HandleException(new InvalidOperationException("Generic"), context);
         Assert.NotNull(r10);

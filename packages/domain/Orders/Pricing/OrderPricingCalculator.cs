@@ -4,7 +4,7 @@ namespace RestaurantOrder.Domain.Orders.Pricing;
 
 /// <summary>
 /// Authoritative pure financial calculator for restaurant orders.
-/// 
+///
 /// Core Invariants & Financial Rules:
 /// 1. Uses strictly 64-bit integer minor-units (e.g. kuruş, cents) and integer basis points (bps, 10000 bps = 100%).
 /// 2. Floating point types (double, float, decimal) are strictly prohibited to prevent representation errors.

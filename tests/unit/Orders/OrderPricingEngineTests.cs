@@ -159,7 +159,9 @@ public class OrderPricingEngineTests
         var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
 
         // Assert
-        Assert.Equal(2700, result.LineItems[0].UnitPriceMinorUnits);
+        Assert.Equal(2000, result.LineItems[0].UnitPriceMinorUnits);
+        Assert.Equal(700, result.LineItems[0].ModifierTotalMinorUnits);
+        Assert.Equal(2700, result.LineItems[0].LineTotalMinorUnits);
         Assert.Equal(2, result.LineItems[0].Modifiers.Count);
         Assert.Equal(2700, result.TotalMinorUnits);
     }
@@ -304,5 +306,103 @@ public class OrderPricingEngineTests
         // Assert: Result snapshot remains 2000
         Assert.Equal(2000, result.LineItems[0].UnitPriceMinorUnits);
         Assert.Equal(2000, result.TotalMinorUnits);
+    }
+
+    [Fact]
+    public async Task PriceOrderAsync_Base4000_Modifier1000_Quantity2_CalculatesAccuratelyWithoutDoubleCounting()
+    {
+        // Arrange: Tabak taban fiyat 4000, modifier 1000, miktar 2
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment(
+            isOrderTakingEnabled: true,
+            pricesIncludeTax: true,
+            defaultTaxRateBps: 1000);
+
+        var menu = Menu.Create(tenantId, branchId, "Menu", "menu", sortOrder: 1, status: MenuStatus.Active);
+        db.Menus.Add(menu);
+        var cat = MenuCategory.Create(tenantId, branchId, menu.Id, "Pizzas", "pizzas", sortOrder: 1, isActive: true);
+        db.MenuCategories.Add(cat);
+        var item = MenuItem.Create(tenantId, branchId, menu.Id, cat.Id, "Pizza", "pizza", PriceAmount.FromMinorUnits(4000), sortOrder: 1, isActive: true);
+        db.MenuItems.Add(item);
+
+        var group = ModifierGroup.Create(tenantId, branchId, "Toppings", 0, 5, sortOrder: 1, isActive: true);
+        db.ModifierGroups.Add(group);
+        var assign = MenuItemModifierGroupAssignment.Create(tenantId, branchId, menu.Id, item.Id, group.Id, sortOrder: 1);
+        db.MenuItemModifierGroupAssignments.Add(assign);
+
+        var opt = ModifierOption.Create(tenantId, branchId, group.Id, "Extra Cheese", PriceAmount.FromMinorUnits(1000), sortOrder: 1, isActive: true);
+        db.ModifierOptions.Add(opt);
+        await db.SaveChangesAsync();
+
+        var engine = new OrderPricingEngine(db);
+        var items = new List<ClientOrderItemDraft>
+        {
+            new(
+                item.Id,
+                null,
+                2,
+                null,
+                new List<ClientSelectedModifierDraft> { new(group.Id.Value, opt.Id.Value) },
+                5000) // Effective unit price: 4000 + 1000 = 5000
+        };
+
+        // Act
+        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+
+        // Assert
+        Assert.Single(result.LineItems);
+        var line = result.LineItems[0];
+        Assert.Equal(4000, line.UnitPriceMinorUnits);
+        Assert.Equal(1000, line.ModifierTotalMinorUnits);
+        Assert.Equal(10000, line.LineTotalMinorUnits);
+        Assert.Equal(10000, result.TotalMinorUnits);
+    }
+
+    [Fact]
+    public async Task PriceOrderAsync_WithTaxExcludedAndServiceCharge_CalculatesFullOrderTotalsCorrectly()
+    {
+        // Arrange: PricesExcludeTax (20%), ServiceCharge (10%)
+        var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment(
+            isOrderTakingEnabled: true,
+            pricesIncludeTax: false,
+            defaultTaxRateBps: 2000,
+            serviceChargeRateBps: 1000);
+
+        var menu = Menu.Create(tenantId, branchId, "Menu", "menu", sortOrder: 1, status: MenuStatus.Active);
+        db.Menus.Add(menu);
+        var cat = MenuCategory.Create(tenantId, branchId, menu.Id, "Main", "main", sortOrder: 1, isActive: true);
+        db.MenuCategories.Add(cat);
+        var item = MenuItem.Create(tenantId, branchId, menu.Id, cat.Id, "Steak", "steak", PriceAmount.FromMinorUnits(4000), sortOrder: 1, isActive: true);
+        db.MenuItems.Add(item);
+
+        var group = ModifierGroup.Create(tenantId, branchId, "Sauce", 0, 2, 1, true);
+        db.ModifierGroups.Add(group);
+        db.MenuItemModifierGroupAssignments.Add(MenuItemModifierGroupAssignment.Create(tenantId, branchId, menu.Id, item.Id, group.Id, 1));
+        var opt = ModifierOption.Create(tenantId, branchId, group.Id, "Pepper", PriceAmount.FromMinorUnits(1000), 1, true);
+        db.ModifierOptions.Add(opt);
+        await db.SaveChangesAsync();
+
+        var engine = new OrderPricingEngine(db);
+        var items = new List<ClientOrderItemDraft>
+        {
+            new(
+                item.Id,
+                null,
+                2,
+                null,
+                new List<ClientSelectedModifierDraft> { new(group.Id.Value, opt.Id.Value) },
+                5000)
+        };
+
+        // Act
+        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+
+        // Net: 10000, Tax (20% on 10000): 2000, Gross: 12000, Service (10% on 12000): 1200, Grand Total: 13200
+        Assert.Equal(4000, result.LineItems[0].UnitPriceMinorUnits);
+        Assert.Equal(1000, result.LineItems[0].ModifierTotalMinorUnits);
+        Assert.Equal(10000, result.LineItems[0].LineTotalMinorUnits);
+        Assert.Equal(10000, result.SubtotalMinorUnits);
+        Assert.Equal(2000, result.TaxMinorUnits);
+        Assert.Equal(1200, result.ServiceChargeMinorUnits);
+        Assert.Equal(13200, result.TotalMinorUnits);
     }
 }

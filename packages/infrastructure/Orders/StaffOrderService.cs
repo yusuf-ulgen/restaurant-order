@@ -25,17 +25,20 @@ public sealed partial class StaffOrderService : IStaffOrderService
     private readonly IOrderPricingEngine _pricingEngine;
     private readonly IPermissionRegistry _permissionRegistry;
     private readonly IPinHasher _pinHasher;
+    private readonly Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? _serviceScopeFactory;
 
     public StaffOrderService(
         RestaurantOrderDbContext dbContext,
         IOrderPricingEngine pricingEngine,
         IPermissionRegistry permissionRegistry,
-        IPinHasher pinHasher)
+        IPinHasher pinHasher,
+        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _pricingEngine = pricingEngine ?? throw new ArgumentNullException(nameof(pricingEngine));
         _permissionRegistry = permissionRegistry ?? throw new ArgumentNullException(nameof(permissionRegistry));
         _pinHasher = pinHasher ?? throw new ArgumentNullException(nameof(pinHasher));
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     public async Task<CreateStaffOrderResult> CreateStaffOrderAsync(
@@ -331,23 +334,7 @@ public sealed partial class StaffOrderService : IStaffOrderService
 
     private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateStaffOrderRequest request)
     {
-        var sb = new StringBuilder();
-        sb.Append($"session:{sessionId.Value:N}|items:");
-        foreach (var item in request.Items.OrderBy(i => i.MenuItemId).ThenBy(i => i.ItemVariantId ?? Guid.Empty))
-        {
-            sb.Append($"[{item.MenuItemId:N}:{item.ItemVariantId?.ToString("N") ?? "none"}:{item.Quantity}:");
-            if (item.SelectedModifiers != null)
-            {
-                foreach (var mod in item.SelectedModifiers.OrderBy(m => m.ModifierGroupId).ThenBy(m => m.ModifierOptionId))
-                {
-                    sb.Append($"{mod.ModifierGroupId:N}>{mod.ModifierOptionId:N};");
-                }
-            }
-            sb.Append(']');
-        }
-
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
-        return Convert.ToHexStringLower(hashBytes);
+        return OrderFingerprintGenerator.ComputeStaffOrderFingerprint(sessionId.Value, request.Items);
     }
 
     private static StaffOrderResponseDto MapToDto(Order order)
