@@ -10,6 +10,7 @@ using RestaurantOrder.Domain.Common;
 using RestaurantOrder.Domain.Floor;
 using RestaurantOrder.Domain.Orders;
 using RestaurantOrder.Domain.Tenants;
+using RestaurantOrder.Infrastructure.Persistence;
 
 namespace RestaurantOrder.Infrastructure.Orders;
 
@@ -188,51 +189,135 @@ public sealed partial class StaffOrderService
     {
         if (!supervisorUserId.HasValue || string.IsNullOrWhiteSpace(supervisorPin))
         {
-            throw new InvalidAuthorizationScopeException("Item is in preparation or ready/served. Supervisor authorization (orders.items.void_in_prep) is required.");
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
         }
 
         var supervisorUser = new UserId(supervisorUserId.Value);
-        var pinCred = await _dbContext.PinCredentials
+        var nowUtc = DateTimeOffset.UtcNow;
+
+        if (_serviceScopeFactory != null)
+        {
+            using var scope = _serviceScopeFactory.CreateScope();
+            var secDb = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<RestaurantOrderDbContext>(scope.ServiceProvider);
+
+            await using var secTx = await secDb.BeginTenantTransactionAsync(tenantId.Value, cancellationToken: cancellationToken);
+            try
+            {
+                var result = await ExecuteSupervisorVerificationAsync(secDb, tenantId, branchId, supervisorUser, supervisorPin, nowUtc, cancellationToken);
+                await secDb.SaveChangesAsync(cancellationToken);
+                await secTx.CommitAsync(cancellationToken);
+                return result;
+            }
+            catch (Exception)
+            {
+                if (secDb.ChangeTracker.HasChanges())
+                {
+                    try
+                    {
+                        await secDb.SaveChangesAsync(cancellationToken);
+                        await secTx.CommitAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        // Ignore persistence errors during failure flow
+                    }
+                }
+                throw;
+            }
+        }
+        else
+        {
+            try
+            {
+                var result = await ExecuteSupervisorVerificationAsync(_dbContext, tenantId, branchId, supervisorUser, supervisorPin, nowUtc, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return result;
+            }
+            catch (Exception)
+            {
+                if (_dbContext.ChangeTracker.HasChanges())
+                {
+                    try
+                    {
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        // Ignore secondary errors in fallback mode
+                    }
+                }
+                throw;
+            }
+        }
+    }
+
+    private async Task<(Guid SupervisorId, string SupervisorRole)> ExecuteSupervisorVerificationAsync(
+        RestaurantOrderDbContext db,
+        TenantId tenantId,
+        BranchId branchId,
+        UserId supervisorUser,
+        string supervisorPin,
+        DateTimeOffset nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var pinCred = await db.PinCredentials
             .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.BranchId == branchId && p.UserId == supervisorUser, cancellationToken);
 
-        if (pinCred == null || pinCred.IsLocked(DateTimeOffset.UtcNow))
+        if (pinCred == null || pinCred.IsLocked(nowUtc))
         {
-            throw new InvalidAuthorizationScopeException("Supervisor verification failed: Invalid PIN or locked credential.");
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
         }
 
         var verifyResult = _pinHasher.VerifyPin(supervisorPin.Trim(), pinCred.PinHash, pinCred.PepperKeyId);
         if (verifyResult == PinVerificationResult.Failed)
         {
-            pinCred.RecordFailedAttempt(5, TimeSpan.FromMinutes(15), DateTimeOffset.UtcNow);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            throw new InvalidAuthorizationScopeException("Supervisor verification failed: Incorrect PIN.");
+            pinCred.RecordFailedAttempt(5, TimeSpan.FromMinutes(15), nowUtc);
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
         }
 
-        pinCred.RecordSuccessfulAttempt(DateTimeOffset.UtcNow);
-
-        // Verify supervisor user has manager/admin role
-        var membership = await _dbContext.Memberships
+        var membership = await db.Memberships
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.UserId == supervisorUser && m.IsActive, cancellationToken);
 
-        if (membership == null)
+        if (membership == null || !membership.IsActive || membership.Status != UserMembershipStatus.Active)
         {
-            throw new InvalidAuthorizationScopeException("Supervisor does not have active membership in this tenant.");
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
         }
+
+        if (membership.Role == AuthRole.BranchManager)
+        {
+            if (membership.BranchId != branchId)
+            {
+                throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
+            }
+        }
+        else if (membership.Role == AuthRole.RestaurantAdmin)
+        {
+            // Tenant-scoped RestaurantAdmin
+        }
+        else
+        {
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
+        }
+
+        var principalScope = membership.Role == AuthRole.RestaurantAdmin
+            ? AuthorizationScope.ForTenant(tenantId)
+            : AuthorizationScope.ForBranch(tenantId, branchId);
 
         var principal = AuthenticatedPrincipal.CreateStaff(
             supervisorUser.Value,
             membership.Role,
-            AuthorizationScope.ForBranch(tenantId, branchId),
+            principalScope,
             sessionId: Guid.NewGuid(),
             authMethod: AuthenticationMethod.Pin,
             securityVersion: 1);
 
         if (!_permissionRegistry.IsPermitted(principal, Permissions.OrdersItemsVoidInPrep))
         {
-            throw new InvalidAuthorizationScopeException("Specified supervisor does not hold 'orders.items.void_in_prep' authority.");
+            throw new InvalidAuthorizationScopeException("Supervisor verification failed.");
         }
 
+        pinCred.RecordSuccessfulAttempt(nowUtc);
         return (supervisorUser.Value, membership.Role.ToString());
     }
 }
