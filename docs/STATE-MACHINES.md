@@ -97,6 +97,7 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 > - `Paid`, sipariş durumu değildir; ilerideki `Bill` (Hesap/Adisyon) durumudur.
 > - `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` veya `OrderItem` durumları arasında yer almaz.
 > - Her durum geçişinde `Order.ConcurrencyToken` yenilenir; eski ETag / `If-Match` ile yapılan istekler `409 Conflict` veya `412 Precondition Failed` ile korunur.
+> - Finansal onay ve yeniden onay kapısı: Müşteri siparişi yalnızca canlı doğrulanmış ve onaylanmış menü parmak izi (`clientPricingPolicyFingerprint`) ve onaylanmış toplam (`clientExpectedTotalMinorUnits`) ile gönderilebilir. Politika veya toplam uyuşmazlığında sipariş reddedilir (`409`), durum geçişi gerçekleşmez ve veri yazılmaz.
 
 ---
 

@@ -168,21 +168,30 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Exception mesajlarının dışarı sızmadığı; unhandled hataların RFC 7807 generic 500'e ve `DistributedSecurityStateUnavailableException` hatalarının 503'e dönüştürüldüğü doğrulandı.
   - `CustomerOrderService` içinde request fingerprint hesaplaması kalem ve modifier sıralamalarıyla tamamen deterministik kılındı.
   - Eşzamanlı benzersizlik ihlallerinde ham SQL hatası sızdırılmayıp `CONCURRENCY_CONFLICT` (409) olarak eşlendi.
+- [x] **Faz 8 Son İnceleme Düzeltmeleri (Final Review Polish):**
+  - **Finansal Onay Bypass'ının Kapatılması:** `CustomerOrderEndpoints` ve `StaffOrderEndpoints` uç noktalarında `clientPricingPolicyFingerprint` ve `clientExpectedTotalMinorUnits` zorunlu kılındı. Eksik/null/boş değerler `400 Bad Request` ile reddedilir ve sıfır persistence uygulanır. Politika uyuşmazlığında `409 ORDER_PRICING_POLICY_CHANGED`, beklenen toplam uyuşmazlığında `409 ORDER_TOTAL_CHANGED` döner.
+  - **Canlı Runtime Menu ve Yeniden Onay UX:** Sessiz `.catch` kaldırıldı; menü null, yükleniyor, hata veya doğrulanmamış durumdayken checkout CTA'sı devre dışı bırakıldı; çalışan retry butonu eklendi. Fiyat/politika çatışmalarında modal kapatılıp sepet açılarak güncel menü çekilir ve kullanıcıdan açık kabul alınır.
+  - **Deterministik Idempotency İmzası:** Frontend `computeOrderPayloadSignature` kanonik formatı kullanılarak policy fingerprint, beklenen toplam, kalemler, varyantlar, modifierlar ve müşteri notlarını kapsayan deterministik imza oluşturuldu.
+  - **Typecheck ve Fixture Güncellemeleri:** Hiçbir alan optional yapılmadan, `any` veya `@ts-ignore` kullanılmadan tüm test fixture'ları ve drift testleri güncellendi.
+  - **Supervisor PIN Schema ve Yaşam Döngüsü:** `SeedSupervisorAsync` IAM gerçek şeması (`created_at_utc`, enum int, User/Membership/PinCredential factory'leri) ile yazıldı. İkinci şube gerçek kayıt olarak eklendi; `RestaurantAdmin` için sahte credential üretimi engellendi. PIN hasher ve API host pepper yapılandırması eşitlendi. `SetupOrderInPrepAsync` güncel ETag döndürecek şekilde düzeltildi. Audit doğrulamalarında `BeginTenantTransactionAsync` kullanılarak `WASTE_CANCEL` ve aktör denetimi yapıldı.
+  - **Farklı Session'lar ile PostgreSQL PIN Concurrency Testi:** Advisory lock sıralamasını credential row lock'undan ayırmak için 5 farklı dining session/order oluşturuldu; aynı BranchManager credential'ına `CountdownEvent` koordinasyonuyla 5 eşzamanlı yanlış PIN gönderildi. Row lock `FOR UPDATE` ile tüm 5 isteğin 403 aldığı, `failed_pin_attempts` değerinin tam 5 olduğu, 15 dakikalık kilit oluştuğu, kilit süresince doğru PIN'in de reddedildiği ve sıfır sipariş/audit mutasyonu oluştuğu kanıtlandı. Başarılı PIN'in sayacı sıfırladığı ayrıca test edildi.
+  - **StaffOrderService Alternatif Test Yolunun Kaldırılması:** `StaffOrderService` içindeki sahte scope factory ve internal constructor kaldırıldı; zorunlu `ISupervisorPinService` bağımlılığı bağlandı.
+  - **React act(...) Test Uyarısının Çözümü:** `OrderSheetsBranchCoverage.test.tsx` içindeki state güncellemesi async kullanıcı akışına uygun hale getirilerek uyarı tamamen giderildi.
 - [x] **Kod Kalitesi ve Sınırlar:**
-  - Elle yazılan hiçbir dosya 600 satırı aşmadı (tüm 1043 dosya yeşil; 450 satır eşiğindeki dosyalar partial sınıflarla sorumluluğa göre bölündü).
+  - Elle yazılan hiçbir dosya 600 satırı aşmadı (1060 dosya < 600 satır; migration hariç tüm dosyalar 450 satır uyarı eşiğinin altında tutuldu).
   - Dead code, eski mock ve TODO ile gizlenmiş davranış bırakılmadı.
   - Drift testleri ile backend ve frontend sözleşmeleri mühürlendi.
 - [x] **Kalite Kapıları ve Doğrulama:**
-  - File size gate: 1053 dosya < 600 satır (`PASS`).
+  - File size gate: 1060 dosya < 600 satır (`PASS`).
   - Docs & links validation: 64 dosya, 0 bozuk bağlantı (`PASS`).
   - Secret scanning: 0 sızıntı (`PASS`).
   - ESLint: 0 hata, 0 uyarı (`PASS`).
   - TypeScript typecheck: 7/7 proje Done (`PASS`).
   - Architecture tests: 10/10 (`PASS`).
-  - Backend Unit tests: 1655/1655 (`PASS`).
-  - Backend Integration tests: 363/363 (`PASS`, SKIP_TESTCONTAINERS=true).
-  - Frontend unit/component tests: 382/382 (`PASS`: customer-web: 216, operations-web: 15, admin-web: 151).
+  - Backend Unit tests: 1667/1667 (`PASS`).
+  - Backend Integration tests: 373/373 (`PASS`, SKIP_TESTCONTAINERS=true).
+  - Frontend unit/component tests: 386/386 (`PASS`: customer-web: 220, operations-web: 15, admin-web: 151).
   - Frontend test coverage (customer-web): Stmts: %93,5, Branch: %83,0, Funcs: %88,41, Lines: %93,5 (`PASS`, tüm eşikler > %80).
   - Quality gates: 114 test (`PASS`, 1 atlandı: Docker konteyner akışı).
   - Production release build: `pnpm build` (`PASS`).
-  - CI / GitHub Actions: Exact HEAD commit iş akışı tamamlandı ve yeşil ([Run #39134518875](https://github.com/yusuf-ulgen/restaurant-order/actions/runs/39134518875), `PASS`).
+  - CI / GitHub Actions: Exact HEAD commit iş akışı push edilecek ve doğrulanacak.

@@ -27,14 +27,15 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - **Faz 8.4:** Müşteri sipariş onay ve gönderim deneyimi (`OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`), stabil idempotency key, sepet koruması ve temizliği.
   - **Faz 8.5:** Personel sipariş uç noktaları (`StaffOrderEndpoints`), RBAC matrisi (`orders.staff.create`, `orders.items.cancel_pre_prep`, `orders.items.void_in_prep`), deterministik `Order.DeriveStatus`, supervisor void ve PIN doğrulama akışı.
   - **Faz 8.6:** 15 adımlı pozitif E2E akışı (DB tek sipariş doğrulaması dahil), negatif güvenlik ve eşzamanlılık testleri, kalite kapıları (Gate 1–6) doğrulaması.
-- Kapanış Düzeltmeleri:
-  - Modifier fiyatının iki kez eklenmesi finansal modelde düzeltildi (`UnitPriceMinorUnits` taban fiyat, `ModifierTotalMinorUnits` birim modifier toplamı, `LineTotalMinorUnits = (UnitPrice + ModifierTotal) * Qty`).
-  - Ortak ve deterministik SHA-256 canonical idempotency fingerprinting altyapısı uygulandı (`OrderFingerprintGenerator`).
-  - Supervisor PIN doğrulaması ayrı transaction/scope içine alınarak 5 başarısız deneme sonrası 15 dakikalık kilit kalıcılaştırıldı; branch scoping ve passive membership kontrolleri sertleştirildi.
-  - Fiyat değişikliği onay döngüsü (`acceptPriceChanges`) tamamlandı; sepette eski/yeni fiyat farkı ve onay CTA'sı eklendi; payload-bazlı idempotency key bağlandı.
-  - Runtime menüye vergi ve servis ücreti politikası alanları eklenerek `OrderConfirmationSheet` üzerinde saf integer Half-Up döküm sağlandı.
-  - Ham SQL sızıntılarını önlemek için `DbUpdateException` eşlemesi sınırlandırıldı.
-  - `apps/customer-web` test kapsamı tüm global metriklerde (Statements: %93,5, Branches: %83,0, Functions: %88,41, Lines: %93,5) %80 üzerine çıkarıldı.
+- Son İnceleme Düzeltmeleri (Final Review Polish):
+  - Finansal onay korumasındaki bypass tamamen kapatıldı: `clientPricingPolicyFingerprint` ve `clientExpectedTotalMinorUnits` zorunlu kılındı. Eksik/null/boş değerler `400 Bad Request` ile reddedilir ve sıfır persistence uygulanır. Politika uyuşmazlığında `409 ORDER_PRICING_POLICY_CHANGED`, toplam uyuşmazlığında `409 ORDER_TOTAL_CHANGED` döner.
+  - Canlı runtime menü ve yeniden onay UX akışı: Checkout öncesi doğrulama, sessiz `.catch` kaldırılması, menü yüklenemediğinde veya doğrulanamadığında sipariş CTA'sının kilitlenmesi, çalışan retry butonu ve conflict durumunda sepet açılarak açık kullanıcı onayı alma akışı tamamlandı.
+  - Frontend idempotency key üretimi `computeOrderPayloadSignature` kanonik formatıyla deterministik kılındı; aynı payload ağ tekrarlarında aynı key'i korurken, politika/toplam/seçim değişiminde yeni key üretir.
+  - TypeScript typecheck ve fixture drift hataları hiçbir alan optional yapılmadan ve `any` kullanılmadan gerçek tiplerle düzeltildi.
+  - Supervisor PIN entegrasyon testleri IAM gerçek şeması (`created_at_utc`, enum int), gerçek ikinci şube ve hazırlık sonrası taze ETag ile düzeltildi; `WASTE_CANCEL` ve aktör denetimleri tenant context içinde yapıldı.
+  - PostgreSQL üzerinde 5 ayrı masa oturumu ile advisory lock'tan bağımsız olarak `iam.pin_credentials` satır kilidi (`FOR UPDATE`), 15 dakikalık kilit penceresi ve rollback'ten bağımsız sayaç kalıcılığı kanıtlandı.
+  - `StaffOrderService` içindeki alternatif test yolu ve fallback scope factory kaldırılarak üretim DI ile zorunlu `ISupervisorPinService` bağımlılığı bağlandı.
+  - `OrderSheetsBranchCoverage.test.tsx` içindeki React `act(...)` test uyarısı giderildi.
 - Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) exact HEAD CI doğrulaması ve kullanıcı onayı sonrasında Faz 9 hazırlığı.
 
 ## Ortam ve Sınırlamalar
@@ -47,4 +48,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Kapanış düzeltmelerinin `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki exact HEAD GitHub Actions CI akışının yeşil olduğunun doğrulanması gerekmektedir. CI yeşil olduktan sonra kullanıcı onayı ile `main` dalına merge süreci işletilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.
+Son inceleme düzeltmelerinin mantıksal commit'lerle `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki exact HEAD GitHub Actions CI akışının yeşil olduğunun doğrulanması gerekmektedir. CI yeşil olduktan sonra kullanıcı onayı ile `main` dalına merge süreci işletilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.

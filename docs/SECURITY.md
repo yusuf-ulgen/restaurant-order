@@ -85,3 +85,8 @@ Rol/yetki atama, fiyat müdahalesi, hesap indirimi/iadesi, hazırlıktaki ürün
 - Staging/Production için `NOTIFICATION_PROVIDER=TransactionalOutbox` gerekir; geliştirme `TestSink`'i yasaktır.
 - `IdentityNotificationOutboxDispatcher`, `FOR UPDATE SKIP LOCKED` ile kayıtları alır, çözer ve `WebhookIdentityNotificationTransport` üzerinden HTTPS gönderir. `X-Webhook-Signature` HMAC-SHA256, `X-Idempotency-Key` tekrar güvenliği içindir.
 - Kimlik/personel hataları `application/problem+json` kullanır: 400, 401, 403, 404, 409, 422, 429. Yapılandırılmış hata kodu vardır; kimlik bilgisi veya stack trace sızmaz.
+
+### 5.8. Faz 8 Finansal Onay Koruması ve Supervisor PIN Güvenliği
+
+- **Finansal Onay Doğrulaması:** Sipariş oluşturma isteklerinde `clientPricingPolicyFingerprint` ve `clientExpectedTotalMinorUnits` zorunludur. Eksik/null/geçersiz parametreler `400 Bad Request` ile reddedilir ve sıfır persistence uygulanır (Order, OrderItem veya Audit kaydı yazılmaz). Şube politikası (vergi/servis ücreti) güncellendiğinde `409 ORDER_PRICING_POLICY_CHANGED`, beklenen genel toplam yetkili toplamdan farklı olduğunda `409 ORDER_TOTAL_CHANGED` döner.
+- **Supervisor PIN Kilitleme ve İzolasyon:** Hazırlıktaki kalemlerin iptali (`WASTE_CANCEL`) için yetkili BranchManager PIN doğrulaması gerekir. Hatalı PIN denemeleri ana sipariş transaction'ı rollback olsa dahi bağımsız transaction ile sayılır. 5 hatalı denemede 15 dakikalık kilit uygulanır; kilitli süre boyunca doğru PIN verilse dahi işlem reddedilir. Doğru PIN verildiğinde sayaç güvenle sıfırlanır. Denetim günlüğünde aktör kimliği ve rolü saklanır; PIN veya müşteri serbest metin notu asla loglanmaz.
