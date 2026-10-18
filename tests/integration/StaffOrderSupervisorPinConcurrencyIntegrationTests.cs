@@ -27,8 +27,8 @@ public class StaffOrderSupervisorPinConcurrencyIntegrationTests : IClassFixture<
     private static readonly IPinHasher PinHasher = new PepperedPinHasher(
         Options.Create(new PinHasherOptions
         {
-            PepperKeyId = "dev_v1",
-            PepperValue = "0123456789abcdef0123456789abcdef",
+            PepperKeyId = RestaurantConfigTestHelpers.SharedTestPinPepperKeyId,
+            PepperValue = RestaurantConfigTestHelpers.SharedPinPepper,
             Environment = "Development"
         }));
 
