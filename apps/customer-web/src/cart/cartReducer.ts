@@ -4,23 +4,30 @@ export interface CartState {
   sessionId: string | null;
   lines: DraftCartLine[];
   currency: string;
+  acceptedPolicyFingerprint: string | null;
 }
 
 export const initialCartState: CartState = {
   sessionId: null,
   lines: [],
   currency: 'TRY',
+  acceptedPolicyFingerprint: null,
 };
 
 export type CartAction =
   | { type: 'SET_SESSION'; sessionId: string; currency?: string }
-  | { type: 'ADD_LINE'; line: DraftCartLine }
+  | { type: 'ADD_LINE'; line: DraftCartLine; policyFingerprint?: string }
   | { type: 'UPDATE_QUANTITY'; signature: string; quantity: number }
   | { type: 'REMOVE_LINE'; signature: string }
   | { type: 'UPDATE_LINE'; oldSignature: string; newLine: DraftCartLine }
   | { type: 'CLEAR_CART' }
   | { type: 'RESTORE_CART'; state: CartState }
-  | { type: 'ACCEPT_PRICE_CHANGES'; updates: Array<{ signature: string; newUnitPriceMinorUnits: number }> };
+  | {
+      type: 'ACCEPT_PRICE_CHANGES';
+      updates: Array<{ signature: string; newUnitPriceMinorUnits: number }>;
+      policyFingerprint?: string;
+    }
+  | { type: 'SET_ACCEPTED_POLICY'; policyFingerprint: string };
 
 export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
@@ -31,6 +38,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
           sessionId: action.sessionId,
           lines: [],
           currency: action.currency || state.currency,
+          acceptedPolicyFingerprint: null,
         };
       }
       return {
@@ -42,6 +50,9 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
 
     case 'ADD_LINE': {
       const newLine = action.line;
+      const updatedPolicy = action.policyFingerprint !== undefined
+        ? action.policyFingerprint
+        : state.acceptedPolicyFingerprint;
       const existingIndex = state.lines.findIndex(
         (l) => l.configurationSignature === newLine.configurationSignature
       );
@@ -58,7 +69,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
           lineTotalMinorUnits: updatedLineTotal,
         };
 
-        return { ...state, lines: updatedLines };
+        return { ...state, lines: updatedLines, acceptedPolicyFingerprint: updatedPolicy };
       }
 
       // Append new distinct line
@@ -66,6 +77,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         lines: [...state.lines, newLine],
         currency: newLine.currency || state.currency,
+        acceptedPolicyFingerprint: updatedPolicy,
       };
     }
 
@@ -140,6 +152,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       return {
         ...state,
         lines: [],
+        acceptedPolicyFingerprint: null,
       };
     }
 
@@ -163,6 +176,16 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       return {
         ...state,
         lines: updatedLines,
+        acceptedPolicyFingerprint: action.policyFingerprint !== undefined
+          ? action.policyFingerprint
+          : state.acceptedPolicyFingerprint,
+      };
+    }
+
+    case 'SET_ACCEPTED_POLICY': {
+      return {
+        ...state,
+        acceptedPolicyFingerprint: action.policyFingerprint,
       };
     }
 

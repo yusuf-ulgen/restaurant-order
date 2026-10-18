@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel, CustomerOrderResponseDto } from '@restaurant-order/contracts';
 import { Card, Button } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
@@ -31,17 +31,42 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [lastPlacedOrder, setLastPlacedOrder] = useState<CustomerOrderResponseDto | null>(null);
   const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
+  const [isMenuLoading, setIsMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState<string | null>(null);
+  const menuRequestIdRef = useRef(0);
 
   const cart = useCart();
 
+  const refreshRuntimeMenu = useCallback(async () => {
+    if (!session.branchId) return;
+    const reqId = ++menuRequestIdRef.current;
+    setIsMenuLoading(true);
+    setMenuError(null);
+    try {
+      const freshMenu = await runtimeMenuApi.getRuntimeMenu(session.branchId);
+      if (reqId === menuRequestIdRef.current) {
+        setRuntimeMenuData(freshMenu);
+        setIsMenuLoading(false);
+      }
+    } catch {
+      if (reqId === menuRequestIdRef.current) {
+        setIsMenuLoading(false);
+        setMenuError('Güncel menü bilgisine ulaşılamadı. Lütfen tekrar deneyiniz.');
+      }
+    }
+  }, [session.branchId]);
+
   useEffect(() => {
     if (cart.isCartOpen && session.branchId) {
-      runtimeMenuApi
-        .getRuntimeMenu(session.branchId)
-        .then((freshMenu) => setRuntimeMenuData(freshMenu))
-        .catch(() => {});
+      refreshRuntimeMenu();
     }
-  }, [cart.isCartOpen, session.branchId]);
+  }, [cart.isCartOpen, session.branchId, refreshRuntimeMenu]);
+
+  const handleResolvePriceConflict = useCallback(() => {
+    setIsConfirmationOpen(false);
+    cart.openCart();
+    refreshRuntimeMenu();
+  }, [cart, refreshRuntimeMenu]);
 
   return (
     <div
@@ -130,6 +155,9 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
         isOpen={cart.isCartOpen}
         onClose={cart.closeCart}
         runtimeMenu={runtimeMenuData || initialMenuData}
+        isLoadingMenu={isMenuLoading}
+        menuError={menuError}
+        onRetryMenu={refreshRuntimeMenu}
         tableInfo={{
           tableNumber: session.tableNumber,
           tableName: session.tableName,
@@ -155,6 +183,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           setIsSuccessOpen(true);
         }}
         onSessionExpired={onLeaveSession}
+        onResolvePriceConflict={handleResolvePriceConflict}
       />
 
       {/* Order Success Bottom Sheet (Phase 8.4) */}

@@ -22,8 +22,18 @@ export function verifyCartAgainstRuntimeMenu(
 ): CartVerificationResult {
   const issues: CartValidationIssue[] = [];
 
-  if (!menuData || !menuData.menus) {
-    return { issues: [], hasBlockingIssues: false, hasPriceChanges: false };
+  if (!menuData || !menuData.menus || !menuData.pricingPolicyFingerprint) {
+    return {
+      issues: [
+        {
+          lineSignature: '__menu__',
+          type: 'item_unavailable',
+          message: 'Güncel menü bilgisine ulaşılamadı. Lütfen menüyü yenileyiniz.',
+        },
+      ],
+      hasBlockingIssues: true,
+      hasPriceChanges: false,
+    };
   }
 
   // Flatten all items across all menus and categories into a quick lookup map

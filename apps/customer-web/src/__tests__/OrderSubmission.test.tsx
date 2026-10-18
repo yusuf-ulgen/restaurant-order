@@ -12,6 +12,7 @@ describe('Phase 8.4 Customer Order Submission & Idempotency Tests', () => {
     defaultTaxRateBps: 1000,
     isServiceChargeEnabled: false,
     serviceChargeRateBps: 0,
+    pricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
     menus: [
       {
         id: 'menu-1',

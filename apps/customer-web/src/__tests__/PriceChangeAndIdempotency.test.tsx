@@ -14,6 +14,7 @@ describe('Phase 8 Price Change UX & Idempotency Tests', () => {
     defaultTaxRateBps: 1000,
     isServiceChargeEnabled: false,
     serviceChargeRateBps: 0,
+    pricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
     menus: [
       {
         id: 'menu-1',
@@ -323,6 +324,7 @@ describe('Phase 8 Price Change UX & Idempotency Tests', () => {
       defaultTaxRateBps: 2000, // 20% tax
       isServiceChargeEnabled: true,
       serviceChargeRateBps: 1000, // 10% service charge
+      pricingPolicyFingerprint: 'f10591c527585aee34a1ec419eb7137fee27b199dc6b82b083373bd14402d9af',
     };
 
     const line: DraftCartLine = {

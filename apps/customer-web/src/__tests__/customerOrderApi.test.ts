@@ -8,6 +8,8 @@ describe('Customer Order API Client & Error Mapping', () => {
   });
 
   const sampleRequest: CreateCustomerOrderRequest = {
+    clientPricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
+    clientExpectedTotalMinorUnits: 5000,
     items: [
       {
         menuItemId: 'item-1',

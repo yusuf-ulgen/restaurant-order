@@ -15,6 +15,7 @@ export interface PersistedCartPayload {
   currency: string;
   lines: DraftCartLine[];
   savedAt: number;
+  acceptedPolicyFingerprint?: string | null;
 }
 
 /**
@@ -137,10 +138,16 @@ export function loadCartFromStorage(activeSessionId: string): CartState | null {
       validatedLines.push(item);
     }
 
+    const acceptedPolicy =
+      typeof payload.acceptedPolicyFingerprint === 'string'
+        ? payload.acceptedPolicyFingerprint
+        : null;
+
     return {
       sessionId: activeSessionId,
       lines: validatedLines,
       currency: typeof payload.currency === 'string' ? payload.currency : 'TRY',
+      acceptedPolicyFingerprint: acceptedPolicy,
     };
   } catch {
     // Memory fallback: if sessionStorage fails, clean up if possible and return null
@@ -176,6 +183,7 @@ export function saveCartToStorage(state: CartState): void {
       currency: state.currency,
       lines: state.lines,
       savedAt: Date.now(),
+      acceptedPolicyFingerprint: state.acceptedPolicyFingerprint ?? null,
     };
 
     window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(payload));

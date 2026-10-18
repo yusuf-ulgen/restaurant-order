@@ -1,6 +1,7 @@
 import {
   CUSTOMER_NOTE_MAX_LENGTH,
   type RuntimeMenuItem,
+  type RuntimeMenuReadModel,
 } from '@restaurant-order/contracts';
 
 /**
@@ -195,4 +196,25 @@ export function validateCustomization(params: {
     isValid: Object.keys(errors).length === 0,
     errors,
   };
+}
+
+export function findModifierGroupId(
+  optionId: string,
+  menuItemId: string,
+  menu: RuntimeMenuReadModel | null
+): string | null {
+  if (!menu?.menus) return null;
+  for (const m of menu.menus) {
+    for (const c of m.categories) {
+      const item = c.items.find((i) => i.id === menuItemId);
+      if (item) {
+        for (const g of item.modifierGroups) {
+          if (g.options.some((o) => o.id === optionId)) {
+            return g.id;
+          }
+        }
+      }
+    }
+  }
+  return null;
 }

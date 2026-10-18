@@ -67,6 +67,8 @@ describe('Customer Order Contracts & Drift Validation', () => {
 
   it('correctly forms CreateCustomerOrderRequest matching backend expectations', () => {
     const request: CreateCustomerOrderRequest = {
+      clientPricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
+      clientExpectedTotalMinorUnits: 2500,
       items: [
         {
           menuItemId: '88888888-8888-8888-8888-888888888888',

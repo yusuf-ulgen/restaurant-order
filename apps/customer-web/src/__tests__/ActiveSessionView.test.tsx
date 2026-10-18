@@ -27,6 +27,7 @@ const sampleMenu: RuntimeMenuReadModel = {
   defaultTaxRateBps: 1000,
   isServiceChargeEnabled: false,
   serviceChargeRateBps: 0,
+  pricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
   menus: [
     {
       id: 'menu-1',
@@ -93,6 +94,10 @@ describe('ActiveSessionView and UnauthenticatedQrView Tests', () => {
   });
 
   describe('ActiveSessionView', () => {
+    beforeEach(() => {
+      vi.spyOn(runtimeMenuApi, 'getRuntimeMenu').mockResolvedValue(sampleMenu);
+    });
+
     it('switches between table and menu tabs via buttons and bottom navigation', async () => {
       const onLeaveSession = vi.fn();
 

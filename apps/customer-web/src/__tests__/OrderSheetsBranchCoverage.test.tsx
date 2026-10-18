@@ -150,8 +150,13 @@ describe('Order Sheets & UI Coverage Tests', () => {
 
       // Test manual refresh button
       const refreshBtn = screen.getByTestId('refresh-orders-btn');
-      fireEvent.click(refreshBtn);
-      expect(getOrdersSpy).toHaveBeenCalledTimes(2);
+      await waitFor(() => {
+        fireEvent.click(refreshBtn);
+      });
+      await waitFor(() => {
+        expect(getOrdersSpy).toHaveBeenCalledTimes(2);
+        expect(screen.queryByText('Yenileniyor...')).toBeNull();
+      });
     });
 
     it('renders fallback description when tableInfo is not provided', async () => {

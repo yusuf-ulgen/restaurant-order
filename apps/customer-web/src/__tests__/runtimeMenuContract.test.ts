@@ -18,6 +18,7 @@ describe('Runtime Menu Contracts & Drift Validation', () => {
       defaultTaxRateBps: 1000,
       isServiceChargeEnabled: true,
       serviceChargeRateBps: 500,
+      pricingPolicyFingerprint: '40eaf86c5bce0a262451923576b8f26dbcf44d0d0aa4c05919d740d99a49508f',
       menus: [
         {
           id: 'm2222222-2222-2222-2222-222222222222',
@@ -101,6 +102,7 @@ describe('Runtime Menu Contracts & Drift Validation', () => {
     expect(rawPayload.defaultTaxRateBps).toBe(1000);
     expect(rawPayload.isServiceChargeEnabled).toBe(true);
     expect(rawPayload.serviceChargeRateBps).toBe(500);
+    expect(rawPayload.pricingPolicyFingerprint).toBe('40eaf86c5bce0a262451923576b8f26dbcf44d0d0aa4c05919d740d99a49508f');
     expect(rawPayload.menus.length).toBe(1);
 
     const menu: RuntimeMenu = rawPayload.menus[0]!;
