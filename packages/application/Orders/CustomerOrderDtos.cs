@@ -23,8 +23,8 @@ public sealed record CustomerOrderItemRequest(
 /// </summary>
 public sealed record CreateCustomerOrderRequest(
     IReadOnlyList<CustomerOrderItemRequest> Items,
-    string? ClientPricingPolicyFingerprint = null,
-    long? ClientExpectedTotalMinorUnits = null);
+    string? ClientPricingPolicyFingerprint,
+    long? ClientExpectedTotalMinorUnits);
 
 /// <summary>
 /// DTO representing an order modifier snapshot.

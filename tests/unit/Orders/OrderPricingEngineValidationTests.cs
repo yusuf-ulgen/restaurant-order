@@ -29,7 +29,8 @@ public class OrderPricingEngineValidationTests
             new(item.Id, null, 1, null, null, 2000)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000));
         Assert.Equal(OrderPricingException.CodeSessionNotActive, ex.ErrorCode);
     }
 
@@ -52,7 +53,8 @@ public class OrderPricingEngineValidationTests
             new(item.Id, null, 1, null, null, 2000)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000));
         Assert.Equal(OrderPricingException.CodeOrderTakingDisabled, ex.ErrorCode);
     }
 
@@ -85,7 +87,8 @@ public class OrderPricingEngineValidationTests
             new(item.Id, null, 1, null, new List<ClientSelectedModifierDraft>(), 2000)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000));
         Assert.Equal(OrderPricingException.CodeItemOutOfStock, ex.ErrorCode);
     }
 
@@ -112,7 +115,8 @@ public class OrderPricingEngineValidationTests
             new(item1.Id, variant2.Id, 1, null, new List<ClientSelectedModifierDraft>(), 2500)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2500));
         Assert.Equal(OrderPricingException.CodeInvalidVariant, ex.ErrorCode);
     }
 
@@ -154,7 +158,8 @@ public class OrderPricingEngineValidationTests
                 2600)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2600));
         Assert.Equal(OrderPricingException.CodeDuplicateModifier, ex.ErrorCode);
     }
 
@@ -186,7 +191,8 @@ public class OrderPricingEngineValidationTests
             new(item.Id, null, 1, null, new List<ClientSelectedModifierDraft>(), 2000)
         };
 
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000));
         Assert.Equal(OrderPricingException.CodeInvalidModifierSelection, ex.ErrorCode);
     }
 }

@@ -141,7 +141,10 @@ public class StaffOrderEndpointsUnitTests
     {
         var branchId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
-        var request = new CreateStaffOrderRequest(new List<StaffOrderItemRequest>());
+        var request = new CreateStaffOrderRequest(
+            new List<StaffOrderItemRequest>(),
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            0);
 
         // 1. Missing Idempotency-Key
         var (c1, p1, tc1, s1) = CreateStaffTestContext(idempotencyKey: null);

@@ -124,12 +124,16 @@ public class CustomerOrderContractDriftTests
                     ],
                     ""clientExpectedUnitPriceMinorUnits"": 2500
                 }
-            ]
+            ],
+            ""clientPricingPolicyFingerprint"": ""0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9"",
+            ""clientExpectedTotalMinorUnits"": 2500
         }";
 
         var request = JsonSerializer.Deserialize<CreateCustomerOrderRequest>(json, JsonOptions);
         Assert.NotNull(request);
         Assert.Single(request.Items);
+        Assert.Equal("0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9", request.ClientPricingPolicyFingerprint);
+        Assert.Equal(2500, request.ClientExpectedTotalMinorUnits);
 
         var item = request.Items[0];
         Assert.Equal(Guid.Parse("88888888-8888-8888-8888-888888888888"), item.MenuItemId);

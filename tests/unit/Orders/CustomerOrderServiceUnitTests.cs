@@ -41,10 +41,13 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, sessionId.Value);
 
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(item.Id.Value, null, 2, "Az tuzlu lütfen", null, 2000)
-        });
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(item.Id.Value, null, 2, "Az tuzlu lütfen", null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            4000);
 
         // Act
         var result = await orderService.CreateOrderAsync(
@@ -91,10 +94,13 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, sessionId.Value);
 
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         // Act 1: Initial creation
         var result1 = await orderService.CreateOrderAsync(tenantId, branchId, sessionId, request, "idem-key-replay", actor);
@@ -128,15 +134,21 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, sessionId.Value);
 
-        var request1 = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request1 = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
-        var request2 = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(item.Id.Value, null, 3, null, null, 2000) // Different quantity
-        });
+        var request2 = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(item.Id.Value, null, 3, null, null, 2000) // Different quantity
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            6000);
 
         // Act 1: First order with key
         await orderService.CreateOrderAsync(tenantId, branchId, sessionId, request1, "idem-key-conflict", actor);
@@ -155,7 +167,10 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, sessionId.Value);
 
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>());
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>(),
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            0);
 
         await Assert.ThrowsAsync<DomainException>(() =>
             orderService.CreateOrderAsync(tenantId, branchId, sessionId, request, "key-1", actor));
@@ -169,10 +184,13 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, sessionId.Value);
 
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(Guid.NewGuid(), null, 1, null, null, 2000)
-        });
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(Guid.NewGuid(), null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var ex = await Assert.ThrowsAsync<OrderPricingException>(() =>
             orderService.CreateOrderAsync(tenantId, branchId, sessionId, request, "key-1", actor));
@@ -198,10 +216,13 @@ public class CustomerOrderServiceUnitTests
         var orderService = new CustomerOrderService(db, pricingEngine);
         var actor = CreateCustomerPrincipal(tenantId.Value, branchId.Value, session1.Value);
 
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var createResult = await orderService.CreateOrderAsync(tenantId, branchId, session1, request, "session1-order", actor);
 

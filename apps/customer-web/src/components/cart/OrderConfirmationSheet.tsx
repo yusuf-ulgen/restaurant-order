@@ -5,14 +5,14 @@ import type {
   CreateCustomerOrderRequest,
   CustomerOrderItemRequest,
   CustomerSelectedModifierRequest,
-  DraftCartLine,
 } from '@restaurant-order/contracts';
-import { calculateCartFinancialSummary } from '@restaurant-order/contracts';
+import { calculateCartFinancialSummary, computeOrderPayloadSignature } from '@restaurant-order/contracts';
 import { BottomSheet, Button } from '@restaurant-order/ui';
 import { useCart } from '../../cart/CartContext';
 import { formatCurrency } from '../../utils/menuUtils';
 import { customerOrderApi, CustomerOrderApiError } from '../../api/customerOrderApi';
 import { resolveCartItemDisplay } from './CartItemRow';
+import { findModifierGroupId } from '../../utils/customizationUtils';
 
 export interface OrderConfirmationSheetProps {
   isOpen: boolean;
@@ -21,38 +21,7 @@ export interface OrderConfirmationSheetProps {
   runtimeMenu: RuntimeMenuReadModel | null;
   onOrderSuccess: (order: CustomerOrderResponseDto) => void;
   onSessionExpired?: () => void;
-}
-
-function findModifierGroupId(
-  optionId: string,
-  menuItemId: string,
-  menu: RuntimeMenuReadModel | null
-): string | null {
-  if (!menu?.menus) return null;
-  for (const m of menu.menus) {
-    for (const c of m.categories) {
-      const item = c.items.find((i) => i.id === menuItemId);
-      if (item) {
-        for (const g of item.modifierGroups) {
-          if (g.options.some((o) => o.id === optionId)) {
-            return g.id;
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function generateOrderPayloadSignature(lines: DraftCartLine[]): string {
-  return lines
-    .map((l) => {
-      const sortedMods = [...l.selectedModifierOptionIds].sort().join(',');
-      const normalizedNote = l.customerNote?.trim() || 'null';
-      const variant = l.variantId || 'null';
-      return `${l.menuItemId}:${variant}:${l.quantity}:${l.unitPriceMinorUnits}:${normalizedNote}:${sortedMods}`;
-    })
-    .join('|');
+  onResolvePriceConflict?: () => void;
 }
 
 export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
@@ -62,6 +31,7 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
   runtimeMenu,
   onOrderSuccess,
   onSessionExpired,
+  onResolvePriceConflict,
 }) => {
   const { lines, currency, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,32 +51,8 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
     return calculateCartFinancialSummary(lines, pricingPolicy);
   }, [lines, pricingPolicy]);
 
-  // Idempotency key tracking: stable across retries of the SAME payload
-  const payloadSignature = generateOrderPayloadSignature(lines);
-  const lastSignatureRef = useRef<string>(payloadSignature);
-  const activeKeyRef = useRef<string>(`ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-
-  if (lastSignatureRef.current !== payloadSignature) {
-    lastSignatureRef.current = payloadSignature;
-    activeKeyRef.current = `ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  }
-
-  const alertRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (errorMessage && alertRef.current) {
-      alertRef.current.focus();
-    }
-  }, [errorMessage]);
-
-  const handleSubmitOrder = async () => {
-    if (isSubmitting || lines.length === 0) return;
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setErrorCode(null);
-    setAffectedItemId(null);
-
-    const items: CustomerOrderItemRequest[] = lines.map((line) => {
+  const itemsForSignatureAndRequest: CustomerOrderItemRequest[] = useMemo(() => {
+    return lines.map((line) => {
       const selectedMods: CustomerSelectedModifierRequest[] = [];
       line.selectedModifierOptionIds.forEach((optId) => {
         const grpId = findModifierGroupId(optId, line.menuItemId, runtimeMenu) || optId;
@@ -125,8 +71,59 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
         clientExpectedUnitPriceMinorUnits: line.unitPriceMinorUnits,
       };
     });
+  }, [lines, runtimeMenu]);
 
-    const request: CreateCustomerOrderRequest = { items };
+  // Idempotency key tracking: stable across retries of the SAME payload
+  const payloadSignature = useMemo(() => {
+    const signatureItems = itemsForSignatureAndRequest.map((item) => ({
+      menuItemId: item.menuItemId,
+      itemVariantId: item.itemVariantId,
+      quantity: item.quantity,
+      customerNote: item.customerNote,
+      clientExpectedUnitPriceMinorUnits: item.clientExpectedUnitPriceMinorUnits ?? 0,
+      selectedModifiers: item.selectedModifiers || [],
+    }));
+
+    return computeOrderPayloadSignature({
+      clientPricingPolicyFingerprint: runtimeMenu?.pricingPolicyFingerprint || '',
+      clientExpectedTotalMinorUnits: financials.grandTotalMinorUnits,
+      items: signatureItems,
+    });
+  }, [itemsForSignatureAndRequest, runtimeMenu?.pricingPolicyFingerprint, financials.grandTotalMinorUnits]);
+
+  const lastSignatureRef = useRef<string>(payloadSignature);
+  const activeKeyRef = useRef<string>(`ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+
+  if (lastSignatureRef.current !== payloadSignature) {
+    lastSignatureRef.current = payloadSignature;
+    activeKeyRef.current = `ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  const alertRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (errorMessage && alertRef.current) {
+      alertRef.current.focus();
+    }
+  }, [errorMessage]);
+
+  const handleSubmitOrder = async () => {
+    if (isSubmitting || lines.length === 0) return;
+
+    if (!runtimeMenu?.pricingPolicyFingerprint) {
+      setErrorMessage('Menü fiyatlandırma politikası doğrulanamadı. Lütfen menüyü yenileyiniz.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setErrorCode(null);
+    setAffectedItemId(null);
+
+    const request: CreateCustomerOrderRequest = {
+      items: itemsForSignatureAndRequest,
+      clientPricingPolicyFingerprint: runtimeMenu.pricingPolicyFingerprint,
+      clientExpectedTotalMinorUnits: financials.grandTotalMinorUnits,
+    };
 
     try {
       const order = await customerOrderApi.submitOrder(request, activeKeyRef.current);
@@ -200,6 +197,10 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
             <div style={{ fontWeight: 'var(--ro-font-weight-bold)', marginBottom: '2px' }}>
               {errorCode === 'ORDER_PRICE_CHANGED'
                 ? 'Fiyat Değişikliği'
+                : errorCode === 'ORDER_PRICING_POLICY_CHANGED'
+                ? 'Politika Değişikliği'
+                : errorCode === 'ORDER_TOTAL_CHANGED'
+                ? 'Toplam Değişikliği'
                 : errorCode === 'ITEM_OUT_OF_STOCK'
                 ? 'Ürün Tükendi'
                 : errorCode === 'ORDER_TAKING_DISABLED'
@@ -207,13 +208,18 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
                 : 'Sipariş Gönderilemedi'}
             </div>
             <div>{errorMessage}</div>
-            {errorCode === 'ORDER_PRICE_CHANGED' && (
+            {(errorCode === 'ORDER_PRICE_CHANGED' ||
+              errorCode === 'ORDER_PRICING_POLICY_CHANGED' ||
+              errorCode === 'ORDER_TOTAL_CHANGED') && (
               <div style={{ marginTop: 'var(--ro-space-2)' }}>
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={onClose}
+                  onClick={() => {
+                    onClose();
+                    onResolvePriceConflict?.();
+                  }}
                   data-testid="resolve-price-change-btn"
                 >
                   Sepete Dön ve Fiyatları Güncelle

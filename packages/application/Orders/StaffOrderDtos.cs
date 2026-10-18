@@ -23,8 +23,8 @@ public sealed record StaffOrderItemRequest(
 /// </summary>
 public sealed record CreateStaffOrderRequest(
     IReadOnlyList<StaffOrderItemRequest> Items,
-    string? ClientPricingPolicyFingerprint = null,
-    long? ClientExpectedTotalMinorUnits = null);
+    string? ClientPricingPolicyFingerprint,
+    long? ClientExpectedTotalMinorUnits);
 
 /// <summary>
 /// Request body for cancelling or voiding an order item.

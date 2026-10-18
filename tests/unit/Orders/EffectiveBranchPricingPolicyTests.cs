@@ -75,7 +75,7 @@ public class EffectiveBranchPricingPolicyTests
         {
             new(item.Id, null, 1, null, new List<ClientSelectedModifierDraft>(), 10000)
         };
-        var priced = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, drafts);
+        var priced = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, drafts, runtimeMenu.PricingPolicyFingerprint, 10000);
 
         Assert.NotNull(runtimeMenu);
         Assert.Equal(runtimeMenu.PricingPolicyFingerprint, priced.PricingPolicyFingerprint);
@@ -118,7 +118,7 @@ public class EffectiveBranchPricingPolicyTests
         {
             new(item.Id, null, 1, null, new List<ClientSelectedModifierDraft>(), 10000)
         };
-        var priced = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, drafts);
+        var priced = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, drafts, runtimeMenu.PricingPolicyFingerprint, 13800);
 
         Assert.NotNull(runtimeMenu);
         Assert.Equal(runtimeMenu.PricingPolicyFingerprint, priced.PricingPolicyFingerprint);

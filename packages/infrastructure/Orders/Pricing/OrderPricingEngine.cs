@@ -70,10 +70,20 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
             throw OrderPricingException.OrderTakingDisabled();
         }
 
-        if (!string.IsNullOrEmpty(clientPricingPolicyFingerprint) &&
-            !string.Equals(clientPricingPolicyFingerprint, effectivePolicy.PricingPolicyFingerprint, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(clientPricingPolicyFingerprint))
         {
-            throw OrderPricingException.PricingPolicyChanged(clientPricingPolicyFingerprint, effectivePolicy.PricingPolicyFingerprint);
+            throw new DomainException("Client pricing policy fingerprint is required.");
+        }
+
+        var normalizedClientFingerprint = clientPricingPolicyFingerprint.Trim().ToLowerInvariant();
+        if (normalizedClientFingerprint.Length != 64 || !normalizedClientFingerprint.All(Uri.IsHexDigit))
+        {
+            throw new DomainException("Invalid pricing policy fingerprint format.");
+        }
+
+        if (!string.Equals(normalizedClientFingerprint, effectivePolicy.PricingPolicyFingerprint, StringComparison.Ordinal))
+        {
+            throw OrderPricingException.PricingPolicyChanged(normalizedClientFingerprint, effectivePolicy.PricingPolicyFingerprint);
         }
 
         // 3. Load and Validate Active Catalog Hierarchy
@@ -319,7 +329,17 @@ public sealed class OrderPricingEngine : IOrderPricingEngine
             effectivePolicy.IsServiceChargeEnabled,
             effectivePolicy.ServiceChargeRateBps);
 
-        if (clientExpectedTotalMinorUnits.HasValue && clientExpectedTotalMinorUnits.Value != grandTotal)
+        if (!clientExpectedTotalMinorUnits.HasValue)
+        {
+            throw new DomainException("Client expected total minor units is required.");
+        }
+
+        if (clientExpectedTotalMinorUnits.Value < 0)
+        {
+            throw new DomainException("Invalid client expected total minor units.");
+        }
+
+        if (clientExpectedTotalMinorUnits.Value != grandTotal)
         {
             throw OrderPricingException.OrderTotalChanged(clientExpectedTotalMinorUnits.Value, grandTotal);
         }

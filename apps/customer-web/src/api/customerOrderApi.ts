@@ -42,6 +42,10 @@ export function mapOrderProblemToUserMessage(
   switch (errorCode) {
     case 'ORDER_PRICE_CHANGED':
       return 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Lütfen güncel tutarları inceleyip tekrar onaylayınız.';
+    case 'ORDER_PRICING_POLICY_CHANGED':
+      return 'Restoran vergi veya servis ücreti politikası güncellendi. Lütfen güncel toplamı inceleyip tekrar onaylayınız.';
+    case 'ORDER_TOTAL_CHANGED':
+      return 'Sipariş genel toplamı güncellendi. Lütfen sepetinizi ve güncel tutarı tekrar inceleyip onaylayınız.';
     case 'ITEM_OUT_OF_STOCK':
       return 'Sepetinizdeki bazı ürünler maalesef tükendi. Lütfen ilgili ürünleri sepetten çıkarınız.';
     case 'INVALID_MODIFIER_SELECTION':

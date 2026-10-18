@@ -247,10 +247,26 @@ public static class StaffOrderEndpoints
         {
             OrderPricingException ope =>
                 Results.Problem(
-                    statusCode: ope.ErrorCode == OrderPricingException.CodeOrderTakingDisabled
-                        ? StatusCodes.Status403Forbidden
-                        : StatusCodes.Status409Conflict,
-                    title: "Order Pricing Conflict",
+                    statusCode: ope.ErrorCode switch
+                    {
+                        OrderPricingException.CodePriceChanged => StatusCodes.Status409Conflict,
+                        OrderPricingException.CodePricingPolicyChanged => StatusCodes.Status409Conflict,
+                        OrderPricingException.CodeOrderTotalChanged => StatusCodes.Status409Conflict,
+                        OrderPricingException.CodeItemOutOfStock => StatusCodes.Status409Conflict,
+                        OrderPricingException.CodeSessionNotActive => StatusCodes.Status409Conflict,
+                        OrderPricingException.CodeOrderTakingDisabled => StatusCodes.Status403Forbidden,
+                        _ => StatusCodes.Status400BadRequest
+                    },
+                    title: ope.ErrorCode switch
+                    {
+                        OrderPricingException.CodePriceChanged => "Order Price Changed",
+                        OrderPricingException.CodePricingPolicyChanged => "Pricing Policy Changed",
+                        OrderPricingException.CodeOrderTotalChanged => "Order Total Changed",
+                        OrderPricingException.CodeItemOutOfStock => "Item Out of Stock",
+                        OrderPricingException.CodeSessionNotActive => "Session Not Active",
+                        OrderPricingException.CodeOrderTakingDisabled => "Order Taking Disabled",
+                        _ => "Invalid Modifier Selection"
+                    },
                     detail: ope.Message,
                     extensions: new Dictionary<string, object?>
                     {

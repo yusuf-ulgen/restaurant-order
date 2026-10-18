@@ -90,4 +90,45 @@ public class StaffOrderContractDriftTests
         Assert.Equal(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), request.SupervisorUserId);
         Assert.Equal(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), request.ConcurrencyToken);
     }
+
+    [Fact]
+    public void CreateStaffOrderRequest_DeserializesFromExpectedCamelCaseJson()
+    {
+        var json = """
+        {
+            "items": [
+                {
+                    "menuItemId": "88888888-8888-8888-8888-888888888888",
+                    "itemVariantId": null,
+                    "quantity": 1,
+                    "customerNote": "Az acılı",
+                    "selectedModifiers": [
+                        {
+                            "modifierGroupId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                            "modifierOptionId": "cccccccc-cccc-cccc-cccc-cccccccccccc"
+                        }
+                    ],
+                    "clientExpectedUnitPriceMinorUnits": 3000
+                }
+            ],
+            "clientPricingPolicyFingerprint": "0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9",
+            "clientExpectedTotalMinorUnits": 3000
+        }
+        """;
+
+        var request = JsonSerializer.Deserialize<CreateStaffOrderRequest>(json, JsonOptions);
+        Assert.NotNull(request);
+        Assert.Single(request.Items);
+        Assert.Equal("0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9", request.ClientPricingPolicyFingerprint);
+        Assert.Equal(3000, request.ClientExpectedTotalMinorUnits);
+
+        var item = request.Items[0];
+        Assert.Equal(Guid.Parse("88888888-8888-8888-8888-888888888888"), item.MenuItemId);
+        Assert.Null(item.ItemVariantId);
+        Assert.Equal(1, item.Quantity);
+        Assert.Equal("Az acılı", item.CustomerNote);
+        Assert.NotNull(item.SelectedModifiers);
+        Assert.Single(item.SelectedModifiers);
+        Assert.Equal(3000, item.ClientExpectedUnitPriceMinorUnits);
+    }
 }

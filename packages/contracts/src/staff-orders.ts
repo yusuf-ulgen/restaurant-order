@@ -23,6 +23,8 @@ export interface StaffOrderItemRequest {
  */
 export interface CreateStaffOrderRequest {
   items: StaffOrderItemRequest[];
+  clientPricingPolicyFingerprint: string;
+  clientExpectedTotalMinorUnits: number;
 }
 
 /**

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Moq;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Orders;
 using RestaurantOrder.Application.RestaurantConfig;
@@ -21,6 +22,7 @@ namespace RestaurantOrder.UnitTests.Orders;
 public class StaffOrderServiceUnitTests
 {
     private static readonly IPermissionRegistry PermissionRegistry = new PermissionRegistry();
+    private static readonly Mock<ISupervisorPinService> SupervisorPinServiceMock = new();
     private static readonly IPinHasher PinHasher = new PepperedPinHasher(
         Options.Create(new PinHasherOptions
         {
@@ -51,13 +53,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 2, "Hassas Müşteri Notu", null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 2, "Hassas Müşteri Notu", null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            4000);
 
         var result = await staffService.CreateStaffOrderAsync(
             tenantId,
@@ -86,13 +91,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var customerActor = AuthenticatedPrincipal.CreateCustomer(sessionId.Value, tenantId, branchId);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         await Assert.ThrowsAsync<InvalidAuthorizationScopeException>(() =>
             staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-c", customerActor));
@@ -106,13 +114,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, otherBranchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         await Assert.ThrowsAsync<InvalidAuthorizationScopeException>(() =>
             staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-diff-b", actor));
@@ -125,13 +136,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, "Notum", null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, "Notum", null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-cancel-1", actor);
         var orderItemId = created.Order.Items[0].Id;
@@ -162,13 +176,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-prep-1", actor);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -195,14 +212,17 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
         var manager = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.BranchManager);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-1", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -233,13 +253,16 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-concur-1", actor);
 
@@ -263,11 +286,17 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var req1 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 1", null, 2000) });
-        var req2 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 2", null, 2000) });
+        var req1 = new CreateStaffOrderRequest(
+            new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 1", null, 2000) },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
+        var req2 = new CreateStaffOrderRequest(
+            new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, "Not 2", null, 2000) },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-1", actor);
 
@@ -282,11 +311,17 @@ public class StaffOrderServiceUnitTests
         var item = SeedMenuItem(db, tenantId, branchId);
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var req1 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000) });
-        var req2 = new CreateStaffOrderRequest(new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2500) });
+        var req1 = new CreateStaffOrderRequest(
+            new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000) },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
+        var req2 = new CreateStaffOrderRequest(
+            new[] { new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2500) },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2500);
 
         await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-price", actor);
 
@@ -304,20 +339,26 @@ public class StaffOrderServiceUnitTests
         db.SaveChanges();
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var req1 = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000),
-            new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000)
-        });
+        var req1 = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000),
+                new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            5000);
 
-        var req2 = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000),
-            new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000)
-        });
+        var req2 = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item2.Id.Value, null, 1, null, null, 3000),
+                new StaffOrderItemRequest(item1.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            5000);
 
         var res1 = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req1, "staff-key-order", actor);
         var res2 = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, req2, "staff-key-order", actor);
@@ -346,19 +387,22 @@ public class StaffOrderServiceUnitTests
         db.SaveChanges();
 
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, SupervisorPinServiceMock.Object);
         var actor = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(
-                item.Id.Value,
-                null,
-                2,
-                null,
-                new[] { new StaffSelectedModifierRequest(group.Id.Value, opt.Id.Value) },
-                5000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(
+                    item.Id.Value,
+                    null,
+                    2,
+                    null,
+                    new[] { new StaffSelectedModifierRequest(group.Id.Value, opt.Id.Value) },
+                    5000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            10000);
 
         var result = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-mod-snap", actor);
 

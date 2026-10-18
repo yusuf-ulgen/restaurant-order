@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using RestaurantOrder.Application.Orders.Pricing;
 using RestaurantOrder.Domain.Catalog;
 using RestaurantOrder.Domain.Common;
@@ -51,7 +52,8 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 4000);
 
         // Assert
         Assert.NotNull(result);
@@ -104,7 +106,8 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2800);
 
         // Assert
         Assert.Equal(2800, result.LineItems[0].UnitPriceMinorUnits);
@@ -156,7 +159,8 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2700);
 
         // Assert
         Assert.Equal(2000, result.LineItems[0].UnitPriceMinorUnits);
@@ -193,7 +197,11 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var branch = await db.Branches.FirstAsync(b => b.Id == branchId);
+        var settings = await db.BranchSettings.FirstOrDefaultAsync(s => s.BranchId == branchId);
+        var policy = EffectiveBranchPricingPolicy.Create(branch, settings);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, policy.PricingPolicyFingerprint, 1200);
 
         // Assert: 1000 net + 200 tax = 1200 total
         Assert.Equal(1000, result.SubtotalMinorUnits);
@@ -229,7 +237,11 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var branch = await db.Branches.FirstAsync(b => b.Id == branchId);
+        var settings = await db.BranchSettings.FirstOrDefaultAsync(s => s.BranchId == branchId);
+        var policy = EffectiveBranchPricingPolicy.Create(branch, settings);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, policy.PricingPolicyFingerprint, 2200);
 
         // Assert: 2000 gross + 200 service charge = 2200 total
         Assert.Equal(200, result.ServiceChargeMinorUnits);
@@ -266,7 +278,8 @@ public class OrderPricingEngineTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items));
+        var ex = await Assert.ThrowsAsync<OrderPricingException>(() => engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000));
         Assert.Equal(OrderPricingException.CodePriceChanged, ex.ErrorCode);
         Assert.Equal(2000, ex.ExpectedUnitPriceMinorUnits);
         Assert.Equal(2500, ex.ActualUnitPriceMinorUnits);
@@ -296,7 +309,8 @@ public class OrderPricingEngineTests
         };
 
         // Act 1: Price calculation
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 2000);
         Assert.Equal(2000, result.LineItems[0].UnitPriceMinorUnits);
 
         // Act 2: Mutate catalog base price to 5000 in database
@@ -346,7 +360,8 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, OrderPricingTestHelper.DefaultTestPolicyFingerprint, 10000);
 
         // Assert
         Assert.Single(result.LineItems);
@@ -394,7 +409,11 @@ public class OrderPricingEngineTests
         };
 
         // Act
-        var result = await engine.PriceAndValidateOrderAsync(tenantId, branchId, sessionId, items);
+        var branch = await db.Branches.FirstAsync(b => b.Id == branchId);
+        var settings = await db.BranchSettings.FirstOrDefaultAsync(s => s.BranchId == branchId);
+        var policy = EffectiveBranchPricingPolicy.Create(branch, settings);
+        var result = await engine.PriceAndValidateOrderAsync(
+            tenantId, branchId, sessionId, items, policy.PricingPolicyFingerprint, 13200);
 
         // Net: 10000, Tax (20% on 10000): 2000, Gross: 12000, Service (10% on 12000): 1200, Grand Total: 13200
         Assert.Equal(4000, result.LineItems[0].UnitPriceMinorUnits);

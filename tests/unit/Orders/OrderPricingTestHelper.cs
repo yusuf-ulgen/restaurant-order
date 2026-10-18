@@ -11,6 +11,8 @@ namespace RestaurantOrder.UnitTests.Orders;
 
 public static class OrderPricingTestHelper
 {
+    public const string DefaultTestPolicyFingerprint = "0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9";
+
     public static (RestaurantOrderDbContext DbContext, TenantId TenantId, BranchId BranchId, DiningSessionId SessionId) CreateTestEnvironment(
         bool isOrderTakingEnabled = true,
         bool pricesIncludeTax = true,

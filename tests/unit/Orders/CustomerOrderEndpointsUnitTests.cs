@@ -220,7 +220,10 @@ public class CustomerOrderEndpointsUnitTests
     [Fact]
     public async Task CreateCustomerOrderAsync_GuardsAndSuccessBranches()
     {
-        var request = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>());
+        var request = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>(),
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            0);
 
         // 1. Role is not customer
         var (c1, p1, pr1, s1) = CreateTestContext(role: AuthRole.Waiter);
