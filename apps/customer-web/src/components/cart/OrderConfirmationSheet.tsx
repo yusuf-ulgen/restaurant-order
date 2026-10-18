@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type {
   RuntimeMenuReadModel,
   CustomerOrderResponseDto,
   CreateCustomerOrderRequest,
   CustomerOrderItemRequest,
   CustomerSelectedModifierRequest,
+  DraftCartLine,
 } from '@restaurant-order/contracts';
+import { calculateCartFinancialSummary } from '@restaurant-order/contracts';
 import { BottomSheet, Button } from '@restaurant-order/ui';
 import { useCart } from '../../cart/CartContext';
 import { formatCurrency } from '../../utils/menuUtils';
@@ -42,6 +44,17 @@ function findModifierGroupId(
   return null;
 }
 
+function generateOrderPayloadSignature(lines: DraftCartLine[]): string {
+  return lines
+    .map((l) => {
+      const sortedMods = [...l.selectedModifierOptionIds].sort().join(',');
+      const normalizedNote = l.customerNote?.trim() || 'null';
+      const variant = l.variantId || 'null';
+      return `${l.menuItemId}:${variant}:${l.quantity}:${l.unitPriceMinorUnits}:${normalizedNote}:${sortedMods}`;
+    })
+    .join('|');
+}
+
 export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
   isOpen,
   onClose,
@@ -50,19 +63,31 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
   onOrderSuccess,
   onSessionExpired,
 }) => {
-  const { lines, subtotalMinorUnits, currency, clearCart } = useCart();
+  const { lines, currency, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [affectedItemId, setAffectedItemId] = useState<string | null>(null);
 
-  // Idempotency key tracking: stable across retries of the SAME cart payload
-  const cartSignature = lines.map((l) => `${l.configurationSignature}:${l.quantity}`).join('|');
-  const lastSignatureRef = useRef<string>(cartSignature);
+  // Financial summary based on branch pricing policy and live runtime menu
+  const pricingPolicy = useMemo(() => ({
+    pricesIncludeTax: runtimeMenu?.pricesIncludeTax ?? true,
+    defaultTaxRateBps: runtimeMenu?.defaultTaxRateBps ?? 0,
+    isServiceChargeEnabled: runtimeMenu?.isServiceChargeEnabled ?? false,
+    serviceChargeRateBps: runtimeMenu?.serviceChargeRateBps ?? 0,
+  }), [runtimeMenu]);
+
+  const financials = useMemo(() => {
+    return calculateCartFinancialSummary(lines, pricingPolicy);
+  }, [lines, pricingPolicy]);
+
+  // Idempotency key tracking: stable across retries of the SAME payload
+  const payloadSignature = generateOrderPayloadSignature(lines);
+  const lastSignatureRef = useRef<string>(payloadSignature);
   const activeKeyRef = useRef<string>(`ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
 
-  if (lastSignatureRef.current !== cartSignature) {
-    lastSignatureRef.current = cartSignature;
+  if (lastSignatureRef.current !== payloadSignature) {
+    lastSignatureRef.current = payloadSignature;
     activeKeyRef.current = `ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
@@ -182,6 +207,19 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
                 : 'Sipariş Gönderilemedi'}
             </div>
             <div>{errorMessage}</div>
+            {errorCode === 'ORDER_PRICE_CHANGED' && (
+              <div style={{ marginTop: 'var(--ro-space-2)' }}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={onClose}
+                  data-testid="resolve-price-change-btn"
+                >
+                  Sepete Dön ve Fiyatları Güncelle
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -296,16 +334,34 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
           data-testid="order-financial-breakdown"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ro-font-size-sm)' }}>
-            <span style={{ color: 'var(--ro-color-text-secondary)' }}>Ara Toplam</span>
-            <span style={{ color: 'var(--ro-color-text-primary)', fontWeight: 'var(--ro-font-weight-medium)' }}>
-              {formatCurrency(subtotalMinorUnits, currency)}
+            <span style={{ color: 'var(--ro-color-text-secondary)' }}>Vergi Öncesi Ara Toplam</span>
+            <span
+              style={{ color: 'var(--ro-color-text-primary)', fontWeight: 'var(--ro-font-weight-medium)' }}
+              data-testid="confirmation-net-subtotal"
+            >
+              {formatCurrency(financials.netSubtotalMinorUnits, currency)}
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ro-font-size-xs)', color: 'var(--ro-color-text-muted)' }}>
-            <span>KDV (Vergiler)</span>
-            <span>Fiyatlara Dahildir</span>
+            <span data-testid="confirmation-tax-label">
+              KDV {pricingPolicy.defaultTaxRateBps > 0 ? `(%${pricingPolicy.defaultTaxRateBps / 100})` : ''} ({pricingPolicy.pricesIncludeTax ? 'Fiyatlara Dahildir' : 'Fiyatlara Hariçtir'})
+            </span>
+            <span data-testid="confirmation-tax-amount">
+              {formatCurrency(financials.taxMinorUnits, currency)}
+            </span>
           </div>
+
+          {(pricingPolicy.isServiceChargeEnabled && (pricingPolicy.serviceChargeRateBps > 0 || financials.serviceChargeMinorUnits > 0)) && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--ro-font-size-xs)', color: 'var(--ro-color-text-muted)' }}>
+              <span data-testid="confirmation-service-label">
+                Servis Ücreti {pricingPolicy.serviceChargeRateBps > 0 ? `(%${pricingPolicy.serviceChargeRateBps / 100})` : ''}
+              </span>
+              <span data-testid="confirmation-service-charge">
+                {formatCurrency(financials.serviceChargeMinorUnits, currency)}
+              </span>
+            </div>
+          )}
 
           <div
             style={{
@@ -328,7 +384,7 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
               }}
               data-testid="confirmation-total-price"
             >
-              {formatCurrency(subtotalMinorUnits, currency)}
+              {formatCurrency(financials.grandTotalMinorUnits, currency)}
             </span>
           </div>
 

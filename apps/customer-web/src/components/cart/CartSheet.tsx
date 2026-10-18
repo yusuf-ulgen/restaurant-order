@@ -31,6 +31,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
     updateQuantity,
     removeLine,
     clearCart,
+    acceptPriceChanges,
   } = useCart();
 
   // Validate cart lines against live runtime menu
@@ -39,6 +40,19 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   }, [lines, runtimeMenu]);
 
   const isEmpty = lines.length === 0;
+  const isOrderBlocked = verification.hasBlockingIssues || verification.hasPriceChanges;
+
+  const handleAcceptPriceChanges = () => {
+    const updates = verification.issues
+      .filter((i) => i.type === 'price_changed' && i.currentUnitPriceMinorUnits !== undefined)
+      .map((i) => ({
+        signature: i.lineSignature,
+        newUnitPriceMinorUnits: i.currentUnitPriceMinorUnits!,
+      }));
+    if (updates.length > 0) {
+      acceptPriceChanges(updates);
+    }
+  };
 
   return (
     <BottomSheet
@@ -100,8 +114,36 @@ export const CartSheet: React.FC<CartSheetProps> = ({
             <div>
               {verification.hasBlockingIssues
                 ? 'Sepetinizdeki bazı ürünler veya seçenekler güncellendi/tükendi. Lütfen sipariş vermeden önce ilgili satırları düzenleyin.'
-                : 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Yeni fiyatlar geçerlidir.'}
+                : 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Devam etmek için yeni fiyatları onaylamanız gerekmektedir.'}
             </div>
+            {verification.hasPriceChanges && (
+              <div style={{ marginTop: 'var(--ro-space-2)' }}>
+                {verification.issues
+                  .filter((i) => i.type === 'price_changed')
+                  .map((i) => (
+                    <div key={i.lineSignature} style={{ marginBottom: '4px' }}>
+                      {i.message}{' '}
+                      <strong>
+                        {i.previousUnitPriceMinorUnits !== undefined &&
+                          formatCurrency(i.previousUnitPriceMinorUnits, currency)}{' '}
+                        ➔{' '}
+                        {i.currentUnitPriceMinorUnits !== undefined &&
+                          formatCurrency(i.currentUnitPriceMinorUnits, currency)}
+                      </strong>
+                    </div>
+                  ))}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAcceptPriceChanges}
+                  data-testid="accept-price-changes-btn"
+                  style={{ marginTop: 'var(--ro-space-2)', minHeight: '36px' }}
+                >
+                  Yeni Fiyatları Kabul Et
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -253,8 +295,8 @@ export const CartSheet: React.FC<CartSheetProps> = ({
               type="button"
               variant="primary"
               size="lg"
-              disabled={verification.hasBlockingIssues}
-              aria-disabled={verification.hasBlockingIssues}
+              disabled={isOrderBlocked}
+              aria-disabled={isOrderBlocked}
               onClick={() => {
                 onProceedToConfirmation?.();
               }}
@@ -262,8 +304,8 @@ export const CartSheet: React.FC<CartSheetProps> = ({
               style={{
                 minHeight: '48px',
                 width: '100%',
-                opacity: verification.hasBlockingIssues ? 0.6 : 1,
-                cursor: verification.hasBlockingIssues ? 'not-allowed' : 'pointer',
+                opacity: isOrderBlocked ? 0.6 : 1,
+                cursor: isOrderBlocked ? 'not-allowed' : 'pointer',
               }}
             >
               Siparişi Onayla • {formatCurrency(subtotalMinorUnits, currency)}

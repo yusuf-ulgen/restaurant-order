@@ -19,7 +19,8 @@ export type CartAction =
   | { type: 'REMOVE_LINE'; signature: string }
   | { type: 'UPDATE_LINE'; oldSignature: string; newLine: DraftCartLine }
   | { type: 'CLEAR_CART' }
-  | { type: 'RESTORE_CART'; state: CartState };
+  | { type: 'RESTORE_CART'; state: CartState }
+  | { type: 'ACCEPT_PRICE_CHANGES'; updates: Array<{ signature: string; newUnitPriceMinorUnits: number }> };
 
 export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
@@ -145,6 +146,23 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     case 'RESTORE_CART': {
       return {
         ...action.state,
+      };
+    }
+
+    case 'ACCEPT_PRICE_CHANGES': {
+      const updateMap = new Map(action.updates.map((u) => [u.signature, u.newUnitPriceMinorUnits]));
+      const updatedLines = state.lines.map((line) => {
+        const newUnitPrice = updateMap.get(line.configurationSignature);
+        if (newUnitPrice === undefined) return line;
+        return {
+          ...line,
+          unitPriceMinorUnits: newUnitPrice,
+          lineTotalMinorUnits: newUnitPrice * line.quantity,
+        };
+      });
+      return {
+        ...state,
+        lines: updatedLines,
       };
     }
 

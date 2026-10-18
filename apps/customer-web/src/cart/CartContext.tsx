@@ -13,6 +13,7 @@ export interface CartContextValue {
   removeLine: (signature: string) => void;
   updateLine: (oldSignature: string, newLine: DraftCartLine) => void;
   clearCart: () => void;
+  acceptPriceChanges: (updates: Array<{ signature: string; newUnitPriceMinorUnits: number }>) => void;
   isCartOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
@@ -82,6 +83,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
       dispatch({ type: 'CLEAR_CART' });
       clearCartFromStorage();
     },
+    acceptPriceChanges: (updates) => dispatch({ type: 'ACCEPT_PRICE_CHANGES', updates }),
     isCartOpen,
     openCart: () => setIsCartOpen(true),
     closeCart: () => setIsCartOpen(false),

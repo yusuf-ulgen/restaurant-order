@@ -225,6 +225,10 @@ public class CatalogAvailabilityEndpointsUnitTests
         var model = new RuntimeMenuReadModel(
             BranchId: _branchId,
             Currency: "TRY",
+            PricesIncludeTax: true,
+            DefaultTaxRateBps: 1000,
+            IsServiceChargeEnabled: false,
+            ServiceChargeRateBps: 0,
             Menus: new List<RuntimeMenuDto>
             {
                 new(

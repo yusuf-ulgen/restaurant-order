@@ -17,6 +17,16 @@ public partial class CatalogService
     {
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
+        // Fetch branch pricing settings
+        var settings = await _dbContext.BranchSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId, ct);
+
+        var pricesIncludeTax = settings?.PricesIncludeTax ?? true;
+        var defaultTaxRateBps = settings?.DefaultTaxRateBps ?? 0;
+        var isServiceChargeEnabled = settings?.IsServiceChargeEnabled ?? false;
+        var serviceChargeRateBps = settings?.ServiceChargeRateBps ?? 0;
+
         // Fetch active menus
         var menus = await _dbContext.Menus
             .Where(m => m.TenantId == tenantId && m.BranchId == branchId && m.Status == MenuStatus.Active)
@@ -29,6 +39,10 @@ public partial class CatalogService
             return new RuntimeMenuReadModel(
                 BranchId: branchId.Value,
                 Currency: branch.Currency.Code,
+                PricesIncludeTax: pricesIncludeTax,
+                DefaultTaxRateBps: defaultTaxRateBps,
+                IsServiceChargeEnabled: isServiceChargeEnabled,
+                ServiceChargeRateBps: serviceChargeRateBps,
                 Menus: Array.Empty<RuntimeMenuDto>());
         }
 
@@ -217,6 +231,10 @@ public partial class CatalogService
         return new RuntimeMenuReadModel(
             BranchId: branchId.Value,
             Currency: branch.Currency.Code,
+            PricesIncludeTax: pricesIncludeTax,
+            DefaultTaxRateBps: defaultTaxRateBps,
+            IsServiceChargeEnabled: isServiceChargeEnabled,
+            ServiceChargeRateBps: serviceChargeRateBps,
             Menus: runtimeMenus);
     }
 }

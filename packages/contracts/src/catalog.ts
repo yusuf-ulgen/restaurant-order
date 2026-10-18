@@ -176,6 +176,10 @@ export interface RuntimeMenu {
 export interface RuntimeMenuReadModel {
   branchId: string;
   currency: string;
+  pricesIncludeTax: boolean;
+  defaultTaxRateBps: number;
+  isServiceChargeEnabled: boolean;
+  serviceChargeRateBps: number;
   menus: RuntimeMenu[];
 }
 
