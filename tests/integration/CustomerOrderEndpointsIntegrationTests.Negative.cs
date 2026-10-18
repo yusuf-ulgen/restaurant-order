@@ -51,10 +51,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
         // Draft WITHOUT selecting the required modifier group
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        });
+        var requestBody = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 1, null, null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"req-mod-key-{Guid.NewGuid():N}");
@@ -104,14 +107,17 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
         // Sending duplicate modifier option ID
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, new List<CustomerSelectedModifierRequest>
+        var requestBody = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
             {
-                new(modGroupId, modOptionId),
-                new(modGroupId, modOptionId)
-            }, 2500)
-        });
+                new(menuItemId, null, 1, null, new List<CustomerSelectedModifierRequest>
+                {
+                    new(modGroupId, modOptionId),
+                    new(modGroupId, modOptionId)
+                }, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"dup-mod-key-{Guid.NewGuid():N}");
@@ -134,10 +140,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
         // Quantity 100 exceeds MaxQuantity (99)
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 100, null, null, 2500)
-        });
+        var requestBody = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 100, null, null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            250000);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"qty-bound-key-{Guid.NewGuid():N}");

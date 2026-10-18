@@ -126,10 +126,13 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
             $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders",
             waiterToken);
         createReq.Headers.Add("Idempotency-Key", $"staff-order-{Guid.NewGuid():N}");
-        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(new List<StaffOrderItemRequest>
-        {
-            new(menuItemId, null, 1, "Orta pişmiş", null, 4500)
-        }));
+        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(
+            new List<StaffOrderItemRequest>
+            {
+                new(menuItemId, null, 1, "Orta pişmiş", null, 4500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            4500));
 
         var createRes = await client.SendAsync(createReq);
         Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
@@ -212,10 +215,13 @@ public class StaffOrderConcurrencyIntegrationTests : IClassFixture<Testcontainer
             $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders",
             waiterToken);
         createReq.Headers.Add("Idempotency-Key", $"double-cancel-{Guid.NewGuid():N}");
-        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(new List<StaffOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 4500)
-        }));
+        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(
+            new List<StaffOrderItemRequest>
+            {
+                new(menuItemId, null, 1, null, null, 4500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            4500));
 
         var createRes = await client.SendAsync(createReq);
         var created = await createRes.Content.ReadFromJsonAsync<StaffOrderResponseDto>(JsonOptions);

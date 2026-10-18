@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Moq;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Orders;
 using RestaurantOrder.Domain.Auth;
@@ -84,14 +85,22 @@ public class StaffOrderServiceSupervisorPinTests
         var (managerId, pin) = SeedSupervisor(db, tenantId, branchId, AuthRole.BranchManager);
         await db.SaveChangesAsync();
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
+        supervisorPinMock
+            .Setup(x => x.VerifySupervisorPinAsync(tenantId, branchId, managerId.Value, pin, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((managerId.Value, "BranchManager"));
+
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, "Müşteri özel notu", null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, "Müşteri özel notu", null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-valid", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -122,21 +131,29 @@ public class StaffOrderServiceSupervisorPinTests
     }
 
     [Fact]
-    public async Task CancelOrderItemAsync_IncorrectPin_ThrowsForbidden_PersistsFailedAttempt()
+    public async Task CancelOrderItemAsync_IncorrectPin_ThrowsForbidden_OrderRemainsInPrep()
     {
         var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
         var item = StaffOrderServiceUnitTests.SeedMenuItem(db, tenantId, branchId);
         var (managerId, _) = SeedSupervisor(db, tenantId, branchId, AuthRole.BranchManager);
         await db.SaveChangesAsync();
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
+        supervisorPinMock
+            .Setup(x => x.VerifySupervisorPinAsync(tenantId, branchId, managerId.Value, "9999", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("Supervisor verification failed."));
+
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-wrong", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -165,62 +182,38 @@ public class StaffOrderServiceSupervisorPinTests
         var refreshedOrder = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == order.Id);
         Assert.Equal(OrderItemStatus.InPreparation, refreshedOrder.Items.First().Status);
         Assert.Equal(OrderStatus.InPreparation, refreshedOrder.Status);
-
-        // Verification: failed attempts counter was persisted in db
-        var cred = await db.PinCredentials.FirstAsync(p => p.UserId == managerId);
-        Assert.Equal(1, cred.FailedPinAttempts);
     }
 
     [Fact]
-    public async Task CancelOrderItemAsync_FiveWrongAttempts_LocksCredential_SubsequentCorrectPinFails()
+    public async Task CancelOrderItemAsync_LockedCredential_ThrowsForbidden()
     {
         var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
         var item = StaffOrderServiceUnitTests.SeedMenuItem(db, tenantId, branchId);
         var (managerId, correctPin) = SeedSupervisor(db, tenantId, branchId, AuthRole.BranchManager);
         await db.SaveChangesAsync();
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
+        supervisorPinMock
+            .Setup(x => x.VerifySupervisorPinAsync(tenantId, branchId, managerId.Value, correctPin, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("Supervisor verification failed."));
+
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-lock", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
         order.StartPreparation();
         await db.SaveChangesAsync();
 
-        var cancelWrong = new CancelOrderItemRequest(
-            Reason: "Zayiat",
-            SupervisorUserId: managerId.Value,
-            SupervisorPin: "0000");
-
-        // 5 consecutive failed attempts
-        for (int i = 1; i <= 5; i++)
-        {
-            await Assert.ThrowsAsync<InvalidAuthorizationScopeException>(() =>
-                staffService.CancelOrderItemAsync(
-                    tenantId,
-                    branchId,
-                    sessionId,
-                    order.Id,
-                    new OrderItemId(created.Order.Items[0].Id),
-                    cancelWrong,
-                    order.ConcurrencyToken,
-                    waiter));
-
-            var c = await db.PinCredentials.FirstAsync(p => p.UserId == managerId);
-            Assert.Equal(i, c.FailedPinAttempts);
-        }
-
-        // Credential must be locked now
-        var lockedCred = await db.PinCredentials.FirstAsync(p => p.UserId == managerId);
-        Assert.True(lockedCred.IsLocked(DateTimeOffset.UtcNow));
-
-        // 6th attempt with CORRECT PIN must also fail
         var cancelCorrect = new CancelOrderItemRequest(
             Reason: "Zayiat",
             SupervisorUserId: managerId.Value,
@@ -247,18 +240,25 @@ public class StaffOrderServiceSupervisorPinTests
         var otherBranchId = BranchId.New();
         var item = StaffOrderServiceUnitTests.SeedMenuItem(db, tenantId, branchId);
 
-        // Manager is assigned to otherBranchId
         var (managerId, pin) = SeedSupervisor(db, tenantId, branchId, AuthRole.BranchManager, membershipBranchId: otherBranchId);
         await db.SaveChangesAsync();
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
+        supervisorPinMock
+            .Setup(x => x.VerifySupervisorPinAsync(tenantId, branchId, managerId.Value, pin, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("Supervisor verification failed."));
+
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-other-branch", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -290,18 +290,25 @@ public class StaffOrderServiceSupervisorPinTests
         var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
         var item = StaffOrderServiceUnitTests.SeedMenuItem(db, tenantId, branchId);
 
-        // Manager membership is suspended
         var (managerId, pin) = SeedSupervisor(db, tenantId, branchId, AuthRole.BranchManager, status: UserMembershipStatus.Suspended);
         await db.SaveChangesAsync();
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
+        supervisorPinMock
+            .Setup(x => x.VerifySupervisorPinAsync(tenantId, branchId, managerId.Value, pin, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidAuthorizationScopeException("Supervisor verification failed."));
+
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var waiter = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.Waiter);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-suspended", waiter);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -333,14 +340,18 @@ public class StaffOrderServiceSupervisorPinTests
         var (db, tenantId, branchId, sessionId) = OrderPricingTestHelper.CreateTestEnvironment();
         var item = StaffOrderServiceUnitTests.SeedMenuItem(db, tenantId, branchId);
 
+        var supervisorPinMock = new Mock<ISupervisorPinService>();
         var pricingEngine = new OrderPricingEngine(db);
-        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, PinHasher);
+        var staffService = new StaffOrderService(db, pricingEngine, PermissionRegistry, supervisorPinMock.Object);
         var manager = CreateStaffPrincipal(tenantId.Value, branchId.Value, AuthRole.BranchManager);
 
-        var request = new CreateStaffOrderRequest(new[]
-        {
-            new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
-        });
+        var request = new CreateStaffOrderRequest(
+            new[]
+            {
+                new StaffOrderItemRequest(item.Id.Value, null, 1, null, null, 2000)
+            },
+            OrderPricingTestHelper.DefaultTestPolicyFingerprint,
+            2000);
 
         var created = await staffService.CreateStaffOrderAsync(tenantId, branchId, sessionId, request, "key-sup-direct", manager);
         var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Order.Id));
@@ -363,5 +374,9 @@ public class StaffOrderServiceSupervisorPinTests
         Assert.Equal("Cancelled", result.Status);
         var voidAudit = await db.OrderAuditEntries.FirstAsync(a => a.Action == "WASTE_CANCEL");
         Assert.Equal(manager.SubjectId, voidAudit.ActorId);
+
+        supervisorPinMock.Verify(
+            x => x.VerifySupervisorPinAsync(It.IsAny<TenantId>(), It.IsAny<BranchId>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

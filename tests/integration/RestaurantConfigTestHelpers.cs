@@ -10,6 +10,7 @@ using Moq;
 using Npgsql;
 using RestaurantOrder.Api.Auth;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Domain.Orders.Pricing;
 using RestaurantOrder.Infrastructure.Persistence;
 
 namespace RestaurantOrder.IntegrationTests;
@@ -18,6 +19,12 @@ public static class RestaurantConfigTestHelpers
 {
     public static readonly string SharedTestQrKeyBase64 = Convert.ToBase64String(
         System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+    public static readonly string DefaultTaxZeroPolicyFingerprint =
+        EffectiveBranchPricingPolicy.ComputeFingerprint("TRY", pricesIncludeTax: true, defaultTaxRateBps: 0, isServiceChargeEnabled: false, serviceChargeRateBps: 0);
+
+    public static readonly string DefaultTax10PercentPolicyFingerprint =
+        EffectiveBranchPricingPolicy.ComputeFingerprint("TRY", pricesIncludeTax: true, defaultTaxRateBps: 1000, isServiceChargeEnabled: false, serviceChargeRateBps: 0);
 
     public static HttpClient CreateTestClient(TestcontainersFixture fixture)
     {
@@ -28,6 +35,9 @@ public static class RestaurantConfigTestHelpers
             builder.UseSetting("DATABASE_URL", fixture.DatabaseConnectionString);
             builder.UseSetting("REDIS_URL", fixture.RedisEndpoint);
             builder.UseSetting("JWT_SECRET", RestaurantOrder.Api.ConfigurationValidator.InsecureDevJwtSecret);
+            builder.UseSetting("PIN_PEPPER_SECRET", "0123456789abcdef0123456789abcdef");
+            builder.UseSetting("Auth:PinHasher:PepperKeyId", "dev_v1");
+            builder.UseSetting("Auth:PinHasher:PepperValue", "0123456789abcdef0123456789abcdef");
             builder.UseSetting("DEPLOYMENT_COLOR", "blue");
             builder.UseSetting("QrSecurity:CurrentKeyId", "k1");
             builder.UseSetting("QrSecurity:Keys:k1", SharedTestQrKeyBase64);

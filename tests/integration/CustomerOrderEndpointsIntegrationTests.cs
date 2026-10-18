@@ -109,6 +109,20 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         return (tenantId, branchId, tableId, sessionId, menuItemId);
     }
 
+    private static CreateCustomerOrderRequest CreateRequest(
+        Guid menuItemId,
+        int quantity = 1,
+        string? note = null,
+        long price = 2500,
+        string? fingerprint = null,
+        long? expectedTotal = null)
+    {
+        return new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest> { new(menuItemId, null, quantity, note, null, price) },
+            fingerprint ?? RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            expectedTotal ?? (price * quantity));
+    }
+
     [Fact]
     public async Task CreateCustomerOrder_Successful_And_GetEndpoints_ReturnSnapshotAndEtag()
     {
@@ -119,10 +133,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 2, "Acısız ve soğansız lütfen", null, 2500)
-        });
+        var requestBody = CreateRequest(menuItemId, 2, "Acısız ve soğansız lütfen");
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"ord-key-{Guid.NewGuid():N}");
@@ -190,10 +201,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        });
+        var requestBody = CreateRequest(menuItemId);
 
         // Request has ambient cookie but missing X-CSRF-Token header
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/customer/orders");
@@ -216,10 +224,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        });
+        var requestBody = CreateRequest(menuItemId);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Content = JsonContent.Create(requestBody);
@@ -239,10 +244,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
         var key = $"idem-key-{Guid.NewGuid():N}";
 
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, "Tek burger", null, 2500)
-        });
+        var requestBody = CreateRequest(menuItemId, 1, "Tek burger");
 
         var req1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req1.Headers.Add("Idempotency-Key", key);
@@ -275,20 +277,14 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
 
         var req1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req1.Headers.Add("Idempotency-Key", key);
-        req1.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        }));
+        req1.Content = JsonContent.Create(CreateRequest(menuItemId));
         var res1 = await client.SendAsync(req1);
         Assert.Equal(HttpStatusCode.Created, res1.StatusCode);
 
         // Same key, but different quantity (2 instead of 1)
         var req2 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req2.Headers.Add("Idempotency-Key", key);
-        req2.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 2, null, null, 2500)
-        }));
+        req2.Content = JsonContent.Create(CreateRequest(menuItemId, 2));
         var res2 = await client.SendAsync(req2);
         Assert.Equal(HttpStatusCode.Conflict, res2.StatusCode);
         var errorBody = await res2.Content.ReadAsStringAsync();
@@ -306,10 +302,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
 
         // Catalog has price 2500, customer expects 1900
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 1900)
-        });
+        var requestBody = CreateRequest(menuItemId, 1, null, price: 1900);
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"key-{Guid.NewGuid():N}");
@@ -348,10 +341,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"key-{Guid.NewGuid():N}");
-        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        }));
+        req.Content = JsonContent.Create(CreateRequest(menuItemId));
 
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
@@ -382,10 +372,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"key-{Guid.NewGuid():N}");
-        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        }));
+        req.Content = JsonContent.Create(CreateRequest(menuItemId));
 
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
@@ -405,10 +392,7 @@ public partial class CustomerOrderEndpointsIntegrationTests : IClassFixture<Test
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"key-{Guid.NewGuid():N}");
-        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        }));
+        req.Content = JsonContent.Create(CreateRequest(menuItemId));
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var created = await res.Content.ReadFromJsonAsync<CustomerOrderResponseDto>(JsonOptions);

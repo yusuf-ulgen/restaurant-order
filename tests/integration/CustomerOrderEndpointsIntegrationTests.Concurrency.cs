@@ -36,17 +36,23 @@ public partial class CustomerOrderEndpointsIntegrationTests
 
         var req1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req1.Headers.Add("Idempotency-Key", $"conc-a-{Guid.NewGuid():N}");
-        req1.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, "Round A", null, 2500)
-        }));
+        req1.Content = JsonContent.Create(new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 1, "Round A", null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500));
 
         var req2 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req2.Headers.Add("Idempotency-Key", $"conc-b-{Guid.NewGuid():N}");
-        req2.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 2, "Round B", null, 2500)
-        }));
+        req2.Content = JsonContent.Create(new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 2, "Round B", null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            5000));
 
         var task1 = client.SendAsync(req1);
         var task2 = client.SendAsync(req2);
@@ -94,10 +100,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
         var customerToken = RestaurantConfigTestHelpers.GenerateCustomerToken(tenantId, branchId, sessionId);
         var key = $"race-key-{Guid.NewGuid():N}";
 
-        var requestBody = new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, "Concurrent race", null, 2500)
-        });
+        var requestBody = new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 1, "Concurrent race", null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500);
 
         var req1 = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req1.Headers.Add("Idempotency-Key", key);
@@ -148,10 +157,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"rls-key-{Guid.NewGuid():N}");
-        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId1, null, 1, null, null, 2500)
-        }));
+        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId1, null, 1, null, null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500));
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
 
@@ -236,10 +248,13 @@ public partial class CustomerOrderEndpointsIntegrationTests
 
         var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, "/api/v1/customer/orders", customerToken);
         req.Headers.Add("Idempotency-Key", $"sec-key-{Guid.NewGuid():N}");
-        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(new List<CustomerOrderItemRequest>
-        {
-            new(menuItemId, null, 1, null, null, 2500)
-        }));
+        req.Content = JsonContent.Create(new CreateCustomerOrderRequest(
+            new List<CustomerOrderItemRequest>
+            {
+                new(menuItemId, null, 1, null, null, 2500)
+            },
+            RestaurantConfigTestHelpers.DefaultTaxZeroPolicyFingerprint,
+            2500));
 
         var res = await client.SendAsync(req);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);

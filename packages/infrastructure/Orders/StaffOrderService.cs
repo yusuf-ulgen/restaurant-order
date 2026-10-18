@@ -39,37 +39,6 @@ public sealed partial class StaffOrderService : IStaffOrderService
         _supervisorPinService = supervisorPinService ?? throw new ArgumentNullException(nameof(supervisorPinService));
     }
 
-    internal StaffOrderService(
-        RestaurantOrderDbContext dbContext,
-        IOrderPricingEngine pricingEngine,
-        IPermissionRegistry permissionRegistry,
-        IPinHasher pinHasher,
-        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory = null)
-        : this(
-            dbContext,
-            pricingEngine,
-            permissionRegistry,
-            CreateScopeSupervisorService(dbContext, pinHasher, permissionRegistry, serviceScopeFactory))
-    {
-    }
-
-    private static ISupervisorPinService CreateScopeSupervisorService(
-        RestaurantOrderDbContext dbContext,
-        IPinHasher pinHasher,
-        IPermissionRegistry permissionRegistry,
-        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory? serviceScopeFactory)
-    {
-        if (serviceScopeFactory != null)
-        {
-            return new SupervisorPinService(serviceScopeFactory, pinHasher, permissionRegistry);
-        }
-
-        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        services.AddSingleton(dbContext);
-        var sp = services.BuildServiceProvider();
-        return new SupervisorPinService(sp.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(), pinHasher, permissionRegistry);
-    }
-
     public async Task<CreateStaffOrderResult> CreateStaffOrderAsync(
         TenantId tenantId,
         BranchId branchId,
@@ -106,6 +75,27 @@ public sealed partial class StaffOrderService : IStaffOrderService
             {
                 throw new DomainException($"Quantity must be between {OrderItem.MinQuantity} and {OrderItem.MaxQuantity}. Received: {item.Quantity}.");
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ClientPricingPolicyFingerprint))
+        {
+            throw new DomainException("Client pricing policy fingerprint is required.");
+        }
+
+        var trimmedFingerprint = request.ClientPricingPolicyFingerprint.Trim().ToLowerInvariant();
+        if (trimmedFingerprint.Length != 64 || !trimmedFingerprint.All(Uri.IsHexDigit))
+        {
+            throw new DomainException("Invalid pricing policy fingerprint format.");
+        }
+
+        if (!request.ClientExpectedTotalMinorUnits.HasValue)
+        {
+            throw new DomainException("Client expected total minor units is required.");
+        }
+
+        if (request.ClientExpectedTotalMinorUnits.Value < 0)
+        {
+            throw new DomainException("Invalid client expected total minor units.");
         }
 
         var fingerprint = ComputeRequestFingerprint(sessionId, request);

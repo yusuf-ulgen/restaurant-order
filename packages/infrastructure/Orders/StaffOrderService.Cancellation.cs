@@ -113,6 +113,11 @@ public sealed partial class StaffOrderService
             }
             else
             {
+                if (!request.SupervisorUserId.HasValue || string.IsNullOrWhiteSpace(request.SupervisorPin))
+                {
+                    throw new InvalidAuthorizationScopeException("Supervisor authorization is required to void items in preparation.");
+                }
+
                 // Verify supervisor PIN authorization
                 var (verifiedSupervisorId, verifiedRole) = await _supervisorPinService.VerifySupervisorPinAsync(
                     tenantId,

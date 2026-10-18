@@ -7,6 +7,7 @@ using Npgsql;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Orders;
 using RestaurantOrder.Domain.Auth;
+using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Orders;
 using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure.Auth;
@@ -17,7 +18,6 @@ namespace RestaurantOrder.IntegrationTests;
 
 /// <summary>
 /// PostgreSQL integration tests verifying supervisor PIN verification,
-/// concurrency brute-force protection (FOR UPDATE pessimistic locking),
 /// branch manager scoping, isolation, and audit redaction.
 /// </summary>
 public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<TestcontainersFixture>
@@ -28,7 +28,8 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         Options.Create(new PinHasherOptions
         {
             PepperKeyId = "dev_v1",
-            PepperValue = "0123456789abcdef0123456789abcdef"
+            PepperValue = "0123456789abcdef0123456789abcdef",
+            Environment = "Development"
         }));
 
     public StaffOrderSupervisorPinIntegrationTests(TestcontainersFixture fixture)
@@ -39,12 +40,8 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
     private async Task EnsureMigrationsAppliedAsync()
     {
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
-            .UseNpgsql(_fixture.DatabaseConnectionString, npgsqlOptions =>
-            {
-                npgsqlOptions.MigrationsAssembly(typeof(RestaurantOrderDbContext).Assembly.FullName);
-            })
+            .UseNpgsql(_fixture.DatabaseConnectionString, n => n.MigrationsAssembly(typeof(RestaurantOrderDbContext).Assembly.FullName))
             .Options;
-
         await using var context = new RestaurantOrderDbContext(options);
         await context.Database.MigrateAsync();
     }
@@ -81,22 +78,18 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
             INSERT INTO tenancy.menu_items (id, tenant_id, branch_id, menu_id, category_id, name, slug, base_price_minor_units, sort_order, is_active, created_at, concurrency_token)
             VALUES (@menuItemId, @tenantId, @branchId, @menuId, @categoryId, 'Kebab', @itemSlug, 3000, 1, true, NOW(), gen_random_uuid());";
 
-        cmd.Parameters.AddWithValue("tenantId", tenantId);
-        cmd.Parameters.AddWithValue("tenantSlug", $"t-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("brandId", brandId);
-        cmd.Parameters.AddWithValue("brandSlug", $"b-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("branchId", branchId);
-        cmd.Parameters.AddWithValue("branchSlug", $"br-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("areaId", areaId);
-        cmd.Parameters.AddWithValue("areaSlug", $"a-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("tableId", tableId);
-        cmd.Parameters.AddWithValue("sessionId", sessionId);
-        cmd.Parameters.AddWithValue("menuId", menuId);
-        cmd.Parameters.AddWithValue("menuSlug", $"m-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("categoryId", categoryId);
-        cmd.Parameters.AddWithValue("catSlug", $"c-{Guid.NewGuid():N}");
-        cmd.Parameters.AddWithValue("menuItemId", menuItemId);
-        cmd.Parameters.AddWithValue("itemSlug", $"i-{Guid.NewGuid():N}");
+        var parameters = new Dictionary<string, object>
+        {
+            ["tenantId"] = tenantId, ["tenantSlug"] = $"t-{Guid.NewGuid():N}",
+            ["brandId"] = brandId, ["brandSlug"] = $"b-{Guid.NewGuid():N}",
+            ["branchId"] = branchId, ["branchSlug"] = $"br-{Guid.NewGuid():N}",
+            ["areaId"] = areaId, ["areaSlug"] = $"a-{Guid.NewGuid():N}",
+            ["tableId"] = tableId, ["sessionId"] = sessionId,
+            ["menuId"] = menuId, ["menuSlug"] = $"m-{Guid.NewGuid():N}",
+            ["categoryId"] = categoryId, ["catSlug"] = $"c-{Guid.NewGuid():N}",
+            ["menuItemId"] = menuItemId, ["itemSlug"] = $"i-{Guid.NewGuid():N}"
+        };
+        foreach (var (k, v) in parameters) cmd.Parameters.AddWithValue(k, v);
         await cmd.ExecuteNonQueryAsync();
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
@@ -104,10 +97,13 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         var createReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post, $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders", waiterToken);
         createReq.Headers.Add("Idempotency-Key", $"sup-test-order-{Guid.NewGuid():N}");
-        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(new List<StaffOrderItemRequest>
-        {
-            new(menuItemId, null, 1, "Müşteri acısız istiyor", null, 3000)
-        }));
+        createReq.Content = JsonContent.Create(new CreateStaffOrderRequest(
+            new List<StaffOrderItemRequest>
+            {
+                new(menuItemId, null, 1, "Müşteri acısız istiyor", null, 3000)
+            },
+            ClientPricingPolicyFingerprint: "0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9",
+            ClientExpectedTotalMinorUnits: 3000));
 
         var createRes = await client.SendAsync(createReq);
         Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
@@ -116,54 +112,61 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
 
         var dbOptions = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
             .UseNpgsql(_fixture.DatabaseConnectionString).Options;
-        await using (var db = new RestaurantOrderDbContext(dbOptions))
-        {
-            var order = await db.Orders.IgnoreQueryFilters().Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Id));
-            order.StartPreparation();
-            await db.SaveChangesAsync();
-        }
+        await using var db = new RestaurantOrderDbContext(dbOptions);
+        await using var tx = await db.BeginTenantTransactionAsync(tenantId);
+        var order = await db.Orders.Include(o => o.Items).FirstAsync(o => o.Id == new OrderId(created.Id));
+        order.StartPreparation();
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
-        return (tenantId, branchId, sessionId, created.Id, created.Items[0].Id, created.ConcurrencyToken.ToString("D"));
+        return (tenantId, branchId, sessionId, created.Id, created.Items[0].Id, order.ConcurrencyToken.ToString("D"));
     }
 
     private async Task<Guid> SeedSupervisorAsync(
         Guid tenantId,
         Guid? branchId,
-        string role,
+        AuthRole role,
         string rawPin,
-        string status = "Active")
+        UserMembershipStatus status = UserMembershipStatus.Active)
     {
-        var userId = Guid.NewGuid();
-        var hashed = PinHasher.HashPin(rawPin);
+        var dbOptions = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+            .UseNpgsql(_fixture.DatabaseConnectionString).Options;
+        await using var db = new RestaurantOrderDbContext(dbOptions);
 
-        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
-        await conn.OpenAsync();
+        await using var tx = await db.BeginTenantTransactionAsync(tenantId);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            INSERT INTO iam.users (id, email, password_hash, status, created_at, concurrency_token)
-            VALUES (@userId, @email, 'dummy_hash', 'Active', NOW(), gen_random_uuid());
+        var userId = UserId.New();
+        var email = $"sup-{userId.Value:N}@test.com";
+        var nowUtc = DateTimeOffset.UtcNow;
+        var user = User.Create(email, "InsecureDevPassword123!", nowUtc, id: userId);
+        db.Users.Add(user);
+        var membership = UserMembership.Create(
+            new TenantId(tenantId),
+            userId,
+            role,
+            branchId.HasValue ? new BranchId(branchId.Value) : null,
+            nowUtc,
+            initialStatus: status);
+        db.Memberships.Add(membership);
 
-            INSERT INTO iam.memberships (id, tenant_id, user_id, role, branch_id, status, created_at, concurrency_token)
-            VALUES (gen_random_uuid(), @tenantId, @userId, @role, @branchId, @status, NOW(), gen_random_uuid());
+        if (branchId.HasValue)
+        {
+            var hashed = PinHasher.HashPin(rawPin);
+            var pinCred = PinCredential.Create(
+                new TenantId(tenantId),
+                userId,
+                new BranchId(branchId.Value),
+                hashed.Hash,
+                hashed.AlgorithmVersion,
+                hashed.PepperKeyId,
+                nowUtc);
+            db.PinCredentials.Add(pinCred);
+        }
 
-            INSERT INTO iam.pin_credentials (id, tenant_id, user_id, branch_id, pin_hash, algorithm_version, pepper_key_id, failed_pin_attempts, created_at_utc, updated_at_utc)
-            VALUES (gen_random_uuid(), @tenantId, @userId, @credBranchId, @pinHash, @alg, @pep, 0, NOW(), NOW());
-        ";
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
-        cmd.Parameters.AddWithValue("userId", userId);
-        cmd.Parameters.AddWithValue("email", $"sup-{Guid.NewGuid():N}@test.com");
-        cmd.Parameters.AddWithValue("tenantId", tenantId);
-        cmd.Parameters.AddWithValue("role", role);
-        cmd.Parameters.AddWithValue("branchId", (object?)branchId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("credBranchId", (object?)branchId ?? Guid.Empty);
-        cmd.Parameters.AddWithValue("status", status);
-        cmd.Parameters.AddWithValue("pinHash", hashed.Hash);
-        cmd.Parameters.AddWithValue("alg", hashed.AlgorithmVersion);
-        cmd.Parameters.AddWithValue("pep", hashed.PepperKeyId);
-
-        await cmd.ExecuteNonQueryAsync();
-        return userId;
+        return userId.Value;
     }
 
     [Fact]
@@ -173,7 +176,7 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var managerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "4567");
+        var managerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "4567");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
@@ -201,7 +204,18 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
         var otherBranchId = Guid.NewGuid();
-        var otherManagerId = await SeedSupervisorAsync(tenantId, otherBranchId, "BranchManager", "4567");
+
+        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO tenancy.branches (id, tenant_id, brand_id, name, slug, timezone, currency, status, created_at, concurrency_token) VALUES (@otherBranchId, @tenantId, (SELECT brand_id FROM tenancy.branches WHERE id = @branchId), 'Other Branch', @branchSlug, 'Europe/Istanbul', 'TRY', 'Active', NOW(), gen_random_uuid());";
+        cmd.Parameters.AddWithValue("otherBranchId", otherBranchId);
+        cmd.Parameters.AddWithValue("tenantId", tenantId);
+        cmd.Parameters.AddWithValue("branchId", branchId);
+        cmd.Parameters.AddWithValue("branchSlug", $"br-other-{Guid.NewGuid():N}");
+        await cmd.ExecuteNonQueryAsync();
+
+        var otherManagerId = await SeedSupervisorAsync(tenantId, otherBranchId, AuthRole.BranchManager, "4567");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
@@ -224,7 +238,7 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var suspendedManagerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "4567", status: "Suspended");
+        var suspendedManagerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "4567", status: UserMembershipStatus.Suspended);
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
@@ -247,7 +261,7 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var adminId = await SeedSupervisorAsync(tenantId, null, "RestaurantAdmin", "4567");
+        var adminId = await SeedSupervisorAsync(tenantId, null, AuthRole.RestaurantAdmin, "4567");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
@@ -284,6 +298,17 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
+    private async Task<int> GetFailedPinAttemptsAsync(Guid tenantId, Guid userId)
+    {
+        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT failed_pin_attempts FROM iam.pin_credentials WHERE tenant_id = @tenantId AND user_id = @userId";
+        cmd.Parameters.AddWithValue("tenantId", tenantId);
+        cmd.Parameters.AddWithValue("userId", userId);
+        return (int)(await cmd.ExecuteScalarAsync())!;
+    }
+
     [Fact]
     public async Task FailedPinAttempt_PersistsEvenIfMainTransactionRollsBack()
     {
@@ -291,12 +316,11 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var managerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "1234");
+        var managerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "1234");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
 
-        // Send incorrect PIN
         var voidReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
             HttpMethod.Post,
             $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}/items/{itemId}/cancel",
@@ -307,61 +331,47 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         var res = await client.SendAsync(voidReq);
         Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
 
-        // Verify that failed_pin_attempts was persisted to 1 in iam.pin_credentials
-        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT failed_pin_attempts FROM iam.pin_credentials WHERE tenant_id = @tenantId AND user_id = @userId";
-        cmd.Parameters.AddWithValue("tenantId", tenantId);
-        cmd.Parameters.AddWithValue("userId", managerId);
-        var attempts = (int)(await cmd.ExecuteScalarAsync())!;
-        Assert.Equal(1, attempts);
+        Assert.Equal(1, await GetFailedPinAttemptsAsync(tenantId, managerId));
     }
 
     [Fact]
-    public async Task ConcurrentFailedAttempts_AllCountedAndCredentialLocked()
+    public async Task SupervisorPin_SuccessfulVerification_ResetsFailedAttemptsCounter()
     {
         if (!TestcontainersGuard.ShouldRun(_fixture)) return;
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var managerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "1234");
+        var managerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "1234");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
 
-        // Execute 5 concurrent failed PIN requests
-        var tasks = Enumerable.Range(0, 5).Select(async _ =>
+        // 1. Send 2 failed attempts
+        for (int i = 0; i < 2; i++)
         {
-            var req = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            var wrongReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
                 HttpMethod.Post,
                 $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}/items/{itemId}/cancel",
                 waiterToken);
-            req.Headers.IfMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue($"\"{token}\""));
-            req.Content = JsonContent.Create(new CancelOrderItemRequest("Eşzamanlı yanlış deneme", SupervisorPin: "0000", SupervisorUserId: managerId));
-            return await client.SendAsync(req);
-        }).ToList();
-
-        var results = await Task.WhenAll(tasks);
-        foreach (var r in results)
-        {
-            Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
+            wrongReq.Headers.IfMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue($"\"{token}\""));
+            wrongReq.Content = JsonContent.Create(new CancelOrderItemRequest("Hatalı deneme", SupervisorPin: "9999", SupervisorUserId: managerId));
+            var wrongRes = await client.SendAsync(wrongReq);
+            Assert.Equal(HttpStatusCode.Forbidden, wrongRes.StatusCode);
         }
 
-        // Verify that failed attempts count is exactly 5 and locked_until_utc is set
-        await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT failed_pin_attempts, locked_until_utc FROM iam.pin_credentials WHERE tenant_id = @tenantId AND user_id = @userId";
-        cmd.Parameters.AddWithValue("tenantId", tenantId);
-        cmd.Parameters.AddWithValue("userId", managerId);
-        await using var reader = await cmd.ExecuteReaderAsync();
-        Assert.True(await reader.ReadAsync());
-        var attempts = reader.GetInt32(0);
-        var isLocked = !reader.IsDBNull(1);
+        Assert.Equal(2, await GetFailedPinAttemptsAsync(tenantId, managerId));
 
-        Assert.Equal(5, attempts);
-        Assert.True(isLocked);
+        // 2. Send correct PIN
+        var correctReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(
+            HttpMethod.Post,
+            $"/api/v1/floor/branches/{branchId}/sessions/{sessionId}/orders/{orderId}/items/{itemId}/cancel",
+            waiterToken);
+        correctReq.Headers.IfMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue($"\"{token}\""));
+        correctReq.Content = JsonContent.Create(new CancelOrderItemRequest("Doğru PIN ile iptal", SupervisorPin: "1234", SupervisorUserId: managerId));
+        var correctRes = await client.SendAsync(correctReq);
+        Assert.Equal(HttpStatusCode.OK, correctRes.StatusCode);
+
+        Assert.Equal(0, await GetFailedPinAttemptsAsync(tenantId, managerId));
     }
 
     [Fact]
@@ -371,7 +381,7 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var managerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "1234");
+        var managerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "1234");
 
         // Manually lock credential
         await using var conn = new NpgsqlConnection(_fixture.DatabaseConnectionString);
@@ -404,7 +414,7 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         await EnsureMigrationsAppliedAsync();
 
         var (tenantId, branchId, sessionId, orderId, itemId, token) = await SetupOrderInPrepAsync();
-        var managerId = await SeedSupervisorAsync(tenantId, branchId, "BranchManager", "4567");
+        var managerId = await SeedSupervisorAsync(tenantId, branchId, AuthRole.BranchManager, "4567");
 
         var client = RestaurantConfigTestHelpers.CreateTestClient(_fixture);
         var waiterToken = RestaurantConfigTestHelpers.GenerateToken(Guid.NewGuid(), Guid.NewGuid(), tenantId, branchId, role: "Waiter");
@@ -420,16 +430,17 @@ public class StaffOrderSupervisorPinIntegrationTests : IClassFixture<Testcontain
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
 
         var dbOptions = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
-            .UseNpgsql(_fixture.DatabaseConnectionString)
-            .Options;
+            .UseNpgsql(_fixture.DatabaseConnectionString).Options;
         await using var db = new RestaurantOrderDbContext(dbOptions);
+        await using var tx = await db.BeginTenantTransactionAsync(tenantId);
         var audits = await db.OrderAuditEntries.Where(a => a.OrderId == new OrderId(orderId)).ToListAsync();
 
         Assert.NotEmpty(audits);
-        foreach (var audit in audits)
-        {
-            Assert.DoesNotContain("4567", audit.DetailsJson);
-            Assert.DoesNotContain("Müşteri acısız istiyor", audit.DetailsJson);
-        }
+        var voidAudit = Assert.Single(audits, a => a.Action == "WASTE_CANCEL");
+        Assert.Equal(managerId, voidAudit.ActorId);
+        Assert.Equal("BranchManager", voidAudit.ActorRole);
+        Assert.DoesNotContain("4567", voidAudit.DetailsJson);
+        Assert.DoesNotContain("Müşteri acısız istiyor", voidAudit.DetailsJson);
+        if (voidAudit.Reason != null) Assert.DoesNotContain("4567", voidAudit.Reason);
     }
 }

@@ -160,6 +160,8 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
       },
       data: {
         items: [{ menuItemId: '00000000-0000-0000-0000-000000000001', quantity: 1 }],
+        clientPricingPolicyFingerprint: '0268781158e5455cd5066342bc2e2a04ede6e69974fef181a1dbd5d26c4728b9',
+        clientExpectedTotalMinorUnits: 2500,
       },
     });
 
