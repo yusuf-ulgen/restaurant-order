@@ -21,7 +21,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
 | **Faz 8.3** | Müşteri Sipariş API'si ve Eşzamanlılık | **Tamamlandı** | `POST /api/v1/customer/orders`, `GET /api/v1/customer/orders`, `GET /api/v1/customer/orders/{orderId}`, `Idempotency-Key` replay & conflict, PostgreSQL advisory lock eşzamanlılık koruması, oturum durumu denetimi, RFC 7807 hata yanıtları, audit not redaction | `feat/phase-08-order-core` |
 | **Faz 8.4** | Müşteri Sipariş Gönderme Arayüzü | **Tamamlandı** | `OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`, stabil `Idempotency-Key`, sepet koruması ve temizliği | `feat/phase-08-order-core` |
 | **Faz 8.5** | Personel Sipariş API'si ve Yaşam Döngüsü Altyapısı | **Tamamlandı** | Personel sipariş uç noktaları, RBAC izin matrisi, deterministik durum türetme, ETag/If-Match, yönetici PIN/zayiat iptali | `feat/phase-08-order-core` |
-| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Tamamlandı** | 15 adımlı E2E yolculuğunun sipariş geçmişi ve DB doğrulamasıyla genişletilmesi, negatif entegrasyon/eşzamanlılık testleri, güvenlik denetimi ve kapanış | `feat/phase-08-order-core` |
+| **Faz 8.6** | Negatif Akışlar, E2E, Güvenlik ve Kapanış | **Kapanış Düzeltmelerinde** | 15 adımlı E2E yolculuğunun sipariş geçmişi ve DB doğrulamasıyla genişletilmesi, negatif entegrasyon/eşzamanlılık testleri, güvenlik denetimi ve kapanış | `feat/phase-08-order-core` |
 
 ---
 
@@ -173,15 +173,16 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Dead code, eski mock ve TODO ile gizlenmiş davranış bırakılmadı.
   - Drift testleri ile backend ve frontend sözleşmeleri mühürlendi.
 - [x] **Kalite Kapıları ve Doğrulama:**
-  - File size gate: 1045 dosya < 600 satır (`PASS`).
+  - File size gate: 1053 dosya < 600 satır (`PASS`).
   - Docs & links validation: 64 dosya, 0 bozuk bağlantı (`PASS`).
   - Secret scanning: 0 sızıntı (`PASS`).
   - ESLint: 0 hata, 0 uyarı (`PASS`).
   - TypeScript typecheck: 7/7 proje Done (`PASS`).
   - Architecture tests: 10/10 (`PASS`).
-  - Backend Unit tests: 1636/1636 (`PASS`).
-  - Backend Integration tests: 362/362 (`PASS`).
-  - Frontend unit/component tests: 501/501 (`PASS`).
-  - E2E Playwright Browser tests: 12/12 (`PASS`).
-  - Quality gates: 114 test (`PASS`).
+  - Backend Unit tests: 1655/1655 (`PASS`).
+  - Backend Integration tests: 363/363 (`PASS`, SKIP_TESTCONTAINERS=true).
+  - Frontend unit/component tests: 382/382 (`PASS`: customer-web: 216, operations-web: 15, admin-web: 151).
+  - Frontend test coverage (customer-web): Stmts: %93,5, Branch: %83,0, Funcs: %88,41, Lines: %93,5 (`PASS`, tüm eşikler > %80).
+  - Quality gates: 114 test (`PASS`, 1 atlandı: Docker konteyner akışı).
   - Production release build: `pnpm build` (`PASS`).
+  - CI / GitHub Actions: Exact HEAD commit iş akışı doğrulaması bekleniyor (CI yeşil olmadan faz tamamlandı sayılmaz).

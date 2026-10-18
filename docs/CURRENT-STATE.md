@@ -14,7 +14,7 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [Issue #18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), [PR #17](https://github.com/yusuf-ulgen/restaurant-order/pull/17): Faz 7 müşteri deneyimi, sepet taslağı, servis talepleri ve güvenlik sertleştirmeleri main'e birleştirildi.
 - Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 8: Sipariş Çekirdeği (Tamamlandı)
+## Aktif Görev — Faz 8: Sipariş Çekirdeği (Kapanış Doğrulamasında)
 
 - Aktif dal: `feat/phase-08-order-core`.
 - GitHub Issue: [#18](https://github.com/yusuf-ulgen/restaurant-order/issues/18).
@@ -27,7 +27,15 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - **Faz 8.4:** Müşteri sipariş onay ve gönderim deneyimi (`OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`), stabil idempotency key, sepet koruması ve temizliği.
   - **Faz 8.5:** Personel sipariş uç noktaları (`StaffOrderEndpoints`), RBAC matrisi (`orders.staff.create`, `orders.items.cancel_pre_prep`, `orders.items.void_in_prep`), deterministik `Order.DeriveStatus`, supervisor void ve PIN doğrulama akışı.
   - **Faz 8.6:** 15 adımlı pozitif E2E akışı (DB tek sipariş doğrulaması dahil), negatif güvenlik ve eşzamanlılık testleri, kalite kapıları (Gate 1–6) doğrulaması.
-- Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) CI doğrulaması ve Faz 9 (Canlı Olaylar ve Bildirimler) hazırlığı.
+- Kapanış Düzeltmeleri:
+  - Modifier fiyatının iki kez eklenmesi finansal modelde düzeltildi (`UnitPriceMinorUnits` taban fiyat, `ModifierTotalMinorUnits` birim modifier toplamı, `LineTotalMinorUnits = (UnitPrice + ModifierTotal) * Qty`).
+  - Ortak ve deterministik SHA-256 canonical idempotency fingerprinting altyapısı uygulandı (`OrderFingerprintGenerator`).
+  - Supervisor PIN doğrulaması ayrı transaction/scope içine alınarak 5 başarısız deneme sonrası 15 dakikalık kilit kalıcılaştırıldı; branch scoping ve passive membership kontrolleri sertleştirildi.
+  - Fiyat değişikliği onay döngüsü (`acceptPriceChanges`) tamamlandı; sepette eski/yeni fiyat farkı ve onay CTA'sı eklendi; payload-bazlı idempotency key bağlandı.
+  - Runtime menüye vergi ve servis ücreti politikası alanları eklenerek `OrderConfirmationSheet` üzerinde saf integer Half-Up döküm sağlandı.
+  - Ham SQL sızıntılarını önlemek için `DbUpdateException` eşlemesi sınırlandırıldı.
+  - `apps/customer-web` test kapsamı tüm global metriklerde (Statements: %93,5, Branches: %83,0, Functions: %88,41, Lines: %93,5) %80 üzerine çıkarıldı.
+- Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) exact HEAD CI doğrulaması ve kullanıcı onayı sonrasında Faz 9 hazırlığı.
 
 ## Ortam ve Sınırlamalar
 
@@ -39,4 +47,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 8 başarıyla tamamlanmıştır. Branch coverage ve sertleştirme commit'lerinin `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki CI akışının onaylanması gerekmektedir. Kullanıcı onayı sonrasında `main` dalına merge edilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.
+Kapanış düzeltmelerinin `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki exact HEAD GitHub Actions CI akışının yeşil olduğunun doğrulanması gerekmektedir. CI yeşil olduktan sonra kullanıcı onayı ile `main` dalına merge süreci işletilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.
