@@ -15,3 +15,4 @@ export * from './floor';
 export * from './customer-orders';
 export * from './staff-orders';
 export * from './order-pricing';
+export * from './events';
