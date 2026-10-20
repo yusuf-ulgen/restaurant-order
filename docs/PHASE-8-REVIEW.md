@@ -2,6 +2,8 @@
 
 Tarih: 2026-10-20. Başlangıç görevi [#18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), incelenen PR [#19](https://github.com/yusuf-ulgen/restaurant-order/pull/19), başlangıç başlığı `c1b8ce0`. PR #19 inceleme sırasında başka bir işlemle birleştirildi; bulgular [#22](https://github.com/yusuf-ulgen/restaurant-order/issues/22) ve `fix/order-review-regressions` dalında, main `d4a1255` tabanından takip edilir.
 
+Takip PR'ı ve güncel tam doğrulama kanıtı: [#23](https://github.com/yusuf-ulgen/restaurant-order/pull/23).
+
 ## İncelenen Sınırlar
 
 Sunucuda fiyatlandırma ve yeniden onay, müşteri/personel yetkileri, oturum yaşam döngüsüyle sipariş oluşturma yarışı, sipariş/kalem durum tutarlılığı, idempotency ve tarayıcı yenilemesinden sonra tekrar gönderim incelendi. İşletme RLS'si, merkezi RBAC ve mevcut para modeli korundu.

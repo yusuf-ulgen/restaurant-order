@@ -30,6 +30,7 @@ Güncelleme: 2026-10-20. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 ## Aktif Görev — Faz 8 İnceleme Düzeltmeleri
 
 - [Issue #22](https://github.com/yusuf-ulgen/restaurant-order/issues/22), dal `fix/order-review-regressions`; taban main `d4a1255`.
+- Takip PR'ı: [#23](https://github.com/yusuf-ulgen/restaurant-order/pull/23). Güncel doğrulama ve birleşme durumunun kaynağı bu PR'dır.
 - Kullanıcı 2026-10-20 tarihinde inceleme, bulguların giderilmesi ve başarılı kontrollerden sonra birleştirmeyle devam edilmesini onayladı. PR #19 inceleme sürerken başka bir işlemle main'e alınmıştı; takip düzeltmeleri ayrı dalda tutulur.
 - Üç bulgu testlerle yeniden üretildi: oturum kapanışı/hesap isteme ile sipariş yarışı; kısmi hazırlıkta siparişin erken hazır sayılması; yanıt kaybından sonra yenilemede değişen sipariş anahtarı. Düzeltmeler ve kanıtlar: [Faz 8 incelemesi](./PHASE-8-REVIEW.md).
 - Eski kodda 2 alan + 6 gerçek PostgreSQL + 1 yenileme regresyonu başarısız oldu. Son hedefli backend çalışmasında 155 birim ve 6 PostgreSQL testi geçti. Tam doğrulama ve güncel CI kanıtı takip PR'ında tutulur; güncel başlıkla eşleştiğini kontrol edin.
