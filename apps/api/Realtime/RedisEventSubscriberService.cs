@@ -10,6 +10,17 @@ using RestaurantOrder.Infrastructure.Events;
 using RestaurantOrder.Infrastructure.Redis;
 using StackExchange.Redis;
 
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using RestaurantOrder.Application.Notifications;
+using RestaurantOrder.Domain.Branches;
+using RestaurantOrder.Domain.Floor;
+using RestaurantOrder.Domain.Notifications;
+using RestaurantOrder.Domain.Tenants;
+using RestaurantOrder.Infrastructure.Persistence;
+
 namespace RestaurantOrder.Api.Realtime;
 
 public sealed class RedisEventSubscriberService : BackgroundService
@@ -17,17 +28,23 @@ public sealed class RedisEventSubscriberService : BackgroundService
     private readonly IRedisDatabaseProvider _redisProvider;
     private readonly IHubContext<EventsHub> _hubContext;
     private readonly IRealtimeConnectionTracker _tracker;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IPushNotificationTransport _pushTransport;
     private readonly ILogger<RedisEventSubscriberService> _logger;
 
     public RedisEventSubscriberService(
         IRedisDatabaseProvider redisProvider,
         IHubContext<EventsHub> hubContext,
         IRealtimeConnectionTracker tracker,
+        IServiceScopeFactory scopeFactory,
+        IPushNotificationTransport pushTransport,
         ILogger<RedisEventSubscriberService> logger)
     {
         _redisProvider = redisProvider ?? throw new ArgumentNullException(nameof(redisProvider));
         _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
         _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _pushTransport = pushTransport ?? throw new ArgumentNullException(nameof(pushTransport));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -149,10 +166,88 @@ public sealed class RedisEventSubscriberService : BackgroundService
                     await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
                     break;
             }
+
+            var eventId = Guid.NewGuid();
+            if (root.TryGetProperty("event_id", out var evProp) && evProp.TryGetGuid(out var parsedEvId))
+            {
+                eventId = parsedEvId;
+            }
+
+            // Asynchronously dispatch push notification to background devices
+            _ = DispatchPushNotificationsAsync(tenantId, branchId, eventType, eventId, diningSessionId, CancellationToken.None);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to route Redis broadcast message to SignalR groups.");
+        }
+    }
+
+    private async Task DispatchPushNotificationsAsync(
+        Guid tenantId,
+        Guid branchId,
+        string eventType,
+        Guid eventId,
+        Guid? diningSessionId,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantOrderDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            var tenantIdTyped = new TenantId(tenantId);
+            var branchIdTyped = new BranchId(branchId);
+
+            IReadOnlyList<DeviceRegistration> targets;
+
+            if (eventType == RealtimeEventTypes.OrderItemStatusChanged && diningSessionId.HasValue)
+            {
+                var sessionTyped = new DiningSessionId(diningSessionId.Value);
+                targets = await db.DeviceRegistrations
+                    .IgnoreQueryFilters()
+                    .Where(d => d.TenantId == tenantIdTyped && d.DiningSessionId == sessionTyped && d.IsActive && d.ExpiresAtUtc > now)
+                    .ToListAsync(ct);
+            }
+            else if (eventType == RealtimeEventTypes.OrderCreated || eventType == RealtimeEventTypes.TableServiceRequested)
+            {
+                targets = await db.DeviceRegistrations
+                    .IgnoreQueryFilters()
+                    .Where(d => d.TenantId == tenantIdTyped && d.BranchId == branchIdTyped && d.UserId != null && d.IsActive && d.ExpiresAtUtc > now)
+                    .ToListAsync(ct);
+            }
+            else
+            {
+                return;
+            }
+
+            var deactivatedAny = false;
+            foreach (var dev in targets)
+            {
+                try
+                {
+                    var pushRequest = new PushNotificationRequest(dev.InstallationId, eventId, dev.ExpiresAtUtc);
+                    var result = await _pushTransport.SendAsync(pushRequest, ct);
+
+                    if (result.Status == PushSendStatus.InvalidRecipient)
+                    {
+                        dev.Deactivate(now);
+                        deactivatedAny = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Push delivery attempt failed for device installation {InstallationId}.", dev.InstallationId);
+                }
+            }
+
+            if (deactivatedAny)
+            {
+                await db.SaveChangesAsync(ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to dispatch push notifications for event {EventType} {EventId}.", eventType, eventId);
         }
     }
 

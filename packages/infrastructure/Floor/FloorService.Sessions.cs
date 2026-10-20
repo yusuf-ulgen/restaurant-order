@@ -340,6 +340,14 @@ public partial class FloorService
                 idempotencyKey: $"session-closed-{session.Id.Value}",
                 occurredAtUtc: closedAt);
 
+            var closedDevices = await _dbContext.DeviceRegistrations
+                .Where(d => d.TenantId == tenantId && d.DiningSessionId == session.Id && d.IsActive)
+                .ToListAsync(ct);
+            foreach (var dev in closedDevices)
+            {
+                dev.Deactivate(closedAt);
+            }
+
             await _dbContext.SaveChangesAsync(ct);
         }, ct);
 

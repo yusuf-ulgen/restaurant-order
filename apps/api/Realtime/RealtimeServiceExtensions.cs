@@ -48,6 +48,7 @@ public static class RealtimeServiceExtensions
         });
 
         app.MapEventSyncEndpoints();
+        app.MapDeviceRegistrationEndpoints();
 
         return app;
     }
