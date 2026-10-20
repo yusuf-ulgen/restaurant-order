@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Catalog;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
@@ -19,15 +20,18 @@ public partial class CatalogService : ICatalogService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly ILogger<CatalogService> _logger;
     private readonly IPermissionRegistry _permissionRegistry;
+    private readonly IOperationalOutboxWriter? _outboxWriter;
 
     public CatalogService(
         RestaurantOrderDbContext dbContext,
         ILogger<CatalogService> logger,
-        IPermissionRegistry? permissionRegistry = null)
+        IPermissionRegistry? permissionRegistry = null,
+        IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _permissionRegistry = permissionRegistry ?? new PermissionRegistry();
+        _outboxWriter = outboxWriter;
     }
 
     public async Task<IReadOnlyList<MenuDto>> ListMenusAsync(

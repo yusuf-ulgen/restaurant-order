@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Catalog;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
@@ -109,6 +110,20 @@ public partial class CatalogService
             eventData,
             $"item-86-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{command.ConcurrencyToken:D}");
 
+        _outboxWriter?.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: itemId.Value.ToString(),
+            eventType: RealtimeEventTypes.MenuItemAvailabilityChanged,
+            data: new MenuItemAvailabilityChangedEventData(
+                itemId.Value,
+                null,
+                false,
+                reasonCode.ToString(),
+                record.ChangedAtUtc),
+            idempotencyKey: $"menu-item-86-{itemId.Value}-{command.ConcurrencyToken:D}",
+            occurredAtUtc: record.ChangedAtUtc);
+
         try
         {
             await _dbContext.SaveChangesAsync(ct);
@@ -198,6 +213,20 @@ public partial class CatalogService
             "CatalogItemRestocked",
             restockEventData,
             $"item-restock-{tenantId.Value}-{branchId.Value}-{itemId.Value}-{command.ConcurrencyToken:D}");
+
+        _outboxWriter?.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: itemId.Value.ToString(),
+            eventType: RealtimeEventTypes.MenuItemAvailabilityChanged,
+            data: new MenuItemAvailabilityChangedEventData(
+                itemId.Value,
+                null,
+                true,
+                null,
+                record.ChangedAtUtc),
+            idempotencyKey: $"menu-item-restock-{itemId.Value}-{command.ConcurrencyToken:D}",
+            occurredAtUtc: record.ChangedAtUtc);
 
         try
         {

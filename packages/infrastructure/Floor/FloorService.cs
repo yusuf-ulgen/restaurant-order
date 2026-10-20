@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
@@ -22,6 +23,7 @@ public partial class FloorService : IFloorService
     private readonly IQrSecurityService _qrSecurity;
     private readonly QrSecurityOptions _qrOptions;
     private readonly ICustomerSessionValidator? _customerSessionValidator;
+    private readonly IOperationalOutboxWriter? _outboxWriter;
 
     public FloorService(
         RestaurantOrderDbContext dbContext,
@@ -29,7 +31,8 @@ public partial class FloorService : IFloorService
         IPermissionRegistry? permissionRegistry = null,
         IQrSecurityService? qrSecurity = null,
         Microsoft.Extensions.Options.IOptions<QrSecurityOptions>? qrOptions = null,
-        ICustomerSessionValidator? customerSessionValidator = null)
+        ICustomerSessionValidator? customerSessionValidator = null,
+        IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext;
         _logger = logger;
@@ -37,6 +40,7 @@ public partial class FloorService : IFloorService
         _qrSecurity = qrSecurity!;
         _qrOptions = qrOptions?.Value ?? new QrSecurityOptions();
         _customerSessionValidator = customerSessionValidator;
+        _outboxWriter = outboxWriter;
     }
 
     public async Task<IReadOnlyList<RestaurantTableDto>> ListTablesAsync(

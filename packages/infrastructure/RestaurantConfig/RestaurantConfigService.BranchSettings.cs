@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Common;
+using RestaurantOrder.Domain.Orders.Pricing;
 using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Infrastructure.RestaurantConfig;
@@ -152,6 +154,23 @@ public partial class RestaurantConfigService
                 ServiceChargeRateBps = command.ServiceChargeRateBps,
                 IsOrderTakingEnabled = command.IsOrderTakingEnabled
             });
+
+        var newPolicy = EffectiveBranchPricingPolicy.Create(
+            command.Currency ?? branch.Currency.Code,
+            settings);
+
+        var nowUtc = DateTimeOffset.UtcNow;
+        _outboxWriter?.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: branchId.Value.ToString(),
+            eventType: RealtimeEventTypes.CatalogPolicyInvalidated,
+            data: new CatalogPolicyInvalidatedEventData(
+                newPolicy.PricingPolicyFingerprint,
+                "BranchSettingsUpdated",
+                nowUtc),
+            idempotencyKey: $"policy-inv-{branchId.Value}-{settings.ConcurrencyToken:D}",
+            occurredAtUtc: nowUtc);
 
         await _dbContext.SaveChangesAsync(ct);
         return MapBranchSettings(settings);

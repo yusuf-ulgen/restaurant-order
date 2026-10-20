@@ -26,17 +26,20 @@ public sealed partial class StaffOrderService : IStaffOrderService
     private readonly IOrderPricingEngine _pricingEngine;
     private readonly IPermissionRegistry _permissionRegistry;
     private readonly ISupervisorPinService _supervisorPinService;
+    private readonly RestaurantOrder.Application.Events.IOperationalOutboxWriter _outboxWriter;
 
     public StaffOrderService(
         RestaurantOrderDbContext dbContext,
         IOrderPricingEngine pricingEngine,
         IPermissionRegistry permissionRegistry,
-        ISupervisorPinService supervisorPinService)
+        ISupervisorPinService supervisorPinService,
+        RestaurantOrder.Application.Events.IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _pricingEngine = pricingEngine ?? throw new ArgumentNullException(nameof(pricingEngine));
         _permissionRegistry = permissionRegistry ?? throw new ArgumentNullException(nameof(permissionRegistry));
         _supervisorPinService = supervisorPinService ?? throw new ArgumentNullException(nameof(supervisorPinService));
+        _outboxWriter = outboxWriter ?? new RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter(_dbContext);
     }
 
     public async Task<CreateStaffOrderResult> CreateStaffOrderAsync(
@@ -252,6 +255,25 @@ public sealed partial class StaffOrderService : IStaffOrderService
 
         _dbContext.OrderAuditEntries.Add(audit);
 
+        // 8. Enqueue real-time operational outbox event within same transaction
+        _outboxWriter.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: order.Id.Value.ToString(),
+            eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderCreated,
+            data: new RestaurantOrder.Application.Events.OrderCreatedEventData(
+                OrderId: order.Id.Value,
+                DiningSessionId: sessionId.Value,
+                TableId: session.TableId.Value,
+                RoundNumber: order.RoundNumber,
+                OrderSource: "Staff",
+                ItemCount: domainItems.Count,
+                Currency: order.Currency.Code,
+                CreatedAtUtc: nowUtc
+            ),
+            idempotencyKey: $"order-created-{order.Id.Value}",
+            occurredAtUtc: nowUtc);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         if (localTx != null)
         {
@@ -325,90 +347,5 @@ public sealed partial class StaffOrderService : IStaffOrderService
         }
 
         return MapToDto(order);
-    }
-
-    private static void ValidateStaffActor(AuthenticatedPrincipal actor, BranchId branchId)
-    {
-        if (actor == null)
-        {
-            throw new InvalidAuthorizationScopeException("Authentication required.");
-        }
-
-        if (actor.Role == AuthRole.Customer)
-        {
-            throw new InvalidAuthorizationScopeException("Customer cannot access staff order endpoints.");
-        }
-
-        if (!actor.Scope.TenantId.HasValue || actor.Scope.TenantId.Value.Value == Guid.Empty)
-        {
-            throw new InvalidAuthorizationScopeException("Actor is missing required tenant scope.");
-        }
-
-        if (actor.Role is AuthRole.Waiter or AuthRole.Cashier or AuthRole.BranchManager)
-        {
-            if (!actor.Scope.BranchId.HasValue || actor.Scope.BranchId.Value != branchId)
-            {
-                throw new InvalidAuthorizationScopeException("Staff member is not assigned to the requested branch.");
-            }
-        }
-    }
-
-    private static string ComputeRequestFingerprint(DiningSessionId sessionId, CreateStaffOrderRequest request)
-    {
-        return OrderFingerprintGenerator.ComputeStaffOrderFingerprint(
-            sessionId.Value,
-            request.Items,
-            request.ClientPricingPolicyFingerprint,
-            request.ClientExpectedTotalMinorUnits);
-    }
-
-    private static StaffOrderResponseDto MapToDto(Order order)
-    {
-        var items = order.Items.Select(i => new StaffOrderItemDto(
-            i.Id.Value,
-            i.MenuItemId.Value,
-            i.ItemVariantId?.Value,
-            i.ItemName,
-            i.VariantName,
-            i.Quantity,
-            i.CustomerNote,
-            i.PreparationStationId,
-            i.UnitPriceMinorUnits,
-            i.ModifierTotalMinorUnits,
-            i.LineTotalMinorUnits,
-            i.TaxRateBasisPoints,
-            i.Status.ToString(),
-            i.CreatedAtUtc,
-            i.UpdatedAtUtc,
-            i.Modifiers.Select(m => new StaffOrderItemModifierDto(
-                m.Id,
-                m.ModifierGroupId,
-                m.ModifierGroupName,
-                m.ModifierOptionId,
-                m.ModifierOptionName,
-                m.PriceDeltaMinorUnits)).ToList())).ToList();
-
-        return new StaffOrderResponseDto(
-            order.Id.Value,
-            order.TenantId.Value,
-            order.BranchId.Value,
-            order.DiningSessionId.Value,
-            order.TableId.Value,
-            order.RoundNumber,
-            order.OrderSource.ToString(),
-            order.Status.ToString(),
-            order.Currency.Code,
-            order.SubtotalMinorUnits,
-            order.TaxMinorUnits,
-            order.ServiceChargeMinorUnits,
-            order.TotalMinorUnits,
-            order.IdempotencyKey,
-            order.ConcurrencyToken,
-            order.CreatedAtUtc,
-            order.SubmittedAtUtc,
-            order.UpdatedAtUtc,
-            order.CancellationReason,
-            order.CancelledByActorId,
-            items);
     }
 }

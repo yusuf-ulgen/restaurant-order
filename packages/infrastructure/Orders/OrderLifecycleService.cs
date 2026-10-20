@@ -14,10 +14,14 @@ namespace RestaurantOrder.Infrastructure.Orders;
 public sealed class OrderLifecycleService : IOrderLifecycleService
 {
     private readonly RestaurantOrderDbContext _dbContext;
+    private readonly RestaurantOrder.Application.Events.IOperationalOutboxWriter _outboxWriter;
 
-    public OrderLifecycleService(RestaurantOrderDbContext dbContext)
+    public OrderLifecycleService(
+        RestaurantOrderDbContext dbContext,
+        RestaurantOrder.Application.Events.IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _outboxWriter = outboxWriter ?? new RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter(_dbContext);
     }
 
     public async Task<OrderLifecycleResult> StartPreparationAsync(
@@ -229,6 +233,21 @@ public sealed class OrderLifecycleService : IOrderLifecycleService
                 nowUtc: nowUtc);
 
             _dbContext.OrderAuditEntries.Add(audit);
+
+            // Enqueue real-time item status change event
+            _outboxWriter.EnqueueEvent(
+                tenantId: tenantId.Value,
+                branchId: branchId.Value,
+                aggregateId: order.Id.Value.ToString(),
+                eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
+                data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
+                    OrderId: order.Id.Value,
+                    ItemId: targetItem?.Id.Value ?? order.Id.Value,
+                    NewStatus: targetItem?.Status.ToString() ?? order.Status.ToString(),
+                    ChangedAtUtc: nowUtc
+                ),
+                idempotencyKey: $"order-transition-{order.Id.Value}-{targetItem?.Id.Value ?? Guid.Empty}-{action}-{order.ConcurrencyToken}",
+                occurredAtUtc: nowUtc);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
             if (localTx != null)

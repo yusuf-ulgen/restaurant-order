@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
@@ -18,15 +19,18 @@ public partial class RestaurantConfigService : IRestaurantConfigService
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<RestaurantConfigService> _logger;
+    private readonly IOperationalOutboxWriter? _outboxWriter;
 
     public RestaurantConfigService(
         RestaurantOrderDbContext dbContext,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<RestaurantConfigService> logger)
+        ILogger<RestaurantConfigService> logger,
+        IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+        _outboxWriter = outboxWriter;
     }
 
     private void AddAuditEvent(

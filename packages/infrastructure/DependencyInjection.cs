@@ -141,6 +141,9 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Orders.IStaffOrderService, RestaurantOrder.Infrastructure.Orders.StaffOrderService>();
         services.AddScoped<RestaurantOrder.Application.Orders.IOrderLifecycleService, RestaurantOrder.Infrastructure.Orders.OrderLifecycleService>();
 
+        // Operational Outbox (Phase 9)
+        services.AddScoped<RestaurantOrder.Application.Events.IOperationalOutboxWriter, RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter>();
+
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
         services.AddHttpClient();
