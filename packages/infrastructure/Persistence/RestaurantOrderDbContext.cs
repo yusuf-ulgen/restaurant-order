@@ -42,6 +42,10 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Floor.DiningSession> DiningSessions => Set<RestaurantOrder.Domain.Floor.DiningSession>();
     public DbSet<RestaurantOrder.Domain.Floor.DiningSessionMovement> DiningSessionMovements => Set<RestaurantOrder.Domain.Floor.DiningSessionMovement>();
     public DbSet<RestaurantOrder.Domain.Floor.ServiceRequest> ServiceRequests => Set<RestaurantOrder.Domain.Floor.ServiceRequest>();
+    public DbSet<RestaurantOrder.Domain.Orders.Order> Orders => Set<RestaurantOrder.Domain.Orders.Order>();
+    public DbSet<RestaurantOrder.Domain.Orders.OrderItem> OrderItems => Set<RestaurantOrder.Domain.Orders.OrderItem>();
+    public DbSet<RestaurantOrder.Domain.Orders.OrderItemModifier> OrderItemModifiers => Set<RestaurantOrder.Domain.Orders.OrderItemModifier>();
+    public DbSet<RestaurantOrder.Domain.Orders.OrderAuditEntry> OrderAuditEntries => Set<RestaurantOrder.Domain.Orders.OrderAuditEntry>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -120,6 +124,9 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSession>().HasQueryFilter(ds => HasTenant && ds.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.DiningSessionMovement>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Floor.ServiceRequest>().HasQueryFilter(sr => HasTenant && sr.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Orders.Order>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Orders.OrderItem>().HasQueryFilter(i => HasTenant && i.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Orders.OrderAuditEntry>().HasQueryFilter(a => HasTenant && a.TenantId == CurrentTenantId);
 
         // IAM tenant-scoped entity filters
         modelBuilder.Entity<UserMembership>().HasQueryFilter(m => HasTenant && m.TenantId == CurrentTenantId);
@@ -176,7 +183,14 @@ public class RestaurantOrderDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         var tx = await Database.BeginTransactionAsync(isolationLevel, cancellationToken);
-        await SetTenantSessionAsync(tenantId, cancellationToken);
+        if (Database.IsNpgsql())
+        {
+            await SetTenantSessionAsync(tenantId, cancellationToken);
+        }
+        else
+        {
+            _transactionTenantId = tenantId;
+        }
         return new TenantDbContextTransaction(tx, this);
     }
 

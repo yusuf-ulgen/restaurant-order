@@ -4,31 +4,40 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Ürün Tabanı ve Birleşen Çalışmalar
 
-- Main tabanı: `d88471b` (PR #15 `feat/fcm-bildirim-altyapisi` birleşmesi).
-- Faz 0-6 tamamlandı olarak kayıtlı; Faz 6 masalar, QR ve oturum yönetimi ile ilk FCM bildirim altyapısı `main` dalına başarıyla birleştirildi.
+- Main tabanı: `aaa906d` (PR #17 `feat(customer): Faz 7 musteri deneyimi (menu, sepet, servis talepleri) ve guvenlik sertlestirmeleri` birleşmesi).
+- Faz 0-7 tamamlandı olarak kayıtlı; Faz 7 dijital menü, ürün özelleştirme, sepet, servis talepleri ve Redis rate limiting `main` dalına başarıyla birleştirildi.
 - [Issue #8](https://github.com/yusuf-ulgen/restaurant-order/issues/8), [PR #9](https://github.com/yusuf-ulgen/restaurant-order/pull/9): negatif hesap payı düzeltmesi, RBAC örnekleri ve katkı/devir akışı main'e birleştirildi.
 - [Issue #10](https://github.com/yusuf-ulgen/restaurant-order/issues/10), [PR #12](https://github.com/yusuf-ulgen/restaurant-order/pull/12): takip edilen tüm Markdown belgeleri Türkçeleştirildi; AGENTS.md içinde kalıcı Türkçe kuralı.
 - [PR #13](https://github.com/yusuf-ulgen/restaurant-order/pull/13): personel/müşteri push planı ve öneri ADR'si main'e birleştirildi.
 - [PR #15](https://github.com/yusuf-ulgen/restaurant-order/pull/15): FCM sunucu bildirim altyapısı ve sağlayıcıdan bağımsız taşıma sözleşmesi main'e birleştirildi.
 - [PR #16](https://github.com/yusuf-ulgen/restaurant-order/pull/16): Faz 6 masa düzeni, kriptografik QR ve oturum yaşam döngüsü sertleştirmeleri main'e birleştirildi.
-- Tamamlanan kapsam: [Faz 5 takibi](./PHASE-5-TRACKER.md), [Faz 6 takibi](./PHASE-6-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
+- [Issue #18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), [PR #17](https://github.com/yusuf-ulgen/restaurant-order/pull/17): Faz 7 müşteri deneyimi, sepet taslağı, servis talepleri ve güvenlik sertleştirmeleri main'e birleştirildi.
+- Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 7: Müşteri Deneyimi (Tamamlandı — GitHub CI Doğrulandı)
+## Aktif Görev — Faz 8: Sipariş Çekirdeği (Tamamlandı)
 
-- Aktif dal: `feat/phase-07-customer-experience`.
-- Takip belgesi: [Faz 7 Takibi](./PHASE-7-TRACKER.md).
+- Aktif dal: `feat/phase-08-order-core`.
+- GitHub Issue: [#18](https://github.com/yusuf-ulgen/restaurant-order/issues/18).
+- Takip belgesi: [Faz 8 Takibi](./PHASE-8-TRACKER.md).
 - Tamamlanan Kapsam:
-  - CUST-02 Dijital Menü ve Kategoriler (çalışan runtime menu, Türkçe normalize arama, diyet/alerjen filtreleme).
-  - CUST-03 Ürün Özelleştirme (varyant seçimi, zorunlu/isteğe bağlı değiştirici kuralları, deterministik imza, saf integer minor-unit fiyat önizlemesi, müşteri notu).
-  - CUST-04 Sepet ve Fiyat Önizleme (sepet store/reducer, güvenli sessionStorage taslak persistence, menü tazelik/fiyat doğrulayıcı).
-  - CUST-06 Hizmet Talepleri ve Hesap İsteme (ServiceRequest aggregate, PostgreSQL RLS ve partial unique index, CSRF/Idempotency, 15s cooldown ve sliding window rate limiter, DiningSession.RequestBillAsync entegrasyonu, ServiceRequestSheet).
-  - 15 adımlı Playwright E2E customer journey (`customer-journey.spec.ts`) ve negatif güvenlik senaryoları (`customer-negative.spec.ts`).
-- Kapsam Sınırları ve Mimari İlkeler:
-  - CUST-02, CUST-03, CUST-04 ve CUST-06 tamamlandı.
-  - Gerçek sipariş aggregate'i (`Order`) kalıcılığı ve yetkili sipariş oluşturma Faz 8 (Sipariş Çekirdeği) kapsamındadır.
-  - Canlı sipariş takibi (CUST-05) Faz 8/9 SignalR kapsamındadır.
-  - Garson / Bar / Mutfak KDS canlı bildirimleri (SignalR/FCM) Faz 9–11 kapsamındadır (servis talepleri DB'de kalıcıdır, canlı iletim sonraki fazlarda bağlanacaktır).
-  - Sahte başarılı sipariş gönderimi veya mock üretim API'si bulunmamaktadır.
+  - **Faz 8.0:** Hazırlık, kapsam sınırları, durum makinesi hizalaması ve takip belgesi.
+  - **Faz 8.1:** `Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry` domain aggregate'i, PostgreSQL şeması, RLS ve audit immutability trigger'ı.
+  - **Faz 8.2:** Sunucu otoriter `OrderPricingEngine`, minor-unit deterministik finans motoru, aktif katalog doğrulama, Hızlı-86 ve fiyat değişikliği koruması.
+  - **Faz 8.3:** `POST /api/v1/customer/orders`, `GET /api/v1/customer/orders`, `GET /api/v1/customer/orders/{orderId}`, advisory transaction lock, round number determinizmi, RFC 7807 hata yanıtları.
+  - **Faz 8.4:** Müşteri sipariş onay ve gönderim deneyimi (`OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`), stabil idempotency key, sepet koruması ve temizliği.
+  - **Faz 8.5:** Personel sipariş uç noktaları (`StaffOrderEndpoints`), RBAC matrisi (`orders.staff.create`, `orders.items.cancel_pre_prep`, `orders.items.void_in_prep`), deterministik `Order.DeriveStatus`, supervisor void ve PIN doğrulama akışı.
+  - **Faz 8.6:** 15 adımlı pozitif E2E akışı (DB tek sipariş doğrulaması dahil), negatif güvenlik ve eşzamanlılık testleri, kalite kapıları (Gate 1–6) doğrulaması.
+- Son İnceleme Düzeltmeleri (Final Review Polish):
+  - Finansal onay korumasındaki bypass tamamen kapatıldı: `clientPricingPolicyFingerprint` ve `clientExpectedTotalMinorUnits` zorunlu kılındı. Eksik/null/boş değerler `400 Bad Request` ile reddedilir ve sıfır persistence uygulanır. Politika uyuşmazlığında `409 ORDER_PRICING_POLICY_CHANGED`, toplam uyuşmazlığında `409 ORDER_TOTAL_CHANGED` döner.
+  - Canlı runtime menü ve yeniden onay UX akışı: Checkout öncesi doğrulama, sessiz `.catch` kaldırılması, menü yüklenemediğinde veya doğrulanamadığında sipariş CTA'sının kilitlenmesi, çalışan retry butonu ve conflict durumunda sepet açılarak açık kullanıcı onayı alma akışı tamamlandı.
+  - Frontend idempotency key üretimi `computeOrderPayloadSignature` kanonik formatıyla deterministik kılındı; aynı payload ağ tekrarlarında aynı key'i korurken, politika/toplam/seçim değişiminde yeni key üretir.
+  - TypeScript typecheck ve fixture drift hataları hiçbir alan optional yapılmadan ve `any` kullanılmadan gerçek tiplerle düzeltildi.
+  - Supervisor PIN entegrasyon testleri IAM gerçek şeması (`created_at_utc`, enum int), gerçek ikinci şube ve hazırlık sonrası taze ETag ile düzeltildi; `WASTE_CANCEL` ve aktör denetimleri tenant context içinde yapıldı.
+  - PostgreSQL üzerinde 5 ayrı masa oturumu ile advisory lock'tan bağımsız olarak `iam.pin_credentials` satır kilidi (`FOR UPDATE`), 15 dakikalık kilit penceresi ve rollback'ten bağımsız sayaç kalıcılığı kanıtlandı.
+  - `StaffOrderService` içindeki alternatif test yolu ve fallback scope factory kaldırılarak üretim DI ile zorunlu `ISupervisorPinService` bağımlılığı bağlandı.
+  - `OrderSheetsBranchCoverage.test.tsx` içindeki React `act(...)` test uyarısı giderildi.
+  - Müşteri fiyatlandırma politikası takibi gerçek menü ürün ekleme akışına bağlandı (`DigitalMenuView` -> `ActiveSessionView` -> `cart.addLine(line, currentFingerprint)`); 409 conflict sonrası açık yeniden onay durumu `requiresReconfirmation` ile hem hafıza hem `sessionStorage` seviyesinde zorunlu kılındı.
+- Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) exact HEAD CI doğrulaması ve kullanıcı onayı sonrasında Faz 9 hazırlığı.
 
 ## Ortam ve Sınırlamalar
 
@@ -40,4 +49,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 7 geliştirmesi, kapı kontrolleri ve GitHub Actions CI doğrulaması (Run `39038756673`) başarıyla tamamlandı. PR incelenip onaylandıktan sonra `main` dalına birleştirilerek Faz 8: Sipariş Çekirdeği (Order Aggregate, Yetkili Fiyatlandırma, Sipariş Gönderimi) geliştirmesine başlanacaktır.
+Son inceleme düzeltmelerinin mantıksal commit'lerle `feat/phase-08-order-core` dalına push edilmesi ve PR #19 üzerindeki exact HEAD GitHub Actions CI akışının yeşil olduğunun doğrulanması gerekmektedir. CI yeşil olduktan sonra kullanıcı onayı ile `main` dalına merge süreci işletilecektir (otomatik merge yapılmaz). Ardından Faz 9 (SignalR Canlı Olaylar ve Bildirimler) başlatılacaktır.

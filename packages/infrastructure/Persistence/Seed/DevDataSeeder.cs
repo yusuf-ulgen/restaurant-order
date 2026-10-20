@@ -99,6 +99,30 @@ public class DevDataSeeder : IDevDataSeeder
             branchesCreated++;
         }
 
+        // Default BranchSettings for synthetic branches
+        var syntheticBranches = new[]
+        {
+            (SyntheticTenant1Id, SyntheticBranch1Id, "Europe/Istanbul", "TRY"),
+            (SyntheticTenant1Id, SyntheticBranch2Id, "Europe/Istanbul", "TRY"),
+            (SyntheticTenant1Id, SyntheticBranch3Id, "Europe/Istanbul", "TRY"),
+            (SyntheticTenant2Id, SyntheticBranch4Id, "America/New_York", "USD"),
+        };
+
+        foreach (var (tenantId, branchId, tz, curr) in syntheticBranches)
+        {
+            var settingsExists = await _dbContext.BranchSettings.IgnoreQueryFilters().AnyAsync(s => s.BranchId == branchId, cancellationToken);
+            if (!settingsExists)
+            {
+                var settings = BranchSettings.Create(
+                    tenantId,
+                    branchId,
+                    timezone: tz,
+                    currency: curr,
+                    isOrderTakingEnabled: true);
+                _dbContext.BranchSettings.Add(settings);
+            }
+        }
+
         // Synthetic Admin User & Session for Local Dev / E2E Testing
         var nowUtc = DateTimeOffset.UtcNow;
         var userExists = await _dbContext.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == SyntheticAdminUserId, cancellationToken);

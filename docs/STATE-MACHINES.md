@@ -80,10 +80,24 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 | `SUBMITTED` | `ACKNOWLEDGE_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Fiş KDS üzerinde görünür; hazırlık sayacı başlar. |
 | `SUBMITTED` | `CANCEL_ITEM` | `CANCELLED` | Restoran Admini, Müdür, Garson, Kasa | orders.items.cancel_pre_prep gerekir; müşteri doğrudan iptal etmez, personelle iletişime geçer. |
 | `IN_PREPARATION`| `BUMP_READY` | `READY` | Mutfak, Bar | Garsona masaya servis için bildirilir. |
-| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Yönetici PIN doğrulaması ve gerekçe gerekir. |
+| `IN_PREPARATION`| `SUPERVISOR_VOID` | `CANCELLED` | Restoran Admini, Müdür | Doğrudan orders.items.void_in_prep yetkili aktör kendi oturumuyla iptal edebilir; yetkisiz personel adına şube müdürü PIN doğrulaması ve zorunlu gerekçe gerekir. |
 | `READY` | `RECALL_TICKET` | `IN_PREPARATION`| Mutfak, Bar | Yanlışlıkla hazır işaretlenen fiş hazırlığa geri döner. |
 | `READY` | `DELIVER_TO_TABLE` | `SERVED` | Garson | Garson masaya teslimi doğrular. |
-| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Resmî denetim kaydı ve gerekçe gerekir. |
+| `SERVED` | `POST_SERVICE_VOID` | `CANCELLED` | Restoran Admini, Müdür | Doğrudan orders.items.void_in_prep yetkili aktör kendi oturumuyla veya yetkisiz personel adına şube müdürü PIN doğrulaması ile zayiat iptali yapabilir; denetim kaydı ve gerekçe zorunludur. |
+
+> **Faz 8 Sipariş Çekirdeği ve Deterministik Durum Türetme (Order.DeriveStatus):**
+> - `Order/OrderItem` yalnızca `Draft`, `Submitted`, `InPreparation`, `Ready`, `Served` ve `Cancelled` durumlarını izler.
+> - Sipariş (`Order`) aggregate genel durumu, kalemlerinin (`OrderItem`) durumlarından deterministik türetilir:
+>   1. Tüm kalemler `Cancelled` ise -> Sipariş durumu `Cancelled`.
+>   2. İptal edilmemiş tüm aktif kalemler `Served` ise -> Sipariş durumu `Served`.
+>   3. Herhangi bir kalem `Ready` ise ve hiçbir kalem `InPreparation` değilse -> Sipariş durumu `Ready`.
+>   4. Herhangi bir kalem `InPreparation` ise veya karışık hazırlık evresindeyse (`Submitted` ile `Ready`/`Served` bir arada) -> Sipariş durumu `InPreparation`.
+>   5. Yalnızca `Submitted` durumundaki kalemler varsa -> Sipariş durumu `Submitted`.
+> - İstasyon fişinin istasyon tarafından kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
+> - `Paid`, sipariş durumu değildir; ilerideki `Bill` (Hesap/Adisyon) durumudur.
+> - `Closed`, `DiningSession` ve `Bill` yaşam döngüsüne aittir; `Order` veya `OrderItem` durumları arasında yer almaz.
+> - Her durum geçişinde `Order.ConcurrencyToken` yenilenir; eski ETag / `If-Match` ile yapılan istekler `409 Conflict` veya `412 Precondition Failed` ile korunur.
+> - Finansal onay ve yeniden onay kapısı: Müşteri siparişi yalnızca canlı doğrulanmış ve onaylanmış menü parmak izi (`clientPricingPolicyFingerprint`) ve onaylanmış toplam (`clientExpectedTotalMinorUnits`) ile gönderilebilir. Politika veya toplam uyuşmazlığında sipariş reddedilir (`409`), durum geçişi gerçekleşmez ve veri yazılmaz.
 
 ---
 

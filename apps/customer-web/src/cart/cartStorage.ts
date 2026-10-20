@@ -15,6 +15,8 @@ export interface PersistedCartPayload {
   currency: string;
   lines: DraftCartLine[];
   savedAt: number;
+  acceptedPolicyFingerprint?: string | null;
+  requiresReconfirmation?: boolean;
 }
 
 /**
@@ -137,10 +139,22 @@ export function loadCartFromStorage(activeSessionId: string): CartState | null {
       validatedLines.push(item);
     }
 
+    const acceptedPolicy =
+      typeof payload.acceptedPolicyFingerprint === 'string'
+        ? payload.acceptedPolicyFingerprint
+        : null;
+
+    const requiresReconfirmation =
+      typeof payload.requiresReconfirmation === 'boolean'
+        ? payload.requiresReconfirmation
+        : false;
+
     return {
       sessionId: activeSessionId,
       lines: validatedLines,
       currency: typeof payload.currency === 'string' ? payload.currency : 'TRY',
+      acceptedPolicyFingerprint: acceptedPolicy,
+      requiresReconfirmation,
     };
   } catch {
     // Memory fallback: if sessionStorage fails, clean up if possible and return null
@@ -176,6 +190,8 @@ export function saveCartToStorage(state: CartState): void {
       currency: state.currency,
       lines: state.lines,
       savedAt: Date.now(),
+      acceptedPolicyFingerprint: state.acceptedPolicyFingerprint ?? null,
+      requiresReconfirmation: state.requiresReconfirmation ?? false,
     };
 
     window.sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(payload));

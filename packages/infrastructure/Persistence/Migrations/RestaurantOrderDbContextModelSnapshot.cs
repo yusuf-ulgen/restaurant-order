@@ -2515,6 +2515,370 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_reason");
+
+                    b.Property<Guid?>("CancelledByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cancelled_by_actor_id");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("concurrency_token");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<Guid>("DiningSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dining_session_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<int>("OrderSource")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_source");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<int>("RoundNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("round_number");
+
+                    b.Property<long>("ServiceChargeMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("service_charge_minor_units");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("SubmittedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at_utc");
+
+                    b.Property<long>("SubtotalMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("subtotal_minor_units");
+
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("table_id");
+
+                    b.Property<long>("TaxMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tax_minor_units");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<long>("TotalMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("total_minor_units");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_orders_tenant_created");
+
+                    b.HasIndex("TenantId", "DiningSessionId")
+                        .HasDatabaseName("ix_orders_tenant_dining_session");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_orders_tenant_idempotency_key");
+
+                    b.HasIndex("TenantId", "BranchId", "DiningSessionId");
+
+                    b.HasIndex("TenantId", "BranchId", "Status")
+                        .HasDatabaseName("ix_orders_tenant_branch_status");
+
+                    b.HasIndex("TenantId", "BranchId", "TableId");
+
+                    b.HasIndex("TenantId", "DiningSessionId", "RoundNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_orders_tenant_session_round");
+
+                    b.ToTable("orders", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_orders_round_number", "round_number >= 1");
+
+                            t.HasCheckConstraint("ck_orders_service_charge", "service_charge_minor_units >= 0");
+
+                            t.HasCheckConstraint("ck_orders_source", "order_source IN (1, 2)");
+
+                            t.HasCheckConstraint("ck_orders_status", "status IN (1, 2, 3, 4, 5, 6)");
+
+                            t.HasCheckConstraint("ck_orders_subtotal", "subtotal_minor_units >= 0");
+
+                            t.HasCheckConstraint("ck_orders_tax", "tax_minor_units >= 0");
+
+                            t.HasCheckConstraint("ck_orders_total", "total_minor_units >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("actor_role");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DetailsJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("details_json");
+
+                    b.Property<Guid>("DiningSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dining_session_id");
+
+                    b.Property<int?>("NewStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("new_status");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<int?>("PreviousStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("previous_status");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_order_audit_entries_tenant_created");
+
+                    b.HasIndex("TenantId", "DiningSessionId")
+                        .HasDatabaseName("ix_order_audit_entries_tenant_session");
+
+                    b.HasIndex("TenantId", "OrderId")
+                        .HasDatabaseName("ix_order_audit_entries_tenant_order");
+
+                    b.ToTable("order_audit_entries", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_order_audit_entries_action", "length(action) >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("CustomerNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("customer_note");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("item_name");
+
+                    b.Property<Guid?>("ItemVariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_variant_id");
+
+                    b.Property<long>("LineTotalMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("line_total_minor_units");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<long>("ModifierTotalMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("modifier_total_minor_units");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid?>("PreparationStationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("preparation_station_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TaxRateBasisPoints")
+                        .HasColumnType("integer")
+                        .HasColumnName("tax_rate_basis_points");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<long>("UnitPriceMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unit_price_minor_units");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<string>("VariantName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("variant_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemVariantId");
+
+                    b.HasIndex("MenuItemId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("TenantId", "OrderId")
+                        .HasDatabaseName("ix_order_items_tenant_order");
+
+                    b.HasIndex("TenantId", "PreparationStationId")
+                        .HasDatabaseName("ix_order_items_tenant_station");
+
+                    b.HasIndex("TenantId", "Status")
+                        .HasDatabaseName("ix_order_items_tenant_status");
+
+                    b.ToTable("order_items", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_order_items_line_total", "line_total_minor_units >= 0");
+
+                            t.HasCheckConstraint("ck_order_items_modifier_total", "modifier_total_minor_units >= 0");
+
+                            t.HasCheckConstraint("ck_order_items_quantity", "quantity >= 1 AND quantity <= 99");
+
+                            t.HasCheckConstraint("ck_order_items_status", "status IN (1, 2, 3, 4, 5, 6)");
+
+                            t.HasCheckConstraint("ck_order_items_tax_rate", "tax_rate_basis_points >= 0 AND tax_rate_basis_points <= 10000");
+
+                            t.HasCheckConstraint("ck_order_items_unit_price", "unit_price_minor_units >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderItemModifier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ModifierGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modifier_group_id");
+
+                    b.Property<string>("ModifierGroupName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("modifier_group_name");
+
+                    b.Property<Guid>("ModifierOptionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modifier_option_id");
+
+                    b.Property<string>("ModifierOptionName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("modifier_option_name");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<long>("PriceDeltaMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("price_delta_minor_units");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderItemId")
+                        .HasDatabaseName("ix_order_item_modifiers_item_id");
+
+                    b.ToTable("order_item_modifiers", "tenancy", t =>
+                        {
+                            t.HasCheckConstraint("ck_order_item_modifiers_price_delta", "price_delta_minor_units >= 0");
+                        });
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.Tenants.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3234,6 +3598,68 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_service_requests_table");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Floor.DiningSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "DiningSessionId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_dining_session");
+
+                    b.HasOne("RestaurantOrder.Domain.Floor.RestaurantTable", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId", "TableId")
+                        .HasPrincipalKey("TenantId", "BranchId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_table");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderAuditEntry", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Orders.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_audit_entries_order");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderItem", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Catalog.ItemVariant", null)
+                        .WithMany()
+                        .HasForeignKey("ItemVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_order_items_item_variant");
+
+                    b.HasOne("RestaurantOrder.Domain.Catalog.MenuItem", null)
+                        .WithMany()
+                        .HasForeignKey("MenuItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_menu_item");
+
+                    b.HasOne("RestaurantOrder.Domain.Orders.Order", null)
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_order");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderItemModifier", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Orders.OrderItem", null)
+                        .WithMany("Modifiers")
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_item_modifiers_item");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.Catalog.MenuItem", b =>
                 {
                     b.Navigation("ModifierGroupAssignments");
@@ -3244,6 +3670,16 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("RestaurantOrder.Domain.Catalog.ModifierGroup", b =>
                 {
                     b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Orders.OrderItem", b =>
+                {
+                    b.Navigation("Modifiers");
                 });
 #pragma warning restore 612, 618
         }

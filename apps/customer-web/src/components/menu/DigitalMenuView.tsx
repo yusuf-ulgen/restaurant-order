@@ -15,7 +15,7 @@ export interface DigitalMenuViewProps {
   onSessionExpired?: () => void;
   onCallWaiter?: () => void;
   initialMenuData?: RuntimeMenuReadModel | null;
-  onAddToCart?: (cartLine: DraftCartLine) => void;
+  onAddToCart?: (cartLine: DraftCartLine, policyFingerprint?: string) => void;
   onMenuLoaded?: (menu: RuntimeMenuReadModel) => void;
 }
 
@@ -401,7 +401,7 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
         isOpen={selectedDetailItem !== null}
         onClose={() => setSelectedDetailItem(null)}
         avoidedAllergens={avoidedAllergens}
-        onAddToCart={onAddToCart}
+        onAddToCart={(line) => onAddToCart?.(line, menuData?.pricingPolicyFingerprint)}
       />
     </div>
   );

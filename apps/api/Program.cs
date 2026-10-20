@@ -410,6 +410,8 @@ RestaurantOrder.Api.Auth.StaffEndpoints.MapStaffEndpoints(app);
 RestaurantOrder.Api.RestaurantConfig.RestaurantConfigEndpoints.MapRestaurantConfigEndpoints(app);
 RestaurantOrder.Api.Catalog.CatalogEndpoints.MapCatalogEndpoints(app);
 RestaurantOrder.Api.Floor.FloorEndpoints.MapFloorEndpoints(app);
+RestaurantOrder.Api.Orders.CustomerOrderEndpoints.MapCustomerOrderEndpoints(app);
+RestaurantOrder.Api.Orders.StaffOrderEndpoints.MapStaffOrderEndpoints(app);
 
 app.Run();
 

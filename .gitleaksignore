@@ -6,3 +6,5 @@ scripts/tests/check-secrets.test.mjs:aws-access-token:32
 .github/workflows/ci.yml:generic-api-key:131
 .github/workflows/ci.yml:generic-api-key:133
 4095824b2d19bba1f794e533c3b76b2d5f2e2e63:packages/infrastructure/Floor/QrSecurityService.cs:generic-api-key:24
+d3f72d15aa92062399f6c46cabb062fcfef8683c:tests/integration/RestaurantConfigTestHelpers.cs:generic-api-key:38
+tests/integration/RestaurantConfigTestHelpers.cs:generic-api-key:38

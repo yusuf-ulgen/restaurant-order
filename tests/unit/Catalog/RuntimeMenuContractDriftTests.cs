@@ -18,6 +18,11 @@ public class RuntimeMenuContractDriftTests
         var model = new RuntimeMenuReadModel(
             BranchId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
             Currency: "TRY",
+            PricesIncludeTax: true,
+            DefaultTaxRateBps: 1000,
+            IsServiceChargeEnabled: true,
+            ServiceChargeRateBps: 500,
+            PricingPolicyFingerprint: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             Menus: new[]
             {
                 new RuntimeMenuDto(
@@ -100,6 +105,16 @@ public class RuntimeMenuContractDriftTests
         Assert.Equal("11111111-1111-1111-1111-111111111111", branchIdProp.GetString());
         Assert.True(root.TryGetProperty("currency", out var currencyProp));
         Assert.Equal("TRY", currencyProp.GetString());
+        Assert.True(root.TryGetProperty("pricesIncludeTax", out var pitProp));
+        Assert.True(pitProp.GetBoolean());
+        Assert.True(root.TryGetProperty("defaultTaxRateBps", out var taxProp));
+        Assert.Equal(1000, taxProp.GetInt32());
+        Assert.True(root.TryGetProperty("isServiceChargeEnabled", out var sceProp));
+        Assert.True(sceProp.GetBoolean());
+        Assert.True(root.TryGetProperty("serviceChargeRateBps", out var scProp));
+        Assert.Equal(500, scProp.GetInt32());
+        Assert.True(root.TryGetProperty("pricingPolicyFingerprint", out var ppfProp));
+        Assert.Equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", ppfProp.GetString());
         Assert.True(root.TryGetProperty("menus", out var menusProp));
         Assert.Equal(1, menusProp.GetArrayLength());
 

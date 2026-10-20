@@ -130,6 +130,7 @@ describe('Cart Reducer & Storage Unit Tests', () => {
         sessionId: 'session-old',
         lines: [sampleLine1],
         currency: 'TRY',
+        acceptedPolicyFingerprint: null,
       };
 
       state = cartReducer(state, { type: 'SET_SESSION', sessionId: 'session-new' });
@@ -156,6 +157,7 @@ describe('Cart Reducer & Storage Unit Tests', () => {
         sessionId: 'session-123',
         lines: [sampleLine1],
         currency: 'TRY',
+        acceptedPolicyFingerprint: null,
       };
 
       saveCartToStorage(state);
@@ -172,6 +174,7 @@ describe('Cart Reducer & Storage Unit Tests', () => {
         sessionId: 'session-original',
         lines: [sampleLine1],
         currency: 'TRY',
+        acceptedPolicyFingerprint: null,
       };
 
       saveCartToStorage(state);
@@ -356,6 +359,7 @@ describe('Cart Reducer & Storage Unit Tests', () => {
         sessionId: 'session-123',
         lines: [sampleLine1],
         currency: 'TRY',
+        acceptedPolicyFingerprint: null,
       };
       saveCartToStorage(state);
       expect(window.sessionStorage.getItem(CART_STORAGE_KEY)).not.toBeNull();

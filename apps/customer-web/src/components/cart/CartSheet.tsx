@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import { calculateCartFinancialSummary } from '@restaurant-order/contracts';
 import { BottomSheet, Button } from '@restaurant-order/ui';
 import { useCart } from '../../cart/CartContext';
 import { verifyCartAgainstRuntimeMenu } from '../../cart/cartValidator';
@@ -10,25 +11,36 @@ export interface CartSheetProps {
   isOpen: boolean;
   onClose: () => void;
   runtimeMenu: RuntimeMenuReadModel | null;
+  isLoadingMenu?: boolean;
+  menuError?: string | null;
+  onRetryMenu?: () => void;
   tableInfo?: { tableNumber: string; tableName: string };
   onNavigateToMenu?: () => void;
+  onProceedToConfirmation?: () => void;
 }
 
 export const CartSheet: React.FC<CartSheetProps> = ({
   isOpen,
   onClose,
   runtimeMenu,
+  isLoadingMenu,
+  menuError,
+  onRetryMenu,
   tableInfo,
   onNavigateToMenu,
+  onProceedToConfirmation,
 }) => {
   const {
     lines,
     totalItemsCount,
     subtotalMinorUnits,
     currency,
+    acceptedPolicyFingerprint,
+    requiresReconfirmation,
     updateQuantity,
     removeLine,
     clearCart,
+    acceptPriceChanges,
   } = useCart();
 
   // Validate cart lines against live runtime menu
@@ -37,6 +49,45 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   }, [lines, runtimeMenu]);
 
   const isEmpty = lines.length === 0;
+
+  const currentFinancials = useMemo(() => {
+    if (!runtimeMenu || lines.length === 0) return null;
+    return calculateCartFinancialSummary(lines, {
+      pricesIncludeTax: runtimeMenu.pricesIncludeTax ?? true,
+      defaultTaxRateBps: runtimeMenu.defaultTaxRateBps ?? 0,
+      isServiceChargeEnabled: runtimeMenu.isServiceChargeEnabled ?? false,
+      serviceChargeRateBps: runtimeMenu.serviceChargeRateBps ?? 0,
+    });
+  }, [lines, runtimeMenu]);
+
+  const isPolicyReconfirmationNeeded =
+    !isEmpty &&
+    Boolean(runtimeMenu?.pricingPolicyFingerprint) &&
+    (acceptedPolicyFingerprint === null ||
+      acceptedPolicyFingerprint !== runtimeMenu?.pricingPolicyFingerprint ||
+      Boolean(requiresReconfirmation));
+
+  const isMenuMissingOrInvalid = !runtimeMenu || !runtimeMenu.pricingPolicyFingerprint;
+  const isOrderBlocked =
+    verification.hasBlockingIssues ||
+    verification.hasPriceChanges ||
+    isPolicyReconfirmationNeeded ||
+    Boolean(isLoadingMenu) ||
+    Boolean(menuError) ||
+    isMenuMissingOrInvalid;
+
+  const canAcceptChanges = !isLoadingMenu && !menuError && Boolean(runtimeMenu?.pricingPolicyFingerprint);
+
+  const handleAcceptPriceChanges = () => {
+    if (!runtimeMenu?.pricingPolicyFingerprint || isLoadingMenu || menuError) return;
+    const updates = verification.issues
+      .filter((i) => i.type === 'price_changed' && i.currentUnitPriceMinorUnits !== undefined)
+      .map((i) => ({
+        signature: i.lineSignature,
+        newUnitPriceMinorUnits: i.currentUnitPriceMinorUnits!,
+      }));
+    acceptPriceChanges(updates, runtimeMenu.pricingPolicyFingerprint);
+  };
 
   return (
     <BottomSheet
@@ -72,8 +123,42 @@ export const CartSheet: React.FC<CartSheetProps> = ({
         }}
         data-testid="customer-cart-sheet"
       >
-        {/* Blocking or Price Changes Warning Alert */}
-        {verification.issues.length > 0 && (
+        {/* Menu Refresh Error Alert */}
+        {menuError && (
+          <div
+            role="alert"
+            style={{
+              padding: 'var(--ro-space-3)',
+              backgroundColor: 'var(--ro-color-error-subtle, #fef2f2)',
+              color: 'var(--ro-color-error-text, #991b1b)',
+              borderRadius: 'var(--ro-radius-md)',
+              marginBottom: 'var(--ro-space-3)',
+              fontSize: 'var(--ro-font-size-xs)',
+              border: '1px solid var(--ro-color-error-border, #fecaca)',
+            }}
+            data-testid="cart-menu-error-alert"
+          >
+            <div style={{ fontWeight: 'var(--ro-font-weight-bold)', marginBottom: '4px' }}>
+              Menü Güncelleme Hatası
+            </div>
+            <div>{menuError}</div>
+            {onRetryMenu && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onRetryMenu}
+                data-testid="cart-menu-retry-btn"
+                style={{ marginTop: 'var(--ro-space-2)', minHeight: '36px' }}
+              >
+                Tekrar Dene
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Blocking or Price/Policy Changes Warning Alert */}
+        {(verification.issues.length > 0 || isPolicyReconfirmationNeeded) && (
           <div
             role="alert"
             style={{
@@ -93,13 +178,79 @@ export const CartSheet: React.FC<CartSheetProps> = ({
             <div style={{ fontWeight: 'var(--ro-font-weight-bold)', marginBottom: '2px' }}>
               {verification.hasBlockingIssues
                 ? 'Menü Güncellemesi Tespit Edildi'
+                : isPolicyReconfirmationNeeded && !verification.hasPriceChanges
+                ? 'Politika Güncellemesi'
                 : 'Fiyat Bilgilendirmesi'}
             </div>
             <div>
               {verification.hasBlockingIssues
                 ? 'Sepetinizdeki bazı ürünler veya seçenekler güncellendi/tükendi. Lütfen sipariş vermeden önce ilgili satırları düzenleyin.'
-                : 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Yeni fiyatlar geçerlidir.'}
+                : isPolicyReconfirmationNeeded && !verification.hasPriceChanges
+                ? 'Restoran vergi veya servis ücreti politikası güncellendi. Devam etmek için yeni koşulları onaylamanız gerekmektedir.'
+                : 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Devam etmek için yeni fiyatları onaylamanız gerekmektedir.'}
             </div>
+            {isPolicyReconfirmationNeeded && !verification.hasBlockingIssues && runtimeMenu && (
+              <div
+                style={{
+                  marginTop: 'var(--ro-space-2)',
+                  paddingTop: 'var(--ro-space-2)',
+                  borderTop: '1px dashed var(--ro-color-border, #e5e7eb)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+                data-testid="policy-change-breakdown"
+              >
+                <div>
+                  <strong>KDV:</strong>{' '}
+                  {runtimeMenu.defaultTaxRateBps > 0 ? `%${runtimeMenu.defaultTaxRateBps / 100}` : '%0'}{' '}
+                  ({runtimeMenu.pricesIncludeTax ? 'Fiyatlara Dahil' : 'Fiyatlara Hariç'})
+                </div>
+                {runtimeMenu.isServiceChargeEnabled && runtimeMenu.serviceChargeRateBps > 0 && (
+                  <div>
+                    <strong>Servis Ücreti:</strong> %{runtimeMenu.serviceChargeRateBps / 100}
+                  </div>
+                )}
+                {currentFinancials && (
+                  <div>
+                    <strong>Güncel Tahmini Toplam:</strong>{' '}
+                    {formatCurrency(currentFinancials.grandTotalMinorUnits, currency)}
+                  </div>
+                )}
+              </div>
+            )}
+            {verification.hasPriceChanges && (
+              <div style={{ marginTop: 'var(--ro-space-2)' }}>
+                {verification.issues
+                  .filter((i) => i.type === 'price_changed')
+                  .map((i) => (
+                    <div key={i.lineSignature} style={{ marginBottom: '4px' }}>
+                      {i.message}{' '}
+                      <strong>
+                        {i.previousUnitPriceMinorUnits !== undefined &&
+                          formatCurrency(i.previousUnitPriceMinorUnits, currency)}{' '}
+                        ➔{' '}
+                        {i.currentUnitPriceMinorUnits !== undefined &&
+                          formatCurrency(i.currentUnitPriceMinorUnits, currency)}
+                      </strong>
+                    </div>
+                  ))}
+              </div>
+            )}
+            {(verification.hasPriceChanges || isPolicyReconfirmationNeeded) && canAcceptChanges && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleAcceptPriceChanges}
+                data-testid="accept-price-changes-btn"
+                style={{ marginTop: 'var(--ro-space-2)', minHeight: '36px' }}
+              >
+                {isPolicyReconfirmationNeeded && !verification.hasPriceChanges
+                  ? 'Yeni Koşulları Kabul Et'
+                  : 'Yeni Fiyatları Kabul Et'}
+              </Button>
+            )}
           </div>
         )}
 
@@ -246,36 +397,26 @@ export const CartSheet: React.FC<CartSheetProps> = ({
               Tüm Sepeti Temizle
             </button>
 
-            {/* Phase 8 Border: Order Submission CTA */}
+            {/* Order Confirmation CTA */}
             <Button
               type="button"
               variant="primary"
               size="lg"
-              disabled={true}
-              aria-disabled="true"
+              disabled={isOrderBlocked}
+              aria-disabled={isOrderBlocked}
+              onClick={() => {
+                onProceedToConfirmation?.();
+              }}
               data-testid="submit-order-cta-btn"
               style={{
                 minHeight: '48px',
                 width: '100%',
-                opacity: 0.7,
-                cursor: 'not-allowed',
+                opacity: isOrderBlocked ? 0.6 : 1,
+                cursor: isOrderBlocked ? 'not-allowed' : 'pointer',
               }}
             >
-              Siparişi Gönder • {formatCurrency(subtotalMinorUnits, currency)}
+              Siparişi Onayla • {formatCurrency(subtotalMinorUnits, currency)}
             </Button>
-
-            {/* Informational Product Copy for Phase 8 Transition */}
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--ro-color-text-muted)',
-                textAlign: 'center',
-                lineHeight: 1.4,
-              }}
-              data-testid="phase8-order-notice"
-            >
-              Sepetiniz hazır. Dijital sipariş gönderim akışı Faz 8 kapsamında hizmete sunulacaktır.
-            </div>
           </div>
         )}
       </div>

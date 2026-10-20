@@ -79,7 +79,7 @@ public class WorkerCoordinationTests
         var execTask = worker.StartAsync(cts.Token);
 
         // Allow worker loop to execute initial acquisition
-        await Task.Delay(100);
+        await WaitForConditionAsync(() => worker.IsLeader, TimeSpan.FromSeconds(3));
         Assert.True(worker.IsLeader);
         Assert.True(lease.AcquireCalls >= 1);
 

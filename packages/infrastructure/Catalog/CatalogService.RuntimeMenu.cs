@@ -3,6 +3,7 @@ using RestaurantOrder.Application.Catalog;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Catalog;
+using RestaurantOrder.Domain.Orders.Pricing;
 using RestaurantOrder.Domain.Tenants;
 
 namespace RestaurantOrder.Infrastructure.Catalog;
@@ -17,6 +18,13 @@ public partial class CatalogService
     {
         var branch = await GetBranchWithAccessCheckAsync(tenantId, branchId, actor, ct);
 
+        // Resolve effective branch pricing policy
+        var settings = await _dbContext.BranchSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.BranchId == branchId, ct);
+
+        var pricingPolicy = EffectiveBranchPricingPolicy.Create(branch, settings);
+
         // Fetch active menus
         var menus = await _dbContext.Menus
             .Where(m => m.TenantId == tenantId && m.BranchId == branchId && m.Status == MenuStatus.Active)
@@ -28,7 +36,12 @@ public partial class CatalogService
         {
             return new RuntimeMenuReadModel(
                 BranchId: branchId.Value,
-                Currency: branch.Currency.Code,
+                Currency: pricingPolicy.Currency,
+                PricesIncludeTax: pricingPolicy.PricesIncludeTax,
+                DefaultTaxRateBps: pricingPolicy.DefaultTaxRateBps,
+                IsServiceChargeEnabled: pricingPolicy.IsServiceChargeEnabled,
+                ServiceChargeRateBps: pricingPolicy.ServiceChargeRateBps,
+                PricingPolicyFingerprint: pricingPolicy.PricingPolicyFingerprint,
                 Menus: Array.Empty<RuntimeMenuDto>());
         }
 
@@ -216,7 +229,12 @@ public partial class CatalogService
 
         return new RuntimeMenuReadModel(
             BranchId: branchId.Value,
-            Currency: branch.Currency.Code,
+            Currency: pricingPolicy.Currency,
+            PricesIncludeTax: pricingPolicy.PricesIncludeTax,
+            DefaultTaxRateBps: pricingPolicy.DefaultTaxRateBps,
+            IsServiceChargeEnabled: pricingPolicy.IsServiceChargeEnabled,
+            ServiceChargeRateBps: pricingPolicy.ServiceChargeRateBps,
+            PricingPolicyFingerprint: pricingPolicy.PricingPolicyFingerprint,
             Menus: runtimeMenus);
     }
 }

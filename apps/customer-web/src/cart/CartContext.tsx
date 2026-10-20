@@ -8,11 +8,19 @@ export interface CartContextValue {
   totalItemsCount: number;
   subtotalMinorUnits: number;
   currency: string;
-  addLine: (line: DraftCartLine) => void;
+  acceptedPolicyFingerprint: string | null;
+  requiresReconfirmation: boolean;
+  requireReconfirmation: (reason?: string) => void;
+  addLine: (line: DraftCartLine, policyFingerprint?: string) => void;
   updateQuantity: (signature: string, quantity: number) => void;
   removeLine: (signature: string) => void;
   updateLine: (oldSignature: string, newLine: DraftCartLine) => void;
   clearCart: () => void;
+  acceptPriceChanges: (
+    updates: Array<{ signature: string; newUnitPriceMinorUnits: number }>,
+    policyFingerprint?: string
+  ) => void;
+  setAcceptedPolicy: (policyFingerprint: string) => void;
   isCartOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
@@ -74,7 +82,10 @@ export const CartProvider: React.FC<CartProviderProps> = ({
     totalItemsCount: totals.totalItemCount,
     subtotalMinorUnits: totals.subtotalMinorUnits,
     currency: state.currency,
-    addLine: (line) => dispatch({ type: 'ADD_LINE', line }),
+    acceptedPolicyFingerprint: state.acceptedPolicyFingerprint,
+    requiresReconfirmation: Boolean(state.requiresReconfirmation),
+    requireReconfirmation: (reason) => dispatch({ type: 'REQUIRE_RECONFIRMATION', reason }),
+    addLine: (line, policyFingerprint) => dispatch({ type: 'ADD_LINE', line, policyFingerprint }),
     updateQuantity: (signature, quantity) => dispatch({ type: 'UPDATE_QUANTITY', signature, quantity }),
     removeLine: (signature) => dispatch({ type: 'REMOVE_LINE', signature }),
     updateLine: (oldSignature, newLine) => dispatch({ type: 'UPDATE_LINE', oldSignature, newLine }),
@@ -82,10 +93,14 @@ export const CartProvider: React.FC<CartProviderProps> = ({
       dispatch({ type: 'CLEAR_CART' });
       clearCartFromStorage();
     },
+    acceptPriceChanges: (updates, policyFingerprint) =>
+      dispatch({ type: 'ACCEPT_PRICE_CHANGES', updates, policyFingerprint }),
+    setAcceptedPolicy: (policyFingerprint) =>
+      dispatch({ type: 'SET_ACCEPTED_POLICY', policyFingerprint }),
     isCartOpen,
     openCart: () => setIsCartOpen(true),
     closeCart: () => setIsCartOpen(false),
-  }), [state.lines, state.currency, totals, isCartOpen]);
+  }), [state.lines, state.currency, state.acceptedPolicyFingerprint, state.requiresReconfirmation, totals, isCartOpen]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

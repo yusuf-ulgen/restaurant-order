@@ -42,6 +42,11 @@ public sealed record RestockVariantCommand(
 public sealed record RuntimeMenuReadModel(
     Guid BranchId,
     string Currency,
+    bool PricesIncludeTax,
+    int DefaultTaxRateBps,
+    bool IsServiceChargeEnabled,
+    int ServiceChargeRateBps,
+    string PricingPolicyFingerprint,
     IReadOnlyList<RuntimeMenuDto> Menus);
 
 public sealed record RuntimeMenuDto(
