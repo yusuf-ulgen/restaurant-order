@@ -4,6 +4,7 @@ import type { RealtimeConnectionStatus } from './types.js';
 export interface RealtimeStatusBadgeProps {
   status: RealtimeConnectionStatus;
   className?: string;
+  'data-testid'?: string;
 }
 
 const statusConfig: Record<
@@ -42,7 +43,11 @@ const statusConfig: Record<
   },
 };
 
-export const RealtimeStatusBadge: React.FC<RealtimeStatusBadgeProps> = ({ status, className }) => {
+export const RealtimeStatusBadge: React.FC<RealtimeStatusBadgeProps> = ({
+  status,
+  className,
+  'data-testid': testId,
+}) => {
   const config = statusConfig[status] ?? statusConfig.disconnected;
 
   return (
@@ -50,6 +55,7 @@ export const RealtimeStatusBadge: React.FC<RealtimeStatusBadgeProps> = ({ status
       role="status"
       aria-live="polite"
       className={className}
+      data-testid={testId}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

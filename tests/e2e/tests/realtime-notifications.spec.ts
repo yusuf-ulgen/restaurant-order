@@ -5,6 +5,21 @@ import {
   type SeededCustomerScenario,
 } from './e2e-catalog-seed';
 
+async function enterCustomerSession(page: any, scenario: SeededCustomerScenario) {
+  await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
+  const resolveView = page.getByTestId('table-resolve-view');
+  await expect(resolveView).toBeVisible({ timeout: 10000 });
+  await expect(resolveView.getByText(scenario.tableNumber).first()).toBeVisible({ timeout: 10000 });
+
+  const continueBtn = page.getByTestId('continue-to-table-btn');
+  await expect(continueBtn).toBeVisible({ timeout: 10000 });
+  await continueBtn.click();
+
+  const sessionOverview = page.getByTestId('customer-active-session');
+  await expect(sessionOverview).toBeVisible({ timeout: 10000 });
+  return sessionOverview;
+}
+
 test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
   let scenario: SeededCustomerScenario;
 
@@ -21,19 +36,7 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
   test('Scenario 1 & 2: Customer opens session, sees RealtimeStatusBadge and receives live order event', async ({
     page,
   }) => {
-    // 1. Visit landing URL with signed QR token
-    await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
-
-    const resolveView = page.getByTestId('table-resolve-view');
-    await expect(resolveView).toBeVisible({ timeout: 10000 });
-
-    const continueBtn = page.getByTestId('continue-to-table-btn');
-    await expect(continueBtn).toBeVisible();
-    await continueBtn.click();
-
-    // 2. Active Session Overview with RealtimeStatusBadge
-    const sessionOverview = page.getByTestId('customer-active-session');
-    await expect(sessionOverview).toBeVisible({ timeout: 10000 });
+    await enterCustomerSession(page, scenario);
 
     const realtimeBadge = page.getByTestId('customer-realtime-badge');
     await expect(realtimeBadge).toBeVisible();
@@ -43,10 +46,7 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
     page,
     request,
   }) => {
-    // 1. Enter session
-    await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
-    await page.getByTestId('continue-to-table-btn').click();
-    await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
+    await enterCustomerSession(page, scenario);
 
     // 2. Open Service Request Sheet
     const requestServiceBtn = page.getByTestId('request-service-btn');
@@ -78,12 +78,14 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
     page,
     request,
   }) => {
-    // 1. Open customer session and navigate to menu
-    await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
-    await page.getByTestId('continue-to-table-btn').click();
-    await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
+    await enterCustomerSession(page, scenario);
 
-    await page.getByTestId('goto-menu-btn').click();
+    const exploreBtn = page.getByTestId('explore-menu-btn');
+    if (await exploreBtn.isVisible()) {
+      await exploreBtn.click();
+    } else {
+      await page.getByTestId('bottom-nav-menu-btn').click();
+    }
     const digitalMenuView = page.getByTestId('digital-menu-view');
     await expect(digitalMenuView).toBeVisible({ timeout: 10000 });
 
@@ -128,9 +130,7 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
   test('Scenario 6: Session closure invalidates access and closes realtime stream', async ({
     page,
   }) => {
-    await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
-    await page.getByTestId('continue-to-table-btn').click();
-    await expect(page.getByTestId('customer-active-session')).toBeVisible({ timeout: 10000 });
+    await enterCustomerSession(page, scenario);
 
     // Trigger leaving session
     const leaveBtn = page.getByRole('button', { name: 'Masa Değiştir / Çıkış' });
