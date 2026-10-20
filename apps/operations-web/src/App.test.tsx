@@ -87,8 +87,21 @@ describe('Operations Web App - 5-Stage Authentication State Machine', () => {
         />
       );
 
-      expect(screen.getByRole('status')).toBeDefined();
+      expect(screen.getByRole('status', { name: 'Aktif Masa Bulunmuyor' })).toBeDefined();
       expect(screen.getByText('Aktif Masa Bulunmuyor')).toBeDefined();
+    });
+
+    it('toggles audio chime mute state from header action button', () => {
+      render(<App initialTerminal={mockTerminal} initialStaff={mockStaff} />);
+
+      const muteToggle = screen.getByTestId('chime-mute-toggle');
+      expect(muteToggle.getAttribute('title')).toBe('Sesi Kapat');
+
+      fireEvent.click(muteToggle);
+      expect(muteToggle.getAttribute('title')).toBe('Sesi Aç');
+
+      fireEvent.click(muteToggle);
+      expect(muteToggle.getAttribute('title')).toBe('Sesi Kapat');
     });
 
     it('opens and closes active calls Modal when Çağrılar button is clicked', () => {

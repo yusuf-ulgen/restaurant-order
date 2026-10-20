@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel, CustomerOrderResponseDto } from '@restaurant-order/contracts';
-import { Card, Button } from '@restaurant-order/ui';
+import { Card, Button, RealtimeStatusBadge, useRealtimeEvents } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
@@ -36,6 +36,24 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const menuRequestIdRef = useRef(0);
 
   const cart = useCart();
+
+  const { status: realtimeStatus } = useRealtimeEvents({
+    enabled: Boolean(session?.sessionId),
+    onEvent: (event) => {
+      if (
+        event.event_type === 'menu.item_availability_changed' ||
+        event.event_type === 'catalog.policy_invalidated'
+      ) {
+        refreshRuntimeMenu();
+      }
+    },
+    onSessionClosed: () => {
+      onLeaveSession();
+    },
+    onResyncRequired: () => {
+      refreshRuntimeMenu();
+    },
+  });
 
   const refreshRuntimeMenu = useCallback(async () => {
     if (!session.branchId) return;
@@ -106,7 +124,10 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
         >
           <div data-testid="session-welcome-view">
             <Card padding="md">
-              <h2 className="customer-card-title">Hoş Geldiniz</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--ro-space-2)' }}>
+                <h2 className="customer-card-title" style={{ margin: 0 }}>Hoş Geldiniz</h2>
+                <RealtimeStatusBadge status={realtimeStatus} data-testid="customer-realtime-badge" />
+              </div>
               <p className="customer-card-text">
                 <strong>Masa {session.tableNumber} ({session.tableName})</strong> için oturumunuz aktif.
                 Menüyü inceleyebilir, ürünleri sepetinize ekleyip sipariş verebilir ve servis talebinde bulunabilirsiniz.

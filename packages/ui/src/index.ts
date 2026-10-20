@@ -38,3 +38,6 @@ export * from './tokens/tokens';
 export * from './tokens/theme';
 export * from './tokens/types';
 
+// Real-Time Events & Audio Chime
+export * from './realtime/index';
+
