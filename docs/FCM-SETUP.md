@@ -8,7 +8,7 @@ Karar: [ADR-0011](./adr/0011-background-push-provider.md). Üst görev [#11](htt
 
 `IPushNotificationTransport`, uygulama katmanında sağlayıcıdan bağımsızdır. `FirebasePushNotificationTransport`, infrastructure içinde sabitlenmiş `FirebaseAdmin` 3.7.0 ile tek Firebase Installation ID (FID) hedefine gönderir. Personel ve müşteri için aynı taşıma kullanılabilir; alıcı seçimi bu katmanın işi değildir.
 
-Kayıt/iptal API'si, veritabanı değişikliği, kalıcı outbox, service worker, tarayıcı izni ve masa/sipariş olay bağlantısı bu ilk parçaya dahil değildir. Herkese açık gönderim ucu ve arka planda otomatik gönderim işi eklenmedi. Mevcut IAM davet/parola sıfırlama bildirimleri ayrı kalır.
+Kayıt/iptal API'si (`/api/v1/notifications/devices`), veritabanı varlığı (`tenancy.device_registrations`), kalıcı outbox ve masa/sipariş olay bağlantısı Faz 9 kapsamında uygulanmış ve entegre edilmiştir. İstemci cihazları yetkili kullanıcı/oturum bağlamıyla kaydedilir ve oturum kapanışında otomatik iptal edilir. Mevcut IAM davet/parola sıfırlama bildirimleri ayrı kalır.
 
 ## Yapılandırma
 

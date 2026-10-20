@@ -13,26 +13,30 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [PR #16](https://github.com/yusuf-ulgen/restaurant-order/pull/16): Faz 6 masa düzeni, kriptografik QR ve oturum yaşam döngüsü sertleştirmeleri main'e birleştirildi.
 - [Issue #18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), [PR #17](https://github.com/yusuf-ulgen/restaurant-order/pull/17): Faz 7 müşteri deneyimi, sepet taslağı, servis talepleri ve güvenlik sertleştirmeleri main'e birleştirildi.
 - [Issue #18](https://github.com/yusuf-ulgen/restaurant-order/issues/18), [PR #19](https://github.com/yusuf-ulgen/restaurant-order/pull/19): Faz 8 sipariş çekirdeği, yetkili fiyatlandırma ve yaşam döngüsü altyapısı main'e birleştirildi.
-- Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md), [Faz 8 takibi](./PHASE-8-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
+- [Issue #20](https://github.com/yusuf-ulgen/restaurant-order/issues/20): Faz 9 SignalR canlı olaylar, Redis backplane, transactional outbox, sürekli yetkilendirme, HTTP sync ve FCM push cihaz kaydı tamamlandı.
+- Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md), [Faz 8 takibi](./PHASE-8-TRACKER.md), [Faz 9 takibi](./PHASE-9-TRACKER.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Tamamlanan Faz — Faz 8: Sipariş Çekirdeği
+## Tamamlanan Faz — Faz 9: Canlı Olaylar ve Bildirimler
 
-- Durum: `main` dalına birleştirildi (`cfb27e6`), PR #19 kapandı.
-- GitHub Issue: [#18](https://github.com/yusuf-ulgen/restaurant-order/issues/18) (Kapatıldı).
-- Takip belgesi: [Faz 8 Takibi](./PHASE-8-TRACKER.md).
-- Özet:
-  - Domain aggregate yapısı (`Order`, `OrderItem`, `OrderItemModifier`, `OrderAuditEntry`), PostgreSQL şeması ve RLS.
-  - Sunucu tarafı otoriter `OrderPricingEngine`, minor-unit deterministik finans motoru, aktif katalog doğrulaması.
-  - Müşteri sipariş onay ve gönderim deneyimi (`OrderConfirmationSheet`, `OrderSuccessSheet`, `OrderHistorySheet`), stabil idempotency key ve sepet politikası yeniden onay akışı.
-  - Personel sipariş altyapısı (`StaffOrderEndpoints`), RBAC yetkilendirmesi, supervisor void ve PIN doğrulama akışı.
-  - 15 adımlı tam E2E ve negatif testler, CI Quality & Verification Pipeline yeşil.
-
-## Aktif / Sıradaki Görev — Faz 9: SignalR Canlı Olaylar ve Bildirimler
-
-- İlgili bağlayıcı belge: [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md), [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md).
-- GitHub Issue: [#20](https://github.com/yusuf-ulgen/restaurant-order/issues/20), dal `feat/phase-09-realtime-notifications`.
+- Durum: `feat/phase-09-realtime-notifications` dalında tamamlandı, PR açık, CI doğrulandı.
+- GitHub Issue: [#20](https://github.com/yusuf-ulgen/restaurant-order/issues/20).
 - Takip belgesi: [Faz 9 Takibi](./PHASE-9-TRACKER.md).
-- Kapsam: Masa oturumu, sipariş durumu güncellemeleri, garson çağrısı, menü 86 ve katalog geçersiz kılma için ASP.NET Core SignalR hub altyapısı, Redis backplane, transactional outbox dispatch, sürekli yetkilendirme, HTTP sync ve FCM push cihaz kaydı.
+- Mimari Karar: [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md) (ACCEPTED).
+- Özet:
+  - ASP.NET Core SignalR hub (`/hubs/events`) ve Redis backplane (`restaurant-order:events:broadcast`).
+  - Çift yönlü drift testleri bulunan tipli sürüm zarfı (`EventEnvelope<T>`).
+  - Transactional Outbox (`tenancy.operational_outbox`), `FOR UPDATE SKIP LOCKED` claim ve exponential backoff ile Worker dispatcher.
+  - Sunucu tarafından atanan gruplar (`session`, `floor`, `station`, `catalog`), dinamik token ve oturum iptali ile sürekli yetkilendirme (continuous authorization).
+  - Sequence tabanlı yetkili HTTP sync okuma modeli (`/api/v1/events/sync`).
+  - FCM cihaz kaydı (`tenancy.device_registrations`), aktif oturum ve üyelik bağı, ADR-0011 push gönderimi ve oturum kapanışında otomatik geçersiz kılma.
+  - Müşteri ve operasyon ekranlarında canlı güncellemeler, Web Audio kullanıcı etkileşimli sesli uyarı (chime), mute seçeneği ve offline sepet koruması.
+  - Çift instance pub/sub doğrulaması, p95 < 500ms yayılım gecikmesi testi ve Playwright E2E senaryoları.
+
+## Aktif / Sıradaki Görev — Faz 10: Garson ve Operasyon Uygulaması
+
+- İlgili bağlayıcı belge: [docs/ROLES-AND-PERMISSIONS.md](./ROLES-AND-PERMISSIONS.md), [docs/SCREEN-INVENTORY.md](./SCREEN-INVENTORY.md).
+- Takip belgesi: `docs/PHASE-10-TRACKER.md` (oluşturulacak).
+- Kapsam: Masa yönetimi, durum bazlı kat planı, hızlı mobil sipariş girişi/değiştirme ve servis çağrısı müdahalesi için Arayüz 2 (Garson ve Operasyon Uygulaması).
 
 ## Ortam ve Sınırlamalar
 
@@ -44,4 +48,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 9.1 kapsamında çift yönlü drift testleriyle desteklenen C# ve TypeScript olay zarfı (`EventEnvelope`) ve tip güvenli payload sözleşmelerinin tanımlanması.
+Faz 10 kapsamında Garson ve Operasyon terminali arayüzünün (Arayüz 2) yetkilendirme, kat planı ve canlı sipariş yönetimi ile uçtan uca uygulanması.

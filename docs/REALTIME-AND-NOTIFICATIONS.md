@@ -64,4 +64,4 @@ Olaylar standart, sürümlenmiş JSON zarfı (`EventEnvelope`) kullanır:
 - Kopma sırasında iş akışını engellemeyen çevrimdışı göstergesi görünür.
 - Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.
 
-Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. İlk sunucu taşıması [FCM-SETUP.md](./FCM-SETUP.md) içinde açıklanır; gerçek olay bağlantıları ve istemciler henüz tamamlanmadı.
+Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. Faz 9 kapsamında sunucu SignalR hub'ı, Redis backplane, Transactional Outbox worker dispatcher'ı, HTTP sync okuma modeli, FCM cihaz kaydı (`/api/v1/notifications/devices`) ve ön yüz sesli/canlı bildirimleri uygulanmış ve doğrulanmıştır (bkz. [Faz 9 Takibi](./PHASE-9-TRACKER.md)).

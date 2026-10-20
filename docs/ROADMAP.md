@@ -40,9 +40,13 @@ Faz 7: Müşteri Deneyimi [Tamamlandı — CI Doğrulandı]
   Dijital menü, arama, filtreler, ürün özelleştirme ve sepet;
   servis talepleri ve hesap isteme akışı; 15 adımlı E2E doğrulandı.
         ↓
-Faz 8: Sipariş Çekirdeği [Tamamlandı — PR #19 Açık, CI Doğrulandı]
+Faz 8: Sipariş Çekirdeği [Tamamlandı — PR #19 Birleşti, CI Doğrulandı]
   Order aggregate ve persistence, yetkili sunucu fiyatlandırması;
   müşteri/personel sipariş API'si, advisory lock eşzamanlılığı.
+        ↓
+Faz 9: Canlı Olaylar ve Bildirimler [Tamamlandı — CI Doğrulandı]
+  SignalR / Redis backplane, transactional outbox, sürekli yetkilendirme,
+  HTTP sync, FCM push cihaz kaydı, sesli uyarı ve p95 < 500ms yayılım.
 ```
 
 ---
@@ -134,15 +138,15 @@ Faz 8: Sipariş Çekirdeği [Tamamlandı — PR #19 Açık, CI Doğrulandı]
 - [x] Personel sipariş API'si ve yaşam döngüsü altyapısı (Faz 8.5).
 - [x] Negatif akışlar, E2E browser doğrulaması ve güvenlik sertleştirmesi (Faz 8.6).
 
-### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Devam Ediyor — Issue #20, Dal: feat/phase-09-realtime-notifications)
-- [ ] ASP.NET Core SignalR hub'ı (`/hubs/events`) ve Redis backplane (`tenant_id`, `branch_id`, masa ve istasyon grupları).
-- [ ] Olay zarfı (`EventEnvelope`), C# ve TypeScript çift yönlü drift testleri.
-- [ ] Transactional Outbox (`tenancy.operational_outbox`), atomik mutasyon, distributed claim/lease ve Redis Pub/Sub köprüsü.
-- [ ] Sürekli yetkilendirme (continuous authorization), token/oturum iptalinde anında kesinti.
-- [ ] Kopma sonrası sequence tabanlı HTTP eşitleme (`/api/v1/events/sync`).
-- [ ] FCM cihaz kaydı (`DeviceRegistration`), aktif oturum ve üyelik bağı, güvenli bildirim gönderimi (ADR-0011).
-- [ ] Müşteri ve operasyon ekranlarında canlı güncellemeler, sesli uyarı (chime), offline sepet koruması.
-- [ ] Çoklu instance teslimi, Playwright E2E ve <500 ms p95 yayılım gecikmesi doğrulaması.
+### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: COMPLETED — PR Açık, CI Doğrulandı)
+- [x] ASP.NET Core SignalR hub'ı (`/hubs/events`) ve Redis backplane (`tenant_id`, `branch_id`, masa ve istasyon grupları).
+- [x] Olay zarfı (`EventEnvelope`), C# ve TypeScript çift yönlü drift testleri.
+- [x] Transactional Outbox (`tenancy.operational_outbox`), atomik mutasyon, distributed claim/lease ve Redis Pub/Sub köprüsü.
+- [x] Sürekli yetkilendirme (continuous authorization), token/oturum iptalinde anında kesinti.
+- [x] Kopma sonrası sequence tabanlı HTTP eşitleme (`/api/v1/events/sync`).
+- [x] FCM cihaz kaydı (`DeviceRegistration`), aktif oturum ve üyelik bağı, güvenli bildirim gönderimi (ADR-0011).
+- [x] Müşteri ve operasyon ekranlarında canlı güncellemeler, sesli uyarı (chime), offline sepet koruması.
+- [x] Çoklu instance teslimi, Playwright E2E ve <500 ms p95 yayılım gecikmesi doğrulaması.
 
 ### Aşama 10: Garson ve Operasyon (Durum: Planlandı)
 - [ ] Arayüz 2: Garson ve Operasyon Mobil Uygulamasının tam uygulaması.

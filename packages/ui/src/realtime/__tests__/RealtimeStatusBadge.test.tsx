@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 import { RealtimeStatusBadge } from '../RealtimeStatusBadge.js';
 import type { RealtimeConnectionStatus } from '../types.js';
 
