@@ -14,6 +14,7 @@ import { formatCurrency } from '../../utils/menuUtils';
 import { customerOrderApi, CustomerOrderApiError } from '../../api/customerOrderApi';
 import { resolveCartItemDisplay } from './CartItemRow';
 import { findModifierGroupId } from '../../utils/customizationUtils';
+import { getOrCreateOrderAttempt } from '../../cart/orderAttemptStorage';
 
 export interface OrderConfirmationSheetProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
   onSessionExpired,
   onResolvePriceConflict,
 }) => {
-  const { lines, currency, clearCart, acceptedPolicyFingerprint, requiresReconfirmation, requireReconfirmation } = useCart();
+  const { sessionId, lines, currency, clearCart, acceptedPolicyFingerprint, requiresReconfirmation, requireReconfirmation } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -96,14 +97,6 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
     });
   }, [itemsForSignatureAndRequest, effectiveFingerprint, financials.grandTotalMinorUnits]);
 
-  const lastSignatureRef = useRef<string>(payloadSignature);
-  const activeKeyRef = useRef<string>(`ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-
-  if (lastSignatureRef.current !== payloadSignature) {
-    lastSignatureRef.current = payloadSignature;
-    activeKeyRef.current = `ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  }
-
   const alertRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (errorMessage && alertRef.current) {
@@ -136,7 +129,8 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
     };
 
     try {
-      const order = await customerOrderApi.submitOrder(request, activeKeyRef.current);
+      const idempotencyKey = getOrCreateOrderAttempt(sessionId, payloadSignature);
+      const order = await customerOrderApi.submitOrder(request, idempotencyKey);
       clearCart();
       setIsSubmitting(false);
       onClose();

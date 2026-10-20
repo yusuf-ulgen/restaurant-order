@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CartProvider } from '../cart/CartContext';
 import { OrderConfirmationSheet } from '../components/cart/OrderConfirmationSheet';
+import { customerOrderApi, CustomerOrderApiError } from '../api/customerOrderApi';
 import type { CustomerOrderResponseDto, RuntimeMenuReadModel, DraftCartLine } from '@restaurant-order/contracts';
 
 describe('Phase 8.4 Customer Order Submission & Idempotency Tests', () => {
@@ -148,6 +149,48 @@ describe('Phase 8.4 Customer Order Submission & Idempotency Tests', () => {
     };
     window.sessionStorage.setItem('ro_customer_cart_draft', JSON.stringify(draft));
   };
+
+  it('reuses the pending order key after page reload when the response was lost', async () => {
+    setupCart();
+    const submit = vi.spyOn(customerOrderApi, 'submitOrder')
+      .mockRejectedValueOnce(new CustomerOrderApiError(0, 'NETWORK_ERROR', 'Yanıt alınamadı'))
+      .mockResolvedValueOnce(sampleSuccessOrder);
+    const checkout = () => (
+      <CartProvider sessionId="test-session">
+        <OrderConfirmationSheet isOpen={true} onClose={vi.fn()}
+          runtimeMenu={sampleRuntimeMenu} onOrderSuccess={vi.fn()} />
+      </CartProvider>
+    );
+    const firstPage = render(checkout());
+    fireEvent.click(screen.getByTestId('confirm-and-submit-order-btn'));
+    await waitFor(() => expect(screen.getByTestId('order-submit-error-alert')).toBeDefined());
+    const firstKey = submit.mock.calls[0]![1];
+    firstPage.unmount();
+
+    render(checkout());
+    fireEvent.click(screen.getByTestId('confirm-and-submit-order-btn'));
+
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(submit.mock.calls[1]![1]).toBe(firstKey);
+  });
+
+  it('preserves the cart and does not send when the pending attempt cannot be saved', async () => {
+    setupCart();
+    const submit = vi.spyOn(customerOrderApi, 'submitOrder');
+    render(
+      <CartProvider sessionId="test-session">
+        <OrderConfirmationSheet isOpen={true} onClose={vi.fn()}
+          runtimeMenu={sampleRuntimeMenu} onOrderSuccess={vi.fn()} />
+      </CartProvider>
+    );
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+
+    fireEvent.click(screen.getByTestId('confirm-and-submit-order-btn'));
+
+    await waitFor(() => expect(screen.getByTestId('order-submit-error-alert')).toBeDefined());
+    expect(submit).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem('ro_customer_cart_draft')).not.toBeNull();
+  });
 
   it('successful order submission clears cart and invokes onOrderSuccess callback', async () => {
     setupCart();
