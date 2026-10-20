@@ -29,8 +29,10 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Aktif / Sıradaki Görev — Faz 9: SignalR Canlı Olaylar ve Bildirimler
 
-- İlgili bağlayıcı belge: [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md).
-- Kapsam: Masa oturumu, sipariş durumu güncellemeleri, garson çağrısı ve mutfak/bar KDS bildirimleri için SignalR hub altyapısı, Redis backplane ve FCM entegrasyonu.
+- İlgili bağlayıcı belge: [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md), [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md).
+- GitHub Issue: [#20](https://github.com/yusuf-ulgen/restaurant-order/issues/20), dal `feat/phase-09-realtime-notifications`.
+- Takip belgesi: [Faz 9 Takibi](./PHASE-9-TRACKER.md).
+- Kapsam: Masa oturumu, sipariş durumu güncellemeleri, garson çağrısı, menü 86 ve katalog geçersiz kılma için ASP.NET Core SignalR hub altyapısı, Redis backplane, transactional outbox dispatch, sürekli yetkilendirme, HTTP sync ve FCM push cihaz kaydı.
 
 ## Ortam ve Sınırlamalar
 
@@ -42,4 +44,4 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Sonraki Somut Adım
 
-Faz 9 için issue açılarak `feat/phase-09-realtime-notifications` dalının oluşturulması, [docs/REALTIME-AND-NOTIFICATIONS.md](./REALTIME-AND-NOTIFICATIONS.md) alan belgesine göre SignalR hub ve taşıma sözleşmelerinin başlatılması.
+Faz 9.1 kapsamında çift yönlü drift testleriyle desteklenen C# ve TypeScript olay zarfı (`EventEnvelope`) ve tip güvenli payload sözleşmelerinin tanımlanması.

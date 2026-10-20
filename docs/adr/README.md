@@ -30,7 +30,7 @@ Kararlar `PROPOSED` durumunda başlar. `ACCEPTED` olarak işaretlenmeden önce k
 | [ADR-0001](./0001-technology-stack.md) | Çekirdek Teknoloji Yığını ve Monorepo Temeli | `ACCEPTED` | React 19, .NET 10, Modüler Monolit, SignalR, Redis, Postgres |
 | [ADR-0002](./0002-persistence-selection.md) | Veri Kalıcılığı Kitaplığı Seçimi | `ACCEPTED` | EF Core, Dapper ve Marten'in karşılaştırmalı değerlendirmesi |
 | `ADR-0003` | Çok İşletmeli Veri Yalıtım Stratejisi | `PROPOSED` | PostgreSQL Satır Düzeyinde Güvenlik ve İşletme Başına Şema Karşılaştırması |
-| `ADR-0004` | Gerçek Zamanlı Olay Aktarım Mimarisi | `PROPOSED` | SignalR Hub'ları ve Redis Arka Panel Tasarımı |
+| [ADR-0004](./0004-realtime-event-transmission-architecture.md) | Gerçek Zamanlı Olay Aktarım Mimarisi | `ACCEPTED` | SignalR Hub'ları, Redis Arka Panel, Transactional Outbox ve Sürekli Yetkilendirme |
 | `ADR-0005` | ESC/POS Termal Baskı Entegrasyon Modeli | `PROPOSED` | Yerel Şube Yazdırma Aracısı ve Cloud Direct Soketi Karşılaştırması |
 | `ADR-0006` | Dijital Ödeme Ağ Geçidi Entegrasyon Stratejisi | `PROPOSED` | Çoklu ağ geçidi soyutlama katmanı |
 | [ADR-0007](./0007-health-checks-and-dependency-verification.md) | Altyapı Durum Denetimleri ve Bağımlılık Doğrulaması | `ACCEPTED` | Arıza kapalı canlılık/hazırlık ayrımı, sıfır sızıntılı durum kontrolleri |

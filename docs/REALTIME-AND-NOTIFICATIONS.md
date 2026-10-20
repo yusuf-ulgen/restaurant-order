@@ -14,33 +14,38 @@ Müşteri telefonu, garson cihazı, mutfak/bar ekranı ve yönetim paneli arası
 | Uygun kullanım | Etkileşimli KDS ve garson cihazları | QR durum akışı ve salt okunur paneller |
 | İlk taslak durumu | `[Proposed / ADR Required]` | `[Proposed / ADR Required]` |
 
-Canlı iletişim teknolojisi ADR-0001 ile **SignalR + Redis** olarak kabul edilmiştir; bu tablo önceki seçenek değerlendirmesini korur. Ayrıntılı hub/grup tasarımı ADR-0004 kapsamındadır. Telefonun arka planındaki push bildirimi ayrı kanaldır; [ADR-0011](./adr/0011-background-push-provider.md) ile FCM seçilmiştir. Uygulama [issue #11](https://github.com/yusuf-ulgen/restaurant-order/issues/11) kapsamında aşamalı sürer.
+Canlı iletişim teknolojisi ADR-0001 ile **SignalR + Redis** olarak kabul edilmiştir; bu tablo önceki seçenek değerlendirmesini korur. Ayrıntılı hub/grup tasarımı [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md) kapsamındadır. Telefonun arka planındaki push bildirimi ayrı kanaldır; [ADR-0011](./adr/0011-background-push-provider.md) ile FCM seçilmiştir. Uygulama [issue #20](https://github.com/yusuf-ulgen/restaurant-order/issues/20) ve [Faz 9 Takibi](./PHASE-9-TRACKER.md) kapsamında yürütülür.
 
 ## 2. Olay Türleri ve Şema
 
-Olaylar standart JSON zarfı kullanır:
+Olaylar standart, sürümlenmiş JSON zarfı (`EventEnvelope`) kullanır:
 
 ```json
 {
-  "event_id": "evt_01HXYZ...",
+  "event_id": "019488a0-1234-7890-abcd-ef0123456789",
   "event_type": "order.created",
-  "timestamp": "2026-09-19T14:55:00Z",
+  "schema_version": 1,
+  "occurred_at_utc": "2026-10-20T14:55:00Z",
   "tenant_id": "org_abc123",
   "branch_id": "brn_xyz789",
+  "aggregate_id": "ord_01HXYZ...",
+  "sequence_number": 1042,
   "data": {}
 }
 ```
 
 ### 2.1. Temel Olaylar
 
-| Olay | Üreten | Tüketen | İçerik |
+| Olay | Üreten | Tüketen | İçerik ve Amaç |
 | :--- | :--- | :--- | :--- |
-| `order.created` | Müşteri QR, garson | KDS, kasa, yönetim | `order_id`, `table_id`, ürünler, ek seçenekler, sipariş turu |
-| `order.item_status_changed` | KDS, garson | Müşteri QR, garson | `order_id`, `item_id`, `new_status` (`IN_PREP`, `READY`) |
-| `table.service_requested` | Müşteri QR | Garson | `table_id`, `request_type` (`WAITER`, `WIPES`, `BILL`) |
-| `kds.ticket_bumped` | KDS | Garson | `ticket_id`, `table_id`, istasyon (`KITCHEN`/`BAR`) |
-| `menu.item_86ed` | KDS, yönetim | Müşteri QR, garson | `item_id`, `is_available: false` |
-| `table.session_closed` | Kasa, garson | Müşteri QR, yönetim | `table_id`, `session_id`, `settled_at` |
+| `order.created` | Müşteri QR, garson | Salon, KDS, yönetim | `order_id`, `dining_session_id`, `table_id`, `round_number`, `item_count`, `currency` |
+| `order.item_status_changed` | Mutfak, bar, garson | Müşteri QR, salon | `order_id`, `item_id`, `new_status` (`InPreparation`, `Ready`, `Served`, `Cancelled`) |
+| `table.service_requested` | Müşteri QR | Salon (`floor`) | `service_request_id`, `table_id`, `request_type`, `requested_at_utc` |
+| `table.service_request_status_changed` | Garson | Müşteri QR, salon | `service_request_id`, `table_id`, `new_status` (`Acknowledged`, `Resolved`, `Cancelled`) |
+| `menu.item_availability_changed` | Yönetim, mutfak | Müşteri QR, salon, istasyon | `item_id`, `item_variant_id`, `is_available`, `reason_code` |
+| `table.session_closed` | Kasa, garson | Müşteri QR, yönetim | `dining_session_id`, `table_id`, `closed_at_utc` |
+| `catalog.policy_invalidated` | Yönetim | Müşteri QR | `policy_fingerprint`, `invalidated_at_utc` (fiyat/politika yeniden onay tetikleyicisi) |
+| `kds.ticket_bumped` *(Faz 11)* | KDS | Salon | `ticket_id`, `station` (Faz 11 KDS fazına ayrılmıştır) |
 
 ## 3. Kanal ve Grup Ayrımı
 

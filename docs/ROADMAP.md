@@ -134,11 +134,15 @@ Faz 8: Sipariş Çekirdeği [Tamamlandı — PR #19 Açık, CI Doğrulandı]
 - [x] Personel sipariş API'si ve yaşam döngüsü altyapısı (Faz 8.5).
 - [x] Negatif akışlar, E2E browser doğrulaması ve güvenlik sertleştirmesi (Faz 8.6).
 
-### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Planlandı)
-- [ ] ASP.NET Core SignalR hub'ı şu şekilde bölümlendirilmiştir: `tenant_id` ve `branch_id`.
-- [ ] Misafirlerden/garsonlara gerçek zamanlı sipariş yayılımı (<500ms) KDS ve operasyonlar.
-- [ ] Chime sesli uyarı gönderimi ve mobil anlık bildirimler.
-- [ ] Bağlantı esnekliği, kalp atışı izleme ve otomatik yeniden bağlanma.
+### Aşama 9: Canlı Olaylar ve Bildirimler (Durum: Devam Ediyor — Issue #20, Dal: feat/phase-09-realtime-notifications)
+- [ ] ASP.NET Core SignalR hub'ı (`/hubs/events`) ve Redis backplane (`tenant_id`, `branch_id`, masa ve istasyon grupları).
+- [ ] Olay zarfı (`EventEnvelope`), C# ve TypeScript çift yönlü drift testleri.
+- [ ] Transactional Outbox (`tenancy.operational_outbox`), atomik mutasyon, distributed claim/lease ve Redis Pub/Sub köprüsü.
+- [ ] Sürekli yetkilendirme (continuous authorization), token/oturum iptalinde anında kesinti.
+- [ ] Kopma sonrası sequence tabanlı HTTP eşitleme (`/api/v1/events/sync`).
+- [ ] FCM cihaz kaydı (`DeviceRegistration`), aktif oturum ve üyelik bağı, güvenli bildirim gönderimi (ADR-0011).
+- [ ] Müşteri ve operasyon ekranlarında canlı güncellemeler, sesli uyarı (chime), offline sepet koruması.
+- [ ] Çoklu instance teslimi, Playwright E2E ve <500 ms p95 yayılım gecikmesi doğrulaması.
 
 ### Aşama 10: Garson ve Operasyon (Durum: Planlandı)
 - [ ] Arayüz 2: Garson ve Operasyon Mobil Uygulamasının tam uygulaması.
