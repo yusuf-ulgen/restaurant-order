@@ -176,13 +176,16 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - **Supervisor PIN Schema ve Yaşam Döngüsü:** `SeedSupervisorAsync` IAM gerçek şeması (`created_at_utc`, enum int, User/Membership/PinCredential factory'leri) ile yazıldı. İkinci şube gerçek kayıt olarak eklendi; `RestaurantAdmin` için sahte credential üretimi engellendi. PIN hasher ve API host pepper yapılandırması eşitlendi. `SetupOrderInPrepAsync` güncel ETag döndürecek şekilde düzeltildi. Audit doğrulamalarında `BeginTenantTransactionAsync` kullanılarak `WASTE_CANCEL` ve aktör denetimi yapıldı.
   - **Farklı Session'lar ile PostgreSQL PIN Concurrency Testi:** Advisory lock sıralamasını credential row lock'undan ayırmak için 5 farklı dining session/order oluşturuldu; aynı BranchManager credential'ına `CountdownEvent` koordinasyonuyla 5 eşzamanlı yanlış PIN gönderildi. Row lock `FOR UPDATE` ile tüm 5 isteğin 403 aldığı, `failed_pin_attempts` değerinin tam 5 olduğu, 15 dakikalık kilit oluştuğu, kilit süresince doğru PIN'in de reddedildiği ve sıfır sipariş/audit mutasyonu oluştuğu kanıtlandı. Başarılı PIN'in sayacı sıfırladığı ayrıca test edildi.
   - **StaffOrderService Alternatif Test Yolunun Kaldırılması:** `StaffOrderService` içindeki sahte scope factory ve internal constructor kaldırıldı; zorunlu `ISupervisorPinService` bağımlılığı bağlandı.
-  - **React act(...) Test Uyarısının Çözümü:** `OrderSheetsBranchCoverage.test.tsx` içindeki state güncellemesi async kullanıcı akışına uygun hale getirilerek uyarı tamamen giderildi.
+  - **Müşteri Politikası Yeniden Onay Akışı ve Gerçek Akış Regresyonu (Issue #18, PR #19):**
+    - Kök Neden: `ActiveSessionView` menüden ürün eklerken `onAddToCart={(line) => cart.addLine(line)}` çağrısında `menuData.pricingPolicyFingerprint`'i aktarmıyordu; `acceptedPolicyFingerprint` null kalıyor ve sepet sadece önceki değer doluysa kontrol yaptığı için 409 conflict sonrası checkout CTA'sını açık tutuyordu.
+    - Düzeltme: `DigitalMenuView` ve `ActiveSessionView` üzerinden ürün ekleme gerçek menü snapshot fingerprint'ine bağlandı. `cartReducer`, `CartContext` ve `cartStorage` (`sessionStorage`) katmanlarına `requiresReconfirmation` durumu eklendi. Dolu sepete farklı politika ile ürün eklenmesinde politikanın ezilmesi engellenip yeniden onay şartı getirildi. Miktar, not ve satır güncellemelerinde yeniden onay durumu korundu. `CartSheet` ve `OrderConfirmationSheet` üzerinde menü yüklenirken veya hata anında checkout engellendi; 409 conflict sonrası kullanıcıya güncel vergi, servis ücreti ve genel toplam gösterilerek açık "Yeni Koşulları Kabul Et" düğmesi zorunlu kılındı.
+    - Testler: Gerçek akış (`ActiveSessionView` -> gerçek menü -> ürün ekleme -> 409 conflict -> kilitli checkout -> açık kabul -> güncel toplam ile submit) ve storage/idempotency regresyon testleri (`PricingPolicyReapprovalRegression.test.tsx`, `PricingPolicyCartStorageRegression.test.tsx`) eklendi (7 test).
 - [x] **Kod Kalitesi ve Sınırlar:**
-  - Elle yazılan hiçbir dosya 600 satırı aşmadı (1060 dosya < 600 satır; migration hariç tüm dosyalar 450 satır uyarı eşiğinin altında tutuldu).
+  - Elle yazılan hiçbir dosya 600 satırı aşmadı (1062 dosya < 600 satır; migration hariç tüm dosyalar 450 satır uyarı eşiğinin altında tutuldu).
   - Dead code, eski mock ve TODO ile gizlenmiş davranış bırakılmadı.
   - Drift testleri ile backend ve frontend sözleşmeleri mühürlendi.
 - [x] **Kalite Kapıları ve Doğrulama:**
-  - File size gate: 1060 dosya < 600 satır (`PASS`).
+  - File size gate: 1062 dosya < 600 satır (`PASS`, 0 elle yazılmış dosya > 450 satır).
   - Docs & links validation: 64 dosya, 0 bozuk bağlantı (`PASS`).
   - Secret scanning: 0 sızıntı (`PASS`).
   - ESLint: 0 hata, 0 uyarı (`PASS`).
@@ -190,8 +193,8 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - Architecture tests: 10/10 (`PASS`).
   - Backend Unit tests: 1667/1667 (`PASS`).
   - Backend Integration tests: 373/373 (`PASS`, SKIP_TESTCONTAINERS=true).
-  - Frontend unit/component tests: 386/386 (`PASS`: customer-web: 220, operations-web: 15, admin-web: 151).
-  - Frontend test coverage (customer-web): Stmts: %93,5, Branch: %83,0, Funcs: %88,41, Lines: %93,5 (`PASS`, tüm eşikler > %80).
+  - Frontend unit/component tests: 552/552 (`PASS`: customer-web: 227 (+7 yeni), operations-web: 15, admin-web: 151, packages/ui: 159).
+  - Frontend test coverage (customer-web): Stmts: %94,03, Branch: %83,33, Funcs: %89,82, Lines: %94,03 (`PASS`, tüm eşikler > %80).
   - Quality gates: 114 test (`PASS`, 1 atlandı: Docker konteyner akışı).
   - Production release build: `pnpm build` (`PASS`).
   - CI / GitHub Actions: Exact HEAD commit iş akışı push edilecek ve doğrulanacak.

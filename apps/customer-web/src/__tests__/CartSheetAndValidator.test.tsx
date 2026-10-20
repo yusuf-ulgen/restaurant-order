@@ -298,6 +298,7 @@ describe('CartSheet & Validator Integration Tests', () => {
         currency: 'TRY',
         lines: [sampleLine],
         savedAt: Date.now(),
+        acceptedPolicyFingerprint: sampleRuntimeMenu.pricingPolicyFingerprint,
       };
       window.sessionStorage.setItem('ro_customer_cart_draft', JSON.stringify(preseededDraft));
       const onProceedMock = vi.fn();

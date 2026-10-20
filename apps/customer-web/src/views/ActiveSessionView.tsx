@@ -63,6 +63,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   }, [cart.isCartOpen, session.branchId, refreshRuntimeMenu]);
 
   const handleResolvePriceConflict = useCallback(() => {
+    cart.requireReconfirmation();
     setIsConfirmationOpen(false);
     cart.openCart();
     refreshRuntimeMenu();
@@ -89,7 +90,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           onSessionExpired={onLeaveSession}
           onCallWaiter={() => setIsServiceSheetOpen(true)}
           initialMenuData={initialMenuData}
-          onAddToCart={(line) => cart.addLine(line)}
+          onAddToCart={(line, policyFingerprint) => cart.addLine(line, policyFingerprint)}
           onMenuLoaded={setRuntimeMenuData}
         />
       ) : (

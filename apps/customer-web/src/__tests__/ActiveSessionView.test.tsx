@@ -263,6 +263,7 @@ describe('ActiveSessionView and UnauthenticatedQrView Tests', () => {
             },
           ],
           savedAt: Date.now(),
+          acceptedPolicyFingerprint: sampleMenu.pricingPolicyFingerprint,
         })
       );
 
@@ -370,6 +371,7 @@ describe('ActiveSessionView and UnauthenticatedQrView Tests', () => {
             },
           ],
           savedAt: Date.now(),
+          acceptedPolicyFingerprint: sampleMenu.pricingPolicyFingerprint,
         })
       );
 

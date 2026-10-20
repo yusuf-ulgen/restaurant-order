@@ -36,6 +36,7 @@ Güncelleme: 2026-10-17. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
   - PostgreSQL üzerinde 5 ayrı masa oturumu ile advisory lock'tan bağımsız olarak `iam.pin_credentials` satır kilidi (`FOR UPDATE`), 15 dakikalık kilit penceresi ve rollback'ten bağımsız sayaç kalıcılığı kanıtlandı.
   - `StaffOrderService` içindeki alternatif test yolu ve fallback scope factory kaldırılarak üretim DI ile zorunlu `ISupervisorPinService` bağımlılığı bağlandı.
   - `OrderSheetsBranchCoverage.test.tsx` içindeki React `act(...)` test uyarısı giderildi.
+  - Müşteri fiyatlandırma politikası takibi gerçek menü ürün ekleme akışına bağlandı (`DigitalMenuView` -> `ActiveSessionView` -> `cart.addLine(line, currentFingerprint)`); 409 conflict sonrası açık yeniden onay durumu `requiresReconfirmation` ile hem hafıza hem `sessionStorage` seviyesinde zorunlu kılındı.
 - Sırada: PR #19 (https://github.com/yusuf-ulgen/restaurant-order/pull/19) exact HEAD CI doğrulaması ve kullanıcı onayı sonrasında Faz 9 hazırlığı.
 
 ## Ortam ve Sınırlamalar

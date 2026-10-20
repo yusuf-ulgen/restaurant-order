@@ -5,6 +5,7 @@ export interface CartState {
   lines: DraftCartLine[];
   currency: string;
   acceptedPolicyFingerprint: string | null;
+  requiresReconfirmation?: boolean;
 }
 
 export const initialCartState: CartState = {
@@ -12,6 +13,7 @@ export const initialCartState: CartState = {
   lines: [],
   currency: 'TRY',
   acceptedPolicyFingerprint: null,
+  requiresReconfirmation: false,
 };
 
 export type CartAction =
@@ -27,7 +29,8 @@ export type CartAction =
       updates: Array<{ signature: string; newUnitPriceMinorUnits: number }>;
       policyFingerprint?: string;
     }
-  | { type: 'SET_ACCEPTED_POLICY'; policyFingerprint: string };
+  | { type: 'SET_ACCEPTED_POLICY'; policyFingerprint: string }
+  | { type: 'REQUIRE_RECONFIRMATION'; reason?: string };
 
 export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
@@ -39,6 +42,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
           lines: [],
           currency: action.currency || state.currency,
           acceptedPolicyFingerprint: null,
+          requiresReconfirmation: false,
         };
       }
       return {
@@ -50,9 +54,24 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
 
     case 'ADD_LINE': {
       const newLine = action.line;
-      const updatedPolicy = action.policyFingerprint !== undefined
-        ? action.policyFingerprint
-        : state.acceptedPolicyFingerprint;
+      const incomingPolicy = action.policyFingerprint;
+
+      let nextAcceptedPolicy = state.acceptedPolicyFingerprint;
+      let nextRequiresReconfirmation = Boolean(state.requiresReconfirmation);
+
+      if (state.lines.length === 0) {
+        nextAcceptedPolicy = incomingPolicy ?? null;
+        nextRequiresReconfirmation = !incomingPolicy;
+      } else {
+        if (incomingPolicy && state.acceptedPolicyFingerprint) {
+          if (incomingPolicy !== state.acceptedPolicyFingerprint) {
+            nextRequiresReconfirmation = true;
+          }
+        } else if (!state.acceptedPolicyFingerprint) {
+          nextRequiresReconfirmation = true;
+        }
+      }
+
       const existingIndex = state.lines.findIndex(
         (l) => l.configurationSignature === newLine.configurationSignature
       );
@@ -69,7 +88,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
           lineTotalMinorUnits: updatedLineTotal,
         };
 
-        return { ...state, lines: updatedLines, acceptedPolicyFingerprint: updatedPolicy };
+        return {
+          ...state,
+          lines: updatedLines,
+          acceptedPolicyFingerprint: nextAcceptedPolicy,
+          requiresReconfirmation: nextRequiresReconfirmation,
+        };
       }
 
       // Append new distinct line
@@ -77,7 +101,8 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         lines: [...state.lines, newLine],
         currency: newLine.currency || state.currency,
-        acceptedPolicyFingerprint: updatedPolicy,
+        acceptedPolicyFingerprint: nextAcceptedPolicy,
+        requiresReconfirmation: nextRequiresReconfirmation,
       };
     }
 
@@ -85,9 +110,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       const { signature, quantity } = action;
 
       if (quantity <= 0) {
+        const remainingLines = state.lines.filter((l) => l.configurationSignature !== signature);
         return {
           ...state,
-          lines: state.lines.filter((l) => l.configurationSignature !== signature),
+          lines: remainingLines,
+          acceptedPolicyFingerprint: remainingLines.length === 0 ? null : state.acceptedPolicyFingerprint,
+          requiresReconfirmation: remainingLines.length === 0 ? false : state.requiresReconfirmation,
         };
       }
 
@@ -107,9 +135,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case 'REMOVE_LINE': {
+      const remainingLines = state.lines.filter((l) => l.configurationSignature !== action.signature);
       return {
         ...state,
-        lines: state.lines.filter((l) => l.configurationSignature !== action.signature),
+        lines: remainingLines,
+        acceptedPolicyFingerprint: remainingLines.length === 0 ? null : state.acceptedPolicyFingerprint,
+        requiresReconfirmation: remainingLines.length === 0 ? false : state.requiresReconfirmation,
       };
     }
 
@@ -153,6 +184,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         lines: [],
         acceptedPolicyFingerprint: null,
+        requiresReconfirmation: false,
       };
     }
 
@@ -179,6 +211,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         acceptedPolicyFingerprint: action.policyFingerprint !== undefined
           ? action.policyFingerprint
           : state.acceptedPolicyFingerprint,
+        requiresReconfirmation: false,
       };
     }
 
@@ -186,6 +219,14 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       return {
         ...state,
         acceptedPolicyFingerprint: action.policyFingerprint,
+        requiresReconfirmation: false,
+      };
+    }
+
+    case 'REQUIRE_RECONFIRMATION': {
+      return {
+        ...state,
+        requiresReconfirmation: true,
       };
     }
 

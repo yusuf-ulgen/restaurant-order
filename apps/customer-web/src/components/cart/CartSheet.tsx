@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import { calculateCartFinancialSummary } from '@restaurant-order/contracts';
 import { BottomSheet, Button } from '@restaurant-order/ui';
 import { useCart } from '../../cart/CartContext';
 import { verifyCartAgainstRuntimeMenu } from '../../cart/cartValidator';
@@ -35,6 +36,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
     subtotalMinorUnits,
     currency,
     acceptedPolicyFingerprint,
+    requiresReconfirmation,
     updateQuantity,
     removeLine,
     clearCart,
@@ -47,28 +49,44 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   }, [lines, runtimeMenu]);
 
   const isEmpty = lines.length === 0;
-  const isPolicyChanged = Boolean(
-    acceptedPolicyFingerprint &&
-      runtimeMenu?.pricingPolicyFingerprint &&
-      acceptedPolicyFingerprint !== runtimeMenu.pricingPolicyFingerprint
-  );
+
+  const currentFinancials = useMemo(() => {
+    if (!runtimeMenu || lines.length === 0) return null;
+    return calculateCartFinancialSummary(lines, {
+      pricesIncludeTax: runtimeMenu.pricesIncludeTax ?? true,
+      defaultTaxRateBps: runtimeMenu.defaultTaxRateBps ?? 0,
+      isServiceChargeEnabled: runtimeMenu.isServiceChargeEnabled ?? false,
+      serviceChargeRateBps: runtimeMenu.serviceChargeRateBps ?? 0,
+    });
+  }, [lines, runtimeMenu]);
+
+  const isPolicyReconfirmationNeeded =
+    !isEmpty &&
+    Boolean(runtimeMenu?.pricingPolicyFingerprint) &&
+    (acceptedPolicyFingerprint === null ||
+      acceptedPolicyFingerprint !== runtimeMenu?.pricingPolicyFingerprint ||
+      Boolean(requiresReconfirmation));
+
   const isMenuMissingOrInvalid = !runtimeMenu || !runtimeMenu.pricingPolicyFingerprint;
   const isOrderBlocked =
     verification.hasBlockingIssues ||
     verification.hasPriceChanges ||
-    isPolicyChanged ||
+    isPolicyReconfirmationNeeded ||
     Boolean(isLoadingMenu) ||
     Boolean(menuError) ||
     isMenuMissingOrInvalid;
 
+  const canAcceptChanges = !isLoadingMenu && !menuError && Boolean(runtimeMenu?.pricingPolicyFingerprint);
+
   const handleAcceptPriceChanges = () => {
+    if (!runtimeMenu?.pricingPolicyFingerprint || isLoadingMenu || menuError) return;
     const updates = verification.issues
       .filter((i) => i.type === 'price_changed' && i.currentUnitPriceMinorUnits !== undefined)
       .map((i) => ({
         signature: i.lineSignature,
         newUnitPriceMinorUnits: i.currentUnitPriceMinorUnits!,
       }));
-    acceptPriceChanges(updates, runtimeMenu?.pricingPolicyFingerprint);
+    acceptPriceChanges(updates, runtimeMenu.pricingPolicyFingerprint);
   };
 
   return (
@@ -140,7 +158,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
         )}
 
         {/* Blocking or Price/Policy Changes Warning Alert */}
-        {(verification.issues.length > 0 || isPolicyChanged) && (
+        {(verification.issues.length > 0 || isPolicyReconfirmationNeeded) && (
           <div
             role="alert"
             style={{
@@ -160,17 +178,47 @@ export const CartSheet: React.FC<CartSheetProps> = ({
             <div style={{ fontWeight: 'var(--ro-font-weight-bold)', marginBottom: '2px' }}>
               {verification.hasBlockingIssues
                 ? 'Menü Güncellemesi Tespit Edildi'
-                : isPolicyChanged && !verification.hasPriceChanges
+                : isPolicyReconfirmationNeeded && !verification.hasPriceChanges
                 ? 'Politika Güncellemesi'
                 : 'Fiyat Bilgilendirmesi'}
             </div>
             <div>
               {verification.hasBlockingIssues
                 ? 'Sepetinizdeki bazı ürünler veya seçenekler güncellendi/tükendi. Lütfen sipariş vermeden önce ilgili satırları düzenleyin.'
-                : isPolicyChanged && !verification.hasPriceChanges
+                : isPolicyReconfirmationNeeded && !verification.hasPriceChanges
                 ? 'Restoran vergi veya servis ücreti politikası güncellendi. Devam etmek için yeni koşulları onaylamanız gerekmektedir.'
                 : 'Sepetinizdeki bazı ürünlerin fiyatları güncellendi. Devam etmek için yeni fiyatları onaylamanız gerekmektedir.'}
             </div>
+            {isPolicyReconfirmationNeeded && !verification.hasBlockingIssues && runtimeMenu && (
+              <div
+                style={{
+                  marginTop: 'var(--ro-space-2)',
+                  paddingTop: 'var(--ro-space-2)',
+                  borderTop: '1px dashed var(--ro-color-border, #e5e7eb)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+                data-testid="policy-change-breakdown"
+              >
+                <div>
+                  <strong>KDV:</strong>{' '}
+                  {runtimeMenu.defaultTaxRateBps > 0 ? `%${runtimeMenu.defaultTaxRateBps / 100}` : '%0'}{' '}
+                  ({runtimeMenu.pricesIncludeTax ? 'Fiyatlara Dahil' : 'Fiyatlara Hariç'})
+                </div>
+                {runtimeMenu.isServiceChargeEnabled && runtimeMenu.serviceChargeRateBps > 0 && (
+                  <div>
+                    <strong>Servis Ücreti:</strong> %{runtimeMenu.serviceChargeRateBps / 100}
+                  </div>
+                )}
+                {currentFinancials && (
+                  <div>
+                    <strong>Güncel Tahmini Toplam:</strong>{' '}
+                    {formatCurrency(currentFinancials.grandTotalMinorUnits, currency)}
+                  </div>
+                )}
+              </div>
+            )}
             {verification.hasPriceChanges && (
               <div style={{ marginTop: 'var(--ro-space-2)' }}>
                 {verification.issues
@@ -189,7 +237,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
                   ))}
               </div>
             )}
-            {(verification.hasPriceChanges || isPolicyChanged) && (
+            {(verification.hasPriceChanges || isPolicyReconfirmationNeeded) && canAcceptChanges && (
               <Button
                 type="button"
                 variant="secondary"
@@ -198,7 +246,7 @@ export const CartSheet: React.FC<CartSheetProps> = ({
                 data-testid="accept-price-changes-btn"
                 style={{ marginTop: 'var(--ro-space-2)', minHeight: '36px' }}
               >
-                {isPolicyChanged && !verification.hasPriceChanges
+                {isPolicyReconfirmationNeeded && !verification.hasPriceChanges
                   ? 'Yeni Koşulları Kabul Et'
                   : 'Yeni Fiyatları Kabul Et'}
               </Button>

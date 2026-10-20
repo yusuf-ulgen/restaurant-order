@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import type {
-  RuntimeMenuReadModel,
-  CustomerOrderResponseDto,
-  CreateCustomerOrderRequest,
-  CustomerOrderItemRequest,
-  CustomerSelectedModifierRequest,
+import {
+  calculateCartFinancialSummary,
+  computeOrderPayloadSignature,
+  type RuntimeMenuReadModel,
+  type CustomerOrderResponseDto,
+  type CreateCustomerOrderRequest,
+  type CustomerOrderItemRequest,
+  type CustomerSelectedModifierRequest,
 } from '@restaurant-order/contracts';
-import { calculateCartFinancialSummary, computeOrderPayloadSignature } from '@restaurant-order/contracts';
 import { BottomSheet, Button } from '@restaurant-order/ui';
 import { useCart } from '../../cart/CartContext';
 import { formatCurrency } from '../../utils/menuUtils';
@@ -33,11 +34,17 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
   onSessionExpired,
   onResolvePriceConflict,
 }) => {
-  const { lines, currency, clearCart } = useCart();
+  const { lines, currency, clearCart, acceptedPolicyFingerprint, requiresReconfirmation, requireReconfirmation } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [affectedItemId, setAffectedItemId] = useState<string | null>(null);
+
+  const effectiveFingerprint = acceptedPolicyFingerprint || runtimeMenu?.pricingPolicyFingerprint || '';
+  const isReconfirmationNeeded =
+    !runtimeMenu?.pricingPolicyFingerprint ||
+    (acceptedPolicyFingerprint !== null && acceptedPolicyFingerprint !== runtimeMenu.pricingPolicyFingerprint) ||
+    Boolean(requiresReconfirmation);
 
   // Financial summary based on branch pricing policy and live runtime menu
   const pricingPolicy = useMemo(() => ({
@@ -47,9 +54,7 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
     serviceChargeRateBps: runtimeMenu?.serviceChargeRateBps ?? 0,
   }), [runtimeMenu]);
 
-  const financials = useMemo(() => {
-    return calculateCartFinancialSummary(lines, pricingPolicy);
-  }, [lines, pricingPolicy]);
+  const financials = useMemo(() => calculateCartFinancialSummary(lines, pricingPolicy), [lines, pricingPolicy]);
 
   const itemsForSignatureAndRequest: CustomerOrderItemRequest[] = useMemo(() => {
     return lines.map((line) => {
@@ -85,11 +90,11 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
     }));
 
     return computeOrderPayloadSignature({
-      clientPricingPolicyFingerprint: runtimeMenu?.pricingPolicyFingerprint || '',
+      clientPricingPolicyFingerprint: effectiveFingerprint,
       clientExpectedTotalMinorUnits: financials.grandTotalMinorUnits,
       items: signatureItems,
     });
-  }, [itemsForSignatureAndRequest, runtimeMenu?.pricingPolicyFingerprint, financials.grandTotalMinorUnits]);
+  }, [itemsForSignatureAndRequest, effectiveFingerprint, financials.grandTotalMinorUnits]);
 
   const lastSignatureRef = useRef<string>(payloadSignature);
   const activeKeyRef = useRef<string>(`ord-key-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
@@ -114,6 +119,11 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
       return;
     }
 
+    if (isReconfirmationNeeded) {
+      setErrorMessage('Fiyatlandırma koşullarında değişiklik tespit edildi. Lütfen sepetinize dönerek yeni koşulları onaylayınız.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setErrorCode(null);
@@ -121,7 +131,7 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
 
     const request: CreateCustomerOrderRequest = {
       items: itemsForSignatureAndRequest,
-      clientPricingPolicyFingerprint: runtimeMenu.pricingPolicyFingerprint,
+      clientPricingPolicyFingerprint: effectiveFingerprint,
       clientExpectedTotalMinorUnits: financials.grandTotalMinorUnits,
     };
 
@@ -138,6 +148,13 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
         setErrorCode(err.errorCode);
         if (err.affectedMenuItemId) {
           setAffectedItemId(err.affectedMenuItemId);
+        }
+        if (
+          err.errorCode === 'ORDER_PRICE_CHANGED' ||
+          err.errorCode === 'ORDER_PRICING_POLICY_CHANGED' ||
+          err.errorCode === 'ORDER_TOTAL_CHANGED'
+        ) {
+          requireReconfirmation(err.errorCode);
         }
         if (err.errorCode === 'SESSION_NOT_ACTIVE') {
           setTimeout(() => {
@@ -311,7 +328,6 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
                     </div>
                   )}
                 </div>
-
                 <div
                   style={{
                     fontSize: 'var(--ro-font-size-sm)',
@@ -326,7 +342,6 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
             );
           })}
         </div>
-
         {/* Financial Summary Breakdown */}
         <div
           style={{
@@ -413,7 +428,6 @@ export const OrderConfirmationSheet: React.FC<OrderConfirmationSheetProps> = ({
             >
               Geri Dön
             </Button>
-
             <Button
               type="button"
               variant="primary"

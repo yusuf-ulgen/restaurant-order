@@ -9,6 +9,8 @@ export interface CartContextValue {
   subtotalMinorUnits: number;
   currency: string;
   acceptedPolicyFingerprint: string | null;
+  requiresReconfirmation: boolean;
+  requireReconfirmation: (reason?: string) => void;
   addLine: (line: DraftCartLine, policyFingerprint?: string) => void;
   updateQuantity: (signature: string, quantity: number) => void;
   removeLine: (signature: string) => void;
@@ -81,6 +83,8 @@ export const CartProvider: React.FC<CartProviderProps> = ({
     subtotalMinorUnits: totals.subtotalMinorUnits,
     currency: state.currency,
     acceptedPolicyFingerprint: state.acceptedPolicyFingerprint,
+    requiresReconfirmation: Boolean(state.requiresReconfirmation),
+    requireReconfirmation: (reason) => dispatch({ type: 'REQUIRE_RECONFIRMATION', reason }),
     addLine: (line, policyFingerprint) => dispatch({ type: 'ADD_LINE', line, policyFingerprint }),
     updateQuantity: (signature, quantity) => dispatch({ type: 'UPDATE_QUANTITY', signature, quantity }),
     removeLine: (signature) => dispatch({ type: 'REMOVE_LINE', signature }),
@@ -96,7 +100,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
     isCartOpen,
     openCart: () => setIsCartOpen(true),
     closeCart: () => setIsCartOpen(false),
-  }), [state.lines, state.currency, state.acceptedPolicyFingerprint, totals, isCartOpen]);
+  }), [state.lines, state.currency, state.acceptedPolicyFingerprint, state.requiresReconfirmation, totals, isCartOpen]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

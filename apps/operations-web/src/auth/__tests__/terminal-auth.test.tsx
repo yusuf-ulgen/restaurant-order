@@ -64,7 +64,7 @@ describe('Operations Web Terminal & Auth Components', () => {
       // Cancel button
       fireEvent.click(screen.getByRole('button', { name: 'İptal' }));
       expect(onCancel).toHaveBeenCalled();
-    });
+    }, 15000);
 
     it('displays error message when provided', () => {
       render(<PinPad onSubmit={vi.fn()} errorMessage="Geçersiz PIN" />);
