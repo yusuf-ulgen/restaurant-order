@@ -15,6 +15,7 @@ public class Worker : BackgroundService
     private readonly IWorkerLeaseManager _leaseManager;
     private readonly IConfiguration _configuration;
     private readonly ILogger<Worker> _logger;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     public bool IsLeader { get; private set; }
 
@@ -22,12 +23,14 @@ public class Worker : BackgroundService
         IWorkerActivationGuard activationGuard,
         IWorkerLeaseManager leaseManager,
         IConfiguration configuration,
-        ILogger<Worker> logger)
+        ILogger<Worker> logger,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         _activationGuard = activationGuard;
         _leaseManager = leaseManager;
         _configuration = configuration;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -116,7 +119,30 @@ public class Worker : BackgroundService
                     }
                 }
 
-                // Active leader processing loop: work execution happens here
+                // Active leader processing loop: dispatch operational outbox events
+                if (_serviceScopeFactory != null)
+                {
+                    try
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var dispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher>();
+                        if (dispatcher != null)
+                        {
+                            var dispatched = await dispatcher.DispatchPendingBatchAsync(25, stoppingToken);
+                            if (dispatched > 0)
+                            {
+                                _logger.LogInformation(
+                                    "[WORKER OUTBOX] Dispatched {Count} operational events to Redis broadcast.",
+                                    dispatched);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error while dispatching operational outbox batch in worker leader loop.");
+                    }
+                }
+
                 await Task.Delay(renewInterval, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

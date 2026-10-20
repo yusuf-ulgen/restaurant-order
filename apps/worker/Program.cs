@@ -1,3 +1,4 @@
+using RestaurantOrder.Infrastructure;
 using RestaurantOrder.Worker;
 using RestaurantOrder.Worker.Safety;
 
@@ -5,6 +6,9 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Fail-fast configuration validation for worker host
 WorkerConfigurationValidator.Validate(builder.Configuration, builder.Environment);
+
+// Register infrastructure services (DbContext, Redis, Operational Outbox)
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
 // Register distributed worker safety services
 builder.Services.AddSingleton<IWorkerActivationGuard, RedisWorkerActivationGuard>();

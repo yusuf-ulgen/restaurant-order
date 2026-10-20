@@ -86,6 +86,31 @@ public sealed class StackExchangeRedisDatabaseProvider : IRedisDatabaseProvider,
         return db;
     }
 
+    public async Task<ISubscriber?> GetSubscriberAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_multiplexer == null || !_multiplexer.IsConnected)
+        {
+            var db = await GetDatabaseAsync(ct);
+            if (db == null || _multiplexer == null) return null;
+        }
+
+        return _multiplexer.GetSubscriber();
+    }
+
+    public async Task<ISubscriber> GetRequiredSubscriberAsync(CancellationToken ct = default)
+    {
+        var sub = await GetSubscriberAsync(ct);
+        if (sub == null)
+        {
+            throw new DistributedSecurityStateUnavailableException(
+                "Distributed Redis pub/sub infrastructure is unavailable. Subscriber cannot be established.");
+        }
+
+        return sub;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

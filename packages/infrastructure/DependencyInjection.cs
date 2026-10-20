@@ -143,6 +143,8 @@ public static class DependencyInjection
 
         // Operational Outbox (Phase 9)
         services.AddScoped<RestaurantOrder.Application.Events.IOperationalOutboxWriter, RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter>();
+        services.AddSingleton<RestaurantOrder.Application.Events.IRealtimeEventPublisher, RestaurantOrder.Infrastructure.Events.RedisRealtimeEventPublisher>();
+        services.AddScoped<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher, RestaurantOrder.Infrastructure.Events.OperationalOutboxDispatcher>();
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();
