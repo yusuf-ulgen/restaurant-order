@@ -2,6 +2,7 @@ using System.Text.Json;
 using RestaurantOrder.Api;
 using RestaurantOrder.Api.Domain.Pricing;
 using RestaurantOrder.Api.Health;
+using RestaurantOrder.Api.Realtime;
 using RestaurantOrder.Api.Tenancy;
 using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Infrastructure;
@@ -30,6 +31,7 @@ builder.Services.AddScoped<ITenantContextResolver>(sp =>
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<ITenantContextAccessor>().TenantContext);
 
 builder.Services.AddSingleton<RestaurantOrder.Api.Auth.IAuthCookieService, RestaurantOrder.Api.Auth.AuthCookieService>();
+builder.Services.AddRealtimeEvents(builder.Configuration, builder.Environment);
 
 var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled")
     || string.Equals(builder.Configuration["FORWARDED_HEADERS_ENABLED"], "true", StringComparison.OrdinalIgnoreCase);
@@ -137,6 +139,15 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBea
                         return Task.CompletedTask;
                     }
                     context.Token = cookieToken;
+                }
+
+                if (string.IsNullOrEmpty(context.Token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    var queryToken = context.Request.Query["access_token"].ToString();
+                    if (!string.IsNullOrWhiteSpace(queryToken) && queryToken.Length <= 4096)
+                    {
+                        context.Token = queryToken;
+                    }
                 }
                 return Task.CompletedTask;
             },
@@ -412,6 +423,7 @@ RestaurantOrder.Api.Catalog.CatalogEndpoints.MapCatalogEndpoints(app);
 RestaurantOrder.Api.Floor.FloorEndpoints.MapFloorEndpoints(app);
 RestaurantOrder.Api.Orders.CustomerOrderEndpoints.MapCustomerOrderEndpoints(app);
 RestaurantOrder.Api.Orders.StaffOrderEndpoints.MapStaffOrderEndpoints(app);
+RestaurantOrder.Api.Realtime.RealtimeServiceExtensions.MapRealtimeEndpoints(app);
 
 app.Run();
 

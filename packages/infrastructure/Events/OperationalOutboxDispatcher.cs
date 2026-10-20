@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,20 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private sealed record ClaimedOutboxRecord(Guid Id, string Payload, int AttemptCount, int MaxAttempts);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private sealed record ClaimedOutboxRecord(
+        Guid Id,
+        Guid TenantId,
+        Guid BranchId,
+        string AggregateId,
+        string EventType,
+        string Payload,
+        int SchemaVersion,
+        long SequenceNumber,
+        DateTimeOffset OccurredAtUtc,
+        int AttemptCount,
+        int MaxAttempts);
 
     public async Task<int> DispatchPendingBatchAsync(int batchSize = 25, CancellationToken ct = default)
     {
@@ -68,7 +82,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                     attempt_count = o.attempt_count + 1
                 FROM cte
                 WHERE o.id = cte.id
-                RETURNING o.id, o.payload, o.attempt_count, o.max_attempts;";
+                RETURNING o.id, o.tenant_id, o.branch_id, o.aggregate_id, o.event_type, o.payload, o.schema_version, o.sequence_number, o.occurred_at_utc, o.attempt_count, o.max_attempts;";
 
             AddParameter(claimCmd, "nowUtc", nowUtc);
             AddParameter(claimCmd, "batchSize", batchSize);
@@ -80,9 +94,16 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
             {
                 claimedItems.Add(new ClaimedOutboxRecord(
                     Id: reader.GetGuid(0),
-                    Payload: reader.GetString(1),
-                    AttemptCount: reader.GetInt32(2),
-                    MaxAttempts: reader.GetInt32(3)));
+                    TenantId: reader.GetGuid(1),
+                    BranchId: reader.GetGuid(2),
+                    AggregateId: reader.GetString(3),
+                    EventType: reader.GetString(4),
+                    Payload: reader.GetString(5),
+                    SchemaVersion: reader.GetInt32(6),
+                    SequenceNumber: reader.GetInt64(7),
+                    OccurredAtUtc: reader.GetFieldValue<DateTimeOffset>(8),
+                    AttemptCount: reader.GetInt32(9),
+                    MaxAttempts: reader.GetInt32(10)));
             }
         }
         else
@@ -99,7 +120,18 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
             foreach (var entity in pendingEntities)
             {
                 entity.Claim(claimId, lockExpiresUtc);
-                claimedItems.Add(new ClaimedOutboxRecord(entity.Id, entity.Payload, entity.AttemptCount + 1, entity.MaxAttempts));
+                claimedItems.Add(new ClaimedOutboxRecord(
+                    entity.Id,
+                    entity.TenantId.Value,
+                    entity.BranchId.Value,
+                    entity.AggregateId,
+                    entity.EventType,
+                    entity.Payload,
+                    entity.SchemaVersion,
+                    entity.SequenceNumber,
+                    entity.OccurredAtUtc,
+                    entity.AttemptCount + 1,
+                    entity.MaxAttempts));
             }
 
             if (pendingEntities.Count > 0)
@@ -118,7 +150,36 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         {
             try
             {
-                await _eventPublisher.PublishBroadcastAsync(item.Payload, ct);
+                string envelopeJson;
+                try
+                {
+                    using var doc = JsonDocument.Parse(item.Payload);
+                    if (doc.RootElement.TryGetProperty("event_id", out _))
+                    {
+                        envelopeJson = item.Payload;
+                    }
+                    else
+                    {
+                        var envelope = new EventEnvelope<JsonElement>(
+                            EventId: item.Id,
+                            EventType: item.EventType,
+                            SchemaVersion: item.SchemaVersion,
+                            OccurredAtUtc: item.OccurredAtUtc,
+                            TenantId: item.TenantId,
+                            BranchId: item.BranchId,
+                            AggregateId: item.AggregateId,
+                            SequenceNumber: item.SequenceNumber,
+                            Data: doc.RootElement.Clone());
+
+                        envelopeJson = JsonSerializer.Serialize(envelope, JsonOptions);
+                    }
+                }
+                catch
+                {
+                    envelopeJson = item.Payload;
+                }
+
+                await _eventPublisher.PublishBroadcastAsync(envelopeJson, ct);
 
                 if (_dbContext.Database.IsNpgsql())
                 {
