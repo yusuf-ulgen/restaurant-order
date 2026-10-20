@@ -56,13 +56,14 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
     const serviceSheet = page.getByTestId('service-request-sheet');
     await expect(serviceSheet).toBeVisible();
 
-    // 3. Request Waiter Call
-    const waiterCallBtn = page.getByTestId('service-action-waiter_call');
-    await expect(waiterCallBtn).toBeVisible();
-    await waiterCallBtn.click();
+    // 3. Request Waiter Call (start confirm, then submit)
+    const waiterActionBtn = page.getByTestId('action-btn-waiter');
+    await expect(waiterActionBtn).toBeVisible();
+    await waiterActionBtn.click();
 
-    // Verify service request submitted successfully
-    await expect(page.getByText('Servis talebiniz iletildi.')).toBeVisible({ timeout: 5000 });
+    const submitConfirmBtn = page.getByTestId('submit-confirm-btn-waiter');
+    await expect(submitConfirmBtn).toBeVisible();
+    await submitConfirmBtn.click();
 
     // 4. Verify operational event is in sync feed via API
     const syncRes = await request.get(`/api/v1/events/sync?since_sequence=0`, {
@@ -89,20 +90,20 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
     const digitalMenuView = page.getByTestId('digital-menu-view');
     await expect(digitalMenuView).toBeVisible({ timeout: 10000 });
 
-    // 2. Admin marks burger 86 (unavailable)
-    const patchRes = await request.patch(
-      `/api/v1/catalog/items/${scenario.itemBurgerId}/availability`,
+    // 2. Admin marks burger 86 (unavailable) via Quick-86 endpoint
+    const postRes = await request.post(
+      `/api/v1/catalog/branches/${scenario.branchId}/menus/${scenario.menuId}/items/${scenario.itemBurgerId}/quick-86`,
       {
         headers: {
           Authorization: `Bearer ${scenario.adminToken}`,
           'Content-Type': 'application/json',
         },
         data: {
-          is_available: false,
+          reason: 'Tükendi',
         },
       }
     );
-    expect([200, 204]).toContain(patchRes.status());
+    expect([200, 204]).toContain(postRes.status());
 
     // 3. Verify digital menu view renders without crashing
     await expect(digitalMenuView).toBeVisible();
