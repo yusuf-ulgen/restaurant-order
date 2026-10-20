@@ -96,13 +96,7 @@ public sealed class CustomerOrderService : ICustomerOrderService
 
         try
         {
-            if (_dbContext.Database.IsNpgsql())
-            {
-                var lockKey = $"order_session_{sessionId.Value:D}";
-                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                    $"SELECT pg_advisory_xact_lock(hashtext({lockKey}))",
-                    cancellationToken);
-            }
+            await OrderSessionLock.AcquireAsync(_dbContext, tenantId, branchId, sessionId, cancellationToken);
 
             // 1. Verify dining session state
             var session = await _dbContext.DiningSessions
