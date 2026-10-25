@@ -2,8 +2,10 @@ import React, { createContext, useContext, useReducer, useEffect, useState, useM
 import type { DraftCartLine } from '@restaurant-order/contracts';
 import { cartReducer, computeCartTotals, initialCartState } from './cartReducer';
 import { loadCartFromStorage, saveCartToStorage, clearCartFromStorage } from './cartStorage';
+import { clearOrderAttempt } from './orderAttemptStorage';
 
 export interface CartContextValue {
+  sessionId: string | null;
   lines: DraftCartLine[];
   totalItemsCount: number;
   subtotalMinorUnits: number;
@@ -60,6 +62,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
       }
     } else {
       clearCartFromStorage();
+      clearOrderAttempt();
       dispatch({ type: 'CLEAR_CART' });
     }
   }, [sessionId, currency]);
@@ -70,6 +73,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
       saveCartToStorage(state);
     } else if (state.sessionId && state.lines.length === 0) {
       clearCartFromStorage();
+      clearOrderAttempt();
     }
   }, [state]);
 
@@ -78,6 +82,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
   }, [state.lines]);
 
   const value = useMemo<CartContextValue>(() => ({
+    sessionId: state.sessionId,
     lines: state.lines,
     totalItemsCount: totals.totalItemCount,
     subtotalMinorUnits: totals.subtotalMinorUnits,
@@ -92,6 +97,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
     clearCart: () => {
       dispatch({ type: 'CLEAR_CART' });
       clearCartFromStorage();
+      clearOrderAttempt();
     },
     acceptPriceChanges: (updates, policyFingerprint) =>
       dispatch({ type: 'ACCEPT_PRICE_CHANGES', updates, policyFingerprint }),
@@ -100,7 +106,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({
     isCartOpen,
     openCart: () => setIsCartOpen(true),
     closeCart: () => setIsCartOpen(false),
-  }), [state.lines, state.currency, state.acceptedPolicyFingerprint, state.requiresReconfirmation, totals, isCartOpen]);
+  }), [state.sessionId, state.lines, state.currency, state.acceptedPolicyFingerprint, state.requiresReconfirmation, totals, isCartOpen]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

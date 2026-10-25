@@ -256,8 +256,12 @@ public sealed partial class Order
             throw new DomainException($"Cannot mark Order as Ready from status '{Status}'. Only InPreparation orders can transition to Ready.");
         }
 
+        if (!_items.Any(item => item.Status == OrderItemStatus.InPreparation))
+        {
+            throw new DomainException("No items in InPreparation status found to mark ready.");
+        }
+
         var timestamp = nowUtc ?? DateTimeOffset.UtcNow;
-        Status = OrderStatus.Ready;
         ConcurrencyToken = Guid.NewGuid();
         UpdatedAtUtc = timestamp;
 
@@ -268,6 +272,9 @@ public sealed partial class Order
                 item.MarkReady(timestamp);
             }
         }
+
+        // Henüz hazırlanmayan kalemler varken siparişin tamamı hazır sayılamaz.
+        RefreshDerivedStatus(timestamp);
     }
 
     public void MarkServed(DateTimeOffset? nowUtc = null)

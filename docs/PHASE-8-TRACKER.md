@@ -192,7 +192,7 @@ Bu belge, `restaurant-order` projesinde **Faz 8: Sipariş Çekirdeği (Order Agg
   - TypeScript typecheck: 7/7 proje Done (`PASS`).
   - Architecture tests: 10/10 (`PASS`).
   - Backend Unit tests: 1667/1667 (`PASS`).
-  - Backend Integration tests: 373/373 (`PASS`, SKIP_TESTCONTAINERS=true).
+  - Önceki yerel entegrasyon kaydı: 373 test raporlandı; `SKIP_TESTCONTAINERS=true` nedeniyle bu kayıt gerçek PostgreSQL çalıştırma kanıtı değildir. 2026-10-20 incelemesinin gerçek veritabanı kanıtı [inceleme kaydında](./PHASE-8-REVIEW.md) tutulur.
   - Frontend unit/component tests: 552/552 (`PASS`: customer-web: 227 (+7 yeni), operations-web: 15, admin-web: 151, packages/ui: 159).
   - Frontend test coverage (customer-web): Stmts: %94,03, Branch: %83,33, Funcs: %89,82, Lines: %94,03 (`PASS`, tüm eşikler > %80).
   - Quality gates: 114 test (`PASS`, 1 atlandı: Docker konteyner akışı).

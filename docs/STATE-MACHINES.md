@@ -90,7 +90,7 @@ Bu masa/sipariş/hesap akışları planlanan fazları anlatır; uygulanmış uç
 > - Sipariş (`Order`) aggregate genel durumu, kalemlerinin (`OrderItem`) durumlarından deterministik türetilir:
 >   1. Tüm kalemler `Cancelled` ise -> Sipariş durumu `Cancelled`.
 >   2. İptal edilmemiş tüm aktif kalemler `Served` ise -> Sipariş durumu `Served`.
->   3. Herhangi bir kalem `Ready` ise ve hiçbir kalem `InPreparation` değilse -> Sipariş durumu `Ready`.
+>   3. İptal edilmemiş tüm kalemler `Ready` veya `Served` ve en az biri `Ready` ise -> Sipariş durumu `Ready`.
 >   4. Herhangi bir kalem `InPreparation` ise veya karışık hazırlık evresindeyse (`Submitted` ile `Ready`/`Served` bir arada) -> Sipariş durumu `InPreparation`.
 >   5. Yalnızca `Submitted` durumundaki kalemler varsa -> Sipariş durumu `Submitted`.
 > - İstasyon fişinin istasyon tarafından kabul edilmesi (`Acknowledged`), gelecekteki `StationTicket` (KDS) alanına aittir; `Order` aggregate'inde durum değildir.
