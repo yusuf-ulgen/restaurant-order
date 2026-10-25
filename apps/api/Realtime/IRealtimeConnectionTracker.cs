@@ -9,7 +9,12 @@ public sealed record TrackedConnection(
     Guid BranchId,
     string Role,
     Guid? DiningSessionId,
-    Guid? UserId);
+    Guid? UserId,
+    Guid? StaffSessionId = null,
+    int? SecurityVersion = null,
+    DateTimeOffset? TokenExpiresAtUtc = null,
+    IReadOnlyList<string>? SubscribedGroups = null,
+    Action? Abort = null);
 
 /// <summary>
 /// Thread-safe tracker of active SignalR connections and their security context.
@@ -21,4 +26,6 @@ public interface IRealtimeConnectionTracker
     void Untrack(string connectionId);
     IReadOnlyList<TrackedConnection> GetConnectionsForSession(Guid tenantId, Guid branchId, Guid diningSessionId);
     IReadOnlyList<TrackedConnection> GetConnectionsForUser(Guid tenantId, Guid userId);
+    IReadOnlyList<TrackedConnection> GetExpiredConnections(DateTimeOffset now);
+    IReadOnlyList<TrackedConnection> GetAllConnections();
 }

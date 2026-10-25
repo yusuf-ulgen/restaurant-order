@@ -105,15 +105,29 @@ public static class PinAuthEndpoints
             HttpContext httpContext,
             IStaffPinAuthService pinAuthService,
             IAuthCookieService cookieService,
+            RestaurantOrder.Application.Events.IRealtimeEventPublisher realtimeEventPublisher,
             CancellationToken ct) =>
         {
             var sidStr = httpContext.User.FindFirst(JwtClaimNames.SessionId)?.Value;
+            var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
+            var tenantStr = httpContext.User.FindFirst(JwtClaimNames.TenantId)?.Value;
             var creds = cookieService.GetTerminalCredentials(httpContext.Request);
             var terminalId = creds?.TerminalId;
 
             if (Guid.TryParse(sidStr, out var sessionId))
             {
                 await pinAuthService.LogoutPinSessionAsync(sessionId, terminalId ?? Guid.Empty, ct);
+                if (Guid.TryParse(tenantStr, out var tenantId) && Guid.TryParse(subStr, out var userId))
+                {
+                    try
+                    {
+                        await realtimeEventPublisher.PublishUserInvalidatedAsync(tenantId, userId, sessionId, "pin_logout", ct);
+                    }
+                    catch
+                    {
+                        // Eviction failure logged in publisher
+                    }
+                }
             }
 
             cookieService.ClearAuthCookies(httpContext.Response, httpContext.Request.IsHttps);

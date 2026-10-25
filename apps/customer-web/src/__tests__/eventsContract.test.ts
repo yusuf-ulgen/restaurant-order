@@ -58,6 +58,7 @@ describe('Real-time Event Envelope and Typed Payloads Contract Drift Validation'
       sequence_number: 1043,
       data: {
         order_id: '44444444-4444-4444-4444-444444444444',
+        dining_session_id: '55555555-5555-5555-5555-555555555555',
         item_id: '77777777-7777-7777-7777-777777777777',
         new_status: 'Ready',
         changed_at_utc: '2026-10-20T14:05:00Z',
@@ -65,6 +66,7 @@ describe('Real-time Event Envelope and Typed Payloads Contract Drift Validation'
     };
 
     expect(envelope.data.new_status).toBe('Ready');
+    expect(envelope.data.dining_session_id).toBe('55555555-5555-5555-5555-555555555555');
     expect(envelope.data.item_id).toBe('77777777-7777-7777-7777-777777777777');
   });
 

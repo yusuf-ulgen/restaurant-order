@@ -49,6 +49,7 @@ export interface OrderCreatedEventData {
  */
 export interface OrderItemStatusChangedEventData {
   order_id: string;
+  dining_session_id: string;
   item_id: string;
   new_status: 'InPreparation' | 'Ready' | 'Served' | 'Cancelled';
   changed_at_utc: string;

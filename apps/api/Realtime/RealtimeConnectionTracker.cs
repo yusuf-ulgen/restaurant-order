@@ -36,4 +36,16 @@ public sealed class RealtimeConnectionTracker : IRealtimeConnectionTracker
             .Where(c => c.TenantId == tenantId && c.UserId == userId)
             .ToList();
     }
+
+    public IReadOnlyList<TrackedConnection> GetExpiredConnections(DateTimeOffset now)
+    {
+        return _connections.Values
+            .Where(c => c.TokenExpiresAtUtc.HasValue && c.TokenExpiresAtUtc.Value <= now)
+            .ToList();
+    }
+
+    public IReadOnlyList<TrackedConnection> GetAllConnections()
+    {
+        return _connections.Values.ToList();
+    }
 }

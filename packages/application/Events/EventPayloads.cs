@@ -22,6 +22,7 @@ public record OrderCreatedEventData(
 /// </summary>
 public record OrderItemStatusChangedEventData(
     [property: JsonPropertyName("order_id")] Guid OrderId,
+    [property: JsonPropertyName("dining_session_id")] Guid DiningSessionId,
     [property: JsonPropertyName("item_id")] Guid ItemId,
     [property: JsonPropertyName("new_status")] string NewStatus,
     [property: JsonPropertyName("changed_at_utc")] DateTimeOffset ChangedAtUtc

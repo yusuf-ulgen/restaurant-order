@@ -13,6 +13,7 @@ public sealed class RedisRealtimeEventPublisher : IRealtimeEventPublisher
 {
     public const string BroadcastChannel = "restaurant-order:events:broadcast";
     public const string SessionEvictionChannel = "restaurant-order:sessions:evict";
+    public const string UserEvictionChannel = "restaurant-order:users:evict";
 
     private readonly IRedisDatabaseProvider _redisProvider;
     private readonly ILogger<RedisRealtimeEventPublisher> _logger;
@@ -59,6 +60,29 @@ public sealed class RedisRealtimeEventPublisher : IRealtimeEventPublisher
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish session eviction event for Session '{SessionId}'.", sessionId);
+            throw;
+        }
+    }
+
+    public async Task PublishUserInvalidatedAsync(Guid tenantId, Guid userId, Guid? sessionId = null, string reason = "revoked", CancellationToken ct = default)
+    {
+        try
+        {
+            var subscriber = await _redisProvider.GetRequiredSubscriberAsync(ct);
+            var payload = JsonSerializer.Serialize(new
+            {
+                tenant_id = tenantId,
+                user_id = userId,
+                session_id = sessionId,
+                reason,
+                invalidated_at_utc = DateTimeOffset.UtcNow
+            });
+
+            await subscriber.PublishAsync(RedisChannel.Literal(UserEvictionChannel), payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish user eviction event for User '{UserId}'.", userId);
             throw;
         }
     }

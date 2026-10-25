@@ -234,20 +234,44 @@ public sealed class OrderLifecycleService : IOrderLifecycleService
 
             _dbContext.OrderAuditEntries.Add(audit);
 
-            // Enqueue real-time item status change event
-            _outboxWriter.EnqueueEvent(
-                tenantId: tenantId.Value,
-                branchId: branchId.Value,
-                aggregateId: order.Id.Value.ToString(),
-                eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
-                data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
-                    OrderId: order.Id.Value,
-                    ItemId: targetItem?.Id.Value ?? order.Id.Value,
-                    NewStatus: targetItem?.Status.ToString() ?? order.Status.ToString(),
-                    ChangedAtUtc: nowUtc
-                ),
-                idempotencyKey: $"order-transition-{order.Id.Value}-{targetItem?.Id.Value ?? Guid.Empty}-{action}-{order.ConcurrencyToken}",
-                occurredAtUtc: nowUtc);
+            // Enqueue real-time item status change events with genuine item and domain statuses
+            if (targetItem != null)
+            {
+                _outboxWriter.EnqueueEvent(
+                    tenantId: tenantId.Value,
+                    branchId: branchId.Value,
+                    aggregateId: order.Id.Value.ToString(),
+                    eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
+                    data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
+                        OrderId: order.Id.Value,
+                        DiningSessionId: order.DiningSessionId.Value,
+                        ItemId: targetItem.Id.Value,
+                        NewStatus: targetItem.Status.ToString(),
+                        ChangedAtUtc: nowUtc
+                    ),
+                    idempotencyKey: $"order-transition-{order.Id.Value}-{targetItem.Id.Value}-{action}-{order.ConcurrencyToken}",
+                    occurredAtUtc: nowUtc);
+            }
+            else
+            {
+                foreach (var item in order.Items)
+                {
+                    _outboxWriter.EnqueueEvent(
+                        tenantId: tenantId.Value,
+                        branchId: branchId.Value,
+                        aggregateId: order.Id.Value.ToString(),
+                        eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
+                        data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
+                            OrderId: order.Id.Value,
+                            DiningSessionId: order.DiningSessionId.Value,
+                            ItemId: item.Id.Value,
+                            NewStatus: item.Status.ToString(),
+                            ChangedAtUtc: nowUtc
+                        ),
+                        idempotencyKey: $"order-transition-{order.Id.Value}-{item.Id.Value}-{action}-{order.ConcurrencyToken}",
+                        occurredAtUtc: nowUtc);
+                }
+            }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
             if (localTx != null)

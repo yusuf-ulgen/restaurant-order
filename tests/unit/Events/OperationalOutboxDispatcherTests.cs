@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +34,11 @@ public class OperationalOutboxDispatcherTests
         }
 
         public Task PublishSessionInvalidatedAsync(Guid tenantId, Guid branchId, Guid sessionId, CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task PublishUserInvalidatedAsync(Guid tenantId, Guid userId, Guid? sessionId = null, string reason = "revoked", CancellationToken ct = default)
         {
             return Task.CompletedTask;
         }

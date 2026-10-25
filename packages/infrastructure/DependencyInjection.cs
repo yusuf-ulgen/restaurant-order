@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.PostgreSqlPlatformSessionStore>();
         services.AddScoped<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisLoginRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Auth.ITokenRevocationValidator, RestaurantOrder.Infrastructure.Auth.DistributedTokenRevocationValidator>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IBranchScopeValidator, RestaurantOrder.Infrastructure.Auth.BranchScopeValidator>();
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
         services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
 

@@ -176,6 +176,7 @@ public sealed partial class StaffOrderService
             eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
             data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
                 OrderId: order.Id.Value,
+                DiningSessionId: order.DiningSessionId.Value,
                 ItemId: item.Id.Value,
                 NewStatus: "Cancelled",
                 ChangedAtUtc: nowUtc

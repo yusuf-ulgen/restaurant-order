@@ -17,6 +17,7 @@ public class RealtimeEventsHubTests
 {
     private readonly Mock<ICustomerSessionValidator> _sessionValidatorMock = new();
     private readonly Mock<ITokenRevocationValidator> _tokenValidatorMock = new();
+    private readonly Mock<IBranchScopeValidator> _branchScopeValidatorMock = new();
     private readonly RealtimeConnectionTracker _tracker = new();
     private readonly Mock<HubCallerContext> _contextMock = new();
     private readonly Mock<IGroupManager> _groupsMock = new();
@@ -30,6 +31,7 @@ public class RealtimeEventsHubTests
         var hub = new EventsHub(
             _sessionValidatorMock.Object,
             _tokenValidatorMock.Object,
+            _branchScopeValidatorMock.Object,
             _tracker,
             NullLogger<EventsHub>.Instance)
         {
@@ -167,7 +169,8 @@ public class RealtimeEventsHubTests
         var catalogGroup = $"tenant:{tenantId}:branch:{branchId}:catalog";
         var stationGroup = $"tenant:{tenantId}:branch:{branchId}:station:kitchen";
 
-        _groupsMock.Verify(g => g.AddToGroupAsync("staff-conn-1", floorGroup, It.IsAny<CancellationToken>()), Times.Once);
+        // Kitchen receives queue and catalog only; must not receive floor noise
+        _groupsMock.Verify(g => g.AddToGroupAsync("staff-conn-1", floorGroup, It.IsAny<CancellationToken>()), Times.Never);
         _groupsMock.Verify(g => g.AddToGroupAsync("staff-conn-1", catalogGroup, It.IsAny<CancellationToken>()), Times.Once);
         _groupsMock.Verify(g => g.AddToGroupAsync("staff-conn-1", stationGroup, It.IsAny<CancellationToken>()), Times.Once);
     }

@@ -188,4 +188,39 @@ public class RealtimeMultiInstanceIntegrationTests : IClassFixture<Testcontainer
         Assert.Equal(tenantId.ToString(), doc.RootElement.GetProperty("tenant_id").GetString());
         Assert.Equal(sessionId.ToString(), doc.RootElement.GetProperty("session_id").GetString());
     }
+
+    [Fact]
+    public async Task MultiInstance_UserEviction_BroadcastsAcrossInstances()
+    {
+        if (!TestcontainersGuard.ShouldRun(_fixture)) return;
+
+        var redisA = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
+        var redisB = await ConnectionMultiplexer.ConnectAsync(_fixture.RedisEndpoint);
+
+        var providerA = new TestRedisProvider(redisA);
+        var publisherA = new RedisRealtimeEventPublisher(providerA, NullLogger<RedisRealtimeEventPublisher>.Instance);
+
+        var subscriberB = redisB.GetSubscriber();
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await subscriberB.SubscribeAsync(
+            RedisChannel.Literal(RedisRealtimeEventPublisher.UserEvictionChannel),
+            (ch, msg) => tcs.TrySetResult(msg.ToString()));
+
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        await publisherA.PublishUserInvalidatedAsync(tenantId, userId, sessionId, "revoked");
+
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+        Assert.Equal(tcs.Task, completed);
+
+        var evictionPayload = await tcs.Task;
+        using var doc = JsonDocument.Parse(evictionPayload);
+        Assert.Equal(tenantId.ToString(), doc.RootElement.GetProperty("tenant_id").GetString());
+        Assert.Equal(userId.ToString(), doc.RootElement.GetProperty("user_id").GetString());
+        Assert.Equal(sessionId.ToString(), doc.RootElement.GetProperty("session_id").GetString());
+        Assert.Equal("revoked", doc.RootElement.GetProperty("reason").GetString());
+    }
 }

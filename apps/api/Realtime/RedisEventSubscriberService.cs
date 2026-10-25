@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,6 +45,9 @@ public sealed class RedisEventSubscriberService : BackgroundService
     {
         _logger.LogInformation("Starting RedisEventSubscriberService background bridge...");
 
+        // Start periodic token expiration sweep task
+        _ = RunPeriodicExpirySweepAsync(stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -64,9 +67,14 @@ public sealed class RedisEventSubscriberService : BackgroundService
                     RedisChannel.Literal(RedisRealtimeEventPublisher.SessionEvictionChannel),
                     async (channel, message) => await HandleSessionEvictionMessageAsync(message));
 
-                _logger.LogInformation("Subscribed to Redis channels '{Broadcast}' and '{Evict}'.",
+                await subscriber.SubscribeAsync(
+                    RedisChannel.Literal(RedisRealtimeEventPublisher.UserEvictionChannel),
+                    async (channel, message) => await HandleUserEvictionMessageAsync(message));
+
+                _logger.LogInformation("Subscribed to Redis channels '{Broadcast}', '{SessionEvict}', and '{UserEvict}'.",
                     RedisRealtimeEventPublisher.BroadcastChannel,
-                    RedisRealtimeEventPublisher.SessionEvictionChannel);
+                    RedisRealtimeEventPublisher.SessionEvictionChannel,
+                    RedisRealtimeEventPublisher.UserEvictionChannel);
 
                 await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
             }
@@ -84,7 +92,57 @@ public sealed class RedisEventSubscriberService : BackgroundService
         _logger.LogInformation("RedisEventSubscriberService background bridge stopped.");
     }
 
-    private async Task HandleBroadcastMessageAsync(RedisValue message)
+    internal async Task RunPeriodicExpirySweepAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                await SweepExpiredConnectionsAsync(DateTimeOffset.UtcNow);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error occurred during periodic connection expiry sweep.");
+            }
+        }
+    }
+
+    internal async Task SweepExpiredConnectionsAsync(DateTimeOffset now)
+    {
+        var expiredConnections = _tracker.GetExpiredConnections(now);
+        foreach (var conn in expiredConnections)
+        {
+            try
+            {
+                await _hubContext.Clients.Client(conn.ConnectionId).SendAsync("TokenExpired", new { expired_at_utc = conn.TokenExpiresAtUtc });
+
+                if (conn.SubscribedGroups != null)
+                {
+                    foreach (var group in conn.SubscribedGroups)
+                    {
+                        await _hubContext.Groups.RemoveFromGroupAsync(conn.ConnectionId, group);
+                    }
+                }
+
+                conn.Abort?.Invoke();
+                _tracker.Untrack(conn.ConnectionId);
+
+                _logger.LogInformation("Terminated expired SignalR connection '{ConnectionId}' (expired at {ExpiredAtUtc}).",
+                    conn.ConnectionId, conn.TokenExpiresAtUtc);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to evict expired connection '{ConnectionId}'.", conn.ConnectionId);
+            }
+        }
+    }
+
+    internal async Task HandleBroadcastMessageAsync(RedisValue message)
     {
         if (message.IsNullOrEmpty) return;
 
@@ -133,6 +191,8 @@ public sealed class RedisEventSubscriberService : BackgroundService
 
             var floorGroup = $"tenant:{tenantId}:branch:{branchId}:floor";
             var catalogGroup = $"tenant:{tenantId}:branch:{branchId}:catalog";
+            var kitchenGroup = $"tenant:{tenantId}:branch:{branchId}:station:kitchen";
+            var barGroup = $"tenant:{tenantId}:branch:{branchId}:station:bar";
             var rawEnvelopeJson = message.ToString();
 
             // Extract optional dining_session_id from data
@@ -149,6 +209,17 @@ public sealed class RedisEventSubscriberService : BackgroundService
             {
                 case RealtimeEventTypes.OrderCreated:
                 case RealtimeEventTypes.OrderItemStatusChanged:
+                    // Route to floor, station queues, and customer's own session
+                    if (diningSessionId.HasValue)
+                    {
+                        var sessionGroup = $"tenant:{tenantId}:branch:{branchId}:session:{diningSessionId.Value}";
+                        await _hubContext.Clients.Group(sessionGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    }
+                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await _hubContext.Clients.Group(kitchenGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await _hubContext.Clients.Group(barGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    break;
+
                 case RealtimeEventTypes.TableServiceRequested:
                 case RealtimeEventTypes.TableServiceRequestStatusChanged:
                     if (diningSessionId.HasValue)
@@ -169,7 +240,10 @@ public sealed class RedisEventSubscriberService : BackgroundService
 
                     if (diningSessionId.HasValue)
                     {
-                        EvictConnectionsForSession(tenantId, branchId, diningSessionId.Value);
+                        // Publish control message so all API instances in the cluster evict local connections
+                        var publisher = new RedisRealtimeEventPublisher(_redisProvider, LoggerFactory.Create(b => {}).CreateLogger<RedisRealtimeEventPublisher>());
+                        await publisher.PublishSessionInvalidatedAsync(tenantId, branchId, diningSessionId.Value);
+                        await EvictConnectionsForSessionAsync(tenantId, branchId, diningSessionId.Value);
                     }
                     break;
 
@@ -190,9 +264,9 @@ public sealed class RedisEventSubscriberService : BackgroundService
         }
     }
 
-    private Task HandleSessionEvictionMessageAsync(RedisValue message)
+    internal async Task HandleSessionEvictionMessageAsync(RedisValue message)
     {
-        if (message.IsNullOrEmpty) return Task.CompletedTask;
+        if (message.IsNullOrEmpty) return;
 
         try
         {
@@ -202,30 +276,111 @@ public sealed class RedisEventSubscriberService : BackgroundService
             var branchId = root.GetProperty("branch_id").GetGuid();
             var sessionId = root.GetProperty("session_id").GetGuid();
 
-            EvictConnectionsForSession(tenantId, branchId, sessionId);
+            await EvictConnectionsForSessionAsync(tenantId, branchId, sessionId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process session eviction control message.");
         }
-
-        return Task.CompletedTask;
     }
 
-    private void EvictConnectionsForSession(Guid tenantId, Guid branchId, Guid sessionId)
+    internal async Task HandleUserEvictionMessageAsync(RedisValue message)
+    {
+        if (message.IsNullOrEmpty) return;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message.ToString());
+            var root = doc.RootElement;
+            var tenantId = root.GetProperty("tenant_id").GetGuid();
+            var userId = root.GetProperty("user_id").GetGuid();
+
+            Guid? sessionId = null;
+            if (root.TryGetProperty("session_id", out var sidProp) && sidProp.ValueKind == JsonValueKind.String && sidProp.TryGetGuid(out var parsedSid))
+            {
+                sessionId = parsedSid;
+            }
+
+            var reason = "revoked";
+            if (root.TryGetProperty("reason", out var reasonProp))
+            {
+                reason = reasonProp.GetString() ?? reason;
+            }
+
+            await EvictConnectionsForUserAsync(tenantId, userId, sessionId, reason);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process user eviction control message.");
+        }
+    }
+
+    internal async Task EvictConnectionsForSessionAsync(Guid tenantId, Guid branchId, Guid sessionId)
     {
         var activeConnections = _tracker.GetConnectionsForSession(tenantId, branchId, sessionId);
         foreach (var conn in activeConnections)
         {
             try
             {
-                _hubContext.Clients.Client(conn.ConnectionId).SendAsync("SessionClosed", new { session_id = sessionId });
+                // Send terminal notification
+                await _hubContext.Clients.Client(conn.ConnectionId).SendAsync("SessionClosed", new { session_id = sessionId });
+
+                // Server-side group lifecycle termination: remove connection from all SignalR groups
+                if (conn.SubscribedGroups != null)
+                {
+                    foreach (var group in conn.SubscribedGroups)
+                    {
+                        await _hubContext.Groups.RemoveFromGroupAsync(conn.ConnectionId, group);
+                    }
+                }
+
+                // Forcefully abort the transport connection on the server
+                conn.Abort?.Invoke();
+
+                // Untrack from local registry
                 _tracker.Untrack(conn.ConnectionId);
-                _logger.LogInformation("Evicted connection '{ConnectionId}' following session '{SessionId}' closure.", conn.ConnectionId, sessionId);
+
+                _logger.LogInformation("Evicted and terminated connection '{ConnectionId}' following session '{SessionId}' closure.",
+                    conn.ConnectionId, sessionId);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to cleanly evict connection '{ConnectionId}'.", conn.ConnectionId);
+            }
+        }
+    }
+
+    internal async Task EvictConnectionsForUserAsync(Guid tenantId, Guid userId, Guid? sessionId, string reason)
+    {
+        var activeConnections = _tracker.GetConnectionsForUser(tenantId, userId);
+        foreach (var conn in activeConnections)
+        {
+            if (sessionId.HasValue && conn.StaffSessionId.HasValue && conn.StaffSessionId.Value != sessionId.Value)
+            {
+                continue;
+            }
+
+            try
+            {
+                await _hubContext.Clients.Client(conn.ConnectionId).SendAsync("AccessRevoked", new { user_id = userId, reason });
+
+                if (conn.SubscribedGroups != null)
+                {
+                    foreach (var group in conn.SubscribedGroups)
+                    {
+                        await _hubContext.Groups.RemoveFromGroupAsync(conn.ConnectionId, group);
+                    }
+                }
+
+                conn.Abort?.Invoke();
+                _tracker.Untrack(conn.ConnectionId);
+
+                _logger.LogInformation("Evicted and terminated staff connection '{ConnectionId}' for user '{UserId}' (reason: {Reason}).",
+                    conn.ConnectionId, userId, reason);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to cleanly evict staff connection '{ConnectionId}'.", conn.ConnectionId);
             }
         }
     }

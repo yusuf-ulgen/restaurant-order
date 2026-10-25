@@ -80,6 +80,7 @@ public class EventContractDriftTests
     {
         var data = new OrderItemStatusChangedEventData(
             OrderId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            DiningSessionId: Guid.Parse("33333333-3333-3333-3333-333333333333"),
             ItemId: Guid.Parse("22222222-2222-2222-2222-222222222222"),
             NewStatus: "Ready",
             ChangedAtUtc: DateTimeOffset.UtcNow
@@ -90,6 +91,7 @@ public class EventContractDriftTests
         var root = doc.RootElement;
 
         Assert.Equal("11111111-1111-1111-1111-111111111111", root.GetProperty("order_id").GetString());
+        Assert.Equal("33333333-3333-3333-3333-333333333333", root.GetProperty("dining_session_id").GetString());
         Assert.Equal("22222222-2222-2222-2222-222222222222", root.GetProperty("item_id").GetString());
         Assert.Equal("Ready", root.GetProperty("new_status").GetString());
         Assert.True(root.TryGetProperty("changed_at_utc", out _));
