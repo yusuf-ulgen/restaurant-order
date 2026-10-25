@@ -263,14 +263,6 @@ public class EventSyncEndpointsTests
                         o.BranchId == branchIdTyped &&
                         o.SequenceNumber > sinceSequence);
 
-        if (isCustomer && customerSessionId.HasValue)
-        {
-            var sessionStr = customerSessionId.Value.ToString();
-            query = query.Where(o => o.EventType == RealtimeEventTypes.MenuItemAvailabilityChanged ||
-                                     o.EventType == RealtimeEventTypes.CatalogPolicyInvalidated ||
-                                     o.Payload.Contains(sessionStr));
-        }
-
         var records = await query
             .OrderBy(o => o.SequenceNumber)
             .Take(safeLimit + 1)
@@ -280,12 +272,39 @@ public class EventSyncEndpointsTests
         var returnRecords = records.Take(safeLimit).ToList();
 
         var eventEnvelopes = new List<EventEnvelope<object>>();
+        long lastProcessedSequence = sinceSequence;
+
         foreach (var rec in returnRecords)
         {
             try
             {
                 using var doc = JsonDocument.Parse(rec.Payload);
-                if (doc.RootElement.TryGetProperty("event_id", out _))
+                var root = doc.RootElement;
+
+                Guid? eventSessionId = null;
+                if (root.TryGetProperty("dining_session_id", out var dsEl) && dsEl.TryGetGuid(out var parsedDsId))
+                {
+                    eventSessionId = parsedDsId;
+                }
+                else if (root.TryGetProperty("data", out var dataEl) &&
+                         dataEl.ValueKind == JsonValueKind.Object &&
+                         dataEl.TryGetProperty("dining_session_id", out var innerDsEl) &&
+                         innerDsEl.TryGetGuid(out var innerParsedDsId))
+                {
+                    eventSessionId = innerParsedDsId;
+                }
+
+                if (isCustomer)
+                {
+                    var isCatalogEvent = rec.EventType is RealtimeEventTypes.MenuItemAvailabilityChanged or RealtimeEventTypes.CatalogPolicyInvalidated;
+                    if (!isCatalogEvent && (!eventSessionId.HasValue || eventSessionId.Value != customerSessionId!.Value))
+                    {
+                        lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
+                        continue;
+                    }
+                }
+
+                if (root.TryGetProperty("event_id", out _))
                 {
                     var env = JsonSerializer.Deserialize<EventEnvelope<object>>(rec.Payload);
                     if (env != null) eventEnvelopes.Add(env);
@@ -301,16 +320,18 @@ public class EventSyncEndpointsTests
                         BranchId: rec.BranchId.Value,
                         AggregateId: rec.AggregateId,
                         SequenceNumber: rec.SequenceNumber,
-                        Data: doc.RootElement.Clone()
+                        Data: root.Clone()
                     );
                     eventEnvelopes.Add(env);
                 }
+
+                lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
             }
             catch { }
         }
 
         var latestSequence = returnRecords.Count > 0
-            ? returnRecords.Max(r => r.SequenceNumber)
+            ? lastProcessedSequence
             : sinceSequence;
 
         return Results.Ok(new EventsSyncResponse(

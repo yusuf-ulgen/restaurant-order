@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -9,8 +10,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Events;
+using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Events;
 using RestaurantOrder.Domain.Tenants;
@@ -28,17 +31,49 @@ public static class EventSyncEndpoints
             ClaimsPrincipal user,
             HttpContext httpContext,
             RestaurantOrderDbContext dbContext,
+            ICustomerSessionValidator sessionValidator,
+            IBranchScopeValidator branchValidator,
+            ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
+            var logger = loggerFactory.CreateLogger("EventSyncEndpoints");
             var tenantClaim = user.FindFirst(JwtClaimNames.TenantId)?.Value ?? user.FindFirst("tenant_id")?.Value;
             var branchClaim = user.FindFirst(JwtClaimNames.BranchId)?.Value ?? user.FindFirst("branch_id")?.Value;
             var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
             var principalType = user.FindFirst(JwtClaimNames.PrincipalType)?.Value ?? user.FindFirst("principal_type")?.Value;
 
-            if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty ||
-                !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty)
+            if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty || string.IsNullOrWhiteSpace(roleClaim))
             {
                 return Results.Unauthorized();
+            }
+
+            var normalizedRole = roleClaim.Trim().ToLowerInvariant();
+            Guid branchId;
+
+            // RestaurantAdmin / SuperAdmin has tenant scope; resolves branch through query parameter or header
+            if (normalizedRole is "restaurantadmin" or "restaurant_admin" or "superadmin" or "super_admin")
+            {
+                var branchQuery = httpContext.Request.Query["branchId"].ToString()
+                    ?? httpContext.Request.Query["branch_id"].ToString()
+                    ?? httpContext.Request.Headers["X-Branch-Id"].ToString();
+
+                if (!Guid.TryParse(branchQuery, out branchId) || branchId == Guid.Empty)
+                {
+                    return Results.BadRequest(new { error = "Branch selection required for tenant-scoped administrator." });
+                }
+
+                var isBranchValid = await branchValidator.ValidateBranchBelongsToTenantAsync(tenantId, branchId, ct);
+                if (!isBranchValid)
+                {
+                    return Results.Forbid();
+                }
+            }
+            else
+            {
+                if (!Guid.TryParse(branchClaim, out branchId) || branchId == Guid.Empty)
+                {
+                    return Results.Unauthorized();
+                }
             }
 
             var safeLimit = Math.Clamp(limit ?? 50, 1, 100);
@@ -53,16 +88,27 @@ public static class EventSyncEndpoints
                 {
                     return Results.Unauthorized();
                 }
+
+                // Verify customer session remains active fail-closed
+                var isSessionActive = await sessionValidator.ValidateSessionActiveAsync(tenantId, branchId, parsedSessionId, ct);
+                if (!isSessionActive)
+                {
+                    httpContext.Response.Headers.Append("X-Session-Closed", "true");
+                    return Results.Unauthorized();
+                }
+
                 customerSessionId = parsedSessionId;
             }
 
             var tenantIdTyped = new TenantId(tenantId);
             var branchIdTyped = new BranchId(branchId);
 
+            // Establish tenant transaction for RLS protection
+            await using var tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+
             // Check retention window (24 hours)
             var retentionCutoff = DateTimeOffset.UtcNow.AddHours(-24);
             var oldestSequence = await dbContext.OperationalOutbox
-                .IgnoreQueryFilters()
                 .Where(o => o.TenantId == tenantIdTyped && o.BranchId == branchIdTyped && o.CreatedAtUtc >= retentionCutoff)
                 .OrderBy(o => o.SequenceNumber)
                 .Select(o => (long?)o.SequenceNumber)
@@ -73,36 +119,148 @@ public static class EventSyncEndpoints
                 httpContext.Response.Headers.Append("X-Resync-Required", "true");
             }
 
-            // Query matching outbox records
-            var query = dbContext.OperationalOutbox
-                .IgnoreQueryFilters()
-                .Where(o => o.TenantId == tenantIdTyped &&
-                            o.BranchId == branchIdTyped &&
-                            o.SequenceNumber > since_sequence);
-
-            if (isCustomer && customerSessionId.HasValue)
+            // Calculate safe commit watermark against out-of-order sequence commit race
+            long safeWatermark = long.MaxValue;
+            if (dbContext.Database.IsRelational() && dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
             {
-                var sessionStr = customerSessionId.Value.ToString();
-                query = query.Where(o => o.EventType == RealtimeEventTypes.MenuItemAvailabilityChanged ||
-                                         o.EventType == RealtimeEventTypes.CatalogPolicyInvalidated ||
-                                         o.Payload.Contains(sessionStr));
+                try
+                {
+                    var conn = dbContext.Database.GetDbConnection();
+                    if (conn.State != ConnectionState.Open)
+                    {
+                        await conn.OpenAsync(ct);
+                    }
+
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT COALESCE(
+                            (SELECT MIN(sequence_number) - 1
+                             FROM tenancy.operational_outbox
+                             WHERE sequence_number > @p_since
+                               AND tenant_id = @p_tenant
+                               AND branch_id = @p_branch
+                               AND (xmin::text)::bigint >= (pg_snapshot_xmin(pg_current_snapshot())::text)::bigint),
+                            (SELECT MAX(sequence_number)
+                             FROM (
+                                 SELECT sequence_number
+                                 FROM tenancy.operational_outbox
+                                 WHERE sequence_number > @p_since
+                                   AND tenant_id = @p_tenant
+                                   AND branch_id = @p_branch
+                                 ORDER BY sequence_number ASC
+                                 LIMIT @p_limit
+                             ) sub)
+                        );";
+
+                    var pSince = cmd.CreateParameter();
+                    pSince.ParameterName = "@p_since";
+                    pSince.Value = since_sequence;
+                    cmd.Parameters.Add(pSince);
+
+                    var pTenant = cmd.CreateParameter();
+                    pTenant.ParameterName = "@p_tenant";
+                    pTenant.Value = tenantId;
+                    cmd.Parameters.Add(pTenant);
+
+                    var pBranch = cmd.CreateParameter();
+                    pBranch.ParameterName = "@p_branch";
+                    pBranch.Value = branchId;
+                    cmd.Parameters.Add(pBranch);
+
+                    var pLimit = cmd.CreateParameter();
+                    pLimit.ParameterName = "@p_limit";
+                    pLimit.Value = safeLimit + 1;
+                    cmd.Parameters.Add(pLimit);
+
+                    var wmResult = await cmd.ExecuteScalarAsync(ct);
+                    if (wmResult != null && wmResult != DBNull.Value && long.TryParse(wmResult.ToString(), out var wmVal) && wmVal > 0)
+                    {
+                        safeWatermark = wmVal;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Watermark query calculation fallback to standard pagination.");
+                }
             }
 
-            var records = await query
+            // Query outbox records bounded by safe watermark
+            var query = dbContext.OperationalOutbox
+                .Where(o => o.TenantId == tenantIdTyped &&
+                            o.BranchId == branchIdTyped &&
+                            o.SequenceNumber > since_sequence &&
+                            o.SequenceNumber <= safeWatermark);
+
+            var rawRecords = await query
                 .OrderBy(o => o.SequenceNumber)
                 .Take(safeLimit + 1)
                 .ToListAsync(ct);
 
-            var hasMore = records.Count > safeLimit;
-            var returnRecords = records.Take(safeLimit).ToList();
+            var hasMore = rawRecords.Count > safeLimit;
+            var returnRecords = rawRecords.Take(safeLimit).ToList();
 
             var eventEnvelopes = new List<EventEnvelope<object>>();
+            long lastProcessedSequence = since_sequence;
+
             foreach (var rec in returnRecords)
             {
                 try
                 {
                     using var doc = JsonDocument.Parse(rec.Payload);
-                    if (doc.RootElement.TryGetProperty("event_id", out _))
+                    var root = doc.RootElement;
+
+                    // Extract typed recipient scope
+                    Guid? eventSessionId = null;
+                    if (root.TryGetProperty("dining_session_id", out var dsEl) && dsEl.TryGetGuid(out var parsedDsId))
+                    {
+                        eventSessionId = parsedDsId;
+                    }
+                    else if (root.TryGetProperty("data", out var dataEl) &&
+                             dataEl.ValueKind == JsonValueKind.Object &&
+                             dataEl.TryGetProperty("dining_session_id", out var innerDsEl) &&
+                             innerDsEl.TryGetGuid(out var innerParsedDsId))
+                    {
+                        eventSessionId = innerParsedDsId;
+                    }
+
+                    // Enforce recipient authorization:
+                    // 1. Customer: only own session and catalog events
+                    if (isCustomer)
+                    {
+                        var isCatalogEvent = rec.EventType is RealtimeEventTypes.MenuItemAvailabilityChanged or RealtimeEventTypes.CatalogPolicyInvalidated;
+                        if (!isCatalogEvent && (!eventSessionId.HasValue || eventSessionId.Value != customerSessionId!.Value))
+                        {
+                            lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
+                            continue; // Skip events belonging to other dining sessions
+                        }
+                    }
+                    // 2. Kitchen / Bar station scoping: no floor service noise
+                    else if (normalizedRole == "kitchen")
+                    {
+                        var isKitchenRelevant = rec.EventType is RealtimeEventTypes.OrderCreated
+                            or RealtimeEventTypes.OrderItemStatusChanged
+                            or RealtimeEventTypes.MenuItemAvailabilityChanged
+                            or RealtimeEventTypes.CatalogPolicyInvalidated;
+                        if (!isKitchenRelevant)
+                        {
+                            lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
+                            continue;
+                        }
+                    }
+                    else if (normalizedRole == "bar")
+                    {
+                        var isBarRelevant = rec.EventType is RealtimeEventTypes.OrderCreated
+                            or RealtimeEventTypes.OrderItemStatusChanged
+                            or RealtimeEventTypes.MenuItemAvailabilityChanged
+                            or RealtimeEventTypes.CatalogPolicyInvalidated;
+                        if (!isBarRelevant)
+                        {
+                            lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
+                            continue;
+                        }
+                    }
+
+                    if (root.TryGetProperty("event_id", out _))
                     {
                         var env = JsonSerializer.Deserialize<EventEnvelope<object>>(rec.Payload);
                         if (env != null)
@@ -121,24 +279,27 @@ public static class EventSyncEndpoints
                             BranchId: rec.BranchId.Value,
                             AggregateId: rec.AggregateId,
                             SequenceNumber: rec.SequenceNumber,
-                            Data: doc.RootElement.Clone()
+                            Data: root.Clone()
                         );
                         eventEnvelopes.Add(env);
                     }
+
+                    lastProcessedSequence = Math.Max(lastProcessedSequence, rec.SequenceNumber);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore malformed payload in sync
+                    logger.LogError(ex, "Corrupt payload encountered in outbox record '{Id}' at sequence {Seq}.", rec.Id, rec.SequenceNumber);
+                    httpContext.Response.Headers.Append("X-Resync-Required", "true");
+                    // Do not silently advance sequence past corrupt payloads without resync signal
+                    break;
                 }
             }
 
-            var latestSequence = returnRecords.Count > 0
-                ? returnRecords.Max(r => r.SequenceNumber)
-                : since_sequence;
+            await tx.CommitAsync(ct);
 
             return Results.Ok(new EventsSyncResponse(
                 Events: eventEnvelopes,
-                LatestSequenceNumber: latestSequence,
+                LatestSequenceNumber: lastProcessedSequence,
                 HasMore: hasMore,
                 SyncedAtUtc: DateTimeOffset.UtcNow));
         })
