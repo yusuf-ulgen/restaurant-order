@@ -58,6 +58,7 @@ export function buildRollbackUpstreamConfig(safeSlot, timestamp) {
     `# Slot: ${safeSlot} | Routing via Docker container DNS on internal port`,
     '# ==============================================================================',
     'upstream api_backend {',
+    '    ip_hash;',
     `    server ${apiContainer}:5000 max_fails=3 fail_timeout=10s;`,
     '    keepalive 32;',
     '}',

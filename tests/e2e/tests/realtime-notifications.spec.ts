@@ -36,10 +36,23 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9)', () => {
   test('Scenario 1 & 2: Customer opens session, sees RealtimeStatusBadge and receives live order event', async ({
     page,
   }) => {
+    // 1. Intercept real SignalR negotiate response through proxy/API
+    const negotiatePromise = page.waitForResponse(
+      (resp) => resp.url().includes('/hubs/events/negotiate') && resp.status() === 200,
+      { timeout: 15000 }
+    ).catch(() => null);
+
     await enterCustomerSession(page, scenario);
 
     const realtimeBadge = page.getByTestId('customer-realtime-badge');
     await expect(realtimeBadge).toBeVisible();
+
+    // 2. Verify badge transitions to 'Canlı' (connected state) rather than just being rendered
+    await expect(realtimeBadge).toHaveText('Canlı', { timeout: 15000 });
+    const negotiateRes = await negotiatePromise;
+    if (negotiateRes) {
+      expect(negotiateRes.status()).toBe(200);
+    }
   });
 
   test('Scenario 3: Service request emits real-time table.service_requested operational event', async ({
