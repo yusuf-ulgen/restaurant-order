@@ -1,4 +1,4 @@
-using RestaurantOrder.Worker.Safety;
+﻿using RestaurantOrder.Worker.Safety;
 
 namespace RestaurantOrder.Worker;
 
@@ -128,7 +128,16 @@ public class Worker : BackgroundService
                         var dispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher>();
                         if (dispatcher != null)
                         {
-                            var dispatched = await dispatcher.DispatchPendingBatchAsync(25, stoppingToken);
+                            var dispatched = await dispatcher.DispatchPendingBatchAsync(
+                                25,
+                                async token =>
+                                {
+                                    if (!IsLeader) return false;
+                                    var active = await _activationGuard.IsActiveSlotAsync(token);
+                                    return active && IsLeader;
+                                },
+                                tenantId: null,
+                                ct: stoppingToken);
                             if (dispatched > 0)
                             {
                                 _logger.LogInformation(
@@ -192,3 +201,4 @@ public class Worker : BackgroundService
         _logger.LogInformation("RestaurantOrder background worker host stopped gracefully.");
     }
 }
+

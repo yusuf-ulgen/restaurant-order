@@ -139,6 +139,10 @@
       "reason": "Machine-generated EF Core migration designer metadata for operational outbox and device registration tables (Phase 9.2)."
     },
     {
+      "path": "packages/infrastructure/Persistence/Migrations/20261025102203_AddOperationalOutboxClaimGateway.Designer.cs",
+      "reason": "Machine-generated EF Core migration designer metadata for operational outbox claim gateway functions (Phase 9.3 fix)."
+    },
+    {
       "path": "deploy/migrations/latest_bundle.sql",
       "reason": "Machine-generated cumulative idempotent migration SQL bundle produced by migration-ops script."
     }

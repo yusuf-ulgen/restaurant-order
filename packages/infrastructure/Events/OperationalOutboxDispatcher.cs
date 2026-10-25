@@ -1,21 +1,40 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Events;
 using RestaurantOrder.Domain.Events;
+using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure.Persistence;
 
 namespace RestaurantOrder.Infrastructure.Events;
 
+/// <summary>
+/// Background operational outbox dispatcher.
+/// Claims batches using a secure claim gateway (PostgreSQL function with FOR UPDATE SKIP LOCKED),
+/// guarantees claim ownership validation, supports mid-batch lease verification,
+/// safely handles cancellations without corrupting attempt counters,
+/// and dead-letters poison payloads.
+/// </summary>
 public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
 {
-    public const int DefaultLeaseSeconds = 30;
+    private const int DefaultLeaseSeconds = 60;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+    };
+
+    private static readonly Regex SensitivePatterns = new(
+        @"(?i)(password|secret|token|key|pwd|connectionstring)\s*[:=]\s*([^\s;,]+)",
+        RegexOptions.Compiled);
 
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IRealtimeEventPublisher _eventPublisher;
@@ -31,8 +50,6 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private sealed record ClaimedOutboxRecord(
         Guid Id,
         Guid TenantId,
@@ -44,10 +61,20 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         long SequenceNumber,
         DateTimeOffset OccurredAtUtc,
         int AttemptCount,
-        int MaxAttempts);
+        int MaxAttempts,
+        string ClaimId);
 
-    public async Task<int> DispatchPendingBatchAsync(int batchSize = 25, CancellationToken ct = default)
+    public async Task<int> DispatchPendingBatchAsync(
+        int batchSize = 25,
+        Func<CancellationToken, Task<bool>>? isLeaseValid = null,
+        Guid? tenantId = null,
+        CancellationToken ct = default)
     {
+        if (ct.IsCancellationRequested)
+        {
+            return 0;
+        }
+
         if (batchSize <= 0) batchSize = 25;
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -55,89 +82,94 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         var lockExpiresUtc = nowUtc.AddSeconds(DefaultLeaseSeconds);
 
         var claimedItems = new List<ClaimedOutboxRecord>();
+        var isPostgres = _dbContext.Database.IsNpgsql();
+        DbConnection? conn = null;
 
-        if (_dbContext.Database.IsNpgsql())
+        try
         {
-            var conn = _dbContext.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
+            if (isPostgres)
             {
-                await conn.OpenAsync(ct);
+                conn = _dbContext.Database.GetDbConnection();
+                if (conn.State != ConnectionState.Open)
+                {
+                    await conn.OpenAsync(ct);
+                }
+
+                await using var claimCmd = conn.CreateCommand();
+                claimCmd.CommandText = @"
+                    SELECT id, tenant_id, branch_id, aggregate_id, event_type, payload, schema_version, sequence_number, occurred_at, attempt_count, max_attempts, lock_claim_id
+                    FROM tenancy.claim_pending_operational_outbox(@limit, @nowUtc, @leaseSeconds, @claimId, @tenantId);";
+
+                AddParameter(claimCmd, "limit", batchSize);
+                AddParameter(claimCmd, "nowUtc", nowUtc);
+                AddParameter(claimCmd, "leaseSeconds", DefaultLeaseSeconds);
+                AddParameter(claimCmd, "claimId", claimId);
+                AddParameter(claimCmd, "tenantId", (object?)tenantId ?? DBNull.Value);
+
+                await using var reader = await claimCmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                {
+                    claimedItems.Add(new ClaimedOutboxRecord(
+                        Id: reader.GetGuid(0),
+                        TenantId: reader.GetGuid(1),
+                        BranchId: reader.GetGuid(2),
+                        AggregateId: reader.GetString(3),
+                        EventType: reader.GetString(4),
+                        Payload: reader.GetString(5),
+                        SchemaVersion: reader.GetInt32(6),
+                        SequenceNumber: reader.GetInt64(7),
+                        OccurredAtUtc: reader.GetFieldValue<DateTimeOffset>(8),
+                        AttemptCount: reader.GetInt32(9),
+                        MaxAttempts: reader.GetInt32(10),
+                        ClaimId: reader.GetString(11)));
+                }
             }
-
-            await using var claimCmd = conn.CreateCommand();
-            claimCmd.CommandText = @"
-                WITH cte AS (
-                    SELECT id
-                    FROM tenancy.operational_outbox
-                    WHERE (status = 1 AND (next_attempt_utc IS NULL OR next_attempt_utc <= @nowUtc))
-                       OR (status = 2 AND lock_expires_utc < @nowUtc)
-                    ORDER BY created_at_utc ASC
-                    LIMIT @batchSize
-                    FOR UPDATE SKIP LOCKED
-                )
-                UPDATE tenancy.operational_outbox o
-                SET status = 2,
-                    lock_claim_id = @claimId,
-                    lock_expires_utc = @lockExpiresUtc,
-                    attempt_count = o.attempt_count + 1
-                FROM cte
-                WHERE o.id = cte.id
-                RETURNING o.id, o.tenant_id, o.branch_id, o.aggregate_id, o.event_type, o.payload, o.schema_version, o.sequence_number, o.occurred_at_utc, o.attempt_count, o.max_attempts;";
-
-            AddParameter(claimCmd, "nowUtc", nowUtc);
-            AddParameter(claimCmd, "batchSize", batchSize);
-            AddParameter(claimCmd, "claimId", claimId);
-            AddParameter(claimCmd, "lockExpiresUtc", lockExpiresUtc);
-
-            await using var reader = await claimCmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
+            else
             {
-                claimedItems.Add(new ClaimedOutboxRecord(
-                    Id: reader.GetGuid(0),
-                    TenantId: reader.GetGuid(1),
-                    BranchId: reader.GetGuid(2),
-                    AggregateId: reader.GetString(3),
-                    EventType: reader.GetString(4),
-                    Payload: reader.GetString(5),
-                    SchemaVersion: reader.GetInt32(6),
-                    SequenceNumber: reader.GetInt64(7),
-                    OccurredAtUtc: reader.GetFieldValue<DateTimeOffset>(8),
-                    AttemptCount: reader.GetInt32(9),
-                    MaxAttempts: reader.GetInt32(10)));
+                // Fallback for non-Postgres / InMemory / SQLite test providers
+                var query = _dbContext.OperationalOutbox
+                    .IgnoreQueryFilters()
+                    .Where(o => (o.Status == OperationalOutboxStatus.Pending && (o.NextAttemptUtc == null || o.NextAttemptUtc <= nowUtc)) ||
+                                (o.Status == OperationalOutboxStatus.Processing && o.LockExpiresUtc != null && o.LockExpiresUtc < nowUtc));
+
+                if (tenantId.HasValue)
+                {
+                    var tid = new TenantId(tenantId.Value);
+                    query = query.Where(o => o.TenantId == tid);
+                }
+
+                var pendingEntities = await query
+                    .OrderBy(o => o.CreatedAtUtc)
+                    .Take(batchSize)
+                    .ToListAsync(ct);
+
+                foreach (var entity in pendingEntities)
+                {
+                    entity.Claim(claimId, lockExpiresUtc);
+                    claimedItems.Add(new ClaimedOutboxRecord(
+                        entity.Id,
+                        entity.TenantId.Value,
+                        entity.BranchId.Value,
+                        entity.AggregateId,
+                        entity.EventType,
+                        entity.Payload,
+                        entity.SchemaVersion,
+                        entity.SequenceNumber,
+                        entity.OccurredAtUtc,
+                        entity.AttemptCount + 1,
+                        entity.MaxAttempts,
+                        claimId));
+                }
+
+                if (claimedItems.Count > 0)
+                {
+                    await _dbContext.SaveChangesAsync(ct);
+                }
             }
         }
-        else
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Fallback for non-Postgres / InMemory / SQLite test providers
-            var pendingEntities = await _dbContext.OperationalOutbox
-                .IgnoreQueryFilters()
-                .Where(o => (o.Status == OperationalOutboxStatus.Pending && (o.NextAttemptUtc == null || o.NextAttemptUtc <= nowUtc)) ||
-                            (o.Status == OperationalOutboxStatus.Processing && o.LockExpiresUtc != null && o.LockExpiresUtc < nowUtc))
-                .OrderBy(o => o.CreatedAtUtc)
-                .Take(batchSize)
-                .ToListAsync(ct);
-
-            foreach (var entity in pendingEntities)
-            {
-                entity.Claim(claimId, lockExpiresUtc);
-                claimedItems.Add(new ClaimedOutboxRecord(
-                    entity.Id,
-                    entity.TenantId.Value,
-                    entity.BranchId.Value,
-                    entity.AggregateId,
-                    entity.EventType,
-                    entity.Payload,
-                    entity.SchemaVersion,
-                    entity.SequenceNumber,
-                    entity.OccurredAtUtc,
-                    entity.AttemptCount + 1,
-                    entity.MaxAttempts));
-            }
-
-            if (pendingEntities.Count > 0)
-            {
-                await _dbContext.SaveChangesAsync(ct);
-            }
+            return 0;
         }
 
         if (claimedItems.Count == 0)
@@ -146,14 +178,36 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         }
 
         var dispatchedCount = 0;
+
         foreach (var item in claimedItems)
         {
+            if (ct.IsCancellationRequested)
+            {
+                _logger.LogInformation("Operational outbox dispatch batch cancelled.");
+                break;
+            }
+
+            if (isLeaseValid != null)
+            {
+                var valid = await isLeaseValid(ct);
+                if (!valid)
+                {
+                    _logger.LogWarning("Leadership lease or active slot lost during outbox dispatch. Aborting remaining batch.");
+                    break;
+                }
+            }
+
             try
             {
                 string envelopeJson;
                 try
                 {
                     using var doc = JsonDocument.Parse(item.Payload);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        throw new JsonException("Outbox payload root must be a JSON object.");
+                    }
+
                     if (doc.RootElement.TryGetProperty("event_id", out _))
                     {
                         envelopeJson = item.Payload;
@@ -174,79 +228,120 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                         envelopeJson = JsonSerializer.Serialize(envelope, JsonOptions);
                     }
                 }
-                catch
+                catch (JsonException jsonEx)
                 {
-                    envelopeJson = item.Payload;
+                    _logger.LogError(jsonEx, "Poison payload detected for outbox message {Id}. Marking DeadLetter immediately.", item.Id);
+                    var poisonError = SanitizeErrorMessage("Poison payload: " + jsonEx.Message);
+                    await RecordFailureAsync(conn, item, claimId, poisonError, isDeadLetter: true, ct);
+                    continue;
                 }
 
                 await _eventPublisher.PublishBroadcastAsync(envelopeJson, ct);
 
-                if (_dbContext.Database.IsNpgsql())
+                if (isPostgres && conn != null)
                 {
-                    var conn = _dbContext.Database.GetDbConnection();
-                    await using var updateCmd = conn.CreateCommand();
-                    updateCmd.CommandText = @"
-                        UPDATE tenancy.operational_outbox
-                        SET status = 3,
-                            dispatched_at_utc = @dispatchedAtUtc,
-                            lock_claim_id = NULL,
-                            lock_expires_utc = NULL
-                        WHERE id = @id;";
+                    await using var completeCmd = conn.CreateCommand();
+                    completeCmd.CommandText = "SELECT tenancy.complete_operational_outbox(@id, @claimId, @nowUtc);";
+                    AddParameter(completeCmd, "id", item.Id);
+                    AddParameter(completeCmd, "claimId", claimId);
+                    AddParameter(completeCmd, "nowUtc", DateTimeOffset.UtcNow);
 
-                    AddParameter(updateCmd, "dispatchedAtUtc", DateTimeOffset.UtcNow);
-                    AddParameter(updateCmd, "id", item.Id);
-                    await updateCmd.ExecuteNonQueryAsync(ct);
+                    var completeResult = await completeCmd.ExecuteScalarAsync(ct);
+                    if (completeResult is not bool completed || !completed)
+                    {
+                        _logger.LogWarning(
+                            "Outbox message {Id} completion skipped: claim was expired or claimed by another worker.",
+                            item.Id);
+                        continue;
+                    }
                 }
                 else
                 {
                     var entity = await _dbContext.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == item.Id, ct);
-                    entity?.MarkDispatched(DateTimeOffset.UtcNow);
-                    await _dbContext.SaveChangesAsync(ct);
+                    if (entity != null && entity.LockClaimId == claimId && entity.Status == OperationalOutboxStatus.Processing)
+                    {
+                        entity.MarkDispatched(DateTimeOffset.UtcNow);
+                        await _dbContext.SaveChangesAsync(ct);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Outbox message {Id} completion skipped in fallback: claim mismatch or expired.",
+                            item.Id);
+                        continue;
+                    }
                 }
 
                 dispatchedCount++;
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                _logger.LogInformation("Dispatch cancelled mid-flight for message {Id}. Not marking as failure.", item.Id);
+                break;
+            }
             catch (Exception ex)
             {
-                var delaySeconds = Math.Min(60, (int)Math.Pow(2, Math.Min(item.AttemptCount, 6)));
                 var isDeadLetter = item.AttemptCount >= item.MaxAttempts;
-                var newStatus = isDeadLetter ? 4 : 1;
-                var nextAttempt = DateTimeOffset.UtcNow.AddSeconds(delaySeconds);
-                var errorSnippet = ex.Message.Length > 490 ? ex.Message[..490] : ex.Message;
+                var sanitizedError = SanitizeErrorMessage(ex.Message);
 
                 _logger.LogWarning(ex,
                     "Failed to dispatch outbox event '{Id}'. Attempt: {Attempt}/{Max}. DeadLetter: {IsDeadLetter}.",
                     item.Id, item.AttemptCount, item.MaxAttempts, isDeadLetter);
 
-                if (_dbContext.Database.IsNpgsql())
+                try
                 {
-                    var conn = _dbContext.Database.GetDbConnection();
-                    await using var failCmd = conn.CreateCommand();
-                    failCmd.CommandText = @"
-                        UPDATE tenancy.operational_outbox
-                        SET status = @status,
-                            last_error = @lastError,
-                            next_attempt_utc = @nextAttemptUtc,
-                            lock_claim_id = NULL,
-                            lock_expires_utc = NULL
-                        WHERE id = @id;";
-
-                    AddParameter(failCmd, "status", newStatus);
-                    AddParameter(failCmd, "lastError", errorSnippet);
-                    AddParameter(failCmd, "nextAttemptUtc", (object?)nextAttempt ?? DBNull.Value);
-                    AddParameter(failCmd, "id", item.Id);
-                    await failCmd.ExecuteNonQueryAsync(ct);
+                    await RecordFailureAsync(conn, item, claimId, sanitizedError, isDeadLetter, CancellationToken.None);
                 }
-                else
+                catch (Exception persistEx)
                 {
-                    var entity = await _dbContext.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == item.Id, ct);
-                    entity?.MarkFailed(errorSnippet, nextAttempt, isDeadLetter);
-                    await _dbContext.SaveChangesAsync(ct);
+                    _logger.LogError(persistEx, "Failed to persist failure status for outbox message {Id}.", item.Id);
                 }
             }
         }
 
         return dispatchedCount;
+    }
+
+    private async Task RecordFailureAsync(
+        DbConnection? conn,
+        ClaimedOutboxRecord item,
+        string claimId,
+        string errorMessage,
+        bool isDeadLetter,
+        CancellationToken ct)
+    {
+        var delaySeconds = Math.Min(60, (int)Math.Pow(2, Math.Min(item.AttemptCount, 6)));
+        var nextAttempt = DateTimeOffset.UtcNow.AddSeconds(delaySeconds);
+
+        if (_dbContext.Database.IsNpgsql() && conn != null)
+        {
+            await using var failCmd = conn.CreateCommand();
+            failCmd.CommandText = "SELECT tenancy.fail_operational_outbox(@id, @claimId, @error, @nextAttemptUtc, @isDeadLetter, @nowUtc);";
+            AddParameter(failCmd, "id", item.Id);
+            AddParameter(failCmd, "claimId", claimId);
+            AddParameter(failCmd, "error", errorMessage);
+            AddParameter(failCmd, "nextAttemptUtc", (object?)nextAttempt ?? DBNull.Value);
+            AddParameter(failCmd, "isDeadLetter", isDeadLetter);
+            AddParameter(failCmd, "nowUtc", DateTimeOffset.UtcNow);
+
+            await failCmd.ExecuteScalarAsync(ct);
+        }
+        else
+        {
+            var entity = await _dbContext.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == item.Id, ct);
+            if (entity != null && entity.LockClaimId == claimId && entity.Status == OperationalOutboxStatus.Processing)
+            {
+                entity.MarkFailed(errorMessage, nextAttempt, isDeadLetter);
+                await _dbContext.SaveChangesAsync(ct);
+            }
+        }
+    }
+
+    internal static string SanitizeErrorMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return "Unknown dispatch error.";
+        var sanitized = SensitivePatterns.Replace(message, "$1=***");
+        return sanitized.Length > 490 ? sanitized[..490] : sanitized;
     }
 
     private static void AddParameter(DbCommand cmd, string name, object value)

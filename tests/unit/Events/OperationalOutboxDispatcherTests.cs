@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -144,7 +144,7 @@ public class OperationalOutboxDispatcherTests
             "idem-poison",
             now,
             now,
-            maxAttempts: 1); // 1 max attempt to trigger dead-letter immediately on failure
+            maxAttempts: 1);
 
         db.OperationalOutbox.Add(message);
         await db.SaveChangesAsync();
@@ -176,7 +176,6 @@ public class OperationalOutboxDispatcherTests
             now.AddMinutes(-5),
             now.AddMinutes(-5));
 
-        // Simulate crash: claimed 5 minutes ago with 30s lease
         message.Claim("crashed-worker", now.AddMinutes(-4));
         db.OperationalOutbox.Add(message);
         await db.SaveChangesAsync();
@@ -191,5 +190,111 @@ public class OperationalOutboxDispatcherTests
         Assert.NotNull(updated);
         Assert.Equal(OperationalOutboxStatus.Dispatched, updated.Status);
         Assert.Equal("{\"event_id\":\"stale-recovered\"}", publisher.LastPayload);
+    }
+
+    [Fact]
+    public async Task DispatchPendingBatchAsync_WhenLeaseInvalid_AbortsBatchPublication()
+    {
+        using var db = CreateInMemoryDbContext();
+        var now = DateTimeOffset.UtcNow;
+        var message = OperationalOutboxMessage.Create(
+            new TenantId(Guid.NewGuid()),
+            new BranchId(Guid.NewGuid()),
+            "agg-loss",
+            "order.created",
+            "{\"event_id\":\"loss-1\"}",
+            "idem-loss",
+            now,
+            now);
+
+        db.OperationalOutbox.Add(message);
+        await db.SaveChangesAsync();
+
+        var publisher = new TestEventPublisher();
+        var dispatcher = new OperationalOutboxDispatcher(db, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
+
+        var dispatched = await dispatcher.DispatchPendingBatchAsync(10, isLeaseValid: _ => Task.FromResult(false));
+
+        Assert.Equal(0, dispatched);
+        Assert.Equal(0, publisher.CallCount);
+    }
+
+    [Fact]
+    public async Task DispatchPendingBatchAsync_WhenPayloadIsPoison_DeadLettersDirectlyWithoutPublishing()
+    {
+        using var db = CreateInMemoryDbContext();
+        var now = DateTimeOffset.UtcNow;
+        var message = OperationalOutboxMessage.Create(
+            new TenantId(Guid.NewGuid()),
+            new BranchId(Guid.NewGuid()),
+            "agg-poison",
+            "order.created",
+            "{{{ invalid json structure !!!",
+            "idem-poison-json",
+            now,
+            now);
+
+        db.OperationalOutbox.Add(message);
+        await db.SaveChangesAsync();
+
+        var publisher = new TestEventPublisher();
+        var dispatcher = new OperationalOutboxDispatcher(db, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
+
+        var dispatched = await dispatcher.DispatchPendingBatchAsync(10);
+
+        Assert.Equal(0, dispatched);
+        Assert.Equal(0, publisher.CallCount);
+
+        var updated = await db.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == message.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(OperationalOutboxStatus.DeadLetter, updated.Status);
+        Assert.NotNull(updated.LastError);
+        Assert.Contains("Poison", updated.LastError);
+    }
+
+    [Fact]
+    public async Task DispatchPendingBatchAsync_OnCancellation_DoesNotIncrementFailureOrPersistError()
+    {
+        using var db = CreateInMemoryDbContext();
+        var now = DateTimeOffset.UtcNow;
+        var message = OperationalOutboxMessage.Create(
+            new TenantId(Guid.NewGuid()),
+            new BranchId(Guid.NewGuid()),
+            "agg-cancel",
+            "order.created",
+            "{\"event_id\":\"cancel-1\"}",
+            "idem-cancel",
+            now,
+            now);
+
+        db.OperationalOutbox.Add(message);
+        await db.SaveChangesAsync();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var publisher = new TestEventPublisher();
+        var dispatcher = new OperationalOutboxDispatcher(db, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
+
+        var dispatched = await dispatcher.DispatchPendingBatchAsync(10, ct: cts.Token);
+
+        Assert.Equal(0, dispatched);
+        Assert.Equal(0, publisher.CallCount);
+
+        var updated = await db.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == message.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(0, updated.AttemptCount);
+        Assert.Null(updated.LastError);
+    }
+
+    [Fact]
+    public void SanitizeErrorMessage_MasksSensitiveInformation()
+    {
+        var rawError = "Connection failed: Server=127.0.0.1;Password=SuperSecretPass!;User ID=admin;token=ey1234567890 secret";
+        var sanitized = OperationalOutboxDispatcher.SanitizeErrorMessage(rawError);
+
+        Assert.DoesNotContain("SuperSecretPass!", sanitized);
+        Assert.Contains("Password=***", sanitized);
+        Assert.Contains("token=***", sanitized);
     }
 }
