@@ -8,7 +8,9 @@ import { ServiceRequestSheet } from '../components/service/ServiceRequestSheet';
 import { OrderConfirmationSheet } from '../components/cart/OrderConfirmationSheet';
 import { OrderSuccessSheet } from '../components/cart/OrderSuccessSheet';
 import { OrderHistorySheet } from '../components/cart/OrderHistorySheet';
+import { ActiveOrderStatusCard } from '../components/cart/ActiveOrderStatusCard';
 import { runtimeMenuApi } from '../api/runtimeMenuApi';
+import { customerOrderApi } from '../api/customerOrderApi';
 
 export interface ActiveSessionViewProps {
   session: CustomerSessionDto;
@@ -30,6 +32,8 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [lastPlacedOrder, setLastPlacedOrder] = useState<CustomerOrderResponseDto | null>(null);
+  const [activeOrders, setActiveOrders] = useState<CustomerOrderResponseDto[]>([]);
+  const [orderRefreshKey, setOrderRefreshKey] = useState(0);
   const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
   const [isMenuLoading, setIsMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
@@ -37,8 +41,27 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
 
   const cart = useCart();
 
+  const refreshOrders = useCallback(async () => {
+    try {
+      const data = await customerOrderApi.getOrders();
+      setActiveOrders([...data].sort((a, b) => b.roundNumber - a.roundNumber));
+      setOrderRefreshKey((prev) => prev + 1);
+    } catch {
+      // Ignore or log error
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.sessionId) {
+      refreshOrders();
+    }
+  }, [session?.sessionId, refreshOrders]);
+
   const { status: realtimeStatus } = useRealtimeEvents({
     enabled: Boolean(session?.sessionId),
+    tenantId: session.tenantId,
+    branchId: session.branchId,
+    sessionId: session.sessionId,
     onEvent: (event) => {
       if (
         event.event_type === 'menu.item_availability_changed' ||
@@ -46,12 +69,19 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
       ) {
         refreshRuntimeMenu();
       }
+      if (
+        event.event_type === 'order.item_status_changed' ||
+        event.event_type === 'order.created'
+      ) {
+        refreshOrders();
+      }
     },
     onSessionClosed: () => {
       onLeaveSession();
     },
     onResyncRequired: () => {
       refreshRuntimeMenu();
+      refreshOrders();
     },
   });
 
@@ -169,6 +199,8 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
             </div>
           </Card>
           </div>
+
+          <ActiveOrderStatusCard orders={activeOrders} />
         </div>
       )}
 
@@ -203,6 +235,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
         onOrderSuccess={(order) => {
           setLastPlacedOrder(order);
           setIsSuccessOpen(true);
+          refreshOrders();
         }}
         onSessionExpired={onLeaveSession}
         onResolvePriceConflict={handleResolvePriceConflict}
@@ -226,6 +259,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           tableName: session.tableName,
         }}
         onSessionExpired={onLeaveSession}
+        refreshKey={orderRefreshKey}
       />
 
       {/* Service Request Bottom Sheet (CUST-06) */}

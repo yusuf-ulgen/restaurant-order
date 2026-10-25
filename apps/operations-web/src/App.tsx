@@ -35,8 +35,12 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
 
   const { status: realtimeStatus } = useRealtimeEvents({
     enabled: Boolean(staffUser),
-    onEvent: (event) => {
-      playChime();
+    tenantId: terminal?.tenantId,
+    branchId: terminal?.branchId,
+    onEvent: (event, meta) => {
+      if (!meta?.isCatchUp) {
+        playChime();
+      }
 
       let title = 'Yeni Operasyon Olayı';
       if (event.event_type === 'order.created') {

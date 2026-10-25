@@ -7,6 +7,11 @@ export type RealtimeConnectionStatus =
   | 'disconnected'
   | 'session_closed';
 
+export interface EventMeta {
+  isCatchUp: boolean;
+  isLive: boolean;
+}
+
 export interface RealtimeEventsOptions {
   hubUrl?: string;
   syncUrl?: string;
@@ -14,7 +19,7 @@ export interface RealtimeEventsOptions {
   tenantId?: string;
   branchId?: string;
   sessionId?: string;
-  onEvent?: (event: EventEnvelope<unknown>) => void;
+  onEvent?: (event: EventEnvelope<unknown>, meta?: EventMeta) => void;
   onSessionClosed?: () => void;
   onResyncRequired?: () => void;
 }
