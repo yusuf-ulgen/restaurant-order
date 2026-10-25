@@ -95,6 +95,40 @@ public sealed class DeviceRegistration
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    public void RebindToCustomer(
+        BranchId branchId,
+        DiningSessionId diningSessionId,
+        string platform,
+        DateTimeOffset updatedAtUtc,
+        TimeSpan ttl)
+    {
+        ValidatePlatform(platform);
+        BranchId = branchId;
+        DiningSessionId = diningSessionId;
+        UserId = null;
+        Platform = platform.Trim().ToLowerInvariant();
+        IsActive = true;
+        UpdatedAtUtc = updatedAtUtc;
+        ExpiresAtUtc = updatedAtUtc.Add(ttl);
+    }
+
+    public void RebindToStaff(
+        BranchId branchId,
+        UserId userId,
+        string platform,
+        DateTimeOffset updatedAtUtc,
+        TimeSpan ttl)
+    {
+        ValidatePlatform(platform);
+        BranchId = branchId;
+        UserId = userId;
+        DiningSessionId = null;
+        Platform = platform.Trim().ToLowerInvariant();
+        IsActive = true;
+        UpdatedAtUtc = updatedAtUtc;
+        ExpiresAtUtc = updatedAtUtc.Add(ttl);
+    }
+
     public void Deactivate(DateTimeOffset updatedAtUtc)
     {
         IsActive = false;

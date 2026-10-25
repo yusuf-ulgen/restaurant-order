@@ -2693,6 +2693,111 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     b.ToTable("device_registrations", "tenancy");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DeviceRegistrationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_registration_id");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("installation_id");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("LockClaimId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("lock_claim_id");
+
+                    b.Property<DateTimeOffset?>("LockExpiresUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lock_expires_utc");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<DateTimeOffset?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_utc");
+
+                    b.Property<DateTimeOffset?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<string>("RecipientType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("recipient_type");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceRegistrationId");
+
+                    b.HasIndex("TenantId", "BranchId");
+
+                    b.HasIndex("TenantId", "DeviceRegistrationId")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_device_registration_id");
+
+                    b.HasIndex("TenantId", "EventId")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_event_id");
+
+                    b.HasIndex("TenantId", "Status", "NextAttemptUtc")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_status_next_attempt");
+
+                    b.ToTable("notification_deliveries", "tenancy");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3810,6 +3915,31 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_device_registrations_branches_tenant_id_branch_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Notifications.DeviceRegistration", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceRegistrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_device_registrations_device_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_branches_tenant_id_branch_id");
                 });
 
             modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>

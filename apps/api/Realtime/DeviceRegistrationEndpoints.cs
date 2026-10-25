@@ -4,8 +4,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.Floor;
@@ -50,7 +52,8 @@ public static class DeviceRegistrationEndpoints
             var isCustomer = string.Equals(principalType, "customer", StringComparison.OrdinalIgnoreCase) ||
                              string.Equals(roleClaim, "Customer", StringComparison.OrdinalIgnoreCase);
 
-            DeviceRegistration registration;
+            DiningSessionId? sessionTyped = null;
+            UserId? userIdTyped = null;
 
             if (isCustomer)
             {
@@ -66,28 +69,7 @@ public static class DeviceRegistrationEndpoints
                     return Results.Forbid();
                 }
 
-                var sessionTyped = new DiningSessionId(sessionId);
-                var existing = await dbContext.DeviceRegistrations
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(d => d.TenantId == tenantIdTyped && d.InstallationId == request.InstallationId, ct);
-
-                if (existing != null)
-                {
-                    existing.Renew(now.AddDays(1), now);
-                    registration = existing;
-                }
-                else
-                {
-                    registration = DeviceRegistration.CreateForCustomer(
-                        tenantIdTyped,
-                        branchIdTyped,
-                        sessionTyped,
-                        request.InstallationId,
-                        request.Platform,
-                        now,
-                        TimeSpan.FromDays(1));
-                    dbContext.DeviceRegistrations.Add(registration);
-                }
+                sessionTyped = new DiningSessionId(sessionId);
             }
             else
             {
@@ -97,34 +79,75 @@ public static class DeviceRegistrationEndpoints
                     return Results.Unauthorized();
                 }
 
-                var userIdTyped = new UserId(staffUserId);
-                var existing = await dbContext.DeviceRegistrations
+                userIdTyped = new UserId(staffUserId);
+            }
+
+            var existing = await dbContext.DeviceRegistrations
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(d => d.TenantId == tenantIdTyped && d.InstallationId == request.InstallationId, ct);
+
+            var (evalResult, registration) = await EvaluateRegistrationAsync(
+                existing,
+                request,
+                isCustomer,
+                tenantIdTyped,
+                branchIdTyped,
+                sessionTyped,
+                userIdTyped,
+                sessionValidator,
+                dbContext,
+                now,
+                ct);
+
+            if (evalResult != null)
+            {
+                return evalResult;
+            }
+
+            try
+            {
+                await dbContext.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                // Handle concurrent registration race:
+                // Another request inserted an installation with the same (tenant_id, installation_id).
+                // Clear tracker and reload the existing registration from DB.
+                dbContext.ChangeTracker.Clear();
+
+                var reloaded = await dbContext.DeviceRegistrations
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(d => d.TenantId == tenantIdTyped && d.InstallationId == request.InstallationId, ct);
 
-                if (existing != null)
+                if (reloaded == null)
                 {
-                    existing.Renew(now.AddDays(30), now);
-                    registration = existing;
+                    throw;
                 }
-                else
+
+                var (retryEvalResult, retryReg) = await EvaluateRegistrationAsync(
+                    reloaded,
+                    request,
+                    isCustomer,
+                    tenantIdTyped,
+                    branchIdTyped,
+                    sessionTyped,
+                    userIdTyped,
+                    sessionValidator,
+                    dbContext,
+                    now,
+                    ct);
+
+                if (retryEvalResult != null)
                 {
-                    registration = DeviceRegistration.CreateForStaff(
-                        tenantIdTyped,
-                        branchIdTyped,
-                        userIdTyped,
-                        request.InstallationId,
-                        request.Platform,
-                        now,
-                        TimeSpan.FromDays(30));
-                    dbContext.DeviceRegistrations.Add(registration);
+                    return retryEvalResult;
                 }
+
+                registration = retryReg;
+                await dbContext.SaveChangesAsync(ct);
             }
 
-            await dbContext.SaveChangesAsync(ct);
-
             return Results.Ok(new DeviceRegistrationResponse(
-                Id: registration.Id,
+                Id: registration!.Id,
                 InstallationId: registration.InstallationId,
                 Platform: registration.Platform,
                 RegisteredAtUtc: registration.CreatedAtUtc,
@@ -156,20 +179,26 @@ public static class DeviceRegistrationEndpoints
             if (isCustomer)
             {
                 var tableSessionClaim = user.FindFirst(JwtClaimNames.TableSessionId)?.Value ?? user.FindFirst("table_session_id")?.Value;
-                if (Guid.TryParse(tableSessionClaim, out var sessionId))
+                if (!Guid.TryParse(tableSessionClaim, out var sessionId) || sessionId == Guid.Empty)
                 {
-                    var sessionTyped = new DiningSessionId(sessionId);
-                    query = query.Where(d => d.DiningSessionId == sessionTyped);
+                    // Fail-closed when required owner claim is missing during unregister
+                    return Results.Unauthorized();
                 }
+
+                var sessionTyped = new DiningSessionId(sessionId);
+                query = query.Where(d => d.DiningSessionId == sessionTyped);
             }
             else
             {
                 var subClaim = user.FindFirst(JwtClaimNames.Subject)?.Value ?? user.FindFirst("sub")?.Value;
-                if (Guid.TryParse(subClaim, out var userId))
+                if (!Guid.TryParse(subClaim, out var userId) || userId == Guid.Empty)
                 {
-                    var userIdTyped = new UserId(userId);
-                    query = query.Where(d => d.UserId == userIdTyped);
+                    // Fail-closed when required owner claim is missing during unregister
+                    return Results.Unauthorized();
                 }
+
+                var userIdTyped = new UserId(userId);
+                query = query.Where(d => d.UserId == userIdTyped);
             }
 
             var devices = await query.ToListAsync(ct);
@@ -183,10 +212,166 @@ public static class DeviceRegistrationEndpoints
                 await dbContext.SaveChangesAsync(ct);
             }
 
+            // Unregister is strictly idempotent
             return Results.NoContent();
         })
         .WithName("UnregisterDevice");
 
         return endpoints;
+    }
+
+    private static async Task<(IResult? ErrorResult, DeviceRegistration? Registration)> EvaluateRegistrationAsync(
+        DeviceRegistration? existing,
+        RegisterDeviceRequest request,
+        bool isCustomer,
+        TenantId tenantIdTyped,
+        BranchId branchIdTyped,
+        DiningSessionId? sessionTyped,
+        UserId? userIdTyped,
+        ICustomerSessionValidator sessionValidator,
+        RestaurantOrderDbContext dbContext,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        if (existing == null)
+        {
+            DeviceRegistration newReg;
+            if (isCustomer)
+            {
+                newReg = DeviceRegistration.CreateForCustomer(
+                    tenantIdTyped,
+                    branchIdTyped,
+                    sessionTyped!.Value,
+                    request.InstallationId,
+                    request.Platform,
+                    now,
+                    TimeSpan.FromDays(1));
+            }
+            else
+            {
+                newReg = DeviceRegistration.CreateForStaff(
+                    tenantIdTyped,
+                    branchIdTyped,
+                    userIdTyped!.Value,
+                    request.InstallationId,
+                    request.Platform,
+                    now,
+                    TimeSpan.FromDays(30));
+            }
+
+            dbContext.DeviceRegistrations.Add(newReg);
+            return (null, newReg);
+        }
+
+        // Ownership and rebind validation
+        if (isCustomer)
+        {
+            // Case 1: Same owner renewal
+            if (existing.DiningSessionId == sessionTyped && existing.BranchId == branchIdTyped && existing.UserId == null)
+            {
+                existing.Renew(now.AddDays(1), now);
+                return (null, existing);
+            }
+
+            // Case 2: Cross-branch rejection when active
+            if (existing.BranchId != branchIdTyped && existing.IsActive)
+            {
+                return (Results.Conflict(new ProblemDetails
+                {
+                    Title = "Device registered to another branch",
+                    Detail = "This device installation is currently active in another branch.",
+                    Status = StatusCodes.Status409Conflict
+                }), null);
+            }
+
+            // Case 3: Device currently owned by active customer session
+            if (existing.DiningSessionId != null && existing.IsActive)
+            {
+                var isPrevSessionActive = await sessionValidator.ValidateSessionActiveAsync(
+                    existing.TenantId.Value,
+                    existing.BranchId.Value,
+                    existing.DiningSessionId.Value.Value,
+                    ct);
+
+                if (isPrevSessionActive)
+                {
+                    // Previous session is still active: prevent hijacking / invalid renewal
+                    return (Results.Conflict(new ProblemDetails
+                    {
+                        Title = "Device registered to another active session",
+                        Detail = "This device installation is currently registered to another active dining session.",
+                        Status = StatusCodes.Status409Conflict
+                    }), null);
+                }
+
+                // Previous session closed: safe rebind from Masa A to Masa B
+                existing.RebindToCustomer(branchIdTyped, sessionTyped!.Value, request.Platform, now, TimeSpan.FromDays(1));
+                return (null, existing);
+            }
+
+            // Case 4: Device registered to staff or inactive
+            if (existing.UserId != null && existing.IsActive)
+            {
+                return (Results.Conflict(new ProblemDetails
+                {
+                    Title = "Device registered to staff",
+                    Detail = "This device installation is currently registered to a staff member.",
+                    Status = StatusCodes.Status409Conflict
+                }), null);
+            }
+
+            // Safe rebind for previously inactive device
+            existing.RebindToCustomer(branchIdTyped, sessionTyped!.Value, request.Platform, now, TimeSpan.FromDays(1));
+            return (null, existing);
+        }
+        else
+        {
+            // Staff caller
+            // Case 1: Same staff user renewal
+            if (existing.UserId == userIdTyped && existing.BranchId == branchIdTyped && existing.DiningSessionId == null)
+            {
+                existing.Renew(now.AddDays(30), now);
+                return (null, existing);
+            }
+
+            // Case 2: Cross-branch rejection when active
+            if (existing.BranchId != branchIdTyped && existing.IsActive)
+            {
+                return (Results.Conflict(new ProblemDetails
+                {
+                    Title = "Device registered to another branch",
+                    Detail = "This device installation is currently active in another branch.",
+                    Status = StatusCodes.Status409Conflict
+                }), null);
+            }
+
+            // Case 3: Device active for another staff or customer session
+            if (existing.IsActive)
+            {
+                return (Results.Conflict(new ProblemDetails
+                {
+                    Title = "Device registered to another user or session",
+                    Detail = "This device installation is currently active for another user or session.",
+                    Status = StatusCodes.Status409Conflict
+                }), null);
+            }
+
+            // Safe rebind for inactive device to new staff user
+            existing.RebindToStaff(branchIdTyped, userIdTyped!.Value, request.Platform, now, TimeSpan.FromDays(30));
+            return (null, existing);
+        }
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        if (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+        {
+            return true;
+        }
+
+        var message = ex.InnerException?.Message ?? ex.Message;
+        return message.Contains("23505", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("unique", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
     }
 }

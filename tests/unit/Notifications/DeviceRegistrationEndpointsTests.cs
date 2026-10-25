@@ -4,12 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.Floor;
-using RestaurantOrder.Application.Notifications;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Floor;
@@ -18,18 +18,12 @@ using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure.Persistence;
 using Xunit;
 
+using static RestaurantOrder.UnitTests.Notifications.DeviceRegistrationTestHelpers;
+
 namespace RestaurantOrder.UnitTests.Notifications;
 
 public class DeviceRegistrationEndpointsTests
 {
-    private static RestaurantOrderDbContext CreateInMemoryDbContext()
-    {
-        var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
-            .UseInMemoryDatabase(databaseName: $"dev_reg_test_{Guid.NewGuid():N}")
-            .Options;
-
-        return new RestaurantOrderDbContext(options);
-    }
 
     [Fact]
     public async Task RegisterDevice_CustomerWithActiveSession_CreatesRegistration()
@@ -45,19 +39,9 @@ public class DeviceRegistrationEndpointsTests
             .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var claims = new[]
-        {
-            new Claim(JwtClaimNames.TenantId, tenantId.ToString()),
-            new Claim(JwtClaimNames.BranchId, branchId.ToString()),
-            new Claim(ClaimTypes.Role, "Customer"),
-            new Claim(JwtClaimNames.PrincipalType, "customer"),
-            new Claim(JwtClaimNames.TableSessionId, sessionId.ToString())
-        };
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
-
+        var principal = CreateCustomerPrincipal(tenantId, branchId, sessionId);
         var request = new RegisterDeviceRequest("inst_cust_12345", "web");
 
-        // Simulate endpoint logic
         var result = await SimulateRegisterDevice(request, principal, sessionValidatorMock.Object, db);
 
         var okResult = Assert.IsType<Ok<DeviceRegistrationResponse>>(result);
@@ -74,7 +58,7 @@ public class DeviceRegistrationEndpointsTests
     }
 
     [Fact]
-    public async Task RegisterDevice_CustomerWithInactiveSession_ReturnsForbid()
+    public async Task RegisterDevice_SameCustomerOwner_RenewsRegistration()
     {
         using var db = CreateInMemoryDbContext();
         var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
@@ -85,62 +69,212 @@ public class DeviceRegistrationEndpointsTests
 
         sessionValidatorMock
             .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(true);
 
-        var claims = new[]
-        {
-            new Claim(JwtClaimNames.TenantId, tenantId.ToString()),
-            new Claim(JwtClaimNames.BranchId, branchId.ToString()),
-            new Claim(ClaimTypes.Role, "Customer"),
-            new Claim(JwtClaimNames.PrincipalType, "customer"),
-            new Claim(JwtClaimNames.TableSessionId, sessionId.ToString())
-        };
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
+        var initialExpiry = DateTimeOffset.UtcNow.AddMinutes(10);
+        var existingReg = DeviceRegistration.CreateForCustomer(
+            new TenantId(tenantId),
+            new BranchId(branchId),
+            new DiningSessionId(sessionId),
+            "inst_same_owner",
+            "web",
+            DateTimeOffset.UtcNow.AddHours(-1),
+            TimeSpan.FromHours(1));
 
-        var request = new RegisterDeviceRequest("inst_cust_fail", "web");
+        db.DeviceRegistrations.Add(existingReg);
+        await db.SaveChangesAsync();
+
+        var principal = CreateCustomerPrincipal(tenantId, branchId, sessionId);
+        var request = new RegisterDeviceRequest("inst_same_owner", "web");
 
         var result = await SimulateRegisterDevice(request, principal, sessionValidatorMock.Object, db);
 
-        Assert.IsType<ForbidHttpResult>(result);
+        var okResult = Assert.IsType<Ok<DeviceRegistrationResponse>>(result);
+        Assert.NotNull(okResult.Value);
+
+        var stored = await db.DeviceRegistrations.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.InstallationId == "inst_same_owner");
+        Assert.NotNull(stored);
+        Assert.True(stored.ExpiresAtUtc > initialExpiry);
+        Assert.Equal(new DiningSessionId(sessionId), stored.DiningSessionId);
     }
 
     [Fact]
-    public async Task RegisterDevice_StaffUser_CreatesRegistrationBoundToUserId()
+    public async Task RegisterDevice_DifferentActiveCustomerSession_ReturnsConflict()
     {
         using var db = CreateInMemoryDbContext();
         var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
 
         var tenantId = Guid.NewGuid();
         var branchId = Guid.NewGuid();
+        var sessionA = Guid.NewGuid();
+        var sessionB = Guid.NewGuid();
+
+        sessionValidatorMock
+            .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionA, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        sessionValidatorMock
+            .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionB, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var existingReg = DeviceRegistration.CreateForCustomer(
+            new TenantId(tenantId),
+            new BranchId(branchId),
+            new DiningSessionId(sessionA),
+            "inst_shared_tablet",
+            "web",
+            DateTimeOffset.UtcNow,
+            TimeSpan.FromHours(1));
+
+        db.DeviceRegistrations.Add(existingReg);
+        await db.SaveChangesAsync();
+
+        // Session B attempts to register the same device while Session A is active
+        var principalB = CreateCustomerPrincipal(tenantId, branchId, sessionB);
+        var request = new RegisterDeviceRequest("inst_shared_tablet", "web");
+
+        var result = await SimulateRegisterDevice(request, principalB, sessionValidatorMock.Object, db);
+
+        var conflict = Assert.IsType<Conflict<ProblemDetails>>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+
+        // Verify session A registration remains untouched
+        var stored = await db.DeviceRegistrations.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.InstallationId == "inst_shared_tablet");
+        Assert.NotNull(stored);
+        Assert.Equal(new DiningSessionId(sessionA), stored.DiningSessionId);
+    }
+
+    [Fact]
+    public async Task RegisterDevice_DifferentCustomerSession_WhenOldSessionClosed_RebindsToNewSession()
+    {
+        using var db = CreateInMemoryDbContext();
+        var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
+
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var sessionA = Guid.NewGuid();
+        var sessionB = Guid.NewGuid();
+
+        // Old session A is closed
+        sessionValidatorMock
+            .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionA, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        // New session B is active
+        sessionValidatorMock
+            .Setup(s => s.ValidateSessionActiveAsync(tenantId, branchId, sessionB, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var existingReg = DeviceRegistration.CreateForCustomer(
+            new TenantId(tenantId),
+            new BranchId(branchId),
+            new DiningSessionId(sessionA),
+            "inst_tablet_table_switch",
+            "web",
+            DateTimeOffset.UtcNow.AddMinutes(-30),
+            TimeSpan.FromHours(1));
+
+        db.DeviceRegistrations.Add(existingReg);
+        await db.SaveChangesAsync();
+
+        // Session B (table B) claims the tablet after session A has closed
+        var principalB = CreateCustomerPrincipal(tenantId, branchId, sessionB);
+        var request = new RegisterDeviceRequest("inst_tablet_table_switch", "web");
+
+        var result = await SimulateRegisterDevice(request, principalB, sessionValidatorMock.Object, db);
+
+        var okResult = Assert.IsType<Ok<DeviceRegistrationResponse>>(result);
+        Assert.NotNull(okResult.Value);
+
+        var stored = await db.DeviceRegistrations.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.InstallationId == "inst_tablet_table_switch");
+        Assert.NotNull(stored);
+        Assert.Equal(new DiningSessionId(sessionB), stored.DiningSessionId);
+        Assert.True(stored.IsActive);
+    }
+
+    [Fact]
+    public async Task RegisterDevice_CrossBranch_WhenActive_ReturnsConflict()
+    {
+        using var db = CreateInMemoryDbContext();
+        var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
+
+        var tenantId = Guid.NewGuid();
+        var branchA = Guid.NewGuid();
+        var branchB = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
+        var existingReg = DeviceRegistration.CreateForStaff(
+            new TenantId(tenantId),
+            new BranchId(branchA),
+            new UserId(userId),
+            "inst_cross_branch",
+            "android",
+            DateTimeOffset.UtcNow,
+            TimeSpan.FromDays(30));
+
+        db.DeviceRegistrations.Add(existingReg);
+        await db.SaveChangesAsync();
+
+        // Caller from Branch B attempts to register device active in Branch A
+        var principalBranchB = CreateStaffPrincipal(tenantId, branchB, userId);
+        var request = new RegisterDeviceRequest("inst_cross_branch", "android");
+
+        var result = await SimulateRegisterDevice(request, principalBranchB, sessionValidatorMock.Object, db);
+
+        var conflict = Assert.IsType<Conflict<ProblemDetails>>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+    }
+
+    [Fact]
+    public async Task RegisterDevice_CustomerMissingSessionClaim_ReturnsUnauthorized()
+    {
+        using var db = CreateInMemoryDbContext();
+        var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
+
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+
+        // Customer principal without table_session_id claim
+        var claims = new[]
+        {
+            new Claim(JwtClaimNames.TenantId, tenantId.ToString()),
+            new Claim(JwtClaimNames.BranchId, branchId.ToString()),
+            new Claim(ClaimTypes.Role, "Customer"),
+            new Claim(JwtClaimNames.PrincipalType, "customer")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
+        var request = new RegisterDeviceRequest("inst_missing_claim", "web");
+
+        var result = await SimulateRegisterDevice(request, principal, sessionValidatorMock.Object, db);
+
+        Assert.IsType<UnauthorizedHttpResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterDevice_StaffMissingSubjectClaim_ReturnsUnauthorized()
+    {
+        using var db = CreateInMemoryDbContext();
+        var sessionValidatorMock = new Mock<ICustomerSessionValidator>();
+
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+
+        // Staff principal without sub claim
         var claims = new[]
         {
             new Claim(JwtClaimNames.TenantId, tenantId.ToString()),
             new Claim(JwtClaimNames.BranchId, branchId.ToString()),
             new Claim(ClaimTypes.Role, "Waiter"),
-            new Claim(JwtClaimNames.PrincipalType, "staff"),
-            new Claim(JwtClaimNames.Subject, userId.ToString())
+            new Claim(JwtClaimNames.PrincipalType, "staff")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
-
-        var request = new RegisterDeviceRequest("inst_waiter_999", "android");
+        var request = new RegisterDeviceRequest("inst_missing_sub", "android");
 
         var result = await SimulateRegisterDevice(request, principal, sessionValidatorMock.Object, db);
 
-        var okResult = Assert.IsType<Ok<DeviceRegistrationResponse>>(result);
-        var response = okResult.Value;
-        Assert.NotNull(response);
-        Assert.Equal("inst_waiter_999", response.InstallationId);
-
-        var stored = await db.DeviceRegistrations.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.InstallationId == "inst_waiter_999");
-        Assert.NotNull(stored);
-        Assert.Equal(new UserId(userId), stored.UserId);
-        Assert.Null(stored.DiningSessionId);
+        Assert.IsType<UnauthorizedHttpResult>(result);
     }
 
     [Fact]
-    public async Task UnregisterDevice_DeactivatesCallerDevice()
+    public async Task UnregisterDevice_CallerMatchesOwner_DeactivatesRegistration()
     {
         using var db = CreateInMemoryDbContext();
         var tenantId = Guid.NewGuid();
@@ -159,15 +293,7 @@ public class DeviceRegistrationEndpointsTests
         db.DeviceRegistrations.Add(reg);
         await db.SaveChangesAsync();
 
-        var claims = new[]
-        {
-            new Claim(JwtClaimNames.TenantId, tenantId.ToString()),
-            new Claim(JwtClaimNames.Subject, userId.ToString()),
-            new Claim(ClaimTypes.Role, "Waiter"),
-            new Claim(JwtClaimNames.PrincipalType, "staff")
-        };
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
-
+        var principal = CreateStaffPrincipal(tenantId, branchId, userId);
         var result = await SimulateUnregisterDevice("inst_staff_to_delete", principal, db);
 
         Assert.IsType<NoContent>(result);
@@ -177,160 +303,36 @@ public class DeviceRegistrationEndpointsTests
         Assert.False(updated.IsActive);
     }
 
-    private static async Task<IResult> SimulateRegisterDevice(
-        RegisterDeviceRequest request,
-        ClaimsPrincipal user,
-        ICustomerSessionValidator sessionValidator,
-        RestaurantOrderDbContext dbContext)
+    [Fact]
+    public async Task UnregisterDevice_DifferentOwner_DoesNotDeactivateOtherUserDevice()
     {
-        var tenantClaim = user.FindFirst(JwtClaimNames.TenantId)?.Value ?? user.FindFirst("tenant_id")?.Value;
-        var branchClaim = user.FindFirst(JwtClaimNames.BranchId)?.Value ?? user.FindFirst("branch_id")?.Value;
-        var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
-        var principalType = user.FindFirst(JwtClaimNames.PrincipalType)?.Value ?? user.FindFirst("principal_type")?.Value;
+        using var db = CreateInMemoryDbContext();
+        var tenantId = Guid.NewGuid();
+        var branchId = Guid.NewGuid();
+        var userOwner = Guid.NewGuid();
+        var userAttacker = Guid.NewGuid();
 
-        if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty ||
-            !Guid.TryParse(branchClaim, out var branchId) || branchId == Guid.Empty)
-        {
-            return Results.Unauthorized();
-        }
+        var reg = DeviceRegistration.CreateForStaff(
+            new TenantId(tenantId),
+            new BranchId(branchId),
+            new UserId(userOwner),
+            "inst_protected_device",
+            "ios",
+            DateTimeOffset.UtcNow,
+            TimeSpan.FromDays(30));
 
-        var now = DateTimeOffset.UtcNow;
-        var tenantIdTyped = new TenantId(tenantId);
-        var branchIdTyped = new BranchId(branchId);
-        var isCustomer = string.Equals(principalType, "customer", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(roleClaim, "Customer", StringComparison.OrdinalIgnoreCase);
+        db.DeviceRegistrations.Add(reg);
+        await db.SaveChangesAsync();
 
-        DeviceRegistration registration;
+        // Attacker attempts to delete userOwner's device
+        var principalAttacker = CreateStaffPrincipal(tenantId, branchId, userAttacker);
+        var result = await SimulateUnregisterDevice("inst_protected_device", principalAttacker, db);
 
-        if (isCustomer)
-        {
-            var tableSessionClaim = user.FindFirst(JwtClaimNames.TableSessionId)?.Value ?? user.FindFirst("table_session_id")?.Value;
-            if (!Guid.TryParse(tableSessionClaim, out var sessionId) || sessionId == Guid.Empty)
-            {
-                return Results.Unauthorized();
-            }
+        // Idempotent 204 returned without deactivating target
+        Assert.IsType<NoContent>(result);
 
-            var isSessionActive = await sessionValidator.ValidateSessionActiveAsync(tenantId, branchId, sessionId);
-            if (!isSessionActive)
-            {
-                return Results.Forbid();
-            }
-
-            var sessionTyped = new DiningSessionId(sessionId);
-            var existing = await dbContext.DeviceRegistrations
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(d => d.TenantId == tenantIdTyped && d.InstallationId == request.InstallationId);
-
-            if (existing != null)
-            {
-                existing.Renew(now.AddDays(1), now);
-                registration = existing;
-            }
-            else
-            {
-                registration = DeviceRegistration.CreateForCustomer(
-                    tenantIdTyped,
-                    branchIdTyped,
-                    sessionTyped,
-                    request.InstallationId,
-                    request.Platform,
-                    now,
-                    TimeSpan.FromDays(1));
-                dbContext.DeviceRegistrations.Add(registration);
-            }
-        }
-        else
-        {
-            var subClaim = user.FindFirst(JwtClaimNames.Subject)?.Value ?? user.FindFirst("sub")?.Value;
-            if (!Guid.TryParse(subClaim, out var staffUserId) || staffUserId == Guid.Empty)
-            {
-                return Results.Unauthorized();
-            }
-
-            var userIdTyped = new UserId(staffUserId);
-            var existing = await dbContext.DeviceRegistrations
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(d => d.TenantId == tenantIdTyped && d.InstallationId == request.InstallationId);
-
-            if (existing != null)
-            {
-                existing.Renew(now.AddDays(30), now);
-                registration = existing;
-            }
-            else
-            {
-                registration = DeviceRegistration.CreateForStaff(
-                    tenantIdTyped,
-                    branchIdTyped,
-                    userIdTyped,
-                    request.InstallationId,
-                    request.Platform,
-                    now,
-                    TimeSpan.FromDays(30));
-                dbContext.DeviceRegistrations.Add(registration);
-            }
-        }
-
-        await dbContext.SaveChangesAsync();
-
-        return Results.Ok(new DeviceRegistrationResponse(
-            Id: registration.Id,
-            InstallationId: registration.InstallationId,
-            Platform: registration.Platform,
-            RegisteredAtUtc: registration.CreatedAtUtc,
-            ExpiresAtUtc: registration.ExpiresAtUtc));
-    }
-
-    private static async Task<IResult> SimulateUnregisterDevice(
-        string installationId,
-        ClaimsPrincipal user,
-        RestaurantOrderDbContext dbContext)
-    {
-        var tenantClaim = user.FindFirst(JwtClaimNames.TenantId)?.Value ?? user.FindFirst("tenant_id")?.Value;
-        if (!Guid.TryParse(tenantClaim, out var tenantId) || tenantId == Guid.Empty)
-        {
-            return Results.Unauthorized();
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var tenantIdTyped = new TenantId(tenantId);
-        var isCustomer = string.Equals(user.FindFirst(JwtClaimNames.PrincipalType)?.Value, "customer", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(user.FindFirst(ClaimTypes.Role)?.Value, "Customer", StringComparison.OrdinalIgnoreCase);
-
-        var query = dbContext.DeviceRegistrations
-            .IgnoreQueryFilters()
-            .Where(d => d.TenantId == tenantIdTyped && d.InstallationId == installationId && d.IsActive);
-
-        if (isCustomer)
-        {
-            var tableSessionClaim = user.FindFirst(JwtClaimNames.TableSessionId)?.Value ?? user.FindFirst("table_session_id")?.Value;
-            if (Guid.TryParse(tableSessionClaim, out var sessionId))
-            {
-                var sessionTyped = new DiningSessionId(sessionId);
-                query = query.Where(d => d.DiningSessionId == sessionTyped);
-            }
-        }
-        else
-        {
-            var subClaim = user.FindFirst(JwtClaimNames.Subject)?.Value ?? user.FindFirst("sub")?.Value;
-            if (Guid.TryParse(subClaim, out var userId))
-            {
-                var userIdTyped = new UserId(userId);
-                query = query.Where(d => d.UserId == userIdTyped);
-            }
-        }
-
-        var devices = await query.ToListAsync();
-        foreach (var d in devices)
-        {
-            d.Deactivate(now);
-        }
-
-        if (devices.Count > 0)
-        {
-            await dbContext.SaveChangesAsync();
-        }
-
-        return Results.NoContent();
+        var stored = await db.DeviceRegistrations.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.InstallationId == "inst_protected_device");
+        Assert.NotNull(stored);
+        Assert.True(stored.IsActive);
     }
 }

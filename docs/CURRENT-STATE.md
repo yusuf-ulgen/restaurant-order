@@ -1,4 +1,4 @@
-﻿# Güncel Durum ve Devir Notu
+# Güncel Durum ve Devir Notu
 
 Güncelleme: 2026-10-25. Devam ederken Git/GitHub üzerinden yenileyin; eski faz takiplerini silmeyin veya yeniden yazmayın.
 
@@ -16,22 +16,24 @@ Güncelleme: 2026-10-25. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - [Issue #22](https://github.com/yusuf-ulgen/restaurant-order/issues/22), [PR #23](https://github.com/yusuf-ulgen/restaurant-order/pull/23): Faz 8 sipariş inceleme regresyonları (oturum kapanışı/hesap isteme yarışı, kısmi hazırlık durumu, yanıt kaybı sonrası yenilemede stabil sipariş anahtarı) main'e birleştirildi.
 - Tamamlanan kapsam: [Faz 6 takibi](./PHASE-6-TRACKER.md), [Faz 7 takibi](./PHASE-7-TRACKER.md), [Faz 8 takibi](./PHASE-8-TRACKER.md), [Faz 8 incelemesi](./PHASE-8-REVIEW.md). Açık öneriler: [inceleme listesi](./REVIEW-BACKLOG.md).
 
-## Aktif Görev — Faz 9: SignalR Canlı Olaylar ve Bildirimler (Düzeltme Parçası 1/4)
+## Aktif Görev — Faz 9: SignalR Canlı Olaylar ve Bildirimler (Düzeltme Parçası 3/4)
 
 - Durum: `feat/phase-09-realtime-notifications` dalında geliştirme ve sertleştirme sürüyor (PR #24, Issue #20).
-- Dört parçalı düzeltme planının 1. parçası uygulanıyor: PostgreSQL transactional outbox, worker RLS/leadership claim güvenliği ve SignalR taşıma altyapısı düzeltmeleri. Diğer parçalar tamamlanana kadar Faz 9 tamamlandı olarak kapatılmaz.
+- Dört parçalı düzeltme planının 1., 2. ve 3. parçaları uygulandı ve doğrulandı. 4. parça tamamlanana kadar Faz 9 tamamlandı olarak kapatılmaz.
 - Takip belgesi: [Faz 9 Takibi](./PHASE-9-TRACKER.md).
-- Mimari Karar: [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md) (ACCEPTED).
-- Parça 1 Kapsamı:
-  - Gerçek PostgreSQL `tenancy.operational_outbox` şeması ile `OperationalOutboxDispatcher` kolon sözleşmesinin uyumlu hale getirilmesi.
-  - Ayrıcalıksız `restaurant_app_runtime` rolü ve FORCE ROW LEVEL SECURITY altında tenant bazlı/güvenli claim gateway'in işletilmesi.
-  - Eşzamanlı claim sahipliği, lease yenileme ve stale worker ezme korumaları.
-  - Çoklu API instance'ında çift backplane yayınını engelleyen tekil yayın modeli.
-  - Hub development proxy ve production ingress (negotiate, WebSocket upgrade, fallback) yapılandırması.
+- Mimari Kararlar: [ADR-0004](./adr/0004-realtime-event-transmission-architecture.md) (ACCEPTED), [ADR-0011](./adr/0011-background-push-provider.md) (ACCEPTED).
+- Parça 1 Kapsamı (Tamamlandı): PostgreSQL outbox şeması, RLS/claim gateway, lease/stale worker yarış korumaları, tekil Redis yayın modeli ve hub proxy.
+- Parça 2 Kapsamı (Tamamlandı): Sürekli sunucu yetkilendirmesi, tipli session yönlendirmesi, rol bazlı grup izolasyonu, güvenli HTTP sync cursor ve AggregateVersion dedup.
+- Parça 3 Kapsamı (Tamamlandı):
+  - Cihaz kaydı sahipliği: aynı sahip yenilemesi, yabancı session/user reddi, masa A->B kapalı oturum güvenli rebind, fail-closed claim denetimi, PostgreSQL 23505 yarış yakalama, idempotent unregister.
+  - Kalıcı teslim kuyruğu: `tenancy.notification_deliveries` outbox staging, worker lease koordinasyonu, claim fonksiyonu, `RetryAfter` ve sağlayıcı hata sınıfları (`InvalidRecipient` cihaz pasifleştirme), stabil event ID, no exactly-once kabulü.
+  - Gönderim öncesi sürekli yetki denetimi: aktif müşteri dining session, personel branch/membership/rol kontrolü, aktif cihaz kontrolü, kısa olay TTL'i (5 dk).
+  - Veri minimizasyonu: sıfır token/installation ID loglama, kilit ekranında opak event ID, yetkili HTTP okuma modeli, service worker allowlisted rota navigasyonu.
+  - İstemci push akışı: destek kontrolü, kullanıcı tetikli izin kartı (`PushNotificationBanner`), `sw.js` arka plan dinleyicisi ve ön plan çift uyarı bastırma.
 
-## Sıradaki Görev — Faz 9 Düzeltme Parçaları 2-4 ve Faz 10
+## Sıradaki Görev — Faz 9 Düzeltme Parçası 4/4 ve Faz 10
 
-- Faz 9 kalan düzeltme parçalarının tamamlanması.
+- Faz 9 Düzeltme Parçası 4/4: Çoklu instance doğrulaması, browser E2E senaryoları, canlı yayılım gecikme ölçümü ve nihai kalite kapıları.
 - Faz 10: Garson ve Operasyon Uygulaması (Masa yönetimi, durum bazlı kat planı, canlı sipariş müdahalesi).
 
 ## Ortam ve Sınırlamalar
@@ -42,8 +44,8 @@ Güncelleme: 2026-10-25. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - Docker daemon yerelde çalışmıyorsa Testcontainers testleri `SKIP_TESTCONTAINERS=true` ile atlanabilir; bu durum CI konteyner doğrulamasının yerine geçmez.
 - Mevcut uyarılar: bir eski geçiş dosyası 450 satır uyarı eşiğini, operasyon/yönetim paketleri Vite'ın 500 kB öneri eşiğini aşıyor.
 - Bu makinede pnpm yardımcı yolu depo dışındaki sabit 11.10.0 kurulumuyla onarıldı. Yerel geçişler MIGRATION_DATABASE_URL ile ayrı geçiş rolünde uygulandı; runtime rolüne DDL yetkisi verilmedi.
-- Firebase geliştirme projesi `restaurant-order-development` hazırdır; kullanıcı şimdilik yalnızca proje kurulumunu seçti. Web Push anahtarı, sunucu kimlik bilgisi ve gerçek cihaz testi yoktur; push kapalı kalır.
+- Firebase geliştirme projesi `restaurant-order-development` hazırdır; kullanıcı şimdilik yalnızca proje kurulumunu seçti. Web Push anahtarı, sunucu kimlik bilgisi ve gerçek cihaz testi yoktur; push kapalı kalır (gerçek cihaz teslimi doğrulanmadı).
 
 ## Sonraki Somut Adım
 
-Faz 9'un 1. parça altyapı düzeltmelerinin (PostgreSQL outbox kolon/mapping, worker RLS/claim gateway, lease/stale worker yarış korumaları, tekil Redis yayın modeli ve hub proxy) testlerini tamamlayıp commit etmek.
+Faz 9'un 4. parça düzeltmelerine (çoklu API instance doğrulaması, E2E senaryoları ve gecikme metrikleri) geçmek.

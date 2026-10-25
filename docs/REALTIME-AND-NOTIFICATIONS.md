@@ -65,3 +65,46 @@ Olaylar standart, sürümlenmiş JSON zarfı (`EventEnvelope`) kullanır:
 - Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.
 
 Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. Faz 9 kapsamında sunucu SignalR hub'ı, Redis backplane, Transactional Outbox worker dispatcher'ı, HTTP sync okuma modeli, FCM cihaz kaydı (`/api/v1/notifications/devices`) ve ön yüz sesli/canlı bildirimleri uygulanmış ve doğrulanmıştır (bkz. [Faz 9 Takibi](./PHASE-9-TRACKER.md)).
+
+## 5. Arka Plan Push Bildirimleri ve Teslim Kuyruğu
+
+### 5.1. Cihaz Kaydı Sahipliği ve Güvenli Yeniden Bağlama (Rebind)
+
+- `DeviceRegistrationEndpoints` uç noktası (`POST /api/v1/notifications/devices`), kurulum kimliği (`installation_id`) bazlı cihaz kayıtlarında katı sahiplik doğrulaması yapar.
+- **Aynı Sahip Yenileme:** Aynı kullanıcı veya oturuma ait mevcut kayıtlar güvenle yenilenir (`last_seen_at_utc`, push token).
+- **Yabancı Sahiplik Reddi:** Başka bir aktif oturuma veya farklı kullanıcıya ait kayıtlar, yalnızca `installation_id` bilindiği gerekçesiyle güncellenemez; `409 Conflict` (`DEVICE_REGISTRATION_CONFLICT`) döner.
+- **Güvenli Yeniden Bağlama (Rebind):** Paylaşılan tablet veya masa değişiminde (Masa A -> Masa B), eski oturum kapalıysa (`Closed`) cihaz kaydı yeni müşteri oturumuna güvenle yeniden bağlanır (`RebindToCustomer`). Sessiz sahiplik devri yapılmaz.
+- **Eksik Yetki Talebi (Claim):** Müşteri oturumunda `dining_session_id`, personel oturumunda `sub` / `tenant_id` claim'leri zorunludur; eksiklik durumunda `401 Unauthorized` ile fail-closed davranılır.
+- **Eşzamanlı Yarış Koruması:** Eşzamanlı cihaz kayıt isteklerinde PostgreSQL `23505` (unique constraint violation) hatası yakalanır; ham 500 hatası yerine mevcut kayıt tekrar sorgulanarak sahiplik kuralları doğrultusunda güvenle ele alınır.
+- **İdempotent Kayıt Silme:** `DELETE /api/v1/notifications/devices` çağrısı, kayıt bulunamadığında veya zaten silinmişse idempotent olarak `204 No Content` döner.
+
+### 5.2. Kalıcı Teslimat Kuyruğu (`tenancy.notification_deliveries`)
+
+- Redis subscriber içinde fire-and-forget push gönderimi kaldırılmıştır. Bildirimler, outbox dispatch döngüsü sırasında `tenancy.notification_deliveries` tablosuna kalıcı olarak evrelenir (`PushNotificationDeliveryStager`).
+- **Durum Makinesi:** `Pending` -> `Claimed` -> `ProviderAccepted` | `FailedRetryable` | `FailedPermanent` | `Expired`.
+- **Worker Koordinasyonu ve Kiralama (Lease):** Teslimat işleri, lider worker tarafından PostgreSQL `FOR UPDATE SKIP LOCKED` mekanizmasıyla (`claim_pending_notification_deliveries` fonksiyonu veya LINQ sorgusu) güvenli kiralama süreleriyle (`claimed_until_utc`) alınır. Süresi dolan kiralamalar çökme toparlanması (crash recovery) ile yeniden kuyruğa girer.
+- **Sağlayıcı Hata Sınıfları ve Geri Çekilme:** `RetryAfter` başlığı varsa tam süresine uyulur, aksi halde üstel geri çekilme (`backoff`) uygulanır. `InvalidRecipient` durumunda geçersiz cihaz kaydı doğrudan pasifleştirilir (`is_active = false`).
+- **Teslimat Güvencesi:** Sağlayıcı sonucu belirsiz olduğunda ağ hatalarında tekilleştirme garantisi (exactly-once) varsayılmaz; retry sırasında `event_id` stabil kalır. `ProviderAccepted` sonucu kesin cihaz teslimi olarak değil, yalnızca sağlayıcının kuyruğa kabulü olarak işaretlenir.
+
+### 5.3. Gönderim Öncesi Sürekli Yetki Denetimi
+
+Her teslimat denemesinde (`PushNotificationDispatcher`):
+- Müşterinin aktif masa oturumu (`dining_sessions` durumu `Active`) doğrulanır.
+- Personelin güncel şube üyeliği, aktifliği ve rol yetkileri (`staff_memberships`) denetlenir.
+- Cihaz kaydının aktifliği (`is_active`) kontrol edilir.
+- Olay geçerliliği kısa bir TTL (5 dakika) ile sınırlandırılır; cihaz kaydının 30 günlük ömrü olay TTL'i yerine kullanılamaz. Süresi dolan olaylar doğrudan `Expired` durumuna alınır.
+
+### 5.4. Veri Minimizasyonu ve Günlük Güvenliği
+
+- Cihaz kurulum kimliği (`installation_id`), FCM registration token'ı ve sunucu kimlik bilgileri loglara kesinlikle yazılmaz.
+- Hata loglarında `{InstallationId}` kaldırılmış, yerine anonim hash veya sayısal kayıt ID'si kullanılmıştır.
+- Kilit ekranında müşteri notu, sipariş kalemi veya finansal tutar gösterilmez; bildirimler genel başlıklar ve opak `event_id` taşır.
+- İstemci uygulamayı açtığında güncel ve detaylı verileri yetkili HTTP uç noktalarından çeker.
+- Service worker bildirim tıklamalarında serbest dış URL'lere yönlendirme engellenmiş; yalnızca izin verilen iç rotalar (`/`, `/table`, `/orders`, `/menu`, `/operations`) açılır.
+
+### 5.5. İstemci Push ve Service Worker Akışı
+
+- Müşteri (`apps/customer-web`) ve operasyon (`apps/operations-web`) arayüzlerinde tarayıcı desteği (`Notification`, `serviceWorker`, `PushManager`) denetlenir.
+- Kullanıcıya açık izin isteme kartı (`PushNotificationBanner`) sunulur; izin reddi veya destek yokluğu menü inceleme veya sipariş akışını engellemez (zorunlu kılınmaz).
+- Service worker (`sw.js`) arka plan bildirimlerini dinler, güvenli kilit ekranı minimizasyonunu uygular ve uygulama ön planda açıkken çift uyarının bastırılmasını (`suppressDoubleAlert`) destekler.
+

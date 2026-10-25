@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -38,16 +38,19 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
 
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IRealtimeEventPublisher _eventPublisher;
+    private readonly RestaurantOrder.Application.Notifications.IPushNotificationDeliveryStager? _deliveryStager;
     private readonly ILogger<OperationalOutboxDispatcher> _logger;
 
     public OperationalOutboxDispatcher(
         RestaurantOrderDbContext dbContext,
         IRealtimeEventPublisher eventPublisher,
-        ILogger<OperationalOutboxDispatcher> logger)
+        ILogger<OperationalOutboxDispatcher> logger,
+        RestaurantOrder.Application.Notifications.IPushNotificationDeliveryStager? deliveryStager = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _deliveryStager = deliveryStager;
     }
 
     private sealed record ClaimedOutboxRecord(
@@ -237,6 +240,26 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                 }
 
                 await _eventPublisher.PublishBroadcastAsync(envelopeJson, ct);
+
+                if (_deliveryStager != null)
+                {
+                    try
+                    {
+                        await _deliveryStager.StageDeliveriesForEventAsync(
+                            item.TenantId,
+                            item.BranchId,
+                            item.Id,
+                            item.EventType,
+                            item.AggregateId,
+                            item.Payload,
+                            item.OccurredAtUtc,
+                            ct);
+                    }
+                    catch (Exception stageEx)
+                    {
+                        _logger.LogWarning(stageEx, "Failed to stage push notification deliveries for event {EventId}.", item.Id);
+                    }
+                }
 
                 if (isPostgres && conn != null)
                 {

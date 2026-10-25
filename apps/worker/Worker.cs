@@ -1,4 +1,4 @@
-﻿using RestaurantOrder.Worker.Safety;
+using RestaurantOrder.Worker.Safety;
 
 namespace RestaurantOrder.Worker;
 
@@ -119,12 +119,14 @@ public class Worker : BackgroundService
                     }
                 }
 
-                // Active leader processing loop: dispatch operational outbox events
+                // Active leader processing loop: dispatch operational outbox events and persistent push notifications
                 if (_serviceScopeFactory != null)
                 {
                     try
                     {
                         using var scope = _serviceScopeFactory.CreateScope();
+
+                        // 1. Operational Outbox dispatcher
                         var dispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher>();
                         if (dispatcher != null)
                         {
@@ -145,10 +147,32 @@ public class Worker : BackgroundService
                                     dispatched);
                             }
                         }
+
+                        // 2. Persistent Push Notification dispatcher
+                        var pushDispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Notifications.IPushNotificationDispatcher>();
+                        if (pushDispatcher != null)
+                        {
+                            var pushed = await pushDispatcher.DispatchPendingBatchAsync(
+                                25,
+                                async token =>
+                                {
+                                    if (!IsLeader) return false;
+                                    var active = await _activationGuard.IsActiveSlotAsync(token);
+                                    return active && IsLeader;
+                                },
+                                tenantId: null,
+                                ct: stoppingToken);
+                            if (pushed > 0)
+                            {
+                                _logger.LogInformation(
+                                    "[WORKER PUSH] Dispatched {Count} persistent push deliveries.",
+                                    pushed);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error while dispatching operational outbox batch in worker leader loop.");
+                        _logger.LogError(ex, "Error while dispatching operational outbox or push batch in worker leader loop.");
                     }
                 }
 
@@ -201,4 +225,3 @@ public class Worker : BackgroundService
         _logger.LogInformation("RestaurantOrder background worker host stopped gracefully.");
     }
 }
-

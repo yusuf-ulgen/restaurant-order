@@ -10,6 +10,9 @@ import {
   RealtimeStatusBadge,
   useRealtimeEvents,
   useAudioChime,
+  PushNotificationBanner,
+  registerPushDevice,
+  markEventReceivedInForeground,
 } from '@restaurant-order/ui';
 import { TerminalContextDto, UserPrincipalDto } from '@restaurant-order/contracts';
 import { TerminalProvider, useTerminal } from './auth/TerminalContext';
@@ -38,6 +41,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
     tenantId: terminal?.tenantId,
     branchId: terminal?.branchId,
     onEvent: (event, meta) => {
+      markEventReceivedInForeground(event.event_id);
       if (!meta?.isCatchUp) {
         playChime();
       }
@@ -111,6 +115,11 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
         ],
       }}
     >
+      <PushNotificationBanner
+        onPermissionGranted={async (installationId) => {
+          await registerPushDevice('', undefined, installationId);
+        }}
+      />
       {!hasActiveTables ? (
         <Card padding="md">
           <EmptyState

@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel, CustomerOrderResponseDto } from '@restaurant-order/contracts';
-import { Card, Button, RealtimeStatusBadge, useRealtimeEvents } from '@restaurant-order/ui';
+import {
+  Card,
+  Button,
+  RealtimeStatusBadge,
+  useRealtimeEvents,
+  PushNotificationBanner,
+  registerPushDevice,
+  markEventReceivedInForeground,
+} from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
@@ -63,6 +71,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
     branchId: session.branchId,
     sessionId: session.sessionId,
     onEvent: (event) => {
+      markEventReceivedInForeground(event.event_id);
       if (
         event.event_type === 'menu.item_availability_changed' ||
         event.event_type === 'catalog.policy_invalidated'
@@ -153,6 +162,11 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           data-testid="table-overview-tab"
         >
           <div data-testid="session-welcome-view">
+            <PushNotificationBanner
+              onPermissionGranted={async (installationId) => {
+                await registerPushDevice('', undefined, installationId);
+              }}
+            />
             <Card padding="md">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--ro-space-2)' }}>
                 <h2 className="customer-card-title" style={{ margin: 0 }}>Hoş Geldiniz</h2>

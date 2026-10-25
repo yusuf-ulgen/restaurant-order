@@ -48,6 +48,7 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Orders.OrderAuditEntry> OrderAuditEntries => Set<RestaurantOrder.Domain.Orders.OrderAuditEntry>();
     public DbSet<RestaurantOrder.Domain.Events.OperationalOutboxMessage> OperationalOutbox => Set<RestaurantOrder.Domain.Events.OperationalOutboxMessage>();
     public DbSet<RestaurantOrder.Domain.Notifications.DeviceRegistration> DeviceRegistrations => Set<RestaurantOrder.Domain.Notifications.DeviceRegistration>();
+    public DbSet<RestaurantOrder.Domain.Notifications.NotificationDelivery> NotificationDeliveries => Set<RestaurantOrder.Domain.Notifications.NotificationDelivery>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -143,6 +144,7 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Events.OperationalOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Notifications.DeviceRegistration>().HasQueryFilter(d => HasTenant && d.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Notifications.NotificationDelivery>().HasQueryFilter(d => HasTenant && d.TenantId == CurrentTenantId);
     }
 
     /// <summary>
