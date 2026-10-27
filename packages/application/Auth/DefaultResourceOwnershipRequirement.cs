@@ -50,7 +50,7 @@ public sealed class DefaultResourceOwnershipRequirement : IResourceOwnershipRequ
         string permission,
         ResourceOwnershipContext context)
     {
-        if (permission == Permissions.FloorSessionsManage)
+        if (permission is Permissions.FloorSessionsManage or Permissions.ServiceRequestCreate or Permissions.ServiceRequestCancel)
         {
             return context.TableSessionId.HasValue
                 && principal.TableSessionId.HasValue

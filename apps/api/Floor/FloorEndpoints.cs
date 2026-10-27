@@ -346,6 +346,7 @@ public static class FloorEndpoints
         app.MapQrCustomerEndpoints();
         app.MapCustomerSessionEndpoints();
         app.MapCustomerServiceRequestEndpoints();
+        app.MapStaffServiceRequestEndpoints();
 
         return app;
     }

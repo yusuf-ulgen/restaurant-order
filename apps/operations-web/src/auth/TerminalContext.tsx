@@ -10,7 +10,7 @@ import {
 
 export type TerminalState = 'UNENROLLED' | 'LOCKED' | 'AUTHENTICATED';
 
-interface TerminalContextValue {
+export interface TerminalContextValue {
   terminal: TerminalContextDto | null;
   state: TerminalState;
   isEnrolled: boolean;
@@ -231,4 +231,9 @@ export const useTerminal = (): TerminalContextValue => {
     throw new Error('useTerminal must be used within a TerminalProvider');
   }
   return context;
+};
+
+export const useTerminalOptional = (): TerminalContextValue | null => {
+  const context = useContext(TerminalContext);
+  return context || null;
 };

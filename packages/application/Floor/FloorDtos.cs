@@ -103,11 +103,15 @@ public record DiningSessionDto(
     DateTimeOffset? UpdatedAtUtc);
 
 /// <summary>
-/// Composite DTO combining table layout details and its current active session (if any).
+/// Composite DTO combining table layout details, current active session, and derived operational statuses.
 /// </summary>
 public record TableFloorStatusDto(
     RestaurantTableDto Table,
-    DiningSessionDto? ActiveSession);
+    DiningSessionDto? ActiveSession,
+    int ActiveServiceRequestsCount = 0,
+    int ReadyItemsCount = 0,
+    int ActiveOrdersCount = 0,
+    string? DerivedStatus = null);
 
 /// <summary>
 /// Composite DTO representing live floor occupancy status for a whole branch.

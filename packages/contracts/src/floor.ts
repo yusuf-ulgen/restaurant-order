@@ -108,6 +108,10 @@ export interface DiningSessionDto {
 export interface TableFloorStatusDto {
   table: RestaurantTableDto;
   activeSession?: DiningSessionDto | null;
+  activeServiceRequestsCount?: number;
+  readyItemsCount?: number;
+  activeOrdersCount?: number;
+  derivedStatus?: string | null;
 }
 
 export interface BranchFloorStatusDto {
@@ -279,4 +283,20 @@ export interface ServiceRequestDto {
 export interface CreateCustomerServiceRequestInput {
   requestType: ServiceRequestType;
   note?: string | null;
+}
+
+export interface StaffServiceRequestDto {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  diningSessionId: string;
+  tableId: string;
+  tableNumber: string;
+  requestType: ServiceRequestType;
+  status: ServiceRequestStatus;
+  note?: string | null;
+  createdAtUtc: string;
+  acknowledgedAtUtc?: string | null;
+  completedAtUtc?: string | null;
+  concurrencyToken: string;
 }

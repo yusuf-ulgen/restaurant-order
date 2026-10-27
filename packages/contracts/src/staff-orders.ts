@@ -105,3 +105,21 @@ export interface CreateStaffOrderResult {
   order: StaffOrderResponseDto;
   isReplay: boolean;
 }
+
+/**
+ * Staff-facing view of a prepared order item that is ready for table delivery.
+ */
+export interface ReadyOrderItemDto {
+  orderId: string;
+  itemId: string;
+  diningSessionId: string;
+  tableId: string;
+  tableNumber: string;
+  roundNumber: number;
+  itemName: string;
+  variantName?: string | null;
+  quantity: number;
+  status: string;
+  createdAtUtc: string;
+  updatedAtUtc?: string | null;
+}

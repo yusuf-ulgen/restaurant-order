@@ -14,34 +14,6 @@ namespace RestaurantOrder.Infrastructure.Floor;
 
 public partial class FloorService
 {
-    public async Task<BranchFloorStatusDto> GetBranchFloorStatusAsync(
-        TenantId tenantId,
-        BranchId branchId,
-        AuthenticatedPrincipal actor,
-        CancellationToken ct = default)
-    {
-        EnsureBranchAccess(tenantId, branchId, actor);
-        EnsureFloorStatusViewPermission(actor);
-
-        var tables = await _dbContext.RestaurantTables
-            .Where(t => t.TenantId == tenantId && t.BranchId == branchId)
-            .OrderBy(t => t.TableNumber)
-            .ToListAsync(ct);
-
-        var activeSessions = await _dbContext.DiningSessions
-            .Where(s => s.TenantId == tenantId && s.BranchId == branchId && s.Status != DiningSessionStatus.Closed)
-            .ToListAsync(ct);
-
-        var sessionsByTable = activeSessions.ToDictionary(s => s.TableId, s => s);
-
-        var tableStatusDtos = tables.Select(t => new TableFloorStatusDto(
-            MapTable(t),
-            sessionsByTable.TryGetValue(t.Id, out var session) ? MapSession(session) : null))
-            .ToList();
-
-        return new BranchFloorStatusDto(branchId.Value, tableStatusDtos);
-    }
-
     public async Task<DiningSessionDto?> GetActiveSessionForTableAsync(
         TenantId tenantId,
         BranchId branchId,

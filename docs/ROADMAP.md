@@ -148,12 +148,16 @@ Faz 9: Canlı Olaylar ve Bildirimler [Tamamlandı — CI Doğrulandı]
 - [x] Müşteri ve operasyon ekranlarında canlı güncellemeler, sesli uyarı (chime), offline sepet koruması.
 - [x] Çoklu instance teslimi, Playwright E2E ve <500 ms p95 yayılım gecikmesi doğrulaması.
 
-### Aşama 10: Garson ve Operasyon (Durum: Planlandı)
-- [ ] Arayüz 2: Garson ve Operasyon Mobil Uygulamasının tam uygulaması.
-- [ ] Renk kodlu tablo durumlarına sahip etkileşimli kat planı.
-- [ ] Hızlı mobil sipariş girişi ve değiştirici seçimi.
-- [ ] Konuk servis çağrıları ve hazır yemek uyarıları için bildirim çekmecesi.
-- [ ] Masa transferi ve fatura ödeme tetikleyicileri.
+### Aşama 10: Garson ve Operasyon (Durum: COMPLETED — Dalda Doğrulandı, İncelemeye Hazır)
+- [x] Arayüz 2: Garson ve Operasyon Mobil Uygulamasının (WAIT-01–WAIT-07) tam uygulaması (`apps/operations-web`).
+- [x] Renk ve metin/ikon kodlu türetilmiş masa durumlarına sahip aranabilir kat planı ve ızgara görünümü (WAIT-02).
+- [x] Masa oturum detayı, sipariş turları, oturma süresi ve servis çağrısı yönetimi (WAIT-03).
+- [x] Kompakt hızlı mobil sipariş girişi, varyant/modifier seçici, taslak ve Idempotency-Key koruması (WAIT-04).
+- [x] Pre-prep gerekçeli iptal ve in-prep/ready/served için yönetici/supervisor PIN void akışı (`CancelItemModal`).
+- [x] Çakışma korumalı, artan GUID satır kilitlemeli ve açık onaylı masa taşıma ve birleştirme (WAIT-05).
+- [x] WAIT-06 Sınırı: Gerçek sipariş toplamı önizlemesi (minor-unit) ve `request-bill` tetikleyicisi (Fatura bölme ve tahsilat motoru Faz 13 ve Faz 16'ya aittir).
+- [x] Otoriter sayaçlı, 3 sekmeli bildirim çekmecesi (`OperationsCallsDrawer`), KDS hazır yemek uyarıları ve realtime koordinatör (WAIT-07).
+- [x] 13 kabul kriterinin tamamı, 1.862 .NET testi, 441 frontend testi ve Playwright E2E browser testleriyle doğrulandı.
 
 ### Aşama 11: KDS ve Yönlendirme (Durum: Planlandı)
 - [ ] Arayüz 3: Mutfak & Bar KDS tam uygulama.

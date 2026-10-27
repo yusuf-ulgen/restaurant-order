@@ -110,6 +110,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.RestaurantAdmin, Permissions.BillingBillSplit);
         Full(AuthRole.RestaurantAdmin, Permissions.BillingDiscountApply);
         Full(AuthRole.RestaurantAdmin, Permissions.BillingRefundAuthorize);
+        Full(AuthRole.RestaurantAdmin, Permissions.ServiceRequestManage);
         Full(AuthRole.RestaurantAdmin, Permissions.BranchStaffManage);
         Full(AuthRole.RestaurantAdmin, Permissions.ReportsBranchRevenue);
         Full(AuthRole.RestaurantAdmin, Permissions.ReportsTenantMultiBranch);
@@ -140,6 +141,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.BranchManager, Permissions.BillingBillSplit);
         Full(AuthRole.BranchManager, Permissions.BillingDiscountApply);
         Full(AuthRole.BranchManager, Permissions.BillingRefundAuthorize);
+        Full(AuthRole.BranchManager, Permissions.ServiceRequestManage);
         Full(AuthRole.BranchManager, Permissions.BranchStaffManage);
         Full(AuthRole.BranchManager, Permissions.ReportsBranchRevenue);
 
@@ -156,6 +158,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.Cashier, Permissions.BillingPaymentCash);
         Full(AuthRole.Cashier, Permissions.BillingPaymentPosCard);
         Full(AuthRole.Cashier, Permissions.BillingBillSplit);
+        Full(AuthRole.Cashier, Permissions.ServiceRequestManage);
         Own(AuthRole.Cashier, Permissions.ReportsBranchRevenue);
 
         // --- Kitchen ---
@@ -188,6 +191,7 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Full(AuthRole.Waiter, Permissions.BillingBillRequest);
         Own(AuthRole.Waiter, Permissions.BillingPaymentPosCard);
         Full(AuthRole.Waiter, Permissions.BillingBillSplit);
+        Full(AuthRole.Waiter, Permissions.ServiceRequestManage);
 
         // --- Customer ---
         Full(AuthRole.Customer, Permissions.TenantBrandingView);
@@ -196,6 +200,8 @@ public sealed class PermissionRegistry : IPermissionRegistry
         Own(AuthRole.Customer, Permissions.FloorSessionsManage);
         Full(AuthRole.Customer, Permissions.OrdersQrCreate);
         Full(AuthRole.Customer, Permissions.BillingBillRequest);
+        Own(AuthRole.Customer, Permissions.ServiceRequestCreate);
+        Own(AuthRole.Customer, Permissions.ServiceRequestCancel);
 
         return map.ToFrozenDictionary();
     }

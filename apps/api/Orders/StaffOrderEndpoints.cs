@@ -82,6 +82,25 @@ public static class StaffOrderEndpoints
         .WithName("CancelStaffOrderItem")
         .WithSummary("Cancel a pre-prep item or supervisor void an in-prep/ready/served item");
 
+        var branchOrdersGroup = app.MapGroup("/api/v1/floor/branches/{branchId:guid}/orders")
+            .WithTags("Staff Orders")
+            .RequireAuthorization(new AuthorizeAttribute { Roles = "RestaurantAdmin,BranchManager,Cashier,Waiter" });
+
+        // GET /api/v1/floor/branches/{branchId}/orders/ready-items
+        branchOrdersGroup.MapGet("/ready-items", (
+            Guid branchId,
+            [FromQuery] Guid? sessionId,
+            [FromQuery] Guid? tableId,
+            [FromQuery] int? limit,
+            [FromQuery] int? offset,
+            HttpContext context,
+            IJwtClaimPrincipalParser parser,
+            ITenantContext tenantContext,
+            IStaffOrderService staffOrderService,
+            CancellationToken ct) => GetBranchReadyItemsAsync(branchId, sessionId, tableId, limit, offset, context, parser, tenantContext, staffOrderService, ct))
+        .WithName("GetBranchReadyItems")
+        .WithSummary("List all prepared items that are ready for table delivery");
+
         return app;
     }
 
@@ -228,6 +247,41 @@ public static class StaffOrderEndpoints
 
             context.Response.Headers.ETag = $"\"{updatedOrder.ConcurrencyToken:D}\"";
             return Results.Ok(updatedOrder);
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, context);
+        }
+    }
+
+    internal static async Task<IResult> GetBranchReadyItemsAsync(
+        Guid branchId,
+        Guid? sessionId,
+        Guid? tableId,
+        int? limit,
+        int? offset,
+        HttpContext context,
+        IJwtClaimPrincipalParser parser,
+        ITenantContext tenantContext,
+        IStaffOrderService staffOrderService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var actor = FloorEndpointHelpers.GetActor(context, parser);
+            var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
+
+            var items = await staffOrderService.ListReadyItemsAsync(
+                tenantId,
+                new BranchId(branchId),
+                sessionId.HasValue ? new DiningSessionId(sessionId.Value) : null,
+                tableId.HasValue ? new RestaurantTableId(tableId.Value) : null,
+                limit ?? 50,
+                offset ?? 0,
+                actor,
+                ct);
+
+            return Results.Ok(items);
         }
         catch (Exception ex)
         {

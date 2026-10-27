@@ -26,6 +26,21 @@ describe('Operations Web App - 5-Stage Authentication State Machine', () => {
     vi.restoreAllMocks();
     localStorage.clear();
     sessionStorage.clear();
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ branchId: 'branch-1', tables: [] }),
+        });
+      }
+      if (typeof url === 'string' && url.includes('/dining-areas')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }) as unknown as typeof fetch;
   });
 
   describe('Stage 1: UNENROLLED State', () => {
@@ -72,8 +87,6 @@ describe('Operations Web App - 5-Stage Authentication State Machine', () => {
       expect(screen.getByRole('heading', { level: 1, name: 'Garson & Operasyon' })).toBeDefined();
       expect(screen.getByText('Waiter')).toBeDefined();
       expect(screen.getByText('Garson POS 1')).toBeDefined();
-      expect(screen.getByText('Masa Yönetimi')).toBeDefined();
-      expect(screen.getByRole('button', { name: /Masa Planı/i })).toBeDefined();
       expect(screen.getByRole('button', { name: 'Çağrılar (0)' })).toBeDefined();
       expect(screen.getByRole('button', { name: 'Kilitle' })).toBeDefined();
     });

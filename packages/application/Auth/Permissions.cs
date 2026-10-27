@@ -54,13 +54,18 @@ public static class Permissions
     public const string BillingDiscountApply = "billing.discount.apply";
     public const string BillingRefundAuthorize = "billing.refund.authorize";
 
+    // Service Requests (Faz 7 / Faz 10)
+    public const string ServiceRequestCreate = "service.request.create";
+    public const string ServiceRequestCancel = "service.request.cancel";
+    public const string ServiceRequestManage = "service.request.manage";
+
     // Staff & Analytics
     public const string BranchStaffManage = "branch.staff.manage";
     public const string ReportsBranchRevenue = "reports.branch.revenue";
     public const string ReportsTenantMultiBranch = "reports.tenant.multi_branch";
 
     /// <summary>
-    /// Frozen set of all 31 canonical permission capability strings.
+    /// Frozen set of all 38 canonical permission capability strings.
     /// </summary>
     public static readonly FrozenSet<string> All = new[]
     {
@@ -96,6 +101,9 @@ public static class Permissions
         BillingBillSplit,
         BillingDiscountApply,
         BillingRefundAuthorize,
+        ServiceRequestCreate,
+        ServiceRequestCancel,
+        ServiceRequestManage,
         BranchStaffManage,
         ReportsBranchRevenue,
         ReportsTenantMultiBranch

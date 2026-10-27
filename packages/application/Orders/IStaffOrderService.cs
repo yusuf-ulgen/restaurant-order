@@ -43,4 +43,14 @@ public interface IStaffOrderService
         Guid? ifMatchConcurrencyToken,
         AuthenticatedPrincipal actor,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ReadyOrderItemDto>> ListReadyItemsAsync(
+        TenantId tenantId,
+        BranchId branchId,
+        DiningSessionId? sessionFilter,
+        RestaurantTableId? tableFilter,
+        int limit,
+        int offset,
+        AuthenticatedPrincipal actor,
+        CancellationToken cancellationToken = default);
 }

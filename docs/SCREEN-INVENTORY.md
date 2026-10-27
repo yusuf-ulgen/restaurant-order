@@ -17,15 +17,17 @@
 
 ## 2. Arayüz 2: Garson & Operasyon Mobil Uygulaması (El Tipi Web Uygulaması)
 
-| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler |
-| :--- | :--- | :--- | :--- | :--- |
-| `WAIT-01` | **Hızlı PIN Kilit ekranı** | Garson, Kasa, Müdür | Güvenilir terminalde dört haneli PIN ile giriş yapın, kullanıcıyı değiştirin, şube/vardiya seçin. | Sayısal tuş takımı, personel adı, şube seçici. |
-| `WAIT-02` | **Kat Planı ve Masa Izgarası** | Garson, Kasa, Müdür | Masa seçin, alana göre filtreleyin (Teras, Salon), masa durumunu görüntüleyin. | Renk kodlu masalar (Boş, Oturmalı, Sipariş Bekleniyor, Fatura İsteniyor). |
-| `WAIT-03` | **Masa Oturumu Detayı** | Garson, Kasa, Müdür | Verilen siparişleri görüntüleyin, ürün ekleyin, fatura isteyin, masayı taşıyın. | Masa numarası, oturma süresi, ayrıntılı sipariş listesi, toplam bakiye. |
-| `WAIT-04` | **Hızlı Sipariş Girişi** | Garson, Kasa | Hızlı kategoriye dokunma, değiştirici seçimi, özel not, siparişi gönderme. | Kompakt menü ızgarası, hızlı değiştirme açılır penceresi, sipariş hazırlama çekmecesi. |
-| `WAIT-05` | **Masa Taşıma / Birleştirme** | Garson, Müdür | Siparişi başka bir masaya aktarın, iki masayı birleştirin. | Kaynak masa, hedef masa seçici, birleştirme onayı. |
-| `WAIT-06` | **Mobil Fatura ve Ödeme**| Garson, Kasa | Ödeme yöntemini seçin, faturayı bölün, nakit/kart ödemesini kaydedin. | Ödenmesi gereken bakiye, tutara veya öğeye göre bölme, bahşiş girişi, makbuz yazdırma CTA. |
-| `WAIT-07` | **Bildirim Çekmecesi** | Garson | Müşteri çağrılarını kabul edin, hazır yemek bildirimlerini görüntüleyin. | Servis çağrısı uyarıları (Masa 12: Garson Çağrısı), KDS hazır uyarılar. |
+| Ekran Kimliği | Ekran Adı | Erişim Rolü | Birincil Eylemler | Görüntülenen Temel Veriler | Durum |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `WAIT-01` | **Hızlı PIN Kilit ekranı** | Garson, Kasa, Müdür | Güvenilir terminalde dört haneli PIN ile giriş yapın, kullanıcıyı değiştirin, şube/vardiya seçin. | Sayısal tuş takımı, personel adı, şube seçici. | Tamamlandı (Faz 10) |
+| `WAIT-02` | **Kat Planı ve Masa Izgarası** | Garson, Kasa, Müdür | Masa seçin, alana göre filtreleyin (Teras, Salon), masa durumunu görüntüleyin. | Renk kodlu masalar (Boş, Oturmalı, Sipariş Bekleniyor, Fatura İsteniyor). | Tamamlandı (Faz 10) |
+| `WAIT-03` | **Masa Oturumu Detayı** | Garson, Kasa, Müdür | Verilen siparişleri görüntüleyin, ürün ekleyin, fatura isteyin, masayı taşıyın. | Masa numarası, oturma süresi, ayrıntılı sipariş listesi, sipariş toplamı. | Tamamlandı (Faz 10) |
+| `WAIT-04` | **Hızlı Sipariş Girişi** | Garson, Kasa | Hızlı kategoriye dokunma, değiştirici seçimi, özel not, siparişi gönderme. | Kompakt menü ızgarası, hızlı değiştirme açılır penceresi, sipariş hazırlama çekmecesi. | Tamamlandı (Faz 10) |
+| `WAIT-05` | **Masa Taşıma / Birleştirme** | Garson, Müdür | Siparişi başka bir masaya aktarın, iki masayı birleştirin. | Kaynak masa, hedef masa seçici, birleştirme onayı. | Tamamlandı (Faz 10) |
+| `WAIT-06` | **Mobil Fatura ve Ödeme (Sınırlı)**| Garson, Kasa | Sipariş toplamını önizleyin, hesap isteme tetikleyin. | Sipariş ara toplamı, vergi, servis ücreti, genel toplam (minor-unit). | Sınırlı Tamamlandı (Faz 10 Sınırı; Tahsilat Faz 13/16) |
+| `WAIT-07` | **Bildirim Çekmecesi** | Garson | Müşteri çağrılarını kabul edin, hazır yemek bildirimlerini görüntüleyin. | Servis çağrısı uyarıları (Masa 12: Garson Çağrısı), KDS hazır uyarılar. | Tamamlandı (Faz 10) |
+
+> **Faz 10 Sınırları Notu:** WAIT-01, WAIT-02, WAIT-03, WAIT-04, WAIT-05 ve WAIT-07 `apps/operations-web` içinde tam olarak uygulanmış ve test edilmiştir. WAIT-06 kapsamında yalnızca sipariş ara toplamı, vergi, servis bedeli, genel toplam (minor-unit) önizlemesi ve `request-bill` tetikleyicisi çalışır. Fatura bölme motoru, nakit/kart tahsilat, ödeme kaydı ve POS cihazı entegrasyonu Faz 13 ve Faz 16 kapsamındadır; bu fazda sahte ödeme veya borç kapatma simülasyonu kesinlikle yapılmamıştır.
 
 ---
 

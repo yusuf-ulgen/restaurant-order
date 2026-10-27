@@ -110,4 +110,8 @@ public static class SecurityAuditEventType
     // Customer Service Requests (Phase 7.4)
     public const string CustomerServiceRequestCreated = "customer_service_request_created";
     public const string CustomerServiceRequestCancelled = "customer_service_request_cancelled";
+
+    // Staff Service Requests (Phase 10)
+    public const string StaffServiceRequestAcknowledged = "staff_service_request_acknowledged";
+    public const string StaffServiceRequestCompleted = "staff_service_request_completed";
 }

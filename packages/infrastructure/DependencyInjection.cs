@@ -133,6 +133,7 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Floor.IFloorService, RestaurantOrder.Infrastructure.Floor.FloorService>();
         services.AddScoped<RestaurantOrder.Application.Floor.IServiceRequestRateLimiter, RestaurantOrder.Infrastructure.Floor.RedisServiceRequestRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Floor.ICustomerServiceRequestService, RestaurantOrder.Infrastructure.Floor.CustomerServiceRequestService>();
+        services.AddScoped<RestaurantOrder.Application.Floor.IStaffServiceRequestService, RestaurantOrder.Infrastructure.Floor.StaffServiceRequestService>();
 
         // Order Services (Phase 8)
         services.AddScoped<RestaurantOrder.Application.Orders.Pricing.IOrderPricingEngine, RestaurantOrder.Infrastructure.Orders.Pricing.OrderPricingEngine>();

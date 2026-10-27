@@ -28,3 +28,21 @@ public record ServiceRequestDto(
     DateTimeOffset? AcknowledgedAtUtc,
     DateTimeOffset? CompletedAtUtc,
     Guid ConcurrencyToken);
+
+/// <summary>
+/// Staff-facing view of a customer service request enriched with table number.
+/// </summary>
+public record StaffServiceRequestDto(
+    Guid Id,
+    Guid TenantId,
+    Guid BranchId,
+    Guid DiningSessionId,
+    Guid TableId,
+    string TableNumber,
+    string RequestType,
+    string Status,
+    string? Note,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset? AcknowledgedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    Guid ConcurrencyToken);

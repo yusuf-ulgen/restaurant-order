@@ -107,3 +107,20 @@ public sealed record OrderLifecycleResult(
     StaffOrderResponseDto Order,
     string Action,
     DateTimeOffset TimestampUtc);
+
+/// <summary>
+/// Staff-facing view of a prepared order item that is ready for table delivery.
+/// </summary>
+public sealed record ReadyOrderItemDto(
+    Guid OrderId,
+    Guid ItemId,
+    Guid DiningSessionId,
+    Guid TableId,
+    string TableNumber,
+    int RoundNumber,
+    string ItemName,
+    string? VariantName,
+    int Quantity,
+    string Status,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset? UpdatedAtUtc);

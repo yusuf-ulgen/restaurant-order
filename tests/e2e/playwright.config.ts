@@ -50,7 +50,7 @@ export default defineConfig({
         ASPNETCORE_ENVIRONMENT: 'Development',
         DEPLOYMENT_COLOR: 'blue',
         ACTIVE_DEPLOYMENT_SLOT: 'blue',
-        WORKER_DATABASE_URL: process.env.WORKER_DATABASE_URL || '',
+        WORKER_DATABASE_URL: process.env.WORKER_DATABASE_URL || DATABASE_URL,
         REDIS_URL: REDIS_URL,
       },
     },
