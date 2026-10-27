@@ -7,6 +7,7 @@ export interface SeededCustomerScenario {
   diningAreaId: string;
   tableId: string;
   tableNumber: string;
+  sessionId: string;
   qrToken: string;
   menuId: string;
   categoryIdBurger: string;
@@ -21,7 +22,12 @@ export interface SeededCustomerScenario {
   adminToken: string;
 }
 
-export function mintDevAdminToken(tenantId: string): string {
+export function mintDevAdminToken(
+  tenantId: string,
+  branchId?: string,
+  role: string = 'RestaurantAdmin',
+  userId: string = '00000000-0000-0000-0000-000000000001'
+): string {
   const secret = process.env.E2E_JWT_SECRET || process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('E2E_JWT_SECRET or JWT_SECRET environment variable is required');
@@ -29,23 +35,25 @@ export function mintDevAdminToken(tenantId: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: 'k1' })).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 3600;
-  const payload = Buffer.from(
-    JSON.stringify({
-      sub: '00000000-0000-0000-0000-000000000001',
-      sid: '00000000-0000-0000-0000-000000000002',
-      jti: crypto.randomUUID().replace(/-/g, ''),
-      principal_type: 'staff',
-      role: 'RestaurantAdmin',
-      auth_method: 'password',
-      security_version: '1',
-      iss: 'restaurant-order',
-      aud: 'restaurant-order-clients',
-      iat: now,
-      nbf: now,
-      exp: exp,
-      tenant_id: tenantId,
-    })
-  ).toString('base64url');
+  const claims: Record<string, any> = {
+    sub: userId,
+    sid: '00000000-0000-0000-0000-000000000002',
+    jti: crypto.randomUUID().replace(/-/g, ''),
+    principal_type: 'staff',
+    role: role,
+    auth_method: 'password',
+    security_version: '1',
+    iss: 'restaurant-order',
+    aud: 'restaurant-order-clients',
+    iat: now,
+    nbf: now,
+    exp: exp,
+    tenant_id: tenantId,
+  };
+  if (branchId && role !== 'RestaurantAdmin') {
+    claims.branch_id = branchId;
+  }
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
 
   const signature = crypto.createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
   return `${header}.${payload}.${signature}`;
@@ -135,7 +143,7 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: {
       name: `Müşteri Menüsü ${Date.now()}`,
-      slug: `musteri-menusu-${Date.now()}`,
+      slug: `musteri-menusu-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       description: 'Faz 7 E2E Test Menüsü',
     },
   });
@@ -152,7 +160,7 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: {
       name: 'Burgerler',
-      slug: `burgerler-${Date.now()}`,
+      slug: `burgerler-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       description: 'Gurme Burgerler',
       sortOrder: 1,
     },
@@ -164,7 +172,7 @@ export async function seedCustomerExperienceScenario(
     headers: authHeaders,
     data: {
       name: 'İçecekler',
-      slug: `icecekler-${Date.now()}`,
+      slug: `icecekler-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       description: 'Soğuk İçecekler',
       sortOrder: 2,
     },
@@ -178,7 +186,7 @@ export async function seedCustomerExperienceScenario(
     data: {
       categoryId: catBurger.id,
       name: 'Gourmet Burger',
-      slug: `gourmet-burger-${Date.now()}`,
+      slug: `gourmet-burger-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       basePriceMinorUnits: 18000,
       shortDescription: 'Özel gurme burger',
       fullDescription: 'Taze brioche ekmeği arasında 150g dana köftesi ve karamelize soğan.',
@@ -274,7 +282,7 @@ export async function seedCustomerExperienceScenario(
     data: {
       categoryId: catDrink.id,
       name: 'Ayran',
-      slug: `ayran-${Date.now()}`,
+      slug: `ayran-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       basePriceMinorUnits: 3000,
       shortDescription: 'Geleneksel yayık ayranı.',
       sortOrder: 1,
@@ -289,7 +297,7 @@ export async function seedCustomerExperienceScenario(
     data: {
       categoryId: catBurger.id,
       name: 'Özel Şef Burgeri',
-      slug: `special-burger-${Date.now()}`,
+      slug: `special-burger-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       basePriceMinorUnits: 32000,
       shortDescription: 'Tükenen lezzet.',
       sortOrder: 2,
@@ -313,6 +321,7 @@ export async function seedCustomerExperienceScenario(
     diningAreaId,
     tableId: table.id,
     tableNumber: uniqueTableNumber,
+    sessionId: openSession.id,
     qrToken,
     menuId: menu.id,
     categoryIdBurger: catBurger.id,

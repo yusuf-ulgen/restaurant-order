@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
 using RestaurantOrder.Application.Events;
@@ -25,7 +26,7 @@ public static class EventSyncEndpoints
 {
     public static IEndpointRouteBuilder MapEventSyncEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/v1/events/sync", async (
+        endpoints.MapGet("/api/v1/events/sync", (
             long since_sequence,
             int? limit,
             ClaimsPrincipal user,
@@ -34,9 +35,37 @@ public static class EventSyncEndpoints
             ICustomerSessionValidator sessionValidator,
             IBranchScopeValidator branchValidator,
             ILoggerFactory loggerFactory,
-            CancellationToken ct) =>
+            CancellationToken ct) => SyncEventsHandlerAsync(
+                since_sequence,
+                limit,
+                user,
+                httpContext,
+                dbContext,
+                sessionValidator,
+                branchValidator,
+                loggerFactory,
+                ct))
+        .RequireAuthorization()
+        .WithName("SyncEvents")
+        .WithTags("Events");
+
+        return endpoints;
+    }
+
+    internal static async Task<IResult> SyncEventsHandlerAsync(
+        long since_sequence,
+        int? limit,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        RestaurantOrderDbContext dbContext,
+        ICustomerSessionValidator sessionValidator,
+        IBranchScopeValidator branchValidator,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct = default)
+    {
+        var logger = loggerFactory.CreateLogger("EventSyncEndpoints");
+        try
         {
-            var logger = loggerFactory.CreateLogger("EventSyncEndpoints");
             var tenantClaim = user.FindFirst(JwtClaimNames.TenantId)?.Value ?? user.FindFirst("tenant_id")?.Value;
             var branchClaim = user.FindFirst(JwtClaimNames.BranchId)?.Value ?? user.FindFirst("branch_id")?.Value;
             var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
@@ -103,12 +132,19 @@ public static class EventSyncEndpoints
             var tenantIdTyped = new TenantId(tenantId);
             var branchIdTyped = new BranchId(branchId);
 
-            // Establish tenant transaction for RLS protection
-            await using var tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+            // Establish tenant transaction for RLS protection if not already opened by middleware
+            var ownsTx = false;
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
+            if (dbContext.Database.IsRelational() && dbContext.Database.CurrentTransaction == null)
+            {
+                tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
+                ownsTx = true;
+            }
 
             // Check retention window (24 hours)
             var retentionCutoff = DateTimeOffset.UtcNow.AddHours(-24);
             var oldestSequence = await dbContext.OperationalOutbox
+                .IgnoreQueryFilters()
                 .Where(o => o.TenantId == tenantIdTyped && o.BranchId == branchIdTyped && o.CreatedAtUtc >= retentionCutoff)
                 .OrderBy(o => o.SequenceNumber)
                 .Select(o => (long?)o.SequenceNumber)
@@ -132,6 +168,10 @@ public static class EventSyncEndpoints
                     }
 
                     await using var cmd = conn.CreateCommand();
+                    if (dbContext.Database.CurrentTransaction != null)
+                    {
+                        cmd.Transaction = dbContext.Database.CurrentTransaction.GetDbTransaction();
+                    }
                     cmd.CommandText = @"
                         SELECT COALESCE(
                             (SELECT MIN(sequence_number) - 1
@@ -186,6 +226,7 @@ public static class EventSyncEndpoints
 
             // Query outbox records bounded by safe watermark
             var query = dbContext.OperationalOutbox
+                .IgnoreQueryFilters()
                 .Where(o => o.TenantId == tenantIdTyped &&
                             o.BranchId == branchIdTyped &&
                             o.SequenceNumber > since_sequence &&
@@ -279,7 +320,7 @@ public static class EventSyncEndpoints
                             BranchId: rec.BranchId.Value,
                             AggregateId: rec.AggregateId,
                             SequenceNumber: rec.SequenceNumber,
-                            Data: root.Clone()
+                            Data: JsonSerializer.Deserialize<JsonElement>(rec.Payload)
                         );
                         eventEnvelopes.Add(env);
                     }
@@ -295,18 +336,22 @@ public static class EventSyncEndpoints
                 }
             }
 
-            await tx.CommitAsync(ct);
+            if (ownsTx && tx != null)
+            {
+                await tx.CommitAsync(ct);
+                await tx.DisposeAsync();
+            }
 
             return Results.Ok(new EventsSyncResponse(
                 Events: eventEnvelopes,
                 LatestSequenceNumber: lastProcessedSequence,
                 HasMore: hasMore,
                 SyncedAtUtc: DateTimeOffset.UtcNow));
-        })
-        .RequireAuthorization()
-        .WithName("SyncEvents")
-        .WithTags("Events");
-
-        return endpoints;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Unhandled error in EventSync: {Message}", ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, detail: ex.Message);
+            }
+        }
     }
-}

@@ -16,9 +16,9 @@ using Xunit;
 namespace RestaurantOrder.IntegrationTests;
 
 /// <summary>
-/// Verifies multi-instance SignalR/Redis backplane pub/sub communication,
-/// cross-instance event propagation, tenant isolation, and measures p50/p95 latency
-/// against the <500ms roadmap budget.
+/// Verifies low-level Redis pub/sub transport layer communication, publisher channels,
+/// and session/user eviction payload formats.
+/// End-to-end multi-host delivery and p95 latency are verified by TwoApiInstanceRealtimeIntegrationTests.
 /// </summary>
 public class RealtimeMultiInstanceIntegrationTests : IClassFixture<TestcontainersFixture>
 {

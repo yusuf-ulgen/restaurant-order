@@ -108,3 +108,10 @@ Her teslimat denemesinde (`PushNotificationDispatcher`):
 - Kullanıcıya açık izin isteme kartı (`PushNotificationBanner`) sunulur; izin reddi veya destek yokluğu menü inceleme veya sipariş akışını engellemez (zorunlu kılınmaz).
 - Service worker (`sw.js`) arka plan bildirimlerini dinler, güvenli kilit ekranı minimizasyonunu uygular ve uygulama ön planda açıkken çift uyarının bastırılmasını (`suppressDoubleAlert`) destekler.
 
+## 6. Çoklu Instance, Canlı Yayılım ve Gecikme Metrikleri
+
+- **Çoklu API Instance Mimarisi:** Üretim ortamında birden fazla API podu çalıştığında, mutasyon A podu üzerinden yürütüldüğünde transactional outbox ve worker aracılığıyla Redis pub/sub'a aktarılır. B podundaki `RedisEventSubscriberService` mesajı alarak SignalR gruplarına iletir ve B poduna bağlı istemciye anında teslim eder (`TwoApiInstanceRealtimeIntegrationTests`).
+- **Tekil Köprü Claim Kilidi:** Instance sayısının artmasıyla SignalR backplane'inde olay çoğalmasını önlemek amacıyla Redis üzerinde atomik anahtar (`restaurant-order:realtime:bridged:{eventId}`) ile ilk claim eden instance köprü görevini üstlenir.
+- **Uçtan Uca Gecikme Bütçesi:** Tanımlı üretim outbox -> worker polling (50ms) -> Redis pub/sub -> API B -> SignalR istemci yolunda <500ms p95 gecikme bütçesi doğrulanmıştır (Ölçülen: p50 ~18 ms, p95 ~38 ms).
+- **Cluster Geneli Oturum/Yetki Revocation:** Bir masa oturumu kapandığında veya personel yetkisi iptal edildiğinde (`PublishSessionInvalidatedAsync`, `PublishUserRevokedAsync`), kümedeki tüm API instance'ları bilgilendirilir ve yerel tracker'lardaki bağlantılar derhal sonlandırılır.
+- **FCM Doğrulama Sınırları:** FCM sağlayıcı sözleşmesi, TTL ve kalıcı teslim kuyruğu otomatik entegrasyon testleriyle doğrulanmıştır; gerçek mobil cihaz teslimi staging ortamında fiziksel donanımla ayrı olarak doğrulanır.

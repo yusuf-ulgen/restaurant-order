@@ -39,8 +39,28 @@ export default defineConfig({
       },
     },
     {
+      command: 'dotnet run --project ../../apps/worker --no-launch-profile',
+      url: 'http://127.0.0.1:5005/health/live',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+      env: {
+        ASPNETCORE_URLS: 'http://127.0.0.1:5005',
+        ASPNETCORE_ENVIRONMENT: 'Development',
+        DEPLOYMENT_COLOR: 'blue',
+        ACTIVE_DEPLOYMENT_SLOT: 'blue',
+        DATABASE_URL: DATABASE_URL,
+        REDIS_URL: REDIS_URL,
+      },
+    },
+    {
       command: 'pnpm --filter customer-web dev',
       url: 'http://127.0.0.1:3001',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+    {
+      command: 'pnpm --filter operations-web dev',
+      url: 'http://127.0.0.1:3002',
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
     },
@@ -48,7 +68,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
   ],
 });

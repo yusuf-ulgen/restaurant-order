@@ -39,12 +39,14 @@ public class Worker : BackgroundService
         var leaseDuration = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_LEASE_TTL_SECONDS", 15));
         var renewInterval = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_LEASE_RENEW_INTERVAL_SECONDS", 5));
         var pollInterval = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_STANDBY_POLL_INTERVAL_SECONDS", 5));
+        var dispatchPollInterval = TimeSpan.FromMilliseconds(_configuration.GetValue("WORKER_DISPATCH_POLL_INTERVAL_MS", 50));
 
         _logger.LogInformation(
             "RestaurantOrder background worker initialized. Slot: '{Slot}', Status: '{Status}', LeaseKey: '{LeaseKey}'.",
             _activationGuard.SlotColor, _activationGuard.Status, leaseKey);
 
         string lastLoggedState = "";
+        DateTimeOffset lastLeaseRenewTime = DateTimeOffset.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -77,12 +79,14 @@ public class Worker : BackgroundService
                 }
 
                 // Slot is active: acquire or renew distributed lease
+                var now = DateTimeOffset.UtcNow;
                 if (!IsLeader)
                 {
                     var acquired = await _leaseManager.TryAcquireLeaseAsync(leaseKey, leaseDuration, stoppingToken);
                     if (acquired)
                     {
                         IsLeader = true;
+                        lastLeaseRenewTime = now;
                         lastLoggedState = "ACTIVE_LEADER";
                         _logger.LogInformation(
                             "[WORKER ACTIVE] Slot '{Slot}' acquired distributed lease '{LeaseKey}'. Leadership is ACTIVE.",
@@ -102,7 +106,7 @@ public class Worker : BackgroundService
                         continue;
                     }
                 }
-                else
+                else if (now - lastLeaseRenewTime >= renewInterval)
                 {
                     // Existing leader: renew lease before expiry
                     var renewed = await _leaseManager.RenewLeaseAsync(leaseKey, leaseDuration, stoppingToken);
@@ -117,7 +121,10 @@ public class Worker : BackgroundService
                         await Task.Delay(pollInterval, stoppingToken);
                         continue;
                     }
+                    lastLeaseRenewTime = now;
                 }
+
+                int totalProcessed = 0;
 
                 // Active leader processing loop: dispatch operational outbox events and persistent push notifications
                 if (_serviceScopeFactory != null)
@@ -140,6 +147,7 @@ public class Worker : BackgroundService
                                 },
                                 tenantId: null,
                                 ct: stoppingToken);
+                            totalProcessed += dispatched;
                             if (dispatched > 0)
                             {
                                 _logger.LogInformation(
@@ -162,6 +170,7 @@ public class Worker : BackgroundService
                                 },
                                 tenantId: null,
                                 ct: stoppingToken);
+                            totalProcessed += pushed;
                             if (pushed > 0)
                             {
                                 _logger.LogInformation(
@@ -176,7 +185,13 @@ public class Worker : BackgroundService
                     }
                 }
 
-                await Task.Delay(renewInterval, stoppingToken);
+                if (totalProcessed > 0)
+                {
+                    // If items were processed, immediately drain remaining backlog without delay
+                    continue;
+                }
+
+                await Task.Delay(dispatchPollInterval, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
