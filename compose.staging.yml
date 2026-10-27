@@ -62,7 +62,7 @@ services:
     container_name: restaurant-order-worker-staging
     environment:
       ASPNETCORE_ENVIRONMENT: Staging
-      DATABASE_URL: ${DATABASE_URL}
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL required}
       REDIS_URL: ${REDIS_URL:-redis:6379}
       DEPLOYMENT_COLOR: ${DEPLOYMENT_COLOR:-blue}
       ACTIVE_DEPLOYMENT_SLOT: ${ACTIVE_DEPLOYMENT_SLOT:-blue}

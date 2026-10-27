@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import * as signalR from '@microsoft/signalr';
-import crypto from 'node:crypto';
 import {
   seedCustomerExperienceScenario,
   cleanupCustomerScenario,
@@ -14,82 +13,7 @@ import {
   waitForEventType,
 } from './realtime-e2e-helpers';
 
-async function enterCustomerSession(page: any, scenario: SeededCustomerScenario) {
-  await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
-  const resolveView = page.getByTestId('table-resolve-view');
-  await expect(resolveView).toBeVisible({ timeout: 10000 });
-  await expect(resolveView.getByText(scenario.tableNumber).first()).toBeVisible({ timeout: 10000 });
-
-  const continueBtn = page.getByTestId('continue-to-table-btn');
-  await expect(continueBtn).toBeVisible({ timeout: 10000 });
-  await continueBtn.click();
-
-  const sessionOverview = page.getByTestId('customer-active-session');
-  await expect(sessionOverview).toBeVisible({ timeout: 10000 });
-  return sessionOverview;
-}
-
-async function transitionSessionToClosed(request: any, scenario: SeededCustomerScenario, reason: string): Promise<void> {
-  const sessionRes = await request.get(
-    `/api/v1/floor/branches/${scenario.branchId}/sessions/${scenario.sessionId}`,
-    { headers: { Authorization: `Bearer ${scenario.adminToken}` } }
-  );
-  expect(sessionRes.status()).toBe(200);
-  const sessionData = await sessionRes.json();
-  let currentToken = sessionData.concurrencyToken;
-  let currentStatus = sessionData.status;
-
-  if (currentStatus === 'Open') {
-    const actRes = await request.post(
-      `/api/v1/floor/branches/${scenario.branchId}/sessions/${scenario.sessionId}/activate`,
-      {
-        headers: {
-          Authorization: `Bearer ${scenario.adminToken}`,
-          'If-Match': `"${currentToken}"`,
-          'Content-Type': 'application/json',
-        },
-        data: { concurrencyToken: currentToken },
-      }
-    );
-    expect([200, 204]).toContain(actRes.status());
-    const actData = await actRes.json();
-    currentToken = actData.concurrencyToken;
-    currentStatus = 'Active';
-  }
-
-  if (currentStatus === 'Active') {
-    const billRes = await request.post(
-      `/api/v1/floor/branches/${scenario.branchId}/sessions/${scenario.sessionId}/request-bill`,
-      {
-        headers: {
-          Authorization: `Bearer ${scenario.adminToken}`,
-          'If-Match': `"${currentToken}"`,
-          'Content-Type': 'application/json',
-        },
-        data: { concurrencyToken: currentToken },
-      }
-    );
-    expect([200, 204]).toContain(billRes.status());
-    const billData = await billRes.json();
-    currentToken = billData.concurrencyToken;
-  }
-
-  const closeRes = await request.post(
-    `/api/v1/floor/branches/${scenario.branchId}/sessions/${scenario.sessionId}/close`,
-    {
-      headers: {
-        Authorization: `Bearer ${scenario.adminToken}`,
-        'If-Match': `"${currentToken}"`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        reason,
-        concurrencyToken: currentToken,
-      },
-    }
-  );
-  expect([200, 204]).toContain(closeRes.status());
-}
+import { enterCustomerSession, transitionSessionToClosed } from './realtime-browser-helpers';
 
 test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verification)', () => {
   let scenario: SeededCustomerScenario;
@@ -222,7 +146,7 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verificati
   test('Scenario 3: Service request reaches correct branch and not wrong branch', async ({
     page,
   }) => {
-    const wrongBranchId = crypto.randomUUID();
+    const wrongBranchId = 'd2222222-2222-2222-2222-222222222222';
     const correctWaiterToken = mintDevAdminToken(scenario.tenantId, scenario.branchId, 'Waiter');
     const wrongWaiterToken = mintDevAdminToken(scenario.tenantId, wrongBranchId, 'Waiter');
 
@@ -342,11 +266,25 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verificati
 
   // 6. Session kapanınca eski müşteri bağlantısı sonraki özel olayları alamaz.
   test('Scenario 6: Closed session prevents customer connection from receiving subsequent private events', async ({
-    request,
+    request, page,
   }) => {
+    await enterCustomerSession(page, scenario);
     const customerToken = mintDevCustomerToken(scenario.tenantId, scenario.branchId, scenario.sessionId);
     const customerHub = createCustomerSignalRConnection(customerToken);
     await customerHub.start();
+    await page.evaluate(async (token) => {
+      const modulePath = '/node_modules/.vite/deps/@microsoft_signalr.js';
+      const sdk = await import(modulePath);
+      const state = { closed: false, leaked: 0 };
+      (window as any).__revocationProbe = state;
+      const hub = new sdk.HubConnectionBuilder().withUrl('/hubs/events', {
+        accessTokenFactory: () => token, transport: sdk.HttpTransportType.WebSockets, skipNegotiation: true,
+      }).build();
+      hub.onclose(() => { state.closed = true; });
+      hub.on('ReceiveEvent', () => { if (state.closed) state.leaked++; });
+      await hub.start();
+      (window as any).__probeHub = hub;
+    }, customerToken);
 
     let sessionClosedReceived = false;
     const leakedSubsequentEvents: any[] = [];
@@ -354,6 +292,7 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verificati
     customerHub.on('SessionClosed', () => {
       sessionClosedReceived = true;
     });
+    customerHub.on('AccessRevoked', () => { sessionClosedReceived = true; });
     const isPrivateEvent = (eventType: string) =>
       eventType === 'order.created' ||
       eventType === 'order.item_status_changed' ||
@@ -373,6 +312,9 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verificati
 
       // Customer receives terminal eviction signal
       await expect.poll(() => sessionClosedReceived, { timeout: 10000 }).toBe(true);
+      await expect.poll(() => page.evaluate(() => (window as any).__revocationProbe.closed), { timeout: 10000 }).toBe(true);
+      await expect.poll(() => customerHub.state).toBe(signalR.HubConnectionState.Disconnected);
+      expect(await page.evaluate(() => (window as any).__revocationProbe.leaked)).toBe(0);
 
       // Server-side continuous revocation: even if client ignores SessionClosed and attempts
       // to maintain transport, server has removed connection from SignalR groups and evicted it,
@@ -388,8 +330,8 @@ test.describe('Real-Time Events & Notifications E2E (Phase 9 Complete Verificati
   test('Scenario 7: Client from another tenant cannot receive events from different tenant', async ({
     page,
   }) => {
-    const foreignTenantId = crypto.randomUUID();
-    const foreignBranchId = crypto.randomUUID();
+    const foreignTenantId = '22222222-2222-2222-2222-222222222222';
+    const foreignBranchId = 'd4444444-4444-4444-4444-444444444444';
     const foreignWaiterToken = mintDevAdminToken(foreignTenantId, foreignBranchId, 'Waiter');
     const foreignHub = createStaffSignalRConnection(foreignWaiterToken, foreignBranchId);
     await foreignHub.start();

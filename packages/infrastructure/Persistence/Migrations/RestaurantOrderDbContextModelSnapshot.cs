@@ -2795,6 +2795,10 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Status", "NextAttemptUtc")
                         .HasDatabaseName("ix_notification_deliveries_tenant_id_status_next_attempt");
 
+                    b.HasIndex("TenantId", "EventId", "DeviceRegistrationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_deliveries_event_device");
+
                     b.ToTable("notification_deliveries", "tenancy");
                 });
 

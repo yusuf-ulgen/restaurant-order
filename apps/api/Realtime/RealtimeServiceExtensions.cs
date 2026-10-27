@@ -17,6 +17,7 @@ public static class RealtimeServiceExtensions
         IHostEnvironment environment)
     {
         services.AddSingleton<IRealtimeConnectionTracker, RealtimeConnectionTracker>();
+        services.AddSingleton<IRealtimeConnectionAuthorizer, RealtimeConnectionAuthorizer>();
 
         var signalR = services.AddSignalR(options =>
         {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/Card.js';
 import { Button } from '../components/Button.js';
 import {
@@ -7,11 +7,10 @@ import {
   isPushDismissed,
   dismissPushPrompt,
   requestPushPermission,
-  getOrCreateInstallationId,
 } from './pushNotifications.js';
 
 export interface PushNotificationBannerProps {
-  onPermissionGranted?: (installationId: string) => void | Promise<void>;
+  onPermissionGranted?: (installationId: string) => boolean | Promise<boolean>;
   className?: string;
 }
 
@@ -21,6 +20,9 @@ export const PushNotificationBanner: React.FC<PushNotificationBannerProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const registrationRef = useRef(onPermissionGranted);
+  registrationRef.current = onPermissionGranted;
 
   useEffect(() => {
     if (!isPushSupported()) {
@@ -29,6 +31,17 @@ export const PushNotificationBanner: React.FC<PushNotificationBannerProps> = ({
     }
 
     const permission = getPushPermission();
+    if (permission === 'granted') {
+      setIsLoading(true);
+      void Promise.resolve(registrationRef.current?.('')).then(registered => {
+        setIsVisible(!registered);
+        if (!registered) setError('Bildirim kaydı tamamlanamadı. Yeniden deneyebilirsiniz.');
+      }).catch(() => {
+        setIsVisible(true);
+        setError('Bildirim kaydı tamamlanamadı. Yeniden deneyebilirsiniz.');
+      }).finally(() => setIsLoading(false));
+      return;
+    }
     if (permission === 'default' && !isPushDismissed()) {
       setIsVisible(true);
     } else {
@@ -42,18 +55,19 @@ export const PushNotificationBanner: React.FC<PushNotificationBannerProps> = ({
 
   const handleEnable = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const result = await requestPushPermission();
+      const result = getPushPermission() === 'granted' ? 'granted' : await requestPushPermission();
       if (result === 'granted') {
-        const installationId = getOrCreateInstallationId();
-        if (onPermissionGranted) {
-          await onPermissionGranted(installationId);
-        }
-        setIsVisible(false);
+        const registered = await registrationRef.current?.('');
+        if (registered) setIsVisible(false);
+        else setError('Bildirim kaydı tamamlanamadı. Yeniden deneyebilirsiniz.');
       } else {
         // User denied or dismissed prompt
         setIsVisible(false);
       }
+    } catch {
+      setError('Bildirim kaydı tamamlanamadı. Yeniden deneyebilirsiniz.');
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +117,7 @@ export const PushNotificationBanner: React.FC<PushNotificationBannerProps> = ({
             Siparişinizin hazırlanma durumu ve servis çağrılarınızı anında takip etmek için bildirimleri açabilirsiniz.
           </p>
           <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {error && <p role="alert">{error}</p>}
             <Button
               variant="primary"
               size="sm"

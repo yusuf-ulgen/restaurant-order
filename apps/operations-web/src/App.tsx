@@ -40,6 +40,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
     enabled: Boolean(staffUser),
     tenantId: terminal?.tenantId,
     branchId: terminal?.branchId,
+    onResyncRequired: () => { setLiveNotifications([]); },
     onEvent: (event, meta) => {
       markEventReceivedInForeground(event.event_id);
       if (!meta?.isCatchUp) {
@@ -117,7 +118,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
     >
       <PushNotificationBanner
         onPermissionGranted={async (installationId) => {
-          await registerPushDevice('', undefined, installationId);
+          return registerPushDevice('', undefined, installationId);
         }}
       />
       {!hasActiveTables ? (

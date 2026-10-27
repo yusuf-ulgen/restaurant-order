@@ -64,7 +64,7 @@ Olaylar standart, sürümlenmiş JSON zarfı (`EventEnvelope`) kullanır:
 - Kopma sırasında iş akışını engellemeyen çevrimdışı göstergesi görünür.
 - Yeniden bağlanınca kaçırılan olaylar HTTP eşitleme ucundan alınır.
 
-Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. Faz 9 kapsamında sunucu SignalR hub'ı, Redis backplane, Transactional Outbox worker dispatcher'ı, HTTP sync okuma modeli, FCM cihaz kaydı (`/api/v1/notifications/devices`) ve ön yüz sesli/canlı bildirimleri uygulanmış ve doğrulanmıştır (bkz. [Faz 9 Takibi](./PHASE-9-TRACKER.md)).
+Personel ve müşteriyi kapsayan arka plan push planı [NOTIFICATIONS-PLAN.md](./NOTIFICATIONS-PLAN.md), kabul edilmiş FCM kararı [ADR-0011](./adr/0011-background-push-provider.md) altındadır. Faz 9 kapsamında sunucu SignalR hub'ı, Redis backplane, Transactional Outbox worker dispatcher'ı, HTTP sync okuma modeli, FCM cihaz kaydı (`/api/v1/notifications/devices`) ve ön yüz sesli/canlı bildirimleri uygulanmıştır; güncel doğrulama ve sınırlar [Faz 9 inceleme kaydında](./PHASE-9-REVIEW.md) izlenir.
 
 ## 5. Arka Plan Push Bildirimleri ve Teslim Kuyruğu
 
@@ -100,7 +100,7 @@ Her teslimat denemesinde (`PushNotificationDispatcher`):
 - Hata loglarında `{InstallationId}` kaldırılmış, yerine anonim hash veya sayısal kayıt ID'si kullanılmıştır.
 - Kilit ekranında müşteri notu, sipariş kalemi veya finansal tutar gösterilmez; bildirimler genel başlıklar ve opak `event_id` taşır.
 - İstemci uygulamayı açtığında güncel ve detaylı verileri yetkili HTTP uç noktalarından çeker.
-- Service worker bildirim tıklamalarında serbest dış URL'lere yönlendirme engellenmiş; yalnızca izin verilen iç rotalar (`/`, `/table`, `/orders`, `/menu`, `/operations`) açılır.
+- Service worker bildirim tıklamalarında serbest dış URL'lere yönlendirme engellenmiş; yalnızca uygulamada gerçekten bulunan kök rota (`/`) açılır.
 
 ### 5.5. İstemci Push ve Service Worker Akışı
 
@@ -108,10 +108,18 @@ Her teslimat denemesinde (`PushNotificationDispatcher`):
 - Kullanıcıya açık izin isteme kartı (`PushNotificationBanner`) sunulur; izin reddi veya destek yokluğu menü inceleme veya sipariş akışını engellemez (zorunlu kılınmaz).
 - Service worker (`sw.js`) arka plan bildirimlerini dinler, güvenli kilit ekranı minimizasyonunu uygular ve uygulama ön planda açıkken çift uyarının bastırılmasını (`suppressDoubleAlert`) destekler.
 
-## 6. Çoklu Instance, Canlı Yayılım ve Gecikme Metrikleri
+## 6. Çoklu Instance ve Sürekli Yetki
 
-- **Çoklu API Instance Mimarisi:** Üretim ortamında birden fazla API podu çalıştığında, mutasyon A podu üzerinden yürütüldüğünde transactional outbox ve worker aracılığıyla Redis pub/sub'a aktarılır. B podundaki `RedisEventSubscriberService` mesajı alarak SignalR gruplarına iletir ve B poduna bağlı istemciye anında teslim eder (`TwoApiInstanceRealtimeIntegrationTests`).
-- **Tekil Köprü Claim Kilidi:** Instance sayısının artmasıyla SignalR backplane'inde olay çoğalmasını önlemek amacıyla Redis üzerinde atomik anahtar (`restaurant-order:realtime:bridged:{eventId}`) ile ilk claim eden instance köprü görevini üstlenir.
-- **Uçtan Uca Gecikme Bütçesi:** Tanımlı üretim outbox -> worker polling (50ms) -> Redis pub/sub -> API B -> SignalR istemci yolunda <500ms p95 gecikme bütçesi doğrulanmıştır (Ölçülen: p50 ~18 ms, p95 ~38 ms).
-- **Cluster Geneli Oturum/Yetki Revocation:** Bir masa oturumu kapandığında veya personel yetkisi iptal edildiğinde (`PublishSessionInvalidatedAsync`, `PublishUserRevokedAsync`), kümedeki tüm API instance'ları bilgilendirilir ve yerel tracker'lardaki bağlantılar derhal sonlandırılır.
-- **FCM Doğrulama Sınırları:** FCM sağlayıcı sözleşmesi, TTL ve kalıcı teslim kuyruğu otomatik entegrasyon testleriyle doğrulanmıştır; gerçek mobil cihaz teslimi staging ortamında fiziksel donanımla ayrı olarak doğrulanır.
+- Her API instance'ı Redis broadcast mesajını alır ve yalnızca kendi tracker'ındaki bağlantılara gönderir. Ortak grup üzerinden backplane fan-out ve global köprü claim kilidi kullanılmaz; böylece başka instance'a bağlı bir istemci yerel authoritative kontrolden geçmeden veri alamaz. Aynı bağlantının birden çok hedef grubunda bulunması tek gönderim üretir; replay aynı event ID ile istemcide tekilleştirilir.
+- Her özel teslimden hemen önce, yeni scoped DB context ve tenant transaction içinde müşteri oturumu veya personel session/security-version/üyelik/rol/branch doğrulanır. Süresi dolmuş/iptal edilmiş bağlantılar gruplardan çıkarılır ve server-side abort edilir. Abort callback'i kısa ömürlü Hub nesnesini değil bağlantı context'ini tutar.
+- Gerçek session/user invalidation yolları Redis kontrol sinyali üretir. Üyelik iptali yalnızca ilgili tenant/branch session ID'lerini hedefler. Sinyal kaçarsa her teslim öncesi authoritative kontrol ve 5 saniyelik sweep erişimi tekrar doğrular. Pub/Sub tek başına güvenlik garantisi değildir.
+- Gerçek worker hostu ve iki API hostu testleri, HTTP mutasyon başlangıcından API B `ReceiveEvent` anına kadar 20 örnek ölçer; eski p50 ~18 / p95 ~38 ms değerleri gerçek worker yolunun kanıtı sayılmaz. Güncel sonuçlar [inceleme kaydındadır](./PHASE-9-REVIEW.md).
+
+## 7. HTTP Catch-up ve Worker İşlem Sınırları
+
+- HTTP tarama cursorı, görülen en yüksek canlı sequence'den ayrıdır. Yetki nedeniyle boş kalan sayfanın sunucu cursorı da ilerletilir. Backlog sayfa sınırında bırakılmaz; hata retry edilir ve tenant/branch/session değişince eski istekler yeni kapsamı güncelleyemez.
+- XID tahsis sırası sequence veya commit sırası değildir. HTTP sync, `READ COMMITTED` transaction içinde kısa `LOCK TABLE ... IN SHARE MODE` ile önceki outbox writer'larının commit/rollback'ini bekler. Ters XID/sequence ve rollback gerçek endpoint testleriyle sınanır. Kilit maliyeti tüm tenantlar için izlenmelidir; unsafe fallback yoktur.
+- Staging, teslimat unique indeksi ve outbox completion aynı tenant transaction'ındadır. Staging hatası completion'ı engeller; retry veya claim expiry recovery işi tekrar alır. Redis yayını PostgreSQL ile atomik değildir; replay mümkün, event ID sabittir.
+- API rolünün global claim EXECUTE yetkisi yoktur. Worker `WORKER_DATABASE_URL` ile ayrı `restaurant_worker_user` hesabını kullanır. NOLOGIN gateway sahibi yalnızca iki kuyrukta dar RLS politikası ve tablo yetkisi taşır; runtime rollerinde SUPERUSER/BYPASSRLS yoktur.
+- Redis leadership monitor uzun işlemlerde sahipliği yeniler; kayıpta bağlı cancellation tetiklenir. Her claim kayıt başına tenant transaction'ında doğrulanır/yenilenir. Tamamlama, failure, retry ve expiry yazımları claim ve sunucu saatiyle koşulludur. Geç sağlayıcı sonucu eski claimi tamamlayamaz.
+- TTL olayın `occurred_at` zamanından itibaren 5 dakikadır; staging veya retry süreyi uzatmaz. Gönderimden önce güncel cihaz sahipliği, tenant/branch, müşteri oturumu veya personel üyeliği/rolü ve kullanıcı aktifliği doğrulanır.

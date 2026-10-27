@@ -23,23 +23,28 @@ public sealed class EventsHub : Hub
     private readonly IBranchScopeValidator _branchScopeValidator;
     private readonly IRealtimeConnectionTracker _tracker;
     private readonly ILogger<EventsHub> _logger;
+    private readonly IRealtimeConnectionAuthorizer _authorizer;
 
     public EventsHub(
         ICustomerSessionValidator sessionValidator,
         ITokenRevocationValidator tokenValidator,
         IBranchScopeValidator branchScopeValidator,
         IRealtimeConnectionTracker tracker,
-        ILogger<EventsHub> logger)
+        ILogger<EventsHub> logger,
+        IRealtimeConnectionAuthorizer authorizer)
     {
         _sessionValidator = sessionValidator ?? throw new ArgumentNullException(nameof(sessionValidator));
         _tokenValidator = tokenValidator ?? throw new ArgumentNullException(nameof(tokenValidator));
         _branchScopeValidator = branchScopeValidator ?? throw new ArgumentNullException(nameof(branchScopeValidator));
         _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _authorizer = authorizer;
     }
 
     public override async Task OnConnectedAsync()
     {
+        // Hub örneği daha sonra dispose edilir; callback hub getter'ını kullanamaz.
+        var connectionContext = Context;
         var principal = Context.User;
         if (principal == null)
         {
@@ -133,6 +138,10 @@ public sealed class EventsHub : Hub
             assignedGroups.Add(sessionGroup);
             assignedGroups.Add(catalogGroup);
 
+            if (!await _authorizer.IsAuthorizedAsync(new TrackedConnection(Context.ConnectionId, tenantId, branchId,
+                "Customer", sessionId, null, TokenExpiresAtUtc: tokenExpiresAtUtc), Context.ConnectionAborted))
+            { Context.Abort(); return; }
+
             foreach (var group in assignedGroups)
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, group);
@@ -149,7 +158,7 @@ public sealed class EventsHub : Hub
                 SecurityVersion: null,
                 TokenExpiresAtUtc: tokenExpiresAtUtc,
                 SubscribedGroups: assignedGroups,
-                Abort: () => Context.Abort()));
+                Abort: () => connectionContext.Abort()));
 
             _logger.LogInformation("Customer connected '{ConnectionId}' bound to session '{SessionId}'.", Context.ConnectionId, sessionId);
         }
@@ -173,6 +182,9 @@ public sealed class EventsHub : Hub
                 }
 
                 var catalogGroup = $"tenant:{tenantId}:branch:{branchId}:catalog";
+                if (!await _authorizer.IsAuthorizedAsync(new TrackedConnection(Context.ConnectionId, tenantId, branchId,
+                    roleClaim, null, staffUserId, staffSessionId, secVer, tokenExpiresAtUtc), Context.ConnectionAborted))
+                { Context.Abort(); return; }
                 var floorGroup = $"tenant:{tenantId}:branch:{branchId}:floor";
                 var kitchenGroup = $"tenant:{tenantId}:branch:{branchId}:station:kitchen";
                 var barGroup = $"tenant:{tenantId}:branch:{branchId}:station:bar";
@@ -230,7 +242,7 @@ public sealed class EventsHub : Hub
                     SecurityVersion: secVer,
                     TokenExpiresAtUtc: tokenExpiresAtUtc,
                     SubscribedGroups: assignedGroups,
-                    Abort: () => Context.Abort()));
+                    Abort: () => connectionContext.Abort()));
 
                 _logger.LogInformation("Staff '{Role}' connected '{ConnectionId}' for branch '{BranchId}' with {GroupCount} groups.",
                     roleClaim, Context.ConnectionId, branchId, assignedGroups.Count);

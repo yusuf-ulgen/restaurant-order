@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Events;
 using RestaurantOrder.Domain.Events;
@@ -77,6 +78,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         {
             return 0;
         }
+        if (isLeaseValid != null && !await isLeaseValid(ct)) return 0;
 
         if (batchSize <= 0) batchSize = 25;
 
@@ -202,6 +204,9 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
 
             try
             {
+                await using var work = await WorkerClaimTransaction.BeginAsync(_dbContext, item.TenantId,
+                    item.Id, claimId, push: false, DefaultLeaseSeconds, ct);
+                if (!work.IsValid) continue;
                 string envelopeJson;
                 try
                 {
@@ -236,6 +241,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                     _logger.LogError(jsonEx, "Poison payload detected for outbox message {Id}. Marking DeadLetter immediately.", item.Id);
                     var poisonError = SanitizeErrorMessage("Poison payload: " + jsonEx.Message);
                     await RecordFailureAsync(conn, item, claimId, poisonError, isDeadLetter: true, ct);
+                    await work.CommitAsync(ct);
                     continue;
                 }
 
@@ -243,8 +249,6 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
 
                 if (_deliveryStager != null)
                 {
-                    try
-                    {
                         await _deliveryStager.StageDeliveriesForEventAsync(
                             item.TenantId,
                             item.BranchId,
@@ -254,16 +258,14 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                             item.Payload,
                             item.OccurredAtUtc,
                             ct);
-                    }
-                    catch (Exception stageEx)
-                    {
-                        _logger.LogWarning(stageEx, "Failed to stage push notification deliveries for event {EventId}.", item.Id);
-                    }
                 }
 
                 if (isPostgres && conn != null)
                 {
+                    work.EnsureValid(ct);
+                    if (isLeaseValid != null && !await isLeaseValid(ct)) break;
                     await using var completeCmd = conn.CreateCommand();
+                    completeCmd.Transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
                     completeCmd.CommandText = "SELECT tenancy.complete_operational_outbox(@id, @claimId, @nowUtc);";
                     AddParameter(completeCmd, "id", item.Id);
                     AddParameter(completeCmd, "claimId", claimId);
@@ -281,7 +283,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                 else
                 {
                     var entity = await _dbContext.OperationalOutbox.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == item.Id, ct);
-                    if (entity != null && entity.LockClaimId == claimId && entity.Status == OperationalOutboxStatus.Processing)
+                    if (entity != null && entity.LockClaimId == claimId && entity.Status == OperationalOutboxStatus.Processing && entity.LockExpiresUtc > DateTimeOffset.UtcNow)
                     {
                         entity.MarkDispatched(DateTimeOffset.UtcNow);
                         await _dbContext.SaveChangesAsync(ct);
@@ -295,6 +297,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
                     }
                 }
 
+                await work.CommitAsync(ct);
                 dispatchedCount++;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -339,6 +342,7 @@ public sealed class OperationalOutboxDispatcher : IOperationalOutboxDispatcher
         if (_dbContext.Database.IsNpgsql() && conn != null)
         {
             await using var failCmd = conn.CreateCommand();
+            failCmd.Transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
             failCmd.CommandText = "SELECT tenancy.fail_operational_outbox(@id, @claimId, @error, @nextAttemptUtc, @isDeadLetter, @nowUtc);";
             AddParameter(failCmd, "id", item.Id);
             AddParameter(failCmd, "claimId", claimId);

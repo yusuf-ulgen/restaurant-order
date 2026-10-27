@@ -86,6 +86,10 @@ public class PostgreSqlOperationalOutboxIntegrationTests : IClassFixture<Testcon
         return new RestaurantOrderDbContext(options, tenantContext ?? TenantContext.Empty);
     }
 
+    private async Task<RestaurantOrderDbContext> CreateWorkerDbContextAsync() =>
+        new(new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+            .UseNpgsql(await _fixture.ProvisionTemporaryWorkerRoleAsync()).Options);
+
     private RestaurantOrderDbContext CreateAdminDbContext()
     {
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
@@ -183,7 +187,7 @@ public class PostgreSqlOperationalOutboxIntegrationTests : IClassFixture<Testcon
         }
 
         // 4. Run dispatcher with unprivileged runtime role (no tenant context)
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var dispatchedCount = await dispatcher.DispatchPendingBatchAsync(10);
@@ -258,7 +262,7 @@ public class PostgreSqlOperationalOutboxIntegrationTests : IClassFixture<Testcon
         }
 
         // Run dispatcher
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var dispatched = await dispatcher.DispatchPendingBatchAsync(10);
@@ -316,7 +320,7 @@ public class PostgreSqlOperationalOutboxIntegrationTests : IClassFixture<Testcon
         }
 
         // First dispatch: succeeds
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var firstDispatch = await dispatcher.DispatchPendingBatchAsync(10);
@@ -402,7 +406,7 @@ public class PostgreSqlOperationalOutboxIntegrationTests : IClassFixture<Testcon
         var redisProvider = new TestRedisProvider(redis);
         var publisher = new RedisRealtimeEventPublisher(redisProvider, NullLogger<RedisRealtimeEventPublisher>.Instance);
 
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var dispatched = await dispatcher.DispatchPendingBatchAsync(10);

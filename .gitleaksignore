@@ -8,3 +8,7 @@ scripts/tests/check-secrets.test.mjs:aws-access-token:32
 4095824b2d19bba1f794e533c3b76b2d5f2e2e63:packages/infrastructure/Floor/QrSecurityService.cs:generic-api-key:24
 d3f72d15aa92062399f6c46cabb062fcfef8683c:tests/integration/RestaurantConfigTestHelpers.cs:generic-api-key:38
 tests/integration/RestaurantConfigTestHelpers.cs:generic-api-key:38
+# PR #24: yalnızca maskelenmeyi sınayan sentetik fixture; taranan eski commit korunur.
+a4b2d5bd989f090ae0c1e52be8c85180fea9f8ad:tests/unit/Events/OperationalOutboxDispatcherTests.cs:generic-api-key:293
+# Mevcut CI sentetik JWT fallback fixture'ının yeni satırı; gerçek kasa değeri istisna değildir.
+.github/workflows/ci.yml:generic-api-key:155

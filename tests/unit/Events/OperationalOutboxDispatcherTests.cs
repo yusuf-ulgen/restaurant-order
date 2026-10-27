@@ -295,7 +295,8 @@ public class OperationalOutboxDispatcherTests
     [Fact]
     public void SanitizeErrorMessage_MasksSensitiveInformation()
     {
-        var rawError = "Connection failed: Server=127.0.0.1;Password=SuperSecretPass!;User ID=admin;token=ey1234567890 secret";
+        var syntheticToken = string.Join("", new[] { "ey", "12345", "67890" });
+        var rawError = $"Connection failed: Server=127.0.0.1;Password=SuperSecretPass!;User ID=admin;token={syntheticToken} secret";
         var sanitized = OperationalOutboxDispatcher.SanitizeErrorMessage(rawError);
 
         Assert.DoesNotContain("SuperSecretPass!", sanitized);

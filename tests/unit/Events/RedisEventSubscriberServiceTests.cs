@@ -23,9 +23,11 @@ public class RedisEventSubscriberServiceTests
     private readonly Mock<ISingleClientProxy> _clientProxyMock = new();
     private readonly Mock<IGroupManager> _groupsMock = new();
     private readonly RealtimeConnectionTracker _tracker = new();
+    private readonly Mock<IRealtimeConnectionAuthorizer> _authorizer = new();
 
     public RedisEventSubscriberServiceTests()
     {
+        _authorizer.Setup(a => a.IsAuthorizedAsync(It.IsAny<TrackedConnection>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         _redisProviderMock.Setup(p => p.GetDatabaseAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(_redisDbMock.Object);
         _redisDbMock.SetReturnsDefault(Task.FromResult(true));
@@ -42,7 +44,22 @@ public class RedisEventSubscriberServiceTests
             _redisProviderMock.Object,
             _hubContextMock.Object,
             _tracker,
-            NullLogger<RedisEventSubscriberService>.Instance);
+            NullLogger<RedisEventSubscriberService>.Instance, _authorizer.Object);
+    }
+
+    [Fact]
+    public async Task MissedInvalidation_AuthoritativeCheckAbortsBeforeNextPrivateEvent()
+    {
+        var tenant = Guid.NewGuid(); var branch = Guid.NewGuid();
+        var aborted = false;
+        _tracker.Track(new TrackedConnection("revoked", tenant, branch, "Waiter", null, Guid.NewGuid(),
+            SubscribedGroups: [$"tenant:{tenant}:branch:{branch}:floor"], Abort: () => aborted = true));
+        _authorizer.Setup(a => a.IsAuthorizedAsync(It.IsAny<TrackedConnection>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        await CreateService().HandleBroadcastMessageAsync(JsonSerializer.Serialize(new {
+            tenant_id = tenant, branch_id = branch, event_id = Guid.NewGuid(), event_type = "order.created", data = new { } }));
+        Assert.True(aborted);
+        Assert.Empty(_tracker.GetAllConnections());
+        _clientProxyMock.Verify(c => c.SendCoreAsync("ReceiveEvent", It.IsAny<object[]>(), default), Times.Never);
     }
 
     [Fact]
@@ -184,6 +201,10 @@ public class RedisEventSubscriberServiceTests
 
         var json = JsonSerializer.Serialize(envelope);
 
+        foreach (var group in new[] { $"session:{sessionId}", "floor", "station:kitchen", "station:bar" })
+            _tracker.Track(new TrackedConnection(group, tenantId, branchId, "Waiter", null, Guid.NewGuid(),
+                SubscribedGroups: [$"tenant:{tenantId}:branch:{branchId}:{group}"]));
+
         await service.HandleBroadcastMessageAsync(json);
 
         var sessionGroup = $"tenant:{tenantId}:branch:{branchId}:session:{sessionId}";
@@ -191,10 +212,8 @@ public class RedisEventSubscriberServiceTests
         var kitchenGroup = $"tenant:{tenantId}:branch:{branchId}:station:kitchen";
         var barGroup = $"tenant:{tenantId}:branch:{branchId}:station:bar";
 
-        _clientsMock.Verify(c => c.Group(sessionGroup), Times.Once);
-        _clientsMock.Verify(c => c.Group(floorGroup), Times.Once);
-        _clientsMock.Verify(c => c.Group(kitchenGroup), Times.Once);
-        _clientsMock.Verify(c => c.Group(barGroup), Times.Once);
+        foreach (var connection in _tracker.GetAllConnections())
+            _clientsMock.Verify(c => c.Client(connection.ConnectionId), Times.Once);
     }
 
     [Fact]

@@ -133,13 +133,8 @@ public static class EventSyncEndpoints
             var branchIdTyped = new BranchId(branchId);
 
             // Establish tenant transaction for RLS protection if not already opened by middleware
-            var ownsTx = false;
-            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
-            if (dbContext.Database.IsRelational() && dbContext.Database.CurrentTransaction == null)
-            {
-                tx = await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
-                ownsTx = true;
-            }
+            await using var tx = dbContext.Database.IsRelational() && dbContext.Database.CurrentTransaction == null
+                ? await dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct) : null;
 
             // Check retention window (24 hours)
             var retentionCutoff = DateTimeOffset.UtcNow.AddHours(-24);
@@ -155,74 +150,13 @@ public static class EventSyncEndpoints
                 httpContext.Response.Headers.Append("X-Resync-Required", "true");
             }
 
-            // Calculate safe commit watermark against out-of-order sequence commit race
-            long safeWatermark = long.MaxValue;
-            if (dbContext.Database.IsRelational() && dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+            // SHARE lock waits for every in-flight writer, independent of XID allocation order.
+            // New inserts wait until this short scan transaction ends. Never fall back to an unsafe cursor.
+            if (dbContext.Database.IsNpgsql())
             {
-                try
-                {
-                    var conn = dbContext.Database.GetDbConnection();
-                    if (conn.State != ConnectionState.Open)
-                    {
-                        await conn.OpenAsync(ct);
-                    }
-
-                    await using var cmd = conn.CreateCommand();
-                    if (dbContext.Database.CurrentTransaction != null)
-                    {
-                        cmd.Transaction = dbContext.Database.CurrentTransaction.GetDbTransaction();
-                    }
-                    cmd.CommandText = @"
-                        SELECT COALESCE(
-                            (SELECT MIN(sequence_number) - 1
-                             FROM tenancy.operational_outbox
-                             WHERE sequence_number > @p_since
-                               AND tenant_id = @p_tenant
-                               AND branch_id = @p_branch
-                               AND (xmin::text)::bigint >= (pg_snapshot_xmin(pg_current_snapshot())::text)::bigint),
-                            (SELECT MAX(sequence_number)
-                             FROM (
-                                 SELECT sequence_number
-                                 FROM tenancy.operational_outbox
-                                 WHERE sequence_number > @p_since
-                                   AND tenant_id = @p_tenant
-                                   AND branch_id = @p_branch
-                                 ORDER BY sequence_number ASC
-                                 LIMIT @p_limit
-                             ) sub)
-                        );";
-
-                    var pSince = cmd.CreateParameter();
-                    pSince.ParameterName = "@p_since";
-                    pSince.Value = since_sequence;
-                    cmd.Parameters.Add(pSince);
-
-                    var pTenant = cmd.CreateParameter();
-                    pTenant.ParameterName = "@p_tenant";
-                    pTenant.Value = tenantId;
-                    cmd.Parameters.Add(pTenant);
-
-                    var pBranch = cmd.CreateParameter();
-                    pBranch.ParameterName = "@p_branch";
-                    pBranch.Value = branchId;
-                    cmd.Parameters.Add(pBranch);
-
-                    var pLimit = cmd.CreateParameter();
-                    pLimit.ParameterName = "@p_limit";
-                    pLimit.Value = safeLimit + 1;
-                    cmd.Parameters.Add(pLimit);
-
-                    var wmResult = await cmd.ExecuteScalarAsync(ct);
-                    if (wmResult != null && wmResult != DBNull.Value && long.TryParse(wmResult.ToString(), out var wmVal) && wmVal > 0)
-                    {
-                        safeWatermark = wmVal;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Watermark query calculation fallback to standard pagination.");
-                }
+                await dbContext.Database.ExecuteSqlRawAsync("LOCK TABLE tenancy.operational_outbox IN SHARE MODE", ct);
             }
+            long safeWatermark = long.MaxValue;
 
             // Query outbox records bounded by safe watermark
             var query = dbContext.OperationalOutbox
@@ -331,15 +265,14 @@ public static class EventSyncEndpoints
                 {
                     logger.LogError(ex, "Corrupt payload encountered in outbox record '{Id}' at sequence {Seq}.", rec.Id, rec.SequenceNumber);
                     httpContext.Response.Headers.Append("X-Resync-Required", "true");
-                    // Do not silently advance sequence past corrupt payloads without resync signal
-                    break;
+                    // Snapshot recovery is signalled; skip the corrupt row so it cannot trap recovery forever.
+                    lastProcessedSequence = rec.SequenceNumber;
                 }
             }
 
-            if (ownsTx && tx != null)
+            if (tx != null)
             {
                 await tx.CommitAsync(ct);
-                await tx.DisposeAsync();
             }
 
             return Results.Ok(new EventsSyncResponse(
@@ -351,7 +284,7 @@ public static class EventSyncEndpoints
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error in EventSync: {Message}", ex.Message);
-                return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, detail: ex.Message);
+                return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, detail: "Event synchronization could not be completed.");
             }
         }
     }

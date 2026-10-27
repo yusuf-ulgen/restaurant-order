@@ -113,6 +113,14 @@ Grup adları sunucu tarafından deterministik olarak oluşturulur:
 
 ## 6. Bağlantılar ve Kaynaklar
 
+### 2026-10-27 İnceleme Uygulaması
+
+İptal sinyalleri tek başına erişim garantisi değildir: her API yalnızca yerel tracker'ındaki bağlantılara, güncel session/security-version/üyelik/tenant/branch yetkisini PostgreSQL'den doğruladıktan sonra gönderir. Periyodik sweep kaçırılan invalidation'ı toparlar; gruplardan çıkarma ve bağlantı context'ini abort etme birlikte uygulanır. Kısa ömürlü Hub nesnesi callback içinde tutulmaz.
+
+API ve worker çalışma zamanı hesapları ayrıdır. Global claim EXECUTE yalnızca dar worker rolündedir; claim sonrası her kayıt tenant transaction'ında işlenir. Staging ile outbox completion aynı PostgreSQL transaction'ını paylaşır; Redis yayınıyla atomiklik veya tam bir kez teslim iddia edilmez. Unique event/device görevi ve sabit event ID replay'i güvenli kılar.
+
+HTTP cursor yalnızca tamamlanan taramadan ilerler. XID/sequence sırası eşdeğer sayılmaz; kısa SHARE kilidiyle açık writer'ların commit/rollback'i beklenir. Üretim kilit maliyeti ve gerçek doğrulama sınırları [inceleme kaydındadır](../PHASE-9-REVIEW.md). Bu ek, kabul edilmiş taşıma yığınını veya Faz 9 kapsamını değiştirmez.
+
 - [ADR-0001: Çekirdek Teknoloji Yığını](./0001-technology-stack.md)
 - [ADR-0011: Personel ve Müşteri İçin Arka Plan Push Sağlayıcısı](./0011-background-push-provider.md)
 - [docs/REALTIME-AND-NOTIFICATIONS.md](../REALTIME-AND-NOTIFICATIONS.md)

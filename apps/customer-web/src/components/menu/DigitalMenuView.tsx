@@ -47,10 +47,12 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
     setError(null);
     try {
       const data = await runtimeMenuApi.getRuntimeMenu(branchId, signal);
+      if (signal?.aborted) return;
       setMenuData(data);
       onMenuLoaded?.(data);
       setStatus('success');
     } catch (err: unknown) {
+      if (signal?.aborted) return;
       if (err instanceof RuntimeMenuApiError) {
         if (err.errorType === 'session_expired') {
           onSessionExpired?.();
@@ -66,6 +68,8 @@ export const DigitalMenuView: React.FC<DigitalMenuViewProps> = ({
 
   useEffect(() => {
     if (initialMenuData) {
+      setMenuData(initialMenuData);
+      setStatus('success');
       onMenuLoaded?.(initialMenuData);
       return;
     }

@@ -3,6 +3,10 @@ using RestaurantOrder.Worker;
 using RestaurantOrder.Worker.Safety;
 
 var builder = WebApplication.CreateBuilder(args);
+var workerDatabase = builder.Configuration["WORKER_DATABASE_URL"];
+if (string.IsNullOrWhiteSpace(workerDatabase))
+    throw new InvalidOperationException("WORKER_DATABASE_URL is required for the isolated worker runtime role.");
+builder.Configuration["DATABASE_URL"] = workerDatabase;
 
 // Fail-fast configuration validation for worker host
 WorkerConfigurationValidator.Validate(builder.Configuration, builder.Environment);

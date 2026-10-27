@@ -15,7 +15,7 @@ COPY packages/infrastructure/ packages/infrastructure/
 WORKDIR /src/apps/worker
 RUN dotnet publish "RestaurantOrder.Worker.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 
 # Create non-root system user and enforce unprivileged execution

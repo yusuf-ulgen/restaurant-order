@@ -24,6 +24,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'dotnet run --project ../../apps/api --no-launch-profile',
+      stdout: 'pipe',
       url: `${API_BASE_URL}/health/live`,
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
@@ -40,6 +41,7 @@ export default defineConfig({
     },
     {
       command: 'dotnet run --project ../../apps/worker --no-launch-profile',
+      stdout: 'pipe',
       url: 'http://127.0.0.1:5005/health/live',
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
@@ -48,7 +50,7 @@ export default defineConfig({
         ASPNETCORE_ENVIRONMENT: 'Development',
         DEPLOYMENT_COLOR: 'blue',
         ACTIVE_DEPLOYMENT_SLOT: 'blue',
-        DATABASE_URL: DATABASE_URL,
+        WORKER_DATABASE_URL: process.env.WORKER_DATABASE_URL || '',
         REDIS_URL: REDIS_URL,
       },
     },
@@ -68,7 +70,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], channel: process.env.PLAYWRIGHT_CHANNEL || undefined },
     },
   ],
 });

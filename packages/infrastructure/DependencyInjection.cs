@@ -44,7 +44,6 @@ public static class DependencyInjection
 
             if (environment.IsDevelopment())
             {
-                options.EnableSensitiveDataLogging();
                 options.EnableDetailedErrors();
             }
         });

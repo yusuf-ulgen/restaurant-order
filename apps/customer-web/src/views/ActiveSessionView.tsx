@@ -4,10 +4,8 @@ import {
   Card,
   Button,
   RealtimeStatusBadge,
-  useRealtimeEvents,
   PushNotificationBanner,
   registerPushDevice,
-  markEventReceivedInForeground,
 } from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
@@ -19,6 +17,7 @@ import { OrderHistorySheet } from '../components/cart/OrderHistorySheet';
 import { ActiveOrderStatusCard } from '../components/cart/ActiveOrderStatusCard';
 import { runtimeMenuApi } from '../api/runtimeMenuApi';
 import { customerOrderApi } from '../api/customerOrderApi';
+import { useCustomerSessionRealtime } from '../realtime/useCustomerSessionRealtime';
 
 export interface ActiveSessionViewProps {
   session: CustomerSessionDto;
@@ -46,12 +45,20 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [isMenuLoading, setIsMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
   const menuRequestIdRef = useRef(0);
+  const orderRequestIdRef = useRef(0);
+  const scopeKey = `${session.tenantId}:${session.branchId}:${session.sessionId}`;
+  const activeScope = useRef(scopeKey);
+  activeScope.current = scopeKey;
+
 
   const cart = useCart();
 
   const refreshOrders = useCallback(async () => {
+    const requestId = ++orderRequestIdRef.current;
+    const requestedScope = activeScope.current;
     try {
       const data = await customerOrderApi.getOrders();
+      if (requestedScope !== activeScope.current || requestId !== orderRequestIdRef.current) return;
       setActiveOrders([...data].sort((a, b) => b.roundNumber - a.roundNumber));
       setOrderRefreshKey((prev) => prev + 1);
     } catch {
@@ -65,34 +72,6 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
     }
   }, [session?.sessionId, refreshOrders]);
 
-  const { status: realtimeStatus } = useRealtimeEvents({
-    enabled: Boolean(session?.sessionId),
-    tenantId: session.tenantId,
-    branchId: session.branchId,
-    sessionId: session.sessionId,
-    onEvent: (event) => {
-      markEventReceivedInForeground(event.event_id);
-      if (
-        event.event_type === 'menu.item_availability_changed' ||
-        event.event_type === 'catalog.policy_invalidated'
-      ) {
-        refreshRuntimeMenu();
-      }
-      if (
-        event.event_type === 'order.item_status_changed' ||
-        event.event_type === 'order.created'
-      ) {
-        refreshOrders();
-      }
-    },
-    onSessionClosed: () => {
-      onLeaveSession();
-    },
-    onResyncRequired: () => {
-      refreshRuntimeMenu();
-      refreshOrders();
-    },
-  });
 
   const refreshRuntimeMenu = useCallback(async () => {
     if (!session.branchId) return;
@@ -101,17 +80,28 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
     setMenuError(null);
     try {
       const freshMenu = await runtimeMenuApi.getRuntimeMenu(session.branchId);
-      if (reqId === menuRequestIdRef.current) {
+      if (reqId === menuRequestIdRef.current && activeScope.current === scopeKey) {
         setRuntimeMenuData(freshMenu);
         setIsMenuLoading(false);
       }
     } catch {
-      if (reqId === menuRequestIdRef.current) {
+      if (reqId === menuRequestIdRef.current && activeScope.current === scopeKey) {
         setIsMenuLoading(false);
         setMenuError('Güncel menü bilgisine ulaşılamadı. Lütfen tekrar deneyiniz.');
       }
     }
-  }, [session.branchId]);
+  }, [session.branchId, scopeKey]);
+
+  const { status: realtimeStatus } = useCustomerSessionRealtime({
+    session, onLeaveSession, refreshMenu: refreshRuntimeMenu, refreshOrders,
+    onSnapshot: (menu, orders) => {
+      menuRequestIdRef.current++;
+      orderRequestIdRef.current++;
+      setRuntimeMenuData(menu);
+      setActiveOrders([...orders].sort((a, b) => b.roundNumber - a.roundNumber));
+      setOrderRefreshKey(prev => prev + 1);
+    },
+  });
 
   useEffect(() => {
     if (cart.isCartOpen && session.branchId) {
@@ -146,7 +136,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           }}
           onSessionExpired={onLeaveSession}
           onCallWaiter={() => setIsServiceSheetOpen(true)}
-          initialMenuData={initialMenuData}
+          initialMenuData={runtimeMenuData}
           onAddToCart={(line, policyFingerprint) => cart.addLine(line, policyFingerprint)}
           onMenuLoaded={setRuntimeMenuData}
         />
@@ -164,7 +154,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           <div data-testid="session-welcome-view">
             <PushNotificationBanner
               onPermissionGranted={async (installationId) => {
-                await registerPushDevice('', undefined, installationId);
+                return registerPushDevice('', undefined, installationId);
               }}
             />
             <Card padding="md">

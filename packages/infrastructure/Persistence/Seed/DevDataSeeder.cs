@@ -167,6 +167,8 @@ public class DevDataSeeder : IDevDataSeeder
             _dbContext.Sessions.Add(session);
         }
 
+        await DevRealtimeIdentitySeeder.SeedAsync(_dbContext,
+            syntheticBranches.Select(b => (b.Item1, b.Item2)), cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

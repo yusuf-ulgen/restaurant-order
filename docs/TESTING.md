@@ -124,29 +124,12 @@ Sipariş çekirdeği doğrulaması; arka uç alan/birim testlerini, PostgreSQL 1
 
 ## Faz 9 Canlı Olaylar ve Bildirimler Doğrulaması
 
-Canlı olaylar ve bildirimler doğrulaması; PostgreSQL 16 transactional outbox, outbox dispatcher worker, Redis 7 Pub/Sub ve SignalR backplane, sürekli yetkilendirme (continuous authorization), iki gerçek API instance topolojisi, uçtan uca gecikme ölçümü ve Playwright tarayıcı E2E testlerini kapsar.
+Güncel çalışma ağacının gerçek komut sonuçları, eski ölçümlerin sınırları ve kalan dış bağımlılıklar [Faz 9 inceleme kaydında](./PHASE-9-REVIEW.md) tutulur. Uzak CI yerel düzeltmelerin kanıtı değildir.
 
-- **İki Gerçek API Instance Entegrasyon Testleri (`TwoApiInstanceRealtimeIntegrationTests.cs`, 5 test):**
-  - Paylaşımlı gerçek PostgreSQL ve Redis üzerinde iki bağımsız API host (`factoryA` ve `factoryB`) ayağa kaldırılır.
-  - Instance A üzerinde HTTP mutasyonu çalıştırılır; transactional outbox -> worker polling -> Redis pub/sub -> Instance B köprü servisi -> Instance B'ye bağlı yetkili SignalR istemcisine canlı olay teslim edilir.
-  - Doğru oturum/istasyon gruplarına teslimat kanıtlanırken, yabancı tenant veya başka şube kapsamındaki istemcilerin olayları almadığı doğrulanır.
-  - İki API instance'ının varlığında olay çoğalması tekil köprü claim kilidi (`restaurant-order:realtime:bridged:{eventId}`) ile engellenir.
-  - Bir oturum kapandığında veya yetki revoke edildiğinde cluster'daki tüm API instance'larındaki aktif bağlantılar ve gruplar düşürülür.
-  - API instance restart ve Redis yeniden bağlanma durumlarında kuyruk ve olay akışı korunur.
-- **Uçtan Uca Canlı Gecikme Ölçümü (<500ms p95):**
-  - Mutasyon commit anından B instance'ındaki SignalR istemcisinin olayı teslim almasına kadar olan süre ölçülür (`TwoApiInstances_EndToEndLatency_MeetsUnder500msP95Budget`).
-  - Ölçülen değerler: p50 ~18 ms, p95 ~38 ms (hedef < 500 ms bütçesi kesin olarak doğrulanmıştır).
-- **Playwright Canlı Tarayıcı E2E Testleri (`realtime-notifications.spec.ts`, 9 senaryo):**
-  - Gerçek API, worker, Redis ve PostgreSQL ortamında çalışan Playwright süiti 9 zorunlu senaryoyu doğrular:
-    1. Müşteri siparişi oluşturur; yetkili personel canlı olayı hub üzerinden alır.
-    2. Gerçek sipariş durum değişikliği müşteri ekranını günceller.
-    3. Servis talebi doğru branch'e ulaşır; yanlış branch'e ulaşmaz.
-    4. Quick-86 sonrası müşteri ekranında ve kartında ürün 'Tükendi' görünür (katı DTO, 200 OK).
-    5. HTTP catch-up sync uç noktası (`GET /api/v1/events/sync`) sıralı ve sayfalı olayları döner.
-    6. Oturum kapanınca müşteri bağlantısı sonraki özel olayları alamaz.
-    7. Başka tenant'a ait istemci olayları alamaz (cross-tenant izolasyonu).
-    8. Masanın kapanması personel bağlantısını kesmez.
-    9. Push izni reddedilince temel sipariş akışı kesintisiz çalışır.
-- **FCM Push Bildirimleri Doğrulama Sınırları:**
-  - FCM sağlayıcı sözleşmesi, TTL, veri minimizasyonu, cihaz kaydı/yenileme/iptal yaşam döngüsü otomatik entegrasyon ve sözleşme testleriyle doğrulanmıştır.
-  - Gerçek fiziksel mobil cihaz push teslimi (FCM cloud teslimatı) staging ortamında gerçek donanım ile doğrulanacaktır.
+- `WorkerGatewayPrivilegeTests`, `WorkerPushRlsTests`: gerçek NOSUPERUSER/NOBYPASSRLS API ve worker rolleri, global claim reddi, iki tenant batch'i ve bağlam temizliği.
+- `WorkerPushRecoveryTests`, `WorkerClaimFencingTests`: staging sonrası hata/çökme, rollback, replay, unique görev, eşzamanlı staging, Redis lease kaybı ve eski workerın geç sağlayıcı sonucu.
+- `TwoApiInstanceRealtimeIntegrationTests`: gerçek authenticated HTTP mutasyonu → çalışan worker hostunun slot/lease/polling yolu → API B istemcisi; cross-tenant/wrong-branch, gerçek askıya alma ve session revoke, kaçırılan invalidation, restart ve HTTP recovery. Auth/membership için sürekli true mock yoktur.
+- `PostgreSqlOutboxSafeWatermarkIntegrationTests`: kopya SQL yerine gerçek HTTP sync, ters XID/sequence ve commit/rollback yarışı.
+- Frontend hook testleri: canlı 102/eksik 101, farklı aggregate, boş yetki sayfası, dedup, pagination ve scope reset. Snapshot yenilemesi başarısızsa HTTP cursorı ilerletilmez; hata tekrar denenir.
+- Browser E2E: gerçek sipariş/menü değişikliğinin kullanıcı ekranına yansıması ve istemci terminal mesajı görmezden gelse bile gerçek WebSocket transport kapanması. Testteki personel kimlikleri gerçek sentetik kullanıcı/üyelik/session kayıtlarıyla eşleşir.
+- FCM SDK adaptörü, izin/banner, hedef yenileme/unregister ve service worker testleri: hassas veri minimizasyonu, görünür uygulamada ikinci uyarının bastırılması, mevcut kök rotaya tıklama. Gerçek FCM cloud/fiziksel cihaz teslimi ayrı HTTPS ve sağlayıcı erişimi gerektirir.

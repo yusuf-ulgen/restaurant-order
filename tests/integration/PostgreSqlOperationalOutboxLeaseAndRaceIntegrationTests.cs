@@ -85,6 +85,10 @@ public class PostgreSqlOperationalOutboxLeaseAndRaceIntegrationTests : IClassFix
         return new RestaurantOrderDbContext(options, tenantContext ?? TenantContext.Empty);
     }
 
+    private async Task<RestaurantOrderDbContext> CreateWorkerDbContextAsync() =>
+        new(new DbContextOptionsBuilder<RestaurantOrderDbContext>()
+            .UseNpgsql(await _fixture.ProvisionTemporaryWorkerRoleAsync()).Options);
+
     private RestaurantOrderDbContext CreateAdminDbContext()
     {
         var options = new DbContextOptionsBuilder<RestaurantOrderDbContext>()
@@ -145,7 +149,7 @@ public class PostgreSqlOperationalOutboxLeaseAndRaceIntegrationTests : IClassFix
             outboxId = message.Id;
         }
 
-        var runtimeConnStr = await GetRuntimeConnectionStringAsync();
+        var runtimeConnStr = await _fixture.ProvisionTemporaryWorkerRoleAsync();
         var worker1ClaimId = $"worker-1-{Guid.NewGuid():N}";
         var worker2ClaimId = $"worker-2-{Guid.NewGuid():N}";
 
@@ -277,8 +281,8 @@ public class PostgreSqlOperationalOutboxLeaseAndRaceIntegrationTests : IClassFix
             await tx.CommitAsync();
         }
 
-        // Run dispatcher with isLeaseValid returning false (lease lost mid-batch)
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        // Lease kaybı önceden biliniyorsa global claim dahi başlamamalıdır.
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var dispatched = await dispatcher.DispatchPendingBatchAsync(10, isLeaseValid: _ => Task.FromResult(false));
@@ -287,6 +291,15 @@ public class PostgreSqlOperationalOutboxLeaseAndRaceIntegrationTests : IClassFix
         }
 
         Assert.Equal(0, receivedCount);
+        await using var verificationDb = CreateAdminDbContext();
+        var unclaimed = await verificationDb.OperationalOutbox.IgnoreQueryFilters()
+            .SingleAsync(o => o.TenantId == tenantId);
+        Assert.Equal(OperationalOutboxStatus.Pending, unclaimed.Status);
+        Assert.Null(unclaimed.LockClaimId);
+        // Bu fixture diğer global claim testleriyle paylaşılır; yalnızca kendi
+        // sentetik kaydını temizle, sonraki poison/race senaryosunu etkileme.
+        verificationDb.OperationalOutbox.Remove(unclaimed);
+        await verificationDb.SaveChangesAsync();
     }
 
     [Fact]
@@ -336,7 +349,7 @@ public class PostgreSqlOperationalOutboxLeaseAndRaceIntegrationTests : IClassFix
         }
 
         // Run dispatcher
-        await using (var dispatcherDb = await CreateRuntimeDbContextAsync(TenantContext.Empty))
+        await using (var dispatcherDb = await CreateWorkerDbContextAsync())
         {
             var dispatcher = new OperationalOutboxDispatcher(dispatcherDb, publisher, NullLogger<OperationalOutboxDispatcher>.Instance);
             var dispatched = await dispatcher.DispatchPendingBatchAsync(10);

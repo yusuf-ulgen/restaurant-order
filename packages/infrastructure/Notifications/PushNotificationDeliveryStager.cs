@@ -40,12 +40,30 @@ public sealed class PushNotificationDeliveryStager : IPushNotificationDeliverySt
         DateTimeOffset occurredAtUtc,
         CancellationToken ct = default)
     {
+        var ownsTransaction = _dbContext.Database.IsRelational() && _dbContext.Database.CurrentTransaction == null;
+        await using var tx = ownsTransaction ? await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct) : null;
+        try
+        {
+            var count = await StageCoreAsync(tenantId, branchId, eventId, eventType, aggregateId, payloadJson, occurredAtUtc, ct);
+            if (tx != null) await tx.CommitAsync(ct);
+            return count;
+        }
+        finally
+        {
+            if (ownsTransaction) _dbContext.ChangeTracker.Clear();
+        }
+    }
+
+    private async Task<int> StageCoreAsync(Guid tenantId, Guid branchId, Guid eventId, string eventType,
+        string aggregateId, string payloadJson, DateTimeOffset occurredAtUtc, CancellationToken ct)
+    {
         if (eventId == Guid.Empty || string.IsNullOrWhiteSpace(eventType))
         {
             return 0;
         }
 
         var now = DateTimeOffset.UtcNow;
+        if (occurredAtUtc.Add(EventLifetimeTtl) <= now) return 0;
         var tenantIdTyped = new TenantId(tenantId);
         var branchIdTyped = new BranchId(branchId);
 
@@ -171,11 +189,25 @@ public sealed class PushNotificationDeliveryStager : IPushNotificationDeliverySt
                 recipientType: recipientType,
                 recipientId: recipientId,
                 nowUtc: now,
-                eventTtl: EventLifetimeTtl,
+                eventTtl: occurredAtUtc.Add(EventLifetimeTtl) - now,
                 maxAttempts: 3);
 
-            _dbContext.NotificationDeliveries.Add(delivery);
-            stagedCount++;
+            if (_dbContext.Database.IsNpgsql())
+            {
+                stagedCount += await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO tenancy.notification_deliveries
+                    (id, tenant_id, branch_id, event_id, event_type, device_registration_id, installation_id,
+                     recipient_type, recipient_id, status, attempt_count, max_attempts, expires_at, created_at)
+                    VALUES ({delivery.Id}, {tenantId}, {branchId}, {eventId}, {eventType}, {device.Id}, {device.InstallationId},
+                            {recipientType}, {recipientId}, 0, 0, 3, {delivery.ExpiresAtUtc}, {now})
+                    ON CONFLICT (tenant_id, event_id, device_registration_id) DO NOTHING
+                    """, ct);
+            }
+            else
+            {
+                _dbContext.NotificationDeliveries.Add(delivery);
+                stagedCount++;
+            }
         }
 
         if (stagedCount > 0)

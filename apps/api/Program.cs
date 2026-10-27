@@ -8,6 +8,8 @@ using RestaurantOrder.Application.Tenancy;
 using RestaurantOrder.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+// Framework request diagnostics URL query'sindeki access_token değerini yazmamalı.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
 // Fail-fast configuration validation
 ConfigurationValidator.Validate(builder.Configuration, builder.Environment);

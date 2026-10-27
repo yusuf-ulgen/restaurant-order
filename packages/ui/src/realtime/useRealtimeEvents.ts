@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { EventEnvelope, EventsSyncResponse } from '@restaurant-order/contracts';
+import { getCsrfToken } from '@restaurant-order/contracts';
 import type {
   EventMeta,
   RealtimeConnectionStatus,
@@ -40,6 +41,9 @@ export function useRealtimeEvents({
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const aggregateVersionsRef = useRef<Map<string, number>>(new Map());
   const lastSequenceRef = useRef<number>(0);
+  const epochRef = useRef(0);
+  const syncingEpochRef = useRef<number | null>(null);
+  const syncRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDisposedRef = useRef<boolean>(false);
   const currentFetchAbortRef = useRef<AbortController | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,10 +90,9 @@ export function useRealtimeEvents({
         }
       }
 
-      // Update monotonic cursor
-      if (envelope.sequence_number && envelope.sequence_number > lastSequenceRef.current) {
-        lastSequenceRef.current = envelope.sequence_number;
-        setLastSequenceNumber(envelope.sequence_number);
+      // Görülen canlı sıra HTTP üzerinden taranmış cursor değildir.
+      if (envelope.sequence_number) {
+        setLastSequenceNumber(prev => Math.max(prev, envelope.sequence_number || 0));
       }
 
       // Continuous authorization: check for session closure
@@ -123,13 +126,27 @@ export function useRealtimeEvents({
 
   const catchUpSync = useCallback(async () => {
     if (!syncUrl || isDisposedRef.current) return;
+    const epoch = epochRef.current;
+    if (syncingEpochRef.current === epoch) return;
+    syncingEpochRef.current = epoch;
+    const retry = () => {
+      if (!isDisposedRef.current && epochRef.current === epoch) {
+        if (syncRetryRef.current) clearTimeout(syncRetryRef.current);
+        syncRetryRef.current = setTimeout(() => { void catchUpSync(); }, 1000);
+      }
+    };
 
+    try {
     let hasMore = true;
     let currentSinceSeq = lastSequenceRef.current;
     let pageCount = 0;
     const MAX_PAGES = 50;
 
-    while (hasMore && pageCount < MAX_PAGES && !isDisposedRef.current) {
+    while (hasMore && !isDisposedRef.current && epochRef.current === epoch) {
+      if (pageCount === MAX_PAGES) {
+        pageCount = 0;
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
       pageCount++;
       const abortController = new AbortController();
       currentFetchAbortRef.current = abortController;
@@ -145,57 +162,61 @@ export function useRealtimeEvents({
           signal: abortController.signal,
         });
 
-        if (isDisposedRef.current) return;
+        if (isDisposedRef.current || epochRef.current !== epoch) return;
 
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
             setStatus('session_closed');
             onSessionClosedRef.current?.();
             connectionRef.current?.stop().catch(() => {});
+          } else {
+            retry();
           }
           return;
         }
 
         if (response.headers.get('X-Resync-Required') === 'true') {
           setResyncRequired(true);
-          onResyncRequiredRef.current?.();
+          await onResyncRequiredRef.current?.();
         }
 
         const data = (await response.json()) as EventsSyncResponse;
+        if (isDisposedRef.current || epochRef.current !== epoch) return;
         if (!data || !Array.isArray(data.events)) {
+          retry();
           break;
         }
 
         for (const env of data.events) {
-          if (isDisposedRef.current) return;
+          if (isDisposedRef.current || epochRef.current !== epoch) return;
           handleEnvelope(env as EventEnvelope<unknown>, { isCatchUp: true, isLive: false });
         }
 
         hasMore = Boolean(data.has_more);
-        if (data.latest_sequence_number && data.latest_sequence_number > currentSinceSeq) {
+        if (Number.isSafeInteger(data.latest_sequence_number) && data.latest_sequence_number > currentSinceSeq) {
           currentSinceSeq = data.latest_sequence_number;
-        } else if (data.events.length > 0) {
-          const maxSeq = Math.max(...data.events.map((e) => e.sequence_number || 0));
-          if (maxSeq > currentSinceSeq) {
-            currentSinceSeq = maxSeq;
-          } else {
-            break;
-          }
+          lastSequenceRef.current = currentSinceSeq;
         } else {
+          if (hasMore) retry();
           break;
         }
       } catch (err: unknown) {
         if ((err as { name?: string })?.name === 'AbortError') {
           return;
         }
+        retry();
         break;
       } finally {
         currentFetchAbortRef.current = null;
       }
     }
+    } finally {
+      if (syncingEpochRef.current === epoch) syncingEpochRef.current = null;
+    }
   }, [syncUrl, handleEnvelope]);
 
   useEffect(() => {
+    epochRef.current++;
     // Reset tracking state on session, branch, or tenant changes
     lastSequenceRef.current = 0;
     setLastSequenceNumber(0);
@@ -218,9 +239,17 @@ export function useRealtimeEvents({
 
     let connection: signalR.HubConnection;
     try {
+      const httpClient = new signalR.DefaultHttpClient(signalR.NullLogger.instance);
+      const send = httpClient.send.bind(httpClient);
+      httpClient.send = request => {
+        const csrf = getCsrfToken();
+        if (csrf) request.headers = { ...request.headers, 'X-CSRF-Token': csrf };
+        return send(request);
+      };
       connection = new signalR.HubConnectionBuilder()
         .withUrl(resolveHubUrl(hubUrl), {
           withCredentials: true,
+          httpClient,
         })
         .withAutomaticReconnect([1000, 2000, 4000, 8000, 15000])
         .configureLogging(signalR.LogLevel.None)
@@ -317,11 +346,17 @@ export function useRealtimeEvents({
     };
 
     connect();
+    const onPushMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_RECEIVED' && !isDisposed) void catchUpSync();
+    };
+    navigator.serviceWorker?.addEventListener?.('message', onPushMessage);
 
     return () => {
       isDisposed = true;
+      navigator.serviceWorker?.removeEventListener?.('message', onPushMessage);
       isDisposedRef.current = true;
       currentFetchAbortRef.current?.abort();
+      if (syncRetryRef.current) clearTimeout(syncRetryRef.current);
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }

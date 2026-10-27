@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { unregisterPushDevice } from '@restaurant-order/ui';
 import {
   TerminalContextDto,
   UserPrincipalDto,
@@ -176,6 +177,7 @@ export const TerminalProvider: React.FC<{
 
   const logoutStaff = useCallback(async (): Promise<void> => {
     try {
+      await unregisterPushDevice('');
       await fetchWithCsrf('/api/v1/auth/pin/logout', {
         method: 'POST',
       });
@@ -189,6 +191,7 @@ export const TerminalProvider: React.FC<{
 
   const deactivateTerminal = useCallback(async (): Promise<void> => {
     try {
+      await unregisterPushDevice('');
       await fetchWithCsrf('/api/v1/terminals/deactivate', {
         method: 'POST',
       });

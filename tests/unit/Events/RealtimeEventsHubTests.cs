@@ -33,7 +33,8 @@ public class RealtimeEventsHubTests
             _tokenValidatorMock.Object,
             _branchScopeValidatorMock.Object,
             _tracker,
-            NullLogger<EventsHub>.Instance)
+            NullLogger<EventsHub>.Instance,
+            Mock.Of<IRealtimeConnectionAuthorizer>(a => a.IsAuthorizedAsync(It.IsAny<TrackedConnection>(), It.IsAny<CancellationToken>()) == Task.FromResult(true)))
         {
             Context = _contextMock.Object,
             Groups = _groupsMock.Object
@@ -133,6 +134,9 @@ public class RealtimeEventsHubTests
         var tracked = _tracker.GetConnectionsForSession(tenantId, branchId, sessionId);
         Assert.Single(tracked);
         Assert.Equal("cust-conn-1", tracked[0].ConnectionId);
+        hub.Dispose();
+        tracked[0].Abort!();
+        _contextMock.Verify(c => c.Abort(), Times.Once);
     }
 
     [Fact]

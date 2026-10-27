@@ -48,9 +48,11 @@ test.describe('Customer Experience Negative Flows & Security Boundaries (CUST-02
   }) => {
     await page.goto(`http://127.0.0.1:3001/q/${encodeURIComponent(scenario.qrToken)}`);
     await page.getByTestId('continue-to-table-btn').click();
+    await expect(page.getByTestId('customer-active-session')).toBeVisible();
 
-    // Inject corrupted draft into sessionStorage using the authoritative production key
-    await page.evaluate((key) => {
+    // Oturum yanıtı/cookie tamamlandıktan sonra yeni belgenin uygulama kodundan
+    // önce bozuk taslağı kur; eski sayfanın effect'leri fixture'ı değiştiremesin.
+    await page.addInitScript((key) => {
       sessionStorage.setItem(key, 'INVALID_CORRUPTED_JSON_<<<>>>');
     }, CART_STORAGE_KEY);
 

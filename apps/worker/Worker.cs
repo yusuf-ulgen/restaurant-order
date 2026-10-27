@@ -132,6 +132,8 @@ public class Worker : BackgroundService
                     try
                     {
                         using var scope = _serviceScopeFactory.CreateScope();
+                        await using var leadership = new LeadershipLeaseScope(_activationGuard, _leaseManager,
+                            leaseKey, leaseDuration, renewInterval, stoppingToken);
 
                         // 1. Operational Outbox dispatcher
                         var dispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher>();
@@ -139,14 +141,9 @@ public class Worker : BackgroundService
                         {
                             var dispatched = await dispatcher.DispatchPendingBatchAsync(
                                 25,
-                                async token =>
-                                {
-                                    if (!IsLeader) return false;
-                                    var active = await _activationGuard.IsActiveSlotAsync(token);
-                                    return active && IsLeader;
-                                },
+                                leadership.ValidateAsync,
                                 tenantId: null,
-                                ct: stoppingToken);
+                                ct: leadership.Token);
                             totalProcessed += dispatched;
                             if (dispatched > 0)
                             {
@@ -162,14 +159,9 @@ public class Worker : BackgroundService
                         {
                             var pushed = await pushDispatcher.DispatchPendingBatchAsync(
                                 25,
-                                async token =>
-                                {
-                                    if (!IsLeader) return false;
-                                    var active = await _activationGuard.IsActiveSlotAsync(token);
-                                    return active && IsLeader;
-                                },
+                                leadership.ValidateAsync,
                                 tenantId: null,
-                                ct: stoppingToken);
+                                ct: leadership.Token);
                             totalProcessed += pushed;
                             if (pushed > 0)
                             {

@@ -23,7 +23,7 @@ Bu belge, `restaurant-order` projesinde **Faz 9: Canlı Olaylar ve Bildirimler (
 | **Faz 9.4** | SignalR Hub, Sürekli Yetkilendirme ve HTTP Sync | **Tamamlandı** | `EventsHub`, sunucu grup yönetimi, revoke/expiry kesintisi, `/api/v1/events/sync` |
 | **Faz 9.5** | FCM Cihaz Kaydı ve Push Yaşam Döngüsü | **Tamamlandı** | `DeviceRegistration`, aktif oturum/üyelik bağı, TTL, invalidation, FCM gönderim |
 | **Faz 9.6** | Mevcut Ekranlarda Canlı Güncelleme ve Ses | **Tamamlandı** | Müşteri sipariş ve politika invalidation, personel chime/sesli uyarı, offline sepet koruması |
-| **Faz 9.7** | Çoklu Instance, E2E ve Gecikme Ölçümü | **Tamamlandı** | İki API instance doğrulaması, Playwright browser E2E, <500ms p95 ölçümü, CI doğrulaması |
+| **Faz 9.7** | Çoklu Instance, E2E ve Gecikme Ölçümü | **İnceleme doğrulaması** | İki API instance doğrulaması, Playwright browser E2E, <500ms p95 ölçümü, CI doğrulaması |
 
 ---
 
@@ -83,29 +83,13 @@ Bu belge, `restaurant-order` projesinde **Faz 9: Canlı Olaylar ve Bildirimler (
 - [x] **Müşteri Web Uygulaması:** Canlı sipariş durumu takibi, 86 durumunda menü ve sepet güncellemesi, politika değişiminde açık yeniden onay penceresi, offline sepetin korunması.
 - [x] **Operasyon Web Uygulaması:** Servis çağrısı ve yeni sipariş için canlı bildirim, kullanıcı etkileşimiyle etkinleşen ses (chime), sessize alma tercihi, replay sırasında ses tekrarının önlenmesi.
 
-### Faz 9.7: Çoklu Instance, E2E ve Gecikme Ölçümü (Tamamlandı — %100 Doğrulandı)
-- [x] **Gerçek İki API Instance Doğrulaması (`TwoApiInstanceRealtimeIntegrationTests.cs`, 5 test):**
-  - Gerçek PostgreSQL ve Redis üzerinde iki ayrı API instance'ı (`factoryA` ve `factoryB`).
-  - Instance A üzerinde HTTP mutasyonu -> PostgreSQL outbox -> Worker polling -> Redis pub/sub -> Instance B `RedisEventSubscriberService` -> Instance B SignalR istemcisine canlı teslimat (`TwoApiInstances_MutationOnInstanceA_DeliveredToClientOnInstanceB_WithScopeIsolation`).
-  - Cross-tenant ve wrong-branch scope izolasyonu kanıtlandı.
-  - Instance sayısına bağlı çoğalma engellendi; tekil Redis köprü claim mekanizması doğrulandı (`TwoApiInstances_Deduplication_OnlySingleBridgeMessageAcrossInstances`).
-  - Oturum sonlandırma/revocation'ın tüm cluster'daki bağlantıları düşürdüğü doğrulandı (`TwoApiInstances_SessionRevocation_EvictsClientOnInstanceB`).
-  - Instance yeniden başlatma ve Redis recovery'de olay akışının sürdüğü doğrulandı (`TwoApiInstances_InstanceRestart_RecoveryMaintainsEventDelivery`).
-- [x] **Uçtan Uca Gecikme Ölçümü (<500ms p95):**
-  - Mutasyon commit noktasından B instance'ındaki SignalR istemcisinin aynı event ID'yi teslim almasına kadar uçtan uca ölçüldü (`TwoApiInstances_EndToEndLatency_MeetsUnder500msP95Budget`).
-  - Ölçülen değerler: p50 ~18 ms, p95 ~38 ms (hedef < 500 ms bütçesinin çok altında, %100 başarılı).
-  - Worker polling gecikmesi 50 ms'ye indirilerek backlog durumunda sıfır bekleme ile optimize edildi.
-- [x] **Playwright Canlı Tarayıcı E2E Testleri (`realtime-notifications.spec.ts`, 9 senaryo):**
-  - 1. Müşteri sipariş oluşturur; yetkili personel canlı olayı SignalR hub üzerinden alır.
-  - 2. Gerçek sipariş durum değişikliği müşteri ekranını günceller.
-  - 3. Servis talebi doğru branch'e ulaşır; yanlış branch'e ulaşmaz.
-  - 4. Quick-86 sonrası müşteri ekranında ve kartında ürün 'Tükendi' görünür (katı DTO, 200 OK doğrulandı).
-  - 5. HTTP catch-up sync uç noktası (`GET /api/v1/events/sync`) sıralı ve sayfalı olayları döner.
-  - 6. Oturum kapanınca müşteri bağlantısı sonraki özel olayları alamaz.
-  - 7. Başka tenant'a ait istemci olayları alamaz (cross-tenant izolasyonu).
-  - 8. Masanın kapanması personel bağlantısını kesmez.
-  - 9. Push izni reddedilince temel sipariş akışı kesintisiz çalışır.
-- [x] **Kalite Kapıları:**
-  - 0 dosya > 600 satır kesin tavanı aşar (1140 dosya kontrol edildi).
-  - Tüm backend ve frontend unit/integration/architecture/e2e testleri yeşil.
-  - Fiziksel FCM teslimi: Sağlayıcı sözleşmesi ve simülasyon testleri tamamlandı; gerçek mobil donanım teslimi staging ortamında ayrı bir kontrol olarak tanımlandı.
+### Faz 9.7: Çoklu Instance ve İnceleme Doğrulaması
+
+- [x] İki ayrı API hostu; gerçek PostgreSQL/Redis, authoritative kimlik/üyelik doğrulaması ve gerçek worker hostu ile HTTP mutasyonu → outbox → slot/lease/polling → API B teslim testi yazıldı.
+- [x] Gerçek personel durum değişikliği ve session revoke uçlarıyla transport kapanması; diğer tenant oturumunun korunması ve kaçırılan invalidation sonrası yeniden yetkilendirme testleri yazıldı.
+- [x] HTTP isteğinin başlangıcından API B `ReceiveEvent` anına kadar ölçüm: bir ısınma örneğinden sonra 20 örnek. Eski p50 ~18 / p95 ~38 ms kaydı gerçek worker yolunun kanıtı olarak kullanılamaz.
+- [x] Ters XID/sequence sırası gerçek `/api/v1/events/sync` üzerinden commit ve rollback senaryolarıyla sınanır; kopya SQL testi kaldırıldı.
+- [x] Yerel kalite, lint/typecheck, backend unit/architecture, tam PostgreSQL/Redis coverage, frontend component/coverage, browser E2E ve build kontrolleri çalıştırıldı. Tam integration 413 + ayrı gerçek process-kill 1 test geçti; fiziksel FCM aşağıdaki dış ortam maddesidir. Sonuç/ara başarısızlık ayrımı inceleme kaydındadır.
+- [ ] Fiziksel FCM teslimi: sağlayıcı kimlik bilgileri, public web yapılandırması/VAPID ve izinli HTTPS cihaz ortamında ayrıca kanıtlanacak.
+
+Güncel kanıt ve engeller için [Faz 9 inceleme kaydı](./PHASE-9-REVIEW.md) esas alınır. Uzak CI, push edilmemiş bu çalışma ağacını doğrulamaz; faz henüz tamamlandı sayılmaz.

@@ -1,3 +1,6 @@
+import { fetchWithCsrf } from '@restaurant-order/contracts';
+import { registerFirebasePush, unregisterFirebasePush } from './firebasePush.js';
+export { configureBrowserPush } from './firebasePush.js';
 /**
  * Client Push Notification management and service-worker integration.
  * Adheres to ADR-0011, lockscreen data minimization, and safe allowlisted navigation.
@@ -8,6 +11,10 @@ const DISMISSED_STORAGE_KEY = 'restaurant_order_push_dismissed';
 const REGISTERED_AT_KEY = 'restaurant_order_push_registered_at';
 
 const foregroundEventCache = new Map<string, number>();
+let registrationEpoch = 0;
+let registrationPending: Promise<boolean> | null = null;
+const pendingSaves = new Set<Promise<boolean>>();
+const knownTargets = new Set<string>();
 const FOREGROUND_CACHE_TTL_MS = 60000;
 
 export const ALLOWLISTED_ROUTES = [
@@ -84,13 +91,41 @@ export function clearInstallationId(): void {
   }
 }
 
-export async function registerPushDevice(
+export function registerPushDevice(
   apiBaseUrl: string,
   authToken?: string,
   installationId?: string
 ): Promise<boolean> {
-  const effectiveId = installationId || getOrCreateInstallationId();
-  if (!effectiveId) return false;
+  if (registrationPending) return registrationPending;
+  registrationPending = registerPushDeviceCore(apiBaseUrl, authToken, installationId)
+    .finally(() => { registrationPending = null; });
+  return registrationPending;
+}
+
+async function registerPushDeviceCore(apiBaseUrl: string, authToken?: string, installationId?: string): Promise<boolean> {
+  // Üçüncü parametre yalnızca eski çağıranların uyumluluğu içindir; rastgele kimlik gönderilmez.
+  void installationId;
+  if (getPushPermission() !== 'granted') return false;
+  const epoch = registrationEpoch;
+  try {
+    let previous = localStorage.getItem('restaurant_order_fcm_fid');
+    await registerFirebasePush(async fid => {
+      if (epoch !== registrationEpoch) return false;
+      knownTargets.add(fid);
+      if (previous && previous !== fid) await unregisterTarget(apiBaseUrl, authToken, previous);
+      if (epoch !== registrationEpoch) return false;
+      const saving = savePushTarget(apiBaseUrl, authToken, fid);
+      pendingSaves.add(saving);
+      let saved: boolean;
+      try { saved = await saving; } finally { pendingSaves.delete(saving); }
+      if (saved && epoch === registrationEpoch) { previous = fid; localStorage.setItem('restaurant_order_fcm_fid', fid); }
+      return saved;
+    });
+    return epoch === registrationEpoch;
+  } catch { return false; }
+}
+
+async function savePushTarget(apiBaseUrl: string, authToken: string | undefined, effectiveId: string): Promise<boolean> {
 
   try {
     const base = apiBaseUrl.replace(/\/+$/, '');
@@ -101,7 +136,7 @@ export async function registerPushDevice(
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${base}/api/v1/notifications/devices`, {
+    const response = await fetchWithCsrf(`${base}/api/v1/notifications/devices`, {
       method: 'POST',
       credentials: 'include',
       headers,
@@ -131,8 +166,22 @@ export async function unregisterPushDevice(
   authToken?: string,
   installationId?: string
 ): Promise<boolean> {
-  const effectiveId = installationId || getOrCreateInstallationId();
-  if (!effectiveId) return false;
+  let effectiveId = installationId;
+  try { effectiveId ||= localStorage.getItem('restaurant_order_fcm_fid') || undefined; } catch { /* Bellekteki hedefler yine iptal edilir. */ }
+  registrationEpoch++;
+  await Promise.allSettled([...pendingSaves]);
+  try { await unregisterFirebasePush(); } catch { /* Sunucudaki kaydı yine de iptal et. */ }
+  if (effectiveId) knownTargets.add(effectiveId);
+  let removed = true;
+  for (const target of [...knownTargets]) {
+    if (await unregisterTarget(apiBaseUrl, authToken, target)) knownTargets.delete(target);
+    else removed = false;
+  }
+  if (removed) { try { localStorage.removeItem('restaurant_order_fcm_fid'); } catch { /* Sağlayıcı ve API kaydı kaldırıldı. */ } }
+  return removed;
+}
+
+async function unregisterTarget(apiBaseUrl: string, authToken: string | undefined, effectiveId: string): Promise<boolean> {
 
   try {
     const base = apiBaseUrl.replace(/\/+$/, '');
@@ -141,7 +190,7 @@ export async function unregisterPushDevice(
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${base}/api/v1/notifications/devices/${effectiveId}`, {
+    const response = await fetchWithCsrf(`${base}/api/v1/notifications/devices/${encodeURIComponent(effectiveId)}`, {
       method: 'DELETE',
       credentials: 'include',
       headers,

@@ -21,7 +21,7 @@ export interface RealtimeEventsOptions {
   sessionId?: string;
   onEvent?: (event: EventEnvelope<unknown>, meta?: EventMeta) => void;
   onSessionClosed?: () => void;
-  onResyncRequired?: () => void;
+  onResyncRequired?: () => void | Promise<void>;
 }
 
 export interface RealtimeEventsState {

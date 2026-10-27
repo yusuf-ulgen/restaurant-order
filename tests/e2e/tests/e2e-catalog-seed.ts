@@ -51,6 +51,14 @@ export function mintDevAdminToken(
     tenant_id: tenantId,
   };
   if (branchId && role !== 'RestaurantAdmin') {
+    const identity = (kind: string) => {
+      const hex = crypto.createHash('sha256').update(`${tenantId}:${branchId}:${role}:${kind}`).digest('hex').slice(0, 32);
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    };
+    claims.sub = identity('user');
+    claims.sid = identity('session');
+  }
+  if (branchId && role !== 'RestaurantAdmin') {
     claims.branch_id = branchId;
   }
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');

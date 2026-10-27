@@ -64,6 +64,7 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
         CancellationToken ct = default)
     {
         if (ct.IsCancellationRequested) return 0;
+        if (isLeaseValid != null && !await isLeaseValid(ct)) return 0;
         if (batchSize <= 0) batchSize = 25;
 
         var nowUtc = DateTimeOffset.UtcNow;
@@ -184,30 +185,63 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
                 }
             }
 
+            await using var work = await WorkerClaimTransaction.BeginAsync(_dbContext, item.TenantId,
+                item.Id, claimId, push: true, DefaultLeaseSeconds, ct);
+            if (!work.IsValid) continue;
+            async Task PersistAsync(NotificationDelivery delivery)
+            {
+                work.EnsureValid(ct);
+                if (isLeaseValid != null && !await isLeaseValid(ct)) throw new OperationCanceledException("Leadership lost.");
+                if (!await _dbContext.NotificationDeliveries.IgnoreQueryFilters().AsNoTracking().AnyAsync(d =>
+                    d.Id == item.Id && d.LockClaimId == claimId && d.Status == NotificationDeliveryStatus.Claimed &&
+                    d.LockExpiresUtc > DateTimeOffset.UtcNow, ct)) throw new OperationCanceledException("Push claim lost.");
+                if (isPostgres)
+                {
+                    var updated = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE tenancy.notification_deliveries
+                        SET status = {(int)delivery.Status}, next_attempt_utc = {delivery.NextAttemptUtc},
+                            processed_at = {delivery.ProcessedAtUtc}, last_error = {delivery.LastError},
+                            lock_claim_id = NULL, lock_expires_utc = NULL
+                        WHERE id = {item.Id} AND tenant_id = {item.TenantId} AND status = 1
+                          AND lock_claim_id = {claimId} AND lock_expires_utc > clock_timestamp()
+                        """, ct);
+                    if (updated != 1) throw new OperationCanceledException("Push claim expired before persistence.");
+                    _dbContext.Entry(delivery).State = EntityState.Unchanged;
+                }
+                await _dbContext.SaveChangesAsync(ct);
+                await work.CommitAsync(ct);
+            }
             var itemNow = DateTimeOffset.UtcNow;
             var deliveryEntity = await _dbContext.NotificationDeliveries
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(d => d.Id == item.Id, ct);
 
-            if (deliveryEntity == null) continue;
+            if (deliveryEntity == null || deliveryEntity.LockClaimId != claimId ||
+                deliveryEntity.Status != NotificationDeliveryStatus.Claimed || deliveryEntity.LockExpiresUtc <= itemNow) continue;
 
             // 1. Short Event TTL check: EventId remains constant across retries
             if (deliveryEntity.ExpiresAtUtc <= itemNow)
             {
                 deliveryEntity.MarkExpired(itemNow);
-                await _dbContext.SaveChangesAsync(ct);
+                await PersistAsync(deliveryEntity);
                 continue;
             }
 
             // 2. Device Registration active check
+            if (isPostgres)
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM tenancy.device_registrations WHERE id = {item.DeviceRegistrationId} AND tenant_id = {item.TenantId} FOR UPDATE", ct);
             var device = await _dbContext.DeviceRegistrations
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(d => d.Id == item.DeviceRegistrationId, ct);
 
-            if (device == null || !device.IsActive || device.ExpiresAtUtc <= itemNow)
+            var sameOwner = device != null && device.TenantId == deliveryEntity.TenantId &&
+                device.BranchId == deliveryEntity.BranchId && device.InstallationId == item.InstallationId &&
+                (item.RecipientType == "Customer" ? device.DiningSessionId?.Value == item.RecipientId && device.UserId == null :
+                    device.UserId?.Value == item.RecipientId && device.DiningSessionId == null);
+            if (!sameOwner || device == null || !device.IsActive || device.ExpiresAtUtc <= itemNow)
             {
                 deliveryEntity.MarkPermanentFailure("Device registration inactive or expired.", itemNow);
-                await _dbContext.SaveChangesAsync(ct);
+                await PersistAsync(deliveryEntity);
                 continue;
             }
 
@@ -222,7 +256,7 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
                     // Session closed: revoke device and fail delivery
                     device.Deactivate(itemNow);
                     deliveryEntity.MarkPermanentFailure("Customer dining session is closed.", itemNow);
-                    await _dbContext.SaveChangesAsync(ct);
+                    await PersistAsync(deliveryEntity);
                     continue;
                 }
             }
@@ -233,12 +267,15 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(m => m.TenantId == deliveryEntity.TenantId &&
                                               m.UserId == new UserId(item.RecipientId) &&
-                                              m.BranchId == deliveryEntity.BranchId, ct);
+                                              (m.BranchId == deliveryEntity.BranchId || m.BranchId == null), ct);
 
-                if (membership == null || membership.Status != UserMembershipStatus.Active)
+                var recipientUser = new UserId(item.RecipientId);
+                var activeUser = await _dbContext.Users.AsNoTracking().AnyAsync(u => u.Id == recipientUser && u.Status == UserStatus.Active, ct);
+                if (!activeUser || membership == null || membership.Status != UserMembershipStatus.Active ||
+                    !CanReceiveEvent(membership.Role, item.EventType))
                 {
                     deliveryEntity.MarkPermanentFailure("Staff membership is inactive, suspended, or revoked.", itemNow);
-                    await _dbContext.SaveChangesAsync(ct);
+                    await PersistAsync(deliveryEntity);
                     continue;
                 }
             }
@@ -252,14 +289,17 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
             catch (Exception ex)
             {
                 deliveryEntity.MarkPermanentFailure(SanitizeErrorMessage("Invalid push request: " + ex.Message), itemNow);
-                await _dbContext.SaveChangesAsync(ct);
+                await PersistAsync(deliveryEntity);
                 continue;
             }
 
             PushSendResult result;
             try
             {
-                result = await _pushTransport.SendAsync(pushRequest, ct);
+                using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                sendTimeout.CancelAfter(TimeSpan.FromSeconds(DefaultLeaseSeconds - 5));
+                result = await _pushTransport.SendAsync(pushRequest, sendTimeout.Token);
+                work.EnsureValid(ct);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -270,7 +310,7 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
                 var safeError = SanitizeErrorMessage(ex.Message);
                 result = new PushSendResult(PushSendStatus.RetryableFailure);
                 deliveryEntity.MarkRetryableFailure(safeError, TimeSpan.FromSeconds(30), itemNow);
-                await _dbContext.SaveChangesAsync(ct);
+                await PersistAsync(deliveryEntity);
                 continue;
             }
 
@@ -307,7 +347,7 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
                     break;
             }
 
-            await _dbContext.SaveChangesAsync(ct);
+            await PersistAsync(deliveryEntity);
         }
 
         return dispatchedCount;
@@ -320,6 +360,14 @@ public sealed class PushNotificationDispatcher : IPushNotificationDispatcher
         param.Value = value ?? DBNull.Value;
         cmd.Parameters.Add(param);
     }
+
+    private static bool CanReceiveEvent(AuthRole role, string eventType) => role switch
+    {
+        AuthRole.SuperAdmin or AuthRole.RestaurantAdmin or AuthRole.BranchManager => true,
+        AuthRole.Waiter or AuthRole.Cashier => true,
+        AuthRole.Kitchen or AuthRole.Bar => eventType is "order.created" or "order.item_status_changed" or "menu.item_availability_changed",
+        _ => false
+    };
 
     private static string SanitizeErrorMessage(string? message)
     {

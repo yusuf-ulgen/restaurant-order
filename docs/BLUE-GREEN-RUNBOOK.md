@@ -28,6 +28,10 @@ Eş zamanlı Blue/Green yürütme sırasında Docker Compose konteyner veya ağ 
 
 ## 2. Worker Güvenliği ve Merkezi Durum Yönetimi
 
+Faz 9 kuyruk ayrıcalıkları için API ve worker bağlantıları ayrıdır. `deploy/bootstrap/002_create_worker_login_role.sql`, depo dışından verilen `WORKER_RUNTIME_PASSWORD` ile `restaurant_worker_user` login rolünü kurar. Ardından migration yetkili hesabıyla `HardenWorkerQueuePrivileges` uygulanır; runtime hesaplarına SUPERUSER/BYPASSRLS verilmez. Worker imajına `WORKER_DATABASE_URL` ayrı secret olarak sağlanır; `DATABASE_URL` API hesabına geri dönüş yoktur. API rolü global claim fonksiyonlarını çalıştıramaz. Yeni worker yapılandırması standby yuvada hazırlandıktan sonra mevcut slot geçişi ve lease kontrolleri uygulanır; eski API hesabıyla çalışan worker migration sonrası kuyruk işleyemez.
+
+Lease sahipliği batch sırasında da yenilenir/doğrulanır; kayıpta yeni işler durur ve yürüyen işlere cancellation iletilir. Tenant transaction'ları claim sahibi ve süre koşuluyla tamamlanır. Redis yayını ile PostgreSQL commit atomik değildir; aynı event ID ile tekrar teslim mümkündür. Kurulum/geri dönüş sınırları ve gerçek runtime testleri [Faz 9 inceleme kaydındadır](./PHASE-9-REVIEW.md).
+
 Blue ve Green konteynerleri aynı anda çalışırken arka plan işlerinin yinelenmesini önlemek için şu denetimler uygulanır:
 
 1. **Redis'teki Merkezi Yetkili Durum:**

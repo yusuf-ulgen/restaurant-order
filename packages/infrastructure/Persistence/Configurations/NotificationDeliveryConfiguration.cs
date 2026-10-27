@@ -13,6 +13,8 @@ public class NotificationDeliveryConfiguration : IEntityTypeConfiguration<Notifi
         builder.ToTable("notification_deliveries", "tenancy");
 
         builder.HasKey(d => d.Id);
+        builder.HasIndex(d => new { d.TenantId, d.EventId, d.DeviceRegistrationId })
+            .IsUnique().HasDatabaseName("ux_notification_deliveries_event_device");
 
         builder.Property(d => d.Id)
             .HasColumnName("id")

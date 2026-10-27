@@ -1,5 +1,7 @@
 using System;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
@@ -13,32 +15,31 @@ using StackExchange.Redis;
 namespace RestaurantOrder.Api.Realtime;
 
 /// <summary>
-/// Subscribes to Redis events broadcast channel and bridges them to SignalR hub groups.
-/// Enforces single and clear publication model:
-/// Uses an atomic Redis lock per EventId to guarantee that only ONE API instance across the cluster
-/// bridges a given event into the SignalR Redis backplane.
-/// Eliminates duplicate delivery caused by multiple API replicas receiving the same Redis pub/sub message.
-/// Push notification delivery is decoupled and handled by the persistent outbox pipeline.
+/// Her API Redis yayınını yalnızca kendi bağlantılarına, güncel yetki kontrolünden sonra iletir.
+/// Aynı yayında birden fazla gruba bağlı alıcı bir kez seçilir. Redis tekrarları istemcide
+/// sabit event ID ile tekilleştirilir. Push teslimi ayrı kalıcı kuyrukta işlenir.
 /// </summary>
 public sealed class RedisEventSubscriberService : BackgroundService
 {
-    private static readonly TimeSpan BridgeDeduplicationTtl = TimeSpan.FromMinutes(10);
 
     private readonly IRedisDatabaseProvider _redisProvider;
     private readonly IHubContext<EventsHub> _hubContext;
     private readonly IRealtimeConnectionTracker _tracker;
     private readonly ILogger<RedisEventSubscriberService> _logger;
+    private readonly IRealtimeConnectionAuthorizer _authorizer;
 
     public RedisEventSubscriberService(
         IRedisDatabaseProvider redisProvider,
         IHubContext<EventsHub> hubContext,
         IRealtimeConnectionTracker tracker,
-        ILogger<RedisEventSubscriberService> logger)
+        ILogger<RedisEventSubscriberService> logger,
+        IRealtimeConnectionAuthorizer authorizer)
     {
         _redisProvider = redisProvider ?? throw new ArgumentNullException(nameof(redisProvider));
         _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
         _tracker = tracker ?? throw new ArgumentNullException(nameof(tracker));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _authorizer = authorizer;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -58,6 +59,10 @@ public sealed class RedisEventSubscriberService : BackgroundService
                     await Task.Delay(3000, stoppingToken);
                     continue;
                 }
+
+                await subscriber.SubscribeAsync(
+                    RedisChannel.Literal("restaurant-order:events:auth-invalidated"),
+                    async (_, message) => await HandleAuthInvalidatedAsync(message));
 
                 await subscriber.SubscribeAsync(
                     RedisChannel.Literal(RedisRealtimeEventPublisher.BroadcastChannel),
@@ -100,6 +105,8 @@ public sealed class RedisEventSubscriberService : BackgroundService
             {
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 await SweepExpiredConnectionsAsync(DateTimeOffset.UtcNow);
+                foreach (var connection in _tracker.GetAllConnections())
+                    if (!await _authorizer.IsAuthorizedAsync(connection, stoppingToken)) await TerminateAsync(connection);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -139,6 +146,7 @@ public sealed class RedisEventSubscriberService : BackgroundService
             {
                 _logger.LogWarning(ex, "Failed to evict expired connection '{ConnectionId}'.", conn.ConnectionId);
             }
+            finally { conn.Abort?.Invoke(); _tracker.Untrack(conn.ConnectionId); }
         }
     }
 
@@ -169,31 +177,25 @@ public sealed class RedisEventSubscriberService : BackgroundService
                 eventId = parsedEvId;
             }
 
-            // Single and clear publication model:
-            // Atomically claim the bridge role for this event across all API instances.
-            // If another instance already claimed it, skip bridging to avoid duplicate messages in the SignalR backplane.
-            if (eventId != Guid.Empty)
-            {
-                var db = await _redisProvider.GetDatabaseAsync();
-                if (db != null)
-                {
-                    var bridgeKey = $"restaurant-order:realtime:bridged:{eventId:N}";
-                    var claimed = await db.StringSetAsync(bridgeKey, Environment.MachineName, BridgeDeduplicationTtl, When.NotExists);
-                    if (!claimed)
-                    {
-                        _logger.LogDebug(
-                            "Event '{EventId}' already bridged to SignalR backplane by another API instance. Skipping duplicate bridge.",
-                            eventId);
-                        return;
-                    }
-                }
-            }
-
             var floorGroup = $"tenant:{tenantId}:branch:{branchId}:floor";
             var catalogGroup = $"tenant:{tenantId}:branch:{branchId}:catalog";
             var kitchenGroup = $"tenant:{tenantId}:branch:{branchId}:station:kitchen";
             var barGroup = $"tenant:{tenantId}:branch:{branchId}:station:bar";
             var rawEnvelopeJson = message.ToString();
+            var delivered = new HashSet<string>();
+            async Task SendGroupAsync(string group)
+            {
+                foreach (var connection in _tracker.GetAllConnections().Where(c => c.SubscribedGroups?.Contains(group) == true))
+                {
+                    if (!delivered.Add(connection.ConnectionId)) continue;
+                    if (!await _authorizer.IsAuthorizedAsync(connection))
+                    {
+                        await TerminateAsync(connection);
+                        continue;
+                    }
+                    await _hubContext.Clients.Client(connection.ConnectionId).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                }
+            }
 
             // Extract optional dining_session_id from data
             Guid? diningSessionId = null;
@@ -213,11 +215,11 @@ public sealed class RedisEventSubscriberService : BackgroundService
                     if (diningSessionId.HasValue)
                     {
                         var sessionGroup = $"tenant:{tenantId}:branch:{branchId}:session:{diningSessionId.Value}";
-                        await _hubContext.Clients.Group(sessionGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                        await SendGroupAsync(sessionGroup);
                     }
-                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
-                    await _hubContext.Clients.Group(kitchenGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
-                    await _hubContext.Clients.Group(barGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await SendGroupAsync(floorGroup);
+                    await SendGroupAsync(kitchenGroup);
+                    await SendGroupAsync(barGroup);
                     break;
 
                 case RealtimeEventTypes.TableServiceRequested:
@@ -225,18 +227,18 @@ public sealed class RedisEventSubscriberService : BackgroundService
                     if (diningSessionId.HasValue)
                     {
                         var sessionGroup = $"tenant:{tenantId}:branch:{branchId}:session:{diningSessionId.Value}";
-                        await _hubContext.Clients.Group(sessionGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                        await SendGroupAsync(sessionGroup);
                     }
-                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await SendGroupAsync(floorGroup);
                     break;
 
                 case RealtimeEventTypes.TableSessionClosed:
                     if (diningSessionId.HasValue)
                     {
                         var sessionGroup = $"tenant:{tenantId}:branch:{branchId}:session:{diningSessionId.Value}";
-                        await _hubContext.Clients.Group(sessionGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                        await SendGroupAsync(sessionGroup);
                     }
-                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await SendGroupAsync(floorGroup);
 
                     if (diningSessionId.HasValue)
                     {
@@ -249,12 +251,12 @@ public sealed class RedisEventSubscriberService : BackgroundService
 
                 case RealtimeEventTypes.MenuItemAvailabilityChanged:
                 case RealtimeEventTypes.CatalogPolicyInvalidated:
-                    await _hubContext.Clients.Group(catalogGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
-                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await SendGroupAsync(catalogGroup);
+                    await SendGroupAsync(floorGroup);
                     break;
 
                 default:
-                    await _hubContext.Clients.Group(floorGroup).SendAsync("ReceiveEvent", rawEnvelopeJson);
+                    await SendGroupAsync(floorGroup);
                     break;
             }
         }
@@ -282,6 +284,29 @@ public sealed class RedisEventSubscriberService : BackgroundService
         {
             _logger.LogError(ex, "Failed to process session eviction control message.");
         }
+    }
+
+    internal async Task HandleAuthInvalidatedAsync(RedisValue message)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(message.ToString());
+            Guid? sid = doc.RootElement.TryGetProperty("session_id", out var s) ? s.GetGuid() : null;
+            Guid? uid = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetGuid() : null;
+            foreach (var c in _tracker.GetAllConnections())
+                if ((sid.HasValue && c.StaffSessionId == sid) || (uid.HasValue && c.UserId == uid)) await TerminateAsync(c);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Invalid authentication eviction message."); }
+    }
+
+    private async Task TerminateAsync(TrackedConnection c)
+    {
+        try
+        {
+            foreach (var group in c.SubscribedGroups ?? []) await _hubContext.Groups.RemoveFromGroupAsync(c.ConnectionId, group);
+            await _hubContext.Clients.Client(c.ConnectionId).SendAsync("AccessRevoked", new { reason = "authorization_changed" });
+        }
+        finally { c.Abort?.Invoke(); _tracker.Untrack(c.ConnectionId); }
     }
 
     internal async Task HandleUserEvictionMessageAsync(RedisValue message)
@@ -347,6 +372,7 @@ public sealed class RedisEventSubscriberService : BackgroundService
             {
                 _logger.LogWarning(ex, "Failed to cleanly evict connection '{ConnectionId}'.", conn.ConnectionId);
             }
+            finally { conn.Abort?.Invoke(); _tracker.Untrack(conn.ConnectionId); }
         }
     }
 
@@ -382,6 +408,7 @@ public sealed class RedisEventSubscriberService : BackgroundService
             {
                 _logger.LogWarning(ex, "Failed to cleanly evict staff connection '{ConnectionId}'.", conn.ConnectionId);
             }
+            finally { conn.Abort?.Invoke(); _tracker.Untrack(conn.ConnectionId); }
         }
     }
 }
