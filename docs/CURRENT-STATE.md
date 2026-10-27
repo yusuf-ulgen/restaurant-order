@@ -18,11 +18,12 @@ Güncelleme: 2026-10-27. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 
 ## Aktif Görev — Faz 9 İnceleme Düzeltmeleri
 
+- Son incelenen/push edilmiş taban HEAD `254c817bf0e9deb9eda343d6e03c2db6e44fe767`; uzak dal düzeltmelerden önce aynı committeydi. CI kapsamı ve worker gecikmesi düzeltmeleri aynı dalda PR #24 incelemesine sunuluyor. Merge veya deploy yapılmadı; yeni commitin CI sonucu ayrıca değerlendirilir.
 - Dal ve başlangıç HEAD: `feat/phase-09-realtime-notifications`, `f0caac8d613fbf40df9d71b939b153d3978456c5`; başlangıç çalışma ağacı temiz ve uzak dalla eşitti.
 - [Issue #20](https://github.com/yusuf-ulgen/restaurant-order/issues/20), [PR #24](https://github.com/yusuf-ulgen/restaurant-order/pull/24). İnceleme düzeltmeleri aynı dalda PR #24'e sunuluyor; birleştirme veya deploy yapılmadı. Push ve CI durumu GitHub üzerinden ayrıca doğrulanır.
 - Önceki tamamlandı ve tüm testler doğrulandı kayıtları incelemede geri açıldı. Faz 10'a geçilmez.
 - Kapsam: worker tenant/RLS, worker/API rol ayrımı, dayanıklı staging, lease/claim fencing, gerçek iptal yolları, HTTP cursor, FCM tarayıcı kaydı ve doğrulama kanıtları.
-- Güncel teknik sonuçlar ve komut kanıtları: [Faz 9 inceleme kaydı](./PHASE-9-REVIEW.md). Fazın kapanış durumu yalnızca bu kayıttaki güncel çalışma ağacı sonuçlarıyla değerlendirilir.
+- Güncel teknik sonuçlar, iki CI engelinin tanısı ve komut kanıtları: [Faz 9 inceleme kaydı](./PHASE-9-REVIEW.md). Önceki CI başarıları yeni yerel çalışma ağacını doğrulamaz.
 ## Ortam ve Sınırlamalar
 
 - .NET 10, sabit pnpm 11.10.0 ile Node, PostgreSQL 16, Redis 7; entegrasyon ve CI E2E için Docker kullanılır.
@@ -31,10 +32,11 @@ Güncelleme: 2026-10-27. Devam ederken Git/GitHub üzerinden yenileyin; eski faz
 - Docker daemon yerelde çalışmıyorsa Testcontainers testleri `SKIP_TESTCONTAINERS=true` ile atlanabilir; bu durum CI konteyner doğrulamasının yerine geçmez.
 - Dosya boyutu denetiminin güncel sonucu ve 450 satır uyarıları inceleme kaydında tutulur; eski dosya sayıları yeni çalışma ağacı için kanıt sayılmaz.
 - Gerçek Firebase projesi ve kimlik bilgileri bu incelemede kullanılmadı. SDK/worker sözleşme testleri fiziksel FCM teslimini kanıtlamaz; HTTPS cihaz doğrulaması R13 kapsamında bekliyor.
+- Bu oturumdaki ilk Compose E2E denemesinde mevcut yerel PostgreSQL 5432 çakışması nedeniyle `Host=localhost` migration'ı yerel `restaurant_order_dev` veritabanına `20261027130000_HardenWorkerQueuePrivileges` uyguladı. Geri alma/veri silme yapılmadı. Sonraki 21/21 browser koşusu rastgele portlu ayrı geçici veritabanında tamamlandı; ayrıntı inceleme kaydında.
 
 ## Sonraki Somut Adım
 
-PR #24 üzerindeki Faz 9 düzeltmelerini değerlendirmek; gerçek FCM yapılandırması ve izinli HTTPS cihazla fiziksel teslimi ayrıca kanıtlamak. Yerel otomatik sonuçlar inceleme kaydındadır; Faz 10'a geçilmedi.
+CI kapsamı ve gecikme düzeltmelerini PR #24 üzerinde incelemek; CI'ın tüm adımlarını yeni committe izlemek; gerçek FCM yapılandırması ve izinli HTTPS cihazla fiziksel teslimi ayrıca kanıtlamak. Yerel otomatik sonuçlar inceleme kaydındadır; Faz 10'a geçilmedi.
 
 ## 2026-10-27 — İnceleme Öncesi Push Kaydı
 

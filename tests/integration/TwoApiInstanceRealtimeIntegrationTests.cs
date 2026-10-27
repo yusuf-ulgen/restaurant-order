@@ -6,14 +6,48 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using RestaurantOrder.Domain.Auth;
+using RestaurantOrder.Infrastructure.Events;
+using StackExchange.Redis;
 using Xunit;
 using Xunit.Abstractions;
 
 namespace RestaurantOrder.IntegrationTests;
 
+[CollectionDefinition("Phase9RealWorker", DisableParallelization = true)]
+public sealed class Phase9RealWorkerCollection { }
+
+[Collection("Phase9RealWorker")]
 public class TwoApiInstanceRealtimeIntegrationTests(TestcontainersFixture fixture, ITestOutputHelper output)
     : IClassFixture<TestcontainersFixture>
 {
+    private sealed record TimedEvent(Guid EventId, Guid AggregateId, double Milliseconds, long Ticks);
+
+    private static bool TryMatchRequest(string raw, Guid session, out Guid eventId, out Guid aggregateId)
+    {
+        using var json = JsonDocument.Parse(raw);
+        var root = json.RootElement;
+        eventId = Guid.Empty;
+        aggregateId = Guid.Empty;
+        if (!root.TryGetProperty("data", out var data) ||
+            !data.TryGetProperty("dining_session_id", out var sessionId) ||
+            !sessionId.TryGetGuid(out var actual) || actual != session) return false;
+        return root.TryGetProperty("event_id", out var id) && id.TryGetGuid(out eventId) &&
+               root.TryGetProperty("aggregate_id", out var aggregate) &&
+               Guid.TryParse(aggregate.GetString(), out aggregateId);
+    }
+
+    [Fact]
+    public void LatencyMatcher_IgnoresUnrelatedSessionAndUsesStableEventId()
+    {
+        var own = Guid.NewGuid(); var other = Guid.NewGuid(); var eventId = Guid.NewGuid(); var aggregate = Guid.NewGuid();
+        var envelope = JsonSerializer.Serialize(new { event_id = eventId, aggregate_id = aggregate.ToString(),
+            data = new { dining_session_id = other } });
+        Assert.False(TryMatchRequest(envelope, own, out _, out _));
+        Assert.True(TryMatchRequest(envelope, other, out var matchedEvent, out var matchedAggregate));
+        Assert.Equal(eventId, matchedEvent);
+        Assert.Equal(aggregate, matchedAggregate);
+    }
+
     [Fact]
     public async Task HttpMutation_RealWorkerPolling_ReachesB_WithoutCrossTenantOrBranchLeakage()
     {
@@ -50,22 +84,53 @@ public class TwoApiInstanceRealtimeIntegrationTests(TestcontainersFixture fixtur
     public async Task RealWorkerLatency_HttpRequestStartToBReceive_ReportsTwentySamples()
     {
         if (!TestcontainersGuard.ShouldRun(fixture)) return;
-        await using var h = new Phase9RealtimeHarness(fixture);
+        var probe = new RealtimeLatencyProbe();
+        await using var h = new Phase9RealtimeHarness(fixture, probe);
         await h.StartAsync();
         var branch = await h.SeedBranchAsync();
         var staff = await h.SeedStaffAsync(branch);
         await using var hub = await Phase9RealtimeHarness.ConnectAsync(h.B, staff.Token);
+        using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisEndpoint);
+        var subscriber = redis.GetSubscriber();
         var samples = new List<double>();
         for (var i = 0; i < 21; i++)
         {
             var customer = await h.SeedCustomerAsync(branch);
             var start = new Stopwatch();
-            var received = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var subscription = hub.On<string>("ReceiveEvent", _ => received.TrySetResult(start.Elapsed.TotalMilliseconds));
+            var received = new TaskCompletionSource<TimedEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var published = new TaskCompletionSource<TimedEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var subscription = hub.On<string>("ReceiveEvent", raw => {
+                var elapsed = start.Elapsed.TotalMilliseconds;
+                if (TryMatchRequest(raw, customer, out var id, out var aggregate))
+                    received.TrySetResult(new(id, aggregate, elapsed, Stopwatch.GetTimestamp()));
+            });
+            Action<RedisChannel, RedisValue> onBroadcast = (_, value) => {
+                var elapsed = start.Elapsed.TotalMilliseconds;
+                if (TryMatchRequest(value.ToString(), customer, out var id, out var aggregate))
+                    published.TrySetResult(new(id, aggregate, elapsed, Stopwatch.GetTimestamp()));
+            };
+            await subscriber.SubscribeAsync(RedisChannel.Literal(RedisRealtimeEventPublisher.BroadcastChannel), onBroadcast);
+            var startedAt = DateTimeOffset.UtcNow;
+            var startTicks = Stopwatch.GetTimestamp();
             start.Start();
-            await h.MutateAsync(branch, customer);
-            var elapsed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            if (i > 0) samples.Add(elapsed);
+            var request = await h.MutateAsync(branch, customer);
+            var httpMs = start.Elapsed.TotalMilliseconds;
+            var seen = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var broadcast = await published.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await subscriber.UnsubscribeAsync(RedisChannel.Literal(RedisRealtimeEventPublisher.BroadcastChannel), onBroadcast);
+            await using var admin = h.Admin();
+            var row = await admin.OperationalOutbox.IgnoreQueryFilters().SingleAsync(o => o.AggregateId == request.ToString());
+            Assert.Equal(request, seen.AggregateId);
+            Assert.Equal(row.Id, seen.EventId);
+            Assert.Equal(row.Id, broadcast.EventId);
+            var publish = await probe.PublishedAsync(row.Id).WaitAsync(TimeSpan.FromSeconds(10));
+            var auth = probe.Authorizations.Where(a => a.ConnectionId == hub.ConnectionId &&
+                a.Start >= publish.Start && a.End <= seen.Ticks).OrderBy(a => a.Start).LastOrDefault();
+            Assert.NotNull(auth);
+            double Milliseconds(long ticks) => Stopwatch.GetElapsedTime(startTicks, ticks).TotalMilliseconds;
+            var createdMs = (row.CreatedAtUtc - startedAt).TotalMilliseconds;
+            output.WriteLine($"sample={i} http={httpMs:F2}ms created={createdMs:F2}ms worker-publish={Milliseconds(publish.Start):F2}ms publish-ack={Milliseconds(publish.End):F2}ms redis-observed={broadcast.Milliseconds:F2}ms B-auth-start={Milliseconds(auth.Start):F2}ms B-auth-duration={Milliseconds(auth.End) - Milliseconds(auth.Start):F2}ms B={seen.Milliseconds:F2}ms");
+            if (i > 0) samples.Add(seen.Milliseconds);
         }
         samples.Sort();
         var p50 = samples[9]; var p95 = samples[18];

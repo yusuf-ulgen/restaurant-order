@@ -4,24 +4,28 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RestaurantOrder.Api.Realtime;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Domain.Auth;
 using RestaurantOrder.Domain.Branches;
 using RestaurantOrder.Domain.Brands;
 using RestaurantOrder.Domain.Floor;
 using RestaurantOrder.Domain.Tenants;
 using RestaurantOrder.Infrastructure;
+using RestaurantOrder.Infrastructure.Events;
 using RestaurantOrder.Infrastructure.Persistence;
 using RestaurantOrder.Worker.Safety;
 using StackExchange.Redis;
 
 namespace RestaurantOrder.IntegrationTests;
 
-internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture) : IAsyncDisposable
+internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture, RealtimeLatencyProbe? probe = null) : IAsyncDisposable
 {
     public WebApplicationFactory<RestaurantOrder.Api.Program> A { get; private set; } = null!;
     public WebApplicationFactory<RestaurantOrder.Api.Program> B { get; private set; } = null!;
@@ -34,7 +38,7 @@ internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture) : IAs
     public async Task StartAsync()
     {
         var apiConnection = await fixture.ProvisionTemporaryRuntimeRoleAsync();
-        A = Factory(apiConnection); B = Factory(apiConnection);
+        A = Factory(apiConnection); B = Factory(apiConnection, measureAuthorization: true);
         _ = A.Server; _ = B.Server;
         using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisEndpoint);
         await redis.GetDatabase().StringSetAsync(RedisWorkerActivationGuard.DefaultActiveSlotKey, "blue");
@@ -48,6 +52,9 @@ internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture) : IAs
         builder.Logging.ClearProviders();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+        if (probe != null)
+            builder.Services.AddSingleton<IRealtimeEventPublisher>(sp => new TimedRealtimePublisher(
+                ActivatorUtilities.CreateInstance<RedisRealtimeEventPublisher>(sp), probe));
         builder.Services.AddSingleton<IWorkerActivationGuard, RedisWorkerActivationGuard>();
         builder.Services.AddSingleton<IWorkerLeaseManager, RedisWorkerLeaseManager>();
         builder.Services.AddHostedService<RestaurantOrder.Worker.Worker>();
@@ -55,7 +62,7 @@ internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture) : IAs
         await _worker.StartAsync();
     }
 
-    private WebApplicationFactory<RestaurantOrder.Api.Program> Factory(string connection) =>
+    private WebApplicationFactory<RestaurantOrder.Api.Program> Factory(string connection, bool measureAuthorization = false) =>
         new WebApplicationFactory<RestaurantOrder.Api.Program>().WithWebHostBuilder(b => {
             b.UseEnvironment("Development");
             b.UseSetting("DATABASE_URL", connection); b.UseSetting("REDIS_URL", fixture.RedisEndpoint);
@@ -67,12 +74,16 @@ internal sealed class Phase9RealtimeHarness(TestcontainersFixture fixture) : IAs
             b.UseSetting("QrSecurity:Keys:k1", RestaurantConfigTestHelpers.SharedTestQrKeyBase64);
             b.UseSetting("PUSH_PROVIDER", "Disabled");
             b.ConfigureLogging(l => l.ClearProviders());
+            if (measureAuthorization && probe != null)
+                b.ConfigureTestServices(services => services.AddSingleton<IRealtimeConnectionAuthorizer>(sp =>
+                    new TimedRealtimeAuthorizer(new RealtimeConnectionAuthorizer(
+                        sp.GetRequiredService<IServiceScopeFactory>()), probe)));
         });
 
     public async Task RestartBAsync()
     {
         await B.DisposeAsync();
-        B = Factory(await fixture.ProvisionTemporaryRuntimeRoleAsync());
+        B = Factory(await fixture.ProvisionTemporaryRuntimeRoleAsync(), measureAuthorization: true);
         _ = B.Server;
     }
 

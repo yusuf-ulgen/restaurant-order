@@ -11,4 +11,4 @@ tests/integration/RestaurantConfigTestHelpers.cs:generic-api-key:38
 # PR #24: yalnızca maskelenmeyi sınayan sentetik fixture; taranan eski commit korunur.
 a4b2d5bd989f090ae0c1e52be8c85180fea9f8ad:tests/unit/Events/OperationalOutboxDispatcherTests.cs:generic-api-key:293
 # Mevcut CI sentetik JWT fallback fixture'ının yeni satırı; gerçek kasa değeri istisna değildir.
-.github/workflows/ci.yml:generic-api-key:155
+.github/workflows/ci.yml:generic-api-key:157
