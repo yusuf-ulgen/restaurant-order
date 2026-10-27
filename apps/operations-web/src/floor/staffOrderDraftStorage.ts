@@ -1,6 +1,10 @@
 import {
   computeOrderPayloadSignature,
   DeterministicOrderItemSignature,
+  RuntimeMenuReadModel,
+  calculateLineItemFinancials,
+  calculateOrderTotals,
+  CreateStaffOrderRequest,
 } from '@restaurant-order/contracts';
 
 export interface StaffDraftSelectedModifier {
@@ -24,6 +28,13 @@ export interface StaffDraftLine {
   lineTotalMinorUnits: number;
 }
 
+export interface StaffOrderFinancials {
+  netSubtotalMinorUnits: number;
+  taxMinorUnits: number;
+  serviceChargeMinorUnits: number;
+  grandTotalMinorUnits: number;
+}
+
 export interface StaffOrderDraft {
   tenantId: string;
   branchId: string;
@@ -33,7 +44,46 @@ export interface StaffOrderDraft {
   idempotencyKey: string;
   lastPayloadSignature: string;
   isPendingSubmission?: boolean;
+  pendingPayload?: CreateStaffOrderRequest;
   updatedAt: number;
+}
+
+export function calculateStaffOrderFinancials(
+  items: StaffDraftLine[],
+  runtimeMenu: RuntimeMenuReadModel
+): StaffOrderFinancials {
+  let netSubtotal = 0;
+  let taxTotal = 0;
+
+  for (const line of items) {
+    const modifierSum = line.selectedModifiers.reduce((acc, m) => acc + m.priceDeltaMinorUnits, 0);
+    const baseUnitPrice = line.unitPriceMinorUnits - modifierSum;
+
+    const fin = calculateLineItemFinancials({
+      unitPriceMinorUnits: Math.max(0, baseUnitPrice),
+      modifierTotalMinorUnits: modifierSum,
+      quantity: line.quantity,
+      taxRateBps: runtimeMenu.defaultTaxRateBps || 0,
+      pricesIncludeTax: runtimeMenu.pricesIncludeTax,
+    });
+
+    netSubtotal += fin.netSubtotalMinorUnits;
+    taxTotal += fin.taxMinorUnits;
+  }
+
+  const orderTotals = calculateOrderTotals({
+    netSubtotalMinorUnits: netSubtotal,
+    taxTotalMinorUnits: taxTotal,
+    isServiceChargeEnabled: runtimeMenu.isServiceChargeEnabled,
+    serviceChargeRateBps: runtimeMenu.serviceChargeRateBps || 0,
+  });
+
+  return {
+    netSubtotalMinorUnits: netSubtotal,
+    taxMinorUnits: taxTotal,
+    serviceChargeMinorUnits: orderTotals.serviceChargeMinorUnits,
+    grandTotalMinorUnits: orderTotals.grandTotalMinorUnits,
+  };
 }
 
 function generateIdempotencyKey(): string {
@@ -140,15 +190,16 @@ export function resolveStaffOrderIdempotencyKey(
   existingDraft: StaffOrderDraft | null,
   newSignature: string
 ): { idempotencyKey: string; isReplayAttempt: boolean } {
-  if (
-    existingDraft &&
-    existingDraft.idempotencyKey &&
-    existingDraft.lastPayloadSignature === newSignature
-  ) {
-    return {
-      idempotencyKey: existingDraft.idempotencyKey,
-      isReplayAttempt: true,
-    };
+  if (existingDraft && existingDraft.idempotencyKey) {
+    if (
+      existingDraft.lastPayloadSignature === newSignature ||
+      existingDraft.isPendingSubmission
+    ) {
+      return {
+        idempotencyKey: existingDraft.idempotencyKey,
+        isReplayAttempt: true,
+      };
+    }
   }
 
   return {

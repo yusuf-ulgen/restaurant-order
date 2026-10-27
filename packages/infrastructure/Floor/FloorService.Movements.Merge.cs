@@ -211,6 +211,35 @@ public partial class FloorService
                 targetSession.AcceptMergedGuests(guestsToMove, targetTable);
                 sourceSession.MergeInto(targetSession, request.Reason);
 
+                // Reassign all source session orders into target session with serialized round numbers
+                // to avoid violating unique constraint ix_orders_tenant_session_round
+                var targetOrders = await _dbContext.Orders
+                    .Where(o => o.TenantId == tenantId && o.DiningSessionId == targetSessionId)
+                    .ToListAsync(ct);
+                var maxTargetRound = targetOrders.Count > 0 ? targetOrders.Max(o => o.RoundNumber) : 0;
+
+                var sourceOrders = await _dbContext.Orders
+                    .Where(o => o.TenantId == tenantId && o.DiningSessionId == sourceSessionId)
+                    .OrderBy(o => o.RoundNumber)
+                    .ThenBy(o => o.CreatedAtUtc)
+                    .ToListAsync(ct);
+
+                var nextRound = maxTargetRound + 1;
+                foreach (var order in sourceOrders)
+                {
+                    order.ReassignSessionOnMerge(targetSessionId, targetSession.TableId, nextRound++, now);
+                }
+
+                // Reassign active customer service requests to target session and target table
+                var activeSourceRequests = await _dbContext.ServiceRequests
+                    .Where(sr => sr.TenantId == tenantId && sr.DiningSessionId == sourceSessionId &&
+                                 sr.Status != ServiceRequestStatus.Completed && sr.Status != ServiceRequestStatus.Cancelled)
+                    .ToListAsync(ct);
+                foreach (var req in activeSourceRequests)
+                {
+                    req.ReassignSessionOnMerge(targetSessionId, targetSession.TableId, now);
+                }
+
                 // 9. Create movement audit log
                 var movement = DiningSessionMovement.CreateMerge(
                     tenantId,
@@ -241,6 +270,22 @@ public partial class FloorService
                         GuestsMoved = guestsToMove,
                         IdempotencyKey = idempotencyKey
                     });
+
+                _outboxWriter?.EnqueueEvent(
+                    tenantId: tenantId.Value,
+                    branchId: branchId.Value,
+                    aggregateId: targetSession.Id.Value.ToString(),
+                    eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.TableSessionMerged,
+                    data: new
+                    {
+                        SourceSessionId = sourceSessionId.Value,
+                        TargetSessionId = targetSessionId.Value,
+                        SourceTableId = sourceSession.TableId.Value,
+                        TargetTableId = targetSession.TableId.Value,
+                        TargetTableNumber = targetTable.TableNumber
+                    },
+                    idempotencyKey: $"merge-{idempotencyKey}",
+                    occurredAtUtc: now);
 
                 await _dbContext.SaveChangesAsync(ct);
                 resultDto = MapSession(targetSession);

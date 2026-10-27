@@ -215,4 +215,31 @@ public class ServiceRequest
             Encoding.UTF8.GetBytes(a.Trim().ToLowerInvariant()),
             Encoding.UTF8.GetBytes(b.Trim().ToLowerInvariant()));
     }
+
+    /// <summary>
+    /// Updates operational table reference when dining session is transferred to a new table.
+    /// </summary>
+    public void UpdateOperationalTable(RestaurantTableId newTableId, DateTimeOffset? nowUtc = null)
+    {
+        if (newTableId.Value == Guid.Empty) throw new DomainException("Target table ID cannot be empty.");
+        TableId = newTableId;
+        ConcurrencyToken = Guid.NewGuid();
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Reassigns service request to target dining session and table upon table merge.
+    /// </summary>
+    public void ReassignSessionOnMerge(
+        DiningSessionId targetSessionId,
+        RestaurantTableId targetTableId,
+        DateTimeOffset? nowUtc = null)
+    {
+        if (targetSessionId.Value == Guid.Empty) throw new DomainException("Target session ID cannot be empty.");
+        if (targetTableId.Value == Guid.Empty) throw new DomainException("Target table ID cannot be empty.");
+        DiningSessionId = targetSessionId;
+        TableId = targetTableId;
+        ConcurrencyToken = Guid.NewGuid();
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
 }

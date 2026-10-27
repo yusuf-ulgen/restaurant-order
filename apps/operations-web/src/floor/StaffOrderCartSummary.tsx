@@ -1,10 +1,6 @@
 import React from 'react';
-import {
-  RuntimeMenuReadModel,
-  calculateLineItemFinancials,
-  calculateOrderTotals,
-} from '@restaurant-order/contracts';
-import { StaffDraftLine } from './staffOrderDraftStorage';
+import { RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import { StaffDraftLine, calculateStaffOrderFinancials } from './staffOrderDraftStorage';
 
 export interface StaffOrderCartSummaryProps {
   lines: StaffDraftLine[];
@@ -27,40 +23,9 @@ export const StaffOrderCartSummary: React.FC<StaffOrderCartSummaryProps> = ({
   isSubmitting,
   errorMessage,
 }) => {
-  // Pure authoritative financial calculation
+  // Pure authoritative financial calculation matching storage & submission exactly
   const totals = React.useMemo(() => {
-    let netSubtotal = 0;
-    let taxTotal = 0;
-
-    for (const line of lines) {
-      const modifierSum = line.selectedModifiers.reduce((acc, m) => acc + m.priceDeltaMinorUnits, 0);
-      const baseUnitPrice = line.unitPriceMinorUnits - modifierSum;
-
-      const fin = calculateLineItemFinancials({
-        unitPriceMinorUnits: Math.max(0, baseUnitPrice),
-        modifierTotalMinorUnits: modifierSum,
-        quantity: line.quantity,
-        taxRateBps: runtimeMenu.defaultTaxRateBps || 0,
-        pricesIncludeTax: runtimeMenu.pricesIncludeTax,
-      });
-
-      netSubtotal += fin.netSubtotalMinorUnits;
-      taxTotal += fin.taxMinorUnits;
-    }
-
-    const orderTotals = calculateOrderTotals({
-      netSubtotalMinorUnits: netSubtotal,
-      taxTotalMinorUnits: taxTotal,
-      isServiceChargeEnabled: runtimeMenu.isServiceChargeEnabled,
-      serviceChargeRateBps: runtimeMenu.serviceChargeRateBps || 0,
-    });
-
-    return {
-      netSubtotalMinorUnits: netSubtotal,
-      taxMinorUnits: taxTotal,
-      serviceChargeMinorUnits: orderTotals.serviceChargeMinorUnits,
-      grandTotalMinorUnits: orderTotals.grandTotalMinorUnits,
-    };
+    return calculateStaffOrderFinancials(lines, runtimeMenu);
   }, [lines, runtimeMenu]);
 
   if (lines.length === 0) {

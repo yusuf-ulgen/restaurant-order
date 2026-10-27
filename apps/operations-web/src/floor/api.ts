@@ -101,11 +101,14 @@ export async function fetchTableServiceRequests(
   branchId: string,
   tableId?: string,
   sessionId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  status: string = 'active'
 ): Promise<StaffServiceRequestDto[]> {
   const params = new URLSearchParams();
   if (tableId) params.append('tableId', tableId);
   if (sessionId) params.append('sessionId', sessionId);
+  if (status && status !== 'all') params.append('status', status);
+  params.append('limit', '100');
   const query = params.toString() ? `?${params.toString()}` : '';
 
   const res = await fetchWithCsrf(`/api/v1/floor/branches/${branchId}/service-requests${query}`, { signal });
@@ -304,15 +307,49 @@ export async function fetchBranchReadyItems(
   branchId: string,
   signal?: AbortSignal
 ): Promise<ReadyOrderItemDto[]> {
-  const res = await fetchWithCsrf(`/api/v1/floor/branches/${branchId}/orders/ready-items`, { signal });
-  return handleResponse<ReadyOrderItemDto[]>(res);
+  const PAGE_SIZE = 50;
+  let offset = 0;
+  const allItems: ReadyOrderItemDto[] = [];
+  const MAX_PAGES = 10;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetchWithCsrf(
+      `/api/v1/floor/branches/${branchId}/orders/ready-items?limit=${PAGE_SIZE}&offset=${offset}`,
+      { signal }
+    );
+    const chunk = await handleResponse<ReadyOrderItemDto[]>(res);
+    allItems.push(...chunk);
+    if (chunk.length < PAGE_SIZE) {
+      break;
+    }
+    offset += PAGE_SIZE;
+  }
+
+  return allItems;
 }
 
 export async function fetchActiveServiceRequests(
   branchId: string,
   signal?: AbortSignal
 ): Promise<StaffServiceRequestDto[]> {
-  const res = await fetchWithCsrf(`/api/v1/floor/branches/${branchId}/service-requests?limit=100`, { signal });
-  return handleResponse<StaffServiceRequestDto[]>(res);
+  const PAGE_SIZE = 100;
+  let offset = 0;
+  const allRequests: StaffServiceRequestDto[] = [];
+  const MAX_PAGES = 10;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetchWithCsrf(
+      `/api/v1/floor/branches/${branchId}/service-requests?status=active&limit=${PAGE_SIZE}&offset=${offset}`,
+      { signal }
+    );
+    const chunk = await handleResponse<StaffServiceRequestDto[]>(res);
+    allRequests.push(...chunk);
+    if (chunk.length < PAGE_SIZE) {
+      break;
+    }
+    offset += PAGE_SIZE;
+  }
+
+  return allRequests;
 }
 

@@ -6,8 +6,6 @@ import {
   CreateStaffOrderRequest,
   StaffOrderItemRequest,
   StaffOrderResponseDto,
-  calculateLineItemFinancials,
-  calculateOrderTotals,
 } from '@restaurant-order/contracts';
 import { fetchRuntimeMenu, createStaffOrder, ApiError } from './api';
 import {
@@ -18,6 +16,7 @@ import {
   clearStaffOrderDraft,
   calculateStaffOrderPayloadSignature,
   resolveStaffOrderIdempotencyKey,
+  calculateStaffOrderFinancials,
 } from './staffOrderDraftStorage';
 import { StaffOrderItemCustomizer } from './StaffOrderItemCustomizer';
 import { StaffOrderCartSummary } from './StaffOrderCartSummary';
@@ -98,11 +97,11 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
       setDraftLines(newLines);
       if (!runtimeMenu) return;
 
-      const grandTotal = newLines.reduce((acc, l) => acc + l.lineTotalMinorUnits, 0);
+      const fin = calculateStaffOrderFinancials(newLines, runtimeMenu);
       const signature = calculateStaffOrderPayloadSignature(
         newLines,
         runtimeMenu.pricingPolicyFingerprint,
-        grandTotal
+        fin.grandTotalMinorUnits
       );
       const { idempotencyKey } = resolveStaffOrderIdempotencyKey(activeDraft, signature);
 
@@ -114,6 +113,7 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
         items: newLines,
         idempotencyKey,
         lastPayloadSignature: signature,
+        isPendingSubmission: false,
         updatedAt: Date.now(),
       };
 
@@ -128,12 +128,23 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
     return runtimeMenu.menus.flatMap((m) => m.categories);
   }, [runtimeMenu]);
 
+  const confirmPendingBreak = (): boolean => {
+    if (activeDraft?.isPendingSubmission) {
+      return window.confirm(
+        'Bekleyen bir sipariş gönderim denemesi bulunmaktadır. Değişiklik yaparsanız bekleyen deneme iptal edilip yeni sipariş olarak hazırlanacaktır. Devam etmek istiyor musunuz?'
+      );
+    }
+    return true;
+  };
+
   const handleOpenCustomizer = (item: RuntimeMenuItem) => {
+    if (!confirmPendingBreak()) return;
     setCustomizingItem(item);
     setEditingLine(null);
   };
 
   const handleEditLine = (line: StaffDraftLine) => {
+    if (!confirmPendingBreak()) return;
     if (!runtimeMenu) return;
     for (const m of runtimeMenu.menus) {
       for (const c of m.categories) {
@@ -158,6 +169,7 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
   };
 
   const handleRemoveLine = (lineId: string) => {
+    if (!confirmPendingBreak()) return;
     updateDraft(draftLines.filter((l) => l.id !== lineId));
   };
 
@@ -176,27 +188,15 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
     setSubmitError(null);
 
     try {
-      let netSubtotal = 0;
-      let taxTotal = 0;
-      for (const line of draftLines) {
-        const modifierSum = line.selectedModifiers.reduce((acc, m) => acc + m.priceDeltaMinorUnits, 0);
-        const baseUnitPrice = line.unitPriceMinorUnits - modifierSum;
-        const fin = calculateLineItemFinancials({
-          unitPriceMinorUnits: Math.max(0, baseUnitPrice),
-          modifierTotalMinorUnits: modifierSum,
-          quantity: line.quantity,
-          taxRateBps: runtimeMenu.defaultTaxRateBps || 0,
-          pricesIncludeTax: runtimeMenu.pricesIncludeTax,
-        });
-        netSubtotal += fin.netSubtotalMinorUnits;
-        taxTotal += fin.taxMinorUnits;
-      }
-      const totals = calculateOrderTotals({
-        netSubtotalMinorUnits: netSubtotal,
-        taxTotalMinorUnits: taxTotal,
-        isServiceChargeEnabled: runtimeMenu.isServiceChargeEnabled,
-        serviceChargeRateBps: runtimeMenu.serviceChargeRateBps || 0,
-      });
+      const fin = calculateStaffOrderFinancials(draftLines, runtimeMenu);
+      const signature = calculateStaffOrderPayloadSignature(
+        draftLines,
+        runtimeMenu.pricingPolicyFingerprint,
+        fin.grandTotalMinorUnits
+      );
+
+      // Freeze or reuse exact idempotency key and payload for retries
+      const { idempotencyKey } = resolveStaffOrderIdempotencyKey(activeDraft, signature);
 
       const itemsRequest: StaffOrderItemRequest[] = draftLines.map((line) => ({
         menuItemId: line.menuItemId,
@@ -213,15 +213,8 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
       const payload: CreateStaffOrderRequest = {
         items: itemsRequest,
         clientPricingPolicyFingerprint: runtimeMenu.pricingPolicyFingerprint,
-        clientExpectedTotalMinorUnits: totals.grandTotalMinorUnits,
+        clientExpectedTotalMinorUnits: fin.grandTotalMinorUnits,
       };
-
-      const signature = calculateStaffOrderPayloadSignature(
-        draftLines,
-        runtimeMenu.pricingPolicyFingerprint,
-        totals.grandTotalMinorUnits
-      );
-      const { idempotencyKey } = resolveStaffOrderIdempotencyKey(activeDraft, signature);
 
       const pendingDraft: StaffOrderDraft = {
         tenantId,
@@ -232,9 +225,11 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
         idempotencyKey,
         lastPayloadSignature: signature,
         isPendingSubmission: true,
+        pendingPayload: payload,
         updatedAt: Date.now(),
       };
       saveStaffOrderDraft(pendingDraft);
+      setActiveDraft(pendingDraft);
 
       const createdOrder = await createStaffOrder(branchId, session.id, payload, idempotencyKey);
 
@@ -246,21 +241,55 @@ export const StaffOrderDrawer: React.FC<StaffOrderDrawerProps> = ({
     } catch (err: unknown) {
       const apiErr = err as ApiError;
       if (apiErr.status === 409) {
-        if (apiErr.errorCode === 'ORDER_PRICE_CHANGED') {
-          setSubmitError('Menü fiyatları veya vergi politikası güncellendi. Lütfen güncel tutarları inceleyip tekrar onaylayın.');
-          loadMenu();
+        if (
+          apiErr.errorCode === 'ORDER_PRICE_CHANGED' ||
+          apiErr.errorCode === 'ORDER_PRICING_POLICY_CHANGED' ||
+          apiErr.errorCode === 'ORDER_TOTAL_CHANGED'
+        ) {
+          setSubmitError(
+            apiErr.detail ||
+              'Menü fiyatları veya vergi politikası güncellendi. Lütfen güncel tutarları inceleyip tekrar onaylayın.'
+          );
+          if (activeDraft) {
+            const resetDraft: StaffOrderDraft = {
+              ...activeDraft,
+              isPendingSubmission: false,
+              pendingPayload: undefined,
+            };
+            setActiveDraft(resetDraft);
+            saveStaffOrderDraft(resetDraft);
+          }
+          void loadMenu();
         } else if (apiErr.errorCode === 'ITEM_OUT_OF_STOCK') {
           setSubmitError('Seçilen kalemlerden biri tükendi (86). Lütfen sepeti güncelleyiniz.');
-          loadMenu();
-        } else if (apiErr.errorCode === 'SESSION_NOT_ACTIVE' || apiErr.errorCode === 'BILL_REQUESTED') {
-          setSubmitError('Masa oturumu kapandı veya hesap istendi durumunda. Yeni sipariş eklenemez.');
+          if (activeDraft) {
+            const resetDraft: StaffOrderDraft = {
+              ...activeDraft,
+              isPendingSubmission: false,
+              pendingPayload: undefined,
+            };
+            setActiveDraft(resetDraft);
+            saveStaffOrderDraft(resetDraft);
+          }
+          void loadMenu();
+        } else if (
+          apiErr.errorCode === 'SESSION_NOT_ACTIVE' ||
+          apiErr.errorCode === 'BILL_REQUESTED'
+        ) {
+          setSubmitError(
+            'Masa oturumu kapandı veya hesap istendi durumunda. Yeni sipariş eklenemez.'
+          );
         } else {
           setSubmitError(apiErr.detail || 'Çakışma hatası: Sipariş durumu değişti.');
         }
       } else if (apiErr.status === 403) {
         setSubmitError('Sipariş oluşturma yetkiniz bulunmamaktadır.');
       } else {
-        setSubmitError(apiErr.detail || apiErr.message || 'Sipariş gönderilirken bağlantı hatası oluştu. Lütfen tekrar deneyin.');
+        setSubmitError(
+          apiErr.detail ||
+            apiErr.message ||
+            'Sipariş gönderilirken bağlantı hatası oluştu. Aynı sipariş güvenle tekrar denenebilir.'
+        );
       }
     } finally {
       setIsSubmitting(false);

@@ -14,6 +14,8 @@ public static class RealtimeEventTypes
     public const string TableServiceRequestStatusChanged = "table.service_request_status_changed";
     public const string MenuItemAvailabilityChanged = "menu.item_availability_changed";
     public const string TableSessionClosed = "table.session_closed";
+    public const string TableSessionTransferred = "table.session_transferred";
+    public const string TableSessionMerged = "table.session_merged";
     public const string CatalogPolicyInvalidated = "catalog.policy_invalidated";
 
     /// <summary>

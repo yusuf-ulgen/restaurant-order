@@ -20,6 +20,7 @@ export interface TerminalContextValue {
   activateTerminal: (enrollmentCode: string, terminalName: string, deviceIdentifier?: string) => Promise<boolean>;
   loginWithPin: (pin: string, userId?: string, email?: string) => Promise<boolean>;
   logoutStaff: () => Promise<void>;
+  lockTerminal: () => void;
   deactivateTerminal: () => Promise<void>;
 }
 
@@ -205,6 +206,11 @@ export const TerminalProvider: React.FC<{
     }
   }, []);
 
+  const lockTerminal = useCallback((): void => {
+    // Immediate local lock: clears protected staff state without waiting for network requests
+    setStaffUser(null);
+  }, []);
+
   return (
     <TerminalContext.Provider
       value={{
@@ -217,6 +223,7 @@ export const TerminalProvider: React.FC<{
         activateTerminal,
         loginWithPin,
         logoutStaff,
+        lockTerminal,
         deactivateTerminal,
       }}
     >

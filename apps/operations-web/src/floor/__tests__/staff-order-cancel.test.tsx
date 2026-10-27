@@ -38,6 +38,7 @@ const mockTerminalContextWaiter: TerminalContextValue = {
   activateTerminal: vi.fn(),
   loginWithPin: vi.fn(),
   logoutStaff: vi.fn(),
+  lockTerminal: vi.fn(),
   deactivateTerminal: vi.fn(),
 };
 

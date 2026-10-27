@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Spinner,
   EmptyState,
@@ -41,17 +41,26 @@ export const OperationsFloorContainer: React.FC<OperationsFloorContainerProps> =
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isStaleData, setIsStaleData] = useState<boolean>(false);
 
-  // Seçili masa ve modallar
-  const [selectedTable, setSelectedTable] = useState<TableFloorStatusDto | null>(null);
+  // Seçili masa ID'si ve modallar (nesne snapshot'tan türetilir, re-render loop önlenir)
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState<boolean>(false);
   const [movementSourceTable, setMovementSourceTable] = useState<TableFloorStatusDto | null>(null);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState<boolean>(false);
 
   const isMountedRef = useRef<boolean>(true);
+  const requestGenerationRef = useRef<number>(0);
+  const tablesRef = useRef<TableFloorStatusDto[]>([]);
+  tablesRef.current = tables;
 
-  // Veri yükleme
+  const selectedTable = useMemo(() => {
+    if (!selectedTableId) return null;
+    return tables.find((t) => t.table.id === selectedTableId) || null;
+  }, [tables, selectedTableId]);
+
+  // Veri yükleme: sadece branchId'ye bağımlı, yarış durumlarını generation ile önler
   const loadFloorData = useCallback(async (isBackground = false) => {
     if (!branchId) return;
+    const currentGeneration = ++requestGenerationRef.current;
 
     if (!isBackground) {
       setIsLoading(true);
@@ -64,57 +73,58 @@ export const OperationsFloorContainer: React.FC<OperationsFloorContainerProps> =
         fetchDiningAreas(branchId),
       ]);
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && currentGeneration === requestGenerationRef.current) {
         setTables(floorStatus.tables || []);
         setDiningAreas(areas || []);
         setErrorMessage(null);
         setIsStaleData(false);
-
-        // Eğer açık bir detay çekmecesi varsa, seçili masayı yeni veriyle güncelle
-        if (selectedTable) {
-          const updated = floorStatus.tables?.find((t) => t.table.id === selectedTable.table.id);
-          if (updated) setSelectedTable(updated);
-        }
       }
     } catch (err: unknown) {
-      if (isMountedRef.current) {
-        if (tables.length > 0) {
-          // Önceden yüklenmiş veri varsa silmeyip bayat veri (stale) uyarısı gösteriyoruz
+      if (isMountedRef.current && currentGeneration === requestGenerationRef.current) {
+        if (tablesRef.current.length > 0) {
           setIsStaleData(true);
         } else {
           setErrorMessage(err instanceof ApiError ? err.message : 'Kat planı verileri alınamadı.');
         }
       }
     } finally {
-      if (isMountedRef.current && !isBackground) {
+      if (isMountedRef.current && currentGeneration === requestGenerationRef.current && !isBackground) {
         setIsLoading(false);
       }
     }
-  }, [branchId, selectedTable, tables.length]);
+  }, [branchId]);
+
+  const onRegisterRefreshFloorRef = useRef(onRegisterRefreshFloor);
+  onRegisterRefreshFloorRef.current = onRegisterRefreshFloor;
 
   useEffect(() => {
     isMountedRef.current = true;
     loadFloorData(false);
 
-    if (onRegisterRefreshFloor) {
-      onRegisterRefreshFloor(() => loadFloorData(true));
+    if (onRegisterRefreshFloorRef.current) {
+      onRegisterRefreshFloorRef.current(() => loadFloorData(true));
     }
 
     return () => {
-      isMountedRef.current = false;
-      // Kapsam değiştiğinde veya unmount olduğunda masaları temizle
+      requestGenerationRef.current++;
       setTables([]);
       setDiningAreas([]);
-      setSelectedTable(null);
+      setSelectedTableId(null);
     };
-  }, [branchId, loadFloorData, onRegisterRefreshFloor]);
+  }, [branchId, loadFloorData]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Dışarıdan bir masaya odaklanma talebi geldiğinde (Hazır kalem veya servis çağrısından)
   useEffect(() => {
     if (focusedTableId && tables.length > 0) {
       const target = tables.find((t) => t.table.id === focusedTableId);
       if (target) {
-        setSelectedTable(target);
+        setSelectedTableId(target.table.id);
         setIsDetailDrawerOpen(true);
         onClearFocusedTable?.();
       }
@@ -123,7 +133,7 @@ export const OperationsFloorContainer: React.FC<OperationsFloorContainerProps> =
 
   // Masa seçimi
   const handleSelectTable = (table: TableFloorStatusDto) => {
-    setSelectedTable(table);
+    setSelectedTableId(table.table.id);
     setIsDetailDrawerOpen(true);
   };
 

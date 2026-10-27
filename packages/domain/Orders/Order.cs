@@ -380,4 +380,39 @@ public sealed partial class Order
 
         return CryptographicOperations.FixedTimeEquals(storedBytes, computedBytes);
     }
+
+    /// <summary>
+    /// Updates operational table reference when dining session is transferred to a new table.
+    /// Preserves financial snapshots, items, and round history.
+    /// </summary>
+    public void UpdateOperationalTable(RestaurantTableId newTableId, DateTimeOffset? nowUtc = null)
+    {
+        if (newTableId.Value == Guid.Empty) throw new DomainException("Target table ID cannot be empty.");
+        TableId = newTableId;
+        ConcurrencyToken = Guid.NewGuid();
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Reassigns order to target dining session upon table merge with serialized round number.
+    /// </summary>
+    public void ReassignSessionOnMerge(
+        DiningSessionId targetSessionId,
+        RestaurantTableId targetTableId,
+        int newRoundNumber,
+        DateTimeOffset? nowUtc = null)
+    {
+        if (targetSessionId.Value == Guid.Empty) throw new DomainException("Target session ID cannot be empty.");
+        if (targetTableId.Value == Guid.Empty) throw new DomainException("Target table ID cannot be empty.");
+        if (newRoundNumber <= 0)
+        {
+            throw new DomainException($"New round number must be greater than zero. Received: {newRoundNumber}.");
+        }
+
+        DiningSessionId = targetSessionId;
+        TableId = targetTableId;
+        RoundNumber = newRoundNumber;
+        ConcurrencyToken = Guid.NewGuid();
+        UpdatedAtUtc = nowUtc ?? DateTimeOffset.UtcNow;
+    }
 }

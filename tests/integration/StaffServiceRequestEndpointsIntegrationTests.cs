@@ -200,8 +200,8 @@ public class StaffServiceRequestEndpointsIntegrationTests : IClassFixture<Testco
         var created = await custResp.Content.ReadFromJsonAsync<ServiceRequestDto>(JsonOptions);
         Assert.NotNull(created);
 
-        // Customer cancels request
-        var cancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Post, $"/api/v1/customer/service-requests/{created.Id}/cancel", custToken);
+        // Customer cancels request via contract: DELETE /api/v1/customer/service-requests/{id}
+        var cancelReq = RestaurantConfigTestHelpers.CreateAuthenticatedRequest(HttpMethod.Delete, $"/api/v1/customer/service-requests/{created.Id}", custToken);
         cancelReq.Headers.IfMatch.ParseAdd($"\"{created.ConcurrencyToken:D}\"");
         var cancelResp = await client.SendAsync(cancelReq);
         Assert.Equal(HttpStatusCode.OK, cancelResp.StatusCode);

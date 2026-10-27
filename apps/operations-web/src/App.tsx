@@ -32,7 +32,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
   const [isCallsDrawerOpen, setIsCallsDrawerOpen] = useState(false);
   const [focusedTableId, setFocusedTableId] = useState<string | null>(null);
 
-  const { terminal, staffUser, logoutStaff } = useTerminal();
+  const { terminal, staffUser, logoutStaff, lockTerminal } = useTerminal();
   const { isMuted, toggleMute } = useAudioChime();
 
   const floorRefreshFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -63,6 +63,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
     terminal,
     staffUser,
     onRefreshFloor: handleRefreshFloorFromRealtime,
+    onSessionRevoked: lockTerminal,
   });
 
   const handleOpenCallsModal = () => setIsCallsDrawerOpen(true);
@@ -116,7 +117,10 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={logoutStaff}
+              onClick={() => {
+                lockTerminal();
+                void logoutStaff();
+              }}
               title="Vardiya oturumunu kilitle ve PIN ekranına dön"
             >
               Kilitle

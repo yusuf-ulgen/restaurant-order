@@ -45,10 +45,15 @@ public static class StaffServiceRequestEndpoints
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
 
+                bool activeOnly = false;
                 ServiceRequestStatus? statusFilter = null;
                 if (!string.IsNullOrWhiteSpace(status))
                 {
-                    if (Enum.TryParse<ServiceRequestStatus>(status, true, out var parsedStatus))
+                    if (string.Equals(status.Trim(), "active", StringComparison.OrdinalIgnoreCase))
+                    {
+                        activeOnly = true;
+                    }
+                    else if (Enum.TryParse<ServiceRequestStatus>(status, true, out var parsedStatus))
                     {
                         statusFilter = parsedStatus;
                     }
@@ -67,6 +72,7 @@ public static class StaffServiceRequestEndpoints
                     limit ?? 50,
                     offset ?? 0,
                     actor,
+                    activeOnly,
                     ct);
 
                 return Results.Ok(list);
@@ -181,10 +187,15 @@ public static class StaffServiceRequestEndpoints
                 var actor = FloorEndpointHelpers.GetActor(context, parser);
                 var tenantId = FloorEndpointHelpers.ResolveTenantId(tenantContext, actor);
 
+                bool activeOnly = false;
                 ServiceRequestStatus? statusFilter = null;
                 if (!string.IsNullOrWhiteSpace(status))
                 {
-                    if (Enum.TryParse<ServiceRequestStatus>(status, true, out var parsedStatus))
+                    if (string.Equals(status.Trim(), "active", StringComparison.OrdinalIgnoreCase))
+                    {
+                        activeOnly = true;
+                    }
+                    else if (Enum.TryParse<ServiceRequestStatus>(status, true, out var parsedStatus))
                     {
                         statusFilter = parsedStatus;
                     }
@@ -203,6 +214,7 @@ public static class StaffServiceRequestEndpoints
                     100,
                     0,
                     actor,
+                    activeOnly,
                     ct);
 
                 return Results.Ok(list);

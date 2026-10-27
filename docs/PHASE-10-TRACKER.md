@@ -171,4 +171,55 @@ Bu belge, `restaurant-order` projesinde **Faz 10: Garson ve Operasyon Uygulamas�
 - [x] **12. Continuous Auth & Revoke:** Token expire, yetki kaybı veya oturum askıya alınmasında SignalR bağlantısının kapatılması, korunan ekranın temizlenmesi ve kilit ekranına dönüş doğrulandı.
 - [x] **13. Mobil 320/375 px Erişilebilirlik:** `tests/e2e/tests/waiter-operations-acceptance.spec.ts` ile 320px ekranda sıfır yatay taşma ve min 36-44px dokunma hedefleri browser seviyesinde doğrulandı.
 
+---
+
+## 8. Faz 10 İnceleme Bulguları ve Kalıcı Düzeltmeler (Issue #25)
+
+İncelenen commit `0172cb37119dde2f261a8fb4aa1e9e68d014d69e` üzerindeki bulgular kalıcı regresyon testleriyle giderildi ve doğrulandı:
+
+1. **Sipariş Tekrarında Idempotency & Fiyatlandırma Tutarlılığı:**
+   - `staffOrderDraftStorage.ts` içine `packages/contracts` ile birebir uyumlu `calculateStaffOrderFinancials` otoriter yardımcı fonksiyonu eklendi.
+   - Taslak, sepet özeti (`StaffOrderCartSummary.tsx`) ve gönderim çekmecesi (`StaffOrderDrawer.tsx`) tek otoriter toplam/imza hesaplamasına bağlandı.
+   - İlk istekte oluşturulan `idempotencyKey` ve `pendingPayload` storage ve state'te donduruldu.
+   - Yanıt kaybı, timeout ve sayfa yenileme (reload) durumlarında aynı bekleyen deneme kurtarılır ve aynı anahtar/payload ile tekrar denenir; mükerrer sipariş üretilmez.
+   - Bekleyen deneme çözülmeden taslakta değişiklik yapılmak istendiğinde kullanıcıdan açık onay (`confirmPendingBreak`) istenir.
+   - Testler: `apps/operations-web/src/floor/__tests__/staff-order-drawer.test.tsx` (3 test) ve `staff-order-idempotency.test.tsx` (2 test) - 5 passed.
+
+2. **Kat Planı Kendi Kendini Yeniden Yükleme Döngüsü:**
+   - `OperationsFloorContainer.tsx` refactor edildi: `selectedTable` nesnesi yerine `selectedTableId` tutulup `useMemo` ile güncel `tables` listesinden dinamik türetildi.
+   - `loadFloorData` bağımlılıklarından `selectedTable` ve `tables.length` çıkarıldı; snapshot güncellemesi effect cleanup'ını ve gereksiz yeniden yükleme döngülerini tetiklemez.
+   - `requestGenerationRef` ile yarış koşulları engellendi; geciken eski HTTP yanıtlarının yeni snapshot'ı ezmesi önlendi.
+   - Detay çekmecesinin yenileme sırasında kapanması engellendi.
+   - Testler: `apps/operations-web/src/floor/__tests__/floor-container-loop.test.tsx` (3 test) - 3 passed.
+
+3. **Realtime Kapsamı, Epoch, Full Resync ve Revoke Yaşam Döngüsü:**
+   - `useOperationsRealtimeCoordinator.ts` içine `epochRef` ve her snapshot isteği için `AbortController` entegre edildi. Eski şubenin gecikmiş yanıtı yeni şubenin verisini ezemez.
+   - `fullResync` fonksiyonunda snapshot hatası sessizce yutulmak yerine üst hook'a fırlatılır; `isStale` ve `syncError` göstergeleriyle veri korunur, sahte güncellik sunulmaz.
+   - `TerminalContext.tsx` içine senkron `lockTerminal: () => void` fonksiyonu eklendi (`setStaffUser(null)`).
+   - Sunucu tarafı session revoke (`onSessionClosed`) ve PIN kilitlenmesinde korunan operasyonel state derhal sıfırlanır ve kilit ekranına dönülür (ağ isteği beklenmeksizin).
+   - Testler: `apps/operations-web/src/floor/__tests__/realtime-coordinator-scoping.test.tsx` (3 test) - 3 passed.
+
+4. **Transfer ve Birleştirme Sipariş/Çağrı İlişkileri ve Tur Çakışması:**
+   - Domain modelleri genişletildi: `Order.UpdateOperationalTable`, `Order.ReassignSessionOnMerge`, `ServiceRequest.UpdateOperationalTable`, `ServiceRequest.ReassignSessionOnMerge`.
+   - `FloorService.Movements.cs` (Transfer): Oturum taşındığında siparişlerin ve aktif servis taleplerinin `TableId`'si yeni masaya güncellenir; `TableSessionTransferred` outbox olayı emit edilir.
+   - `FloorService.Movements.Merge.cs` (Merge): Kaynak oturum siparişleri hedef oturumun `maxTargetRound + 1`'den başlayarak sıralı yeniden numaralandırılır. Böylece `ix_orders_tenant_session_round` constraint ihlali engellenir. Aktif servis talepleri hedefe taşınır; `TableSessionMerged` outbox olayı emit edilir.
+   - Testler: `tests/unit/Floor/FloorMovementOrdersAndCallsUnitTests.cs` (4 test) ve `tests/integration/FloorTableTransferAndMergeOrdersAndCallsIntegrationTests.cs` - passed.
+
+5. **Çağrı ve Hazır Ürün Listeleri Sayfalaması:**
+   - Backend `IStaffServiceRequestService.cs`, `StaffServiceRequestService.cs` ve `StaffServiceRequestEndpoints.cs` içine `status=active` (veya `activeOnly: true`) filtreleme desteği eklendi.
+   - `apps/operations-web/src/floor/api.ts` içinde `fetchActiveServiceRequests` (`status=active&limit=100`) ve `fetchBranchReadyItems` (`limit=50`) tüm sayfaları döngüyle (`offset += PAGE_SIZE`) tüketecek şekilde güncellendi.
+   - `fetchTableServiceRequests` varsayılan olarak `status=active&limit=100` sorgulayarak eski tamamlanmış çağrıların aktif talepleri listeden düşürmesini engelledi.
+   - Testler: `apps/operations-web/src/floor/__tests__/paginated-active-work.test.tsx` (3 test) - 3 passed.
+
+6. **Gerçek Kabul Testleri ve Sözleşme Düzeltmeleri:**
+   - `StaffServiceRequestEndpointsIntegrationTests.cs` içindeki olmayan `POST .../cancel` rotası sözleşmeye uygun `DELETE /api/v1/customer/service-requests/{created.Id}` olarak düzeltildi.
+   - Playwright testlerinde geçersiz `localStorage` auth anahtarları yerine `/api/v1/terminals/current` ve `/api/v1/auth/pin/login` uçları ve gerçek müşteri çağrı API'si kullanıldı.
+   - Güncel Test Sayıları:
+     - Frontend Unit/Component: **657 passed** (UI: 205, Operations: 48, Customer: 253, Admin: 151)
+     - Backend Unit: **1866 passed** (0 fail)
+     - Backend Architecture: **10 passed** (0 fail)
+     - Kalite Kapıları (`verify:gates`): **116 pass, 0 fail, 1 skipped** (Docker daemon yokluğu)
+     - Dosya Limitleri: 1217 dosya, **0 dosya 600 satır tavanını aşmıyor**.
+
+
 

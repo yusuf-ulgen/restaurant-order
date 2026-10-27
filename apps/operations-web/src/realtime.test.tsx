@@ -25,7 +25,17 @@ const staff = { userId: 'synthetic-user', email: 'synthetic@example.invalid', ro
 const event = (id: number, type: string) => ({ event_id: `event-${id}`, event_type: type, data: {} }) as EventEnvelope<unknown>;
 
 describe('operational realtime delivery', () => {
-  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [],
+      })
+    );
+  });
 
   it('renders authorized live events, silences catch-up, and clears stale feed on full resync', () => {
     render(<App initialTerminal={terminal} initialStaff={staff} />);

@@ -187,7 +187,27 @@ public partial class FloorService
 
                 // 10. Execute transfer and record immutable movement
                 var oldTableId = session.TableId;
+                var nowUtc = DateTimeOffset.UtcNow;
                 session.TransferToTable(targetTable);
+
+                // Update operational table reference for all orders of this session so table filters & ready items resolve correctly
+                var sessionOrders = await _dbContext.Orders
+                    .Where(o => o.TenantId == tenantId && o.DiningSessionId == session.Id)
+                    .ToListAsync(ct);
+                foreach (var order in sessionOrders)
+                {
+                    order.UpdateOperationalTable(targetTableId, nowUtc);
+                }
+
+                // Update active customer service requests to point to the new table
+                var activeRequests = await _dbContext.ServiceRequests
+                    .Where(sr => sr.TenantId == tenantId && sr.DiningSessionId == session.Id &&
+                                 sr.Status != ServiceRequestStatus.Completed && sr.Status != ServiceRequestStatus.Cancelled)
+                    .ToListAsync(ct);
+                foreach (var req in activeRequests)
+                {
+                    req.UpdateOperationalTable(targetTableId, nowUtc);
+                }
 
                 var movement = DiningSessionMovement.CreateTransfer(
                     tenantId,
@@ -217,6 +237,21 @@ public partial class FloorService
                         GuestCount = session.GuestCount,
                         IdempotencyKey = idempotencyKey
                     });
+
+                _outboxWriter?.EnqueueEvent(
+                    tenantId: tenantId.Value,
+                    branchId: branchId.Value,
+                    aggregateId: session.Id.Value.ToString(),
+                    eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.TableSessionTransferred,
+                    data: new
+                    {
+                        SessionId = session.Id.Value,
+                        OldTableId = oldTableId.Value,
+                        NewTableId = targetTableId.Value,
+                        TableNumber = targetTable.TableNumber
+                    },
+                    idempotencyKey: $"transfer-{idempotencyKey}",
+                    occurredAtUtc: nowUtc);
 
                 await _dbContext.SaveChangesAsync(ct);
                 resultDto = MapSession(session);

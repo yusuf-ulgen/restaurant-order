@@ -108,6 +108,7 @@ const mockTerminalContextWaiter: TerminalContextValue = {
   activateTerminal: vi.fn(),
   loginWithPin: vi.fn(),
   logoutStaff: vi.fn(),
+  lockTerminal: vi.fn(),
   deactivateTerminal: vi.fn(),
 };
 
@@ -289,9 +290,10 @@ describe('WAIT-04 Quick Staff Order Creation & Idempotency', () => {
     fireEvent.click(screen.getByText(/Siparişi Onayla ve Gönder/));
 
     await waitFor(() => {
-      expect(screen.getByText(/Menü fiyatları veya vergi politikası güncellendi/)).toBeDefined();
+      expect(screen.getByText(/Fiyatlar değişti/)).toBeDefined();
     });
 
     expect(screen.getByText(/1x Klasik Burger/)).toBeDefined();
   });
 });
+

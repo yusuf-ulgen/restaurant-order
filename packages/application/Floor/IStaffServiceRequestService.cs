@@ -22,6 +22,7 @@ public interface IStaffServiceRequestService
         int limit,
         int offset,
         AuthenticatedPrincipal actor,
+        bool activeOnly = false,
         CancellationToken ct = default);
 
     Task<StaffServiceRequestDto> AcknowledgeRequestAsync(

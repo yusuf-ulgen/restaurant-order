@@ -34,18 +34,22 @@ export interface OperationsRealtimeCoordinatorOptions {
   terminal: TerminalContextDto | null;
   staffUser: UserPrincipalDto | null;
   onRefreshFloor?: () => Promise<void> | void;
+  onSessionRevoked?: () => void;
 }
 
 export function useOperationsRealtimeCoordinator({
   terminal,
   staffUser,
   onRefreshFloor,
+  onSessionRevoked,
 }: OperationsRealtimeCoordinatorOptions) {
   const [activeRequests, setActiveRequests] = useState<StaffServiceRequestDto[]>([]);
   const [readyItems, setReadyItems] = useState<ReadyOrderItemDto[]>([]);
   const [notifications, setNotifications] = useState<OperationalNotification[]>([]);
   const [isOperating, setIsOperating] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const { playChime } = useAudioChime();
 
@@ -54,55 +58,96 @@ export function useOperationsRealtimeCoordinator({
   const readyItemsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const epochRef = useRef<number>(0);
 
   const branchId = terminal?.branchId;
+  const tenantId = terminal?.tenantId;
+  const userId = staffUser?.userId;
   const isEnabled = Boolean(staffUser && branchId);
 
   // Otoriter aktif servis çağrılarını sunucudan çekme
-  const loadActiveRequests = useCallback(async () => {
+  const loadActiveRequests = useCallback(async (throwOnError = false) => {
     if (!branchId) return;
+    const currentEpoch = epochRef.current;
+    const signal = abortControllerRef.current?.signal;
+
     try {
-      const list = await fetchActiveServiceRequests(branchId);
-      // Sadece Open veya Acknowledged olan aktif çağrıları listele
+      const list = await fetchActiveServiceRequests(branchId, signal);
+      if (currentEpoch !== epochRef.current) return;
       const activeOnly = list.filter((r) => r.status === 'Open' || r.status === 'Acknowledged');
       setActiveRequests(activeOnly);
-    } catch {
-      // Ağ hatasında mevcut listeyi ezmeyiz
+      setIsStale(false);
+      setSyncError(null);
+    } catch (err: unknown) {
+      if (signal?.aborted || currentEpoch !== epochRef.current) return;
+      setIsStale(true);
+      setSyncError(err instanceof Error ? err.message : 'Servis çağrıları alınamadı.');
+      if (throwOnError) throw err;
     }
   }, [branchId]);
 
   // Otoriter hazır ürünleri sunucudan çekme
-  const loadReadyItems = useCallback(async () => {
+  const loadReadyItems = useCallback(async (throwOnError = false) => {
     if (!branchId) return;
+    const currentEpoch = epochRef.current;
+    const signal = abortControllerRef.current?.signal;
+
     try {
-      const items = await fetchBranchReadyItems(branchId);
+      const items = await fetchBranchReadyItems(branchId, signal);
+      if (currentEpoch !== epochRef.current) return;
       setReadyItems(items);
-    } catch {
-      // Ağ hatasında mevcut listeyi ezmeyiz
+      setIsStale(false);
+      setSyncError(null);
+    } catch (err: unknown) {
+      if (signal?.aborted || currentEpoch !== epochRef.current) return;
+      setIsStale(true);
+      setSyncError(err instanceof Error ? err.message : 'Hazır siparişler alınamadı.');
+      if (throwOnError) throw err;
     }
   }, [branchId]);
 
-  // Resync ve başlangıç veri yüklemesi
+  // Resync ve başlangıç veri yüklemesi: kritik snapshot başarısızsa hatayı üst hook'a taşır
   const fullResync = useCallback(async () => {
     setNotifications([]);
-    await Promise.all([
-      loadActiveRequests(),
-      loadReadyItems(),
-      onRefreshFloor ? onRefreshFloor() : Promise.resolve(),
-    ]);
+    setIsStale(false);
+    setSyncError(null);
+    try {
+      await Promise.all([
+        loadActiveRequests(true),
+        loadReadyItems(true),
+        onRefreshFloor ? onRefreshFloor() : Promise.resolve(),
+      ]);
+    } catch (err: unknown) {
+      setIsStale(true);
+      setSyncError(err instanceof Error ? err.message : 'Yenileme başarısız oldu.');
+      throw err;
+    }
   }, [loadActiveRequests, loadReadyItems, onRefreshFloor]);
 
-  // Mount ve branch/personel değişiminde başlatma
+  // Mount ve branch/personel/tenant değişiminde scope temizliği ve başlatma
   useEffect(() => {
+    epochRef.current += 1;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    if (serviceRequestsTimerRef.current) clearTimeout(serviceRequestsTimerRef.current);
+    if (readyItemsTimerRef.current) clearTimeout(readyItemsTimerRef.current);
+    if (floorTimerRef.current) clearTimeout(floorTimerRef.current);
+
+    processedEventIdsRef.current.clear();
+
     if (!isEnabled) {
       setActiveRequests([]);
       setReadyItems([]);
       setNotifications([]);
-      processedEventIdsRef.current.clear();
+      setIsStale(false);
+      setSyncError(null);
       return;
     }
 
-    void fullResync();
+    void fullResync().catch(() => {});
 
     return () => {
       if (serviceRequestsTimerRef.current) clearTimeout(serviceRequestsTimerRef.current);
@@ -110,28 +155,37 @@ export function useOperationsRealtimeCoordinator({
       if (floorTimerRef.current) clearTimeout(floorTimerRef.current);
       abortControllerRef.current?.abort();
     };
-  }, [isEnabled, branchId, staffUser?.userId, fullResync]);
+  }, [isEnabled, branchId, tenantId, userId, fullResync]);
 
-  // Coalesced / Debounced yenileme yardımcıları
+  // Coalesced / Debounced yenileme yardımcıları (epoch korumalı)
   const scheduleRequestsRefresh = useCallback(() => {
     if (serviceRequestsTimerRef.current) clearTimeout(serviceRequestsTimerRef.current);
+    const scheduledEpoch = epochRef.current;
     serviceRequestsTimerRef.current = setTimeout(() => {
-      void loadActiveRequests();
+      if (scheduledEpoch === epochRef.current) {
+        void loadActiveRequests();
+      }
     }, 60);
   }, [loadActiveRequests]);
 
   const scheduleReadyItemsRefresh = useCallback(() => {
     if (readyItemsTimerRef.current) clearTimeout(readyItemsTimerRef.current);
+    const scheduledEpoch = epochRef.current;
     readyItemsTimerRef.current = setTimeout(() => {
-      void loadReadyItems();
+      if (scheduledEpoch === epochRef.current) {
+        void loadReadyItems();
+      }
     }, 60);
   }, [loadReadyItems]);
 
   const scheduleFloorRefresh = useCallback(() => {
     if (!onRefreshFloor) return;
     if (floorTimerRef.current) clearTimeout(floorTimerRef.current);
+    const scheduledEpoch = epochRef.current;
     floorTimerRef.current = setTimeout(() => {
-      void onRefreshFloor();
+      if (scheduledEpoch === epochRef.current) {
+        void onRefreshFloor();
+      }
     }, 80);
   }, [onRefreshFloor]);
 
@@ -142,6 +196,14 @@ export function useOperationsRealtimeCoordinator({
     branchId: terminal?.branchId,
     onResyncRequired: async () => {
       await fullResync();
+    },
+    onSessionClosed: () => {
+      // Sunucu revoke/kapanma olayında yerel korunan verileri hemen temizle ve terminali kilitle
+      setActiveRequests([]);
+      setReadyItems([]);
+      setNotifications([]);
+      processedEventIdsRef.current.clear();
+      onSessionRevoked?.();
     },
     onEvent: (event, meta) => {
       if (!event || !event.event_id) return;
@@ -283,6 +345,8 @@ export function useOperationsRealtimeCoordinator({
     isOperating,
     actionError,
     setActionError,
+    isStale,
+    syncError,
     loadActiveRequests,
     loadReadyItems,
     fullResync,

@@ -65,6 +65,7 @@ export const SessionDetailDrawer: React.FC<SessionDetailDrawerProps> = ({
     activateTerminal: async () => false,
     loginWithPin: async () => false,
     logoutStaff: async () => {},
+    lockTerminal: () => {},
     deactivateTerminal: async () => {},
   };
   const [session, setSession] = useState<DiningSessionDto | null>(null);

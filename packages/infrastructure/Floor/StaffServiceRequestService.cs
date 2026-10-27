@@ -47,12 +47,13 @@ public sealed class StaffServiceRequestService : IStaffServiceRequestService
         int limit,
         int offset,
         AuthenticatedPrincipal actor,
+        bool activeOnly = false,
         CancellationToken ct = default)
     {
         EnsureBranchAccess(tenantId, branchId, actor);
         EnsureServiceRequestManagePermission(actor);
 
-        var safeLimit = Math.Clamp(limit, 1, 100);
+        var safeLimit = Math.Clamp(limit, 1, 200);
         var safeOffset = Math.Max(0, offset);
 
         var query = from sr in _dbContext.ServiceRequests.AsNoTracking()
@@ -77,7 +78,11 @@ public sealed class StaffServiceRequestService : IStaffServiceRequestService
                         sr.ConcurrencyToken
                     };
 
-        if (statusFilter.HasValue)
+        if (activeOnly)
+        {
+            query = query.Where(x => x.Status == ServiceRequestStatus.Open || x.Status == ServiceRequestStatus.Acknowledged);
+        }
+        else if (statusFilter.HasValue)
         {
             var st = statusFilter.Value;
             query = query.Where(x => x.Status == st);
