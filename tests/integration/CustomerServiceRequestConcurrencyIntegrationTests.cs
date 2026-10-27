@@ -189,6 +189,10 @@ public class CustomerServiceRequestConcurrencyIntegrationTests : IClassFixture<T
             Task.FromResult<StackExchange.Redis.IDatabase?>(_multiplexer.GetDatabase());
         public Task<StackExchange.Redis.IDatabase> GetRequiredDatabaseAsync(CancellationToken ct = default) =>
             Task.FromResult(_multiplexer.GetDatabase());
+        public Task<StackExchange.Redis.ISubscriber?> GetSubscriberAsync(CancellationToken ct = default) =>
+            Task.FromResult<StackExchange.Redis.ISubscriber?>(_multiplexer.GetSubscriber());
+        public Task<StackExchange.Redis.ISubscriber> GetRequiredSubscriberAsync(CancellationToken ct = default) =>
+            Task.FromResult(_multiplexer.GetSubscriber());
     }
 
     private sealed class TestHostEnvironment : Microsoft.Extensions.Hosting.IHostEnvironment

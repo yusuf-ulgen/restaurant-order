@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
@@ -21,13 +22,16 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
 {
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IServiceRequestRateLimiter _rateLimiter;
+    private readonly IOperationalOutboxWriter? _outboxWriter;
 
     public CustomerServiceRequestService(
         RestaurantOrderDbContext dbContext,
-        IServiceRequestRateLimiter rateLimiter)
+        IServiceRequestRateLimiter rateLimiter,
+        IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext;
         _rateLimiter = rateLimiter;
+        _outboxWriter = outboxWriter;
     }
 
     public async Task<ServiceRequestDto> CreateRequestAsync(
@@ -154,6 +158,20 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
                 trimmedKey);
 
             _dbContext.ServiceRequests.Add(serviceRequest);
+
+            _outboxWriter?.EnqueueEvent(
+                tenantId: tenantId.Value,
+                branchId: branchId.Value,
+                aggregateId: serviceRequest.Id.Value.ToString(),
+                eventType: RealtimeEventTypes.TableServiceRequested,
+                data: new TableServiceRequestedEventData(
+                    serviceRequest.Id.Value,
+                    session.TableId.Value,
+                    sessionId.Value,
+                    serviceRequest.RequestType.ToString(),
+                    serviceRequest.CreatedAtUtc),
+                idempotencyKey: $"sr-created-{serviceRequest.Id.Value}",
+                occurredAtUtc: serviceRequest.CreatedAtUtc);
 
             // 8. Security audit event (strictly redact note content for customer privacy)
             var audit = SecurityAuditEvent.Create(
@@ -286,6 +304,21 @@ public class CustomerServiceRequestService : ICustomerServiceRequestService
                 ?? throw new ResourceNotFoundException($"Service request '{requestId.Value}' was not found.");
 
             sr.Cancel();
+
+            var cancelNowUtc = DateTimeOffset.UtcNow;
+            _outboxWriter?.EnqueueEvent(
+                tenantId: tenantId.Value,
+                branchId: branchId.Value,
+                aggregateId: sr.Id.Value.ToString(),
+                eventType: RealtimeEventTypes.TableServiceRequestStatusChanged,
+                data: new TableServiceRequestStatusChangedEventData(
+                    sr.Id.Value,
+                    sr.TableId.Value,
+                    sessionId.Value,
+                    ServiceRequestStatus.Cancelled.ToString(),
+                    cancelNowUtc),
+                idempotencyKey: $"sr-cancelled-{sr.Id.Value}-{sr.ConcurrencyToken:D}",
+                occurredAtUtc: cancelNowUtc);
 
             var audit = SecurityAuditEvent.Create(
                 tenantId,

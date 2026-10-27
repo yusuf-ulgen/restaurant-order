@@ -37,6 +37,7 @@ test('1. Docker Compose config validation across all environments', () => {
   const testEnv = {
     ...process.env,
     DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/restaurant_order',
+    WORKER_DATABASE_URL: 'Host=localhost;Database=synthetic;Username=restaurant_worker_user',
     REDIS_URL: 'redis://localhost:6379',
     JWT_SECRET: 'test_jwt_secret_min_32_characters_long_for_security',
     API_IMAGE_DIGEST: VALID_DIGEST,

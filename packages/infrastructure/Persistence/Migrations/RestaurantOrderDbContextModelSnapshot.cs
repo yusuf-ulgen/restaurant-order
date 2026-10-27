@@ -2042,6 +2042,115 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                     b.ToTable("modifier_options", "tenancy");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Events.OperationalOutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("aggregate_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DispatchedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatched_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("LockClaimId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("lock_claim_id");
+
+                    b.Property<DateTimeOffset?>("LockExpiresUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lock_expires_utc");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<DateTimeOffset?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_utc");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<long>("SequenceNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence_number");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("SequenceNumber"));
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SequenceNumber")
+                        .HasDatabaseName("ix_operational_outbox_sequence_number");
+
+                    b.HasIndex("Status", "NextAttemptUtc")
+                        .HasDatabaseName("ix_operational_outbox_status_next_attempt");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_operational_outbox_tenant_id_idempotency_key");
+
+                    b.HasIndex("TenantId", "BranchId", "SequenceNumber")
+                        .HasDatabaseName("ix_operational_outbox_tenant_id_branch_id_sequence_number");
+
+                    b.ToTable("operational_outbox", "tenancy");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -2513,6 +2622,184 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_service_requests_type", "request_type IN (1, 2, 3, 4)");
                         });
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.DeviceRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DiningSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dining_session_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("installation_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("platform");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "InstallationId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_device_registrations_tenant_id_installation_id");
+
+                    b.HasIndex("TenantId", "BranchId", "IsActive")
+                        .HasDatabaseName("ix_device_registrations_tenant_id_branch_id_is_active");
+
+                    b.HasIndex("TenantId", "DiningSessionId", "IsActive")
+                        .HasDatabaseName("ix_device_registrations_tenant_id_session_id_is_active");
+
+                    b.HasIndex("TenantId", "UserId", "IsActive")
+                        .HasDatabaseName("ix_device_registrations_tenant_id_user_id_is_active");
+
+                    b.ToTable("device_registrations", "tenancy");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DeviceRegistrationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_registration_id");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("installation_id");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("LockClaimId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("lock_claim_id");
+
+                    b.Property<DateTimeOffset?>("LockExpiresUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lock_expires_utc");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<DateTimeOffset?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_utc");
+
+                    b.Property<DateTimeOffset?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<string>("RecipientType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("recipient_type");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceRegistrationId");
+
+                    b.HasIndex("TenantId", "BranchId");
+
+                    b.HasIndex("TenantId", "DeviceRegistrationId")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_device_registration_id");
+
+                    b.HasIndex("TenantId", "EventId")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_event_id");
+
+                    b.HasIndex("TenantId", "Status", "NextAttemptUtc")
+                        .HasDatabaseName("ix_notification_deliveries_tenant_id_status_next_attempt");
+
+                    b.HasIndex("TenantId", "EventId", "DeviceRegistrationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_deliveries_event_device");
+
+                    b.ToTable("notification_deliveries", "tenancy");
                 });
 
             modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>
@@ -3475,6 +3762,24 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_modifier_options_modifier_groups_tenant_branch_group");
                 });
 
+            modelBuilder.Entity("RestaurantOrder.Domain.Events.OperationalOutboxMessage", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_operational_outbox_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_operational_outbox_branches_tenant_id_branch_id");
+                });
+
             modelBuilder.Entity("RestaurantOrder.Domain.FeatureFlags.BranchFeatureFlags", b =>
                 {
                     b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
@@ -3596,6 +3901,49 @@ namespace RestaurantOrder.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_service_requests_table");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.DeviceRegistration", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_device_registrations_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_device_registrations_branches_tenant_id_branch_id");
+                });
+
+            modelBuilder.Entity("RestaurantOrder.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.HasOne("RestaurantOrder.Domain.Notifications.DeviceRegistration", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceRegistrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_device_registrations_device_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_tenants_tenant_id");
+
+                    b.HasOne("RestaurantOrder.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_deliveries_branches_tenant_id_branch_id");
                 });
 
             modelBuilder.Entity("RestaurantOrder.Domain.Orders.Order", b =>

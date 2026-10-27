@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Auth;
+using RestaurantOrder.Application.Events;
 using RestaurantOrder.Application.Floor;
 using RestaurantOrder.Application.RestaurantConfig;
 using RestaurantOrder.Domain.Auth;
@@ -325,6 +326,27 @@ public partial class FloorService
                 tableId = session.TableId.Value,
                 closeReason = session.CloseReason
             });
+
+            var closedAt = session.ClosedAtUtc ?? DateTimeOffset.UtcNow;
+            _outboxWriter?.EnqueueEvent(
+                tenantId: tenantId.Value,
+                branchId: branchId.Value,
+                aggregateId: session.Id.Value.ToString(),
+                eventType: RealtimeEventTypes.TableSessionClosed,
+                data: new TableSessionClosedEventData(
+                    session.Id.Value,
+                    session.TableId.Value,
+                    closedAt),
+                idempotencyKey: $"session-closed-{session.Id.Value}",
+                occurredAtUtc: closedAt);
+
+            var closedDevices = await _dbContext.DeviceRegistrations
+                .Where(d => d.TenantId == tenantId && d.DiningSessionId == session.Id && d.IsActive)
+                .ToListAsync(ct);
+            foreach (var dev in closedDevices)
+            {
+                dev.Deactivate(closedAt);
+            }
 
             await _dbContext.SaveChangesAsync(ct);
         }, ct);

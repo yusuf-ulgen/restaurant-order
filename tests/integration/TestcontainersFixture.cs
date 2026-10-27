@@ -24,6 +24,21 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
     private string? _runtimeUsername;
     private string? _runtimePassword;
     private string? _runtimeConnectionString;
+    private string? _workerConnectionString;
+
+    public async Task<string> ProvisionTemporaryWorkerRoleAsync()
+    {
+        if (_workerConnectionString != null) return _workerConnectionString;
+        await using var conn = new NpgsqlConnection(DatabaseConnectionString);
+        await conn.OpenAsync();
+        var username = $"test_worker_{Guid.NewGuid():N}";
+        var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"CREATE ROLE \"{username}\" LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{password}' IN ROLE restaurant_worker_runtime";
+        await cmd.ExecuteNonQueryAsync();
+        return _workerConnectionString = new NpgsqlConnectionStringBuilder(DatabaseConnectionString)
+        { Username = username, Password = password }.ConnectionString;
+    }
 
     public bool IsDockerRunning { get; private set; }
     public Exception? InitializationException { get; private set; }
@@ -209,7 +224,7 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "docker",
-                    Arguments = "info",
+                    Arguments = "info --format {{.ServerVersion}}",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -222,7 +237,7 @@ public class TestcontainersFixture : ITestDatabaseFixture, IAsyncLifetime
                 return false;
             }
 
-            var exited = process.WaitForExit(3000);
+            var exited = process.WaitForExit(15000);
             return exited && process.ExitCode == 0;
         }
         catch

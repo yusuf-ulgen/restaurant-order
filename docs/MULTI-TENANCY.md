@@ -91,6 +91,14 @@ Tenant / Organization: Faturalandırılan kuruluş, abonelik planı, kullanıcı
 
 ## 6. Test Zorunlulukları
 
+### Faz 9 Worker Ayrıcalık Ayrımı
+
+`restaurant_worker_runtime`, API rolünü miras almaz. Yalnızca kuyruk/device işlemleri, müşteri oturumu ve üyelik okumaları ile kullanıcı `(id,status)` sütunlarına erişir. Ayrı `restaurant_worker_user` LOGIN hesabı `deploy/bootstrap/002_create_worker_login_role.sql` ve kasa kaynaklı `WORKER_RUNTIME_PASSWORD` ile oluşturulur. Worker yalnızca `WORKER_DATABASE_URL` kullanır; API bağlantısı worker kimliğine dönüştürülmez.
+
+`restaurant_queue_gateway`, NOLOGIN/NOSUPERUSER/NOBYPASSRLS function owner'dır; yalnızca iki kuyruk tablosunda SELECT/UPDATE ve kendine özgü RLS politikası taşır. Claim/completion/failure/renew fonksiyonlarında sabit search_path, PUBLIC/API revoke ve yalnızca worker EXECUTE vardır. Gateway rolü hiçbir LOGIN hesabına verilmez.
+
+Global claimin döndürdüğü her kayıt, claim ID ve tenant ID eşleşmesi doğrulanarak ayrı transaction içinde işlenir. Commit/rollback/dispose tenant bağlamını temizler; tracked entity'ler sonraki tenant'a taşınmaz. [Faz 9 incelemesi](./PHASE-9-REVIEW.md) gerçek runtime rolü testlerini ve yayın sınırlarını kaydeder.
+
 - Her entegrasyon testi en az sentetik Tenant A ve Tenant B ile çalışır.
 - A bağlamında B kimliklerine erişim sıfır kayıt döndürmelidir.
 - Test sahip olmayan runtime rolüyle çalışır; ayrıcalıklı rolün sahte başarısı kabul edilmez.

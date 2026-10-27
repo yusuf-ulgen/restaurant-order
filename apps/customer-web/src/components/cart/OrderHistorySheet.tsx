@@ -9,6 +9,7 @@ export interface OrderHistorySheetProps {
   onClose: () => void;
   tableInfo?: { tableNumber: string; tableName: string };
   onSessionExpired?: () => void;
+  refreshKey?: number;
 }
 
 export const OrderHistorySheet: React.FC<OrderHistorySheetProps> = ({
@@ -16,6 +17,7 @@ export const OrderHistorySheet: React.FC<OrderHistorySheetProps> = ({
   onClose,
   tableInfo,
   onSessionExpired,
+  refreshKey,
 }) => {
   const [orders, setOrders] = useState<CustomerOrderResponseDto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +44,7 @@ export const OrderHistorySheet: React.FC<OrderHistorySheetProps> = ({
     if (isOpen) {
       fetchOrders();
     }
-  }, [isOpen, fetchOrders]);
+  }, [isOpen, fetchOrders, refreshKey]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

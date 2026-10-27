@@ -23,9 +23,11 @@ jobs:
   quality-and-verification:
     name: Repository Quality Gates & Verification
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Compose çözümlenmesi, yalnızca postgres/redis seçilse de worker ortamını doğrular.
+      WORKER_DATABASE_URL: Host=postgres;Port=5432;Database=restaurant_order_dev;Username=restaurant_worker_user;Password=postgres
 
     steps:
       - name: Checkout Source
@@ -83,7 +85,7 @@ jobs:
 
       # Gate 4: Code Formatting / Standards & Gate Unit Tests
       - name: Gate 4 - Quality Gate & Blue-Green Scripts Unit Tests
-        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/migration-ops.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs
+        run: node --test scripts/tests/check-file-size.test.mjs scripts/tests/check-docs.test.mjs scripts/tests/check-secrets.test.mjs scripts/tests/migration-ops.test.mjs scripts/tests/blue-green.test.mjs scripts/tests/blue-green-checks.test.mjs scripts/tests/blue-green-resilience.test.mjs scripts/tests/blue-green-flow.test.mjs scripts/tests/blue-green-docker.test.mjs scripts/tests/ci-compose-contract.test.mjs
 
       # Gate 5: ESLint
       - name: Gate 5 - ESLint
@@ -118,6 +120,7 @@ jobs:
         run: |
           docker compose -f compose.yml -f compose.dev.yml up -d --wait postgres redis
           docker compose -f compose.yml -f compose.dev.yml exec -T -e APP_RUNTIME_PASSWORD=postgres postgres psql -U postgres -d restaurant_order_dev -v ON_ERROR_STOP=1 < deploy/bootstrap/001_create_runtime_login_role.sql
+          docker compose -f compose.yml -f compose.dev.yml exec -T -e WORKER_RUNTIME_PASSWORD=postgres postgres psql -U postgres -d restaurant_order_dev -v ON_ERROR_STOP=1 < deploy/bootstrap/002_create_worker_login_role.sql
 
       - name: E2E Database - Apply EF Core Migrations
         run: |
@@ -130,6 +133,7 @@ jobs:
         env:
           DATABASE_URL: Host=localhost;Port=5432;Database=restaurant_order_dev;Username=postgres;Password=postgres
           REDIS_URL: localhost:6379
+          WORKER_DATABASE_URL: Host=localhost;Port=5432;Database=restaurant_order_dev;Username=restaurant_worker_user;Password=postgres
         run: pnpm test:e2e
 
       # Step: Clean up disposable E2E services

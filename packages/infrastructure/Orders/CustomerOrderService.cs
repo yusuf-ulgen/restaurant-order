@@ -22,13 +22,16 @@ public sealed class CustomerOrderService : ICustomerOrderService
 {
     private readonly RestaurantOrderDbContext _dbContext;
     private readonly IOrderPricingEngine _pricingEngine;
+    private readonly RestaurantOrder.Application.Events.IOperationalOutboxWriter _outboxWriter;
 
     public CustomerOrderService(
         RestaurantOrderDbContext dbContext,
-        IOrderPricingEngine pricingEngine)
+        IOrderPricingEngine pricingEngine,
+        RestaurantOrder.Application.Events.IOperationalOutboxWriter? outboxWriter = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _pricingEngine = pricingEngine ?? throw new ArgumentNullException(nameof(pricingEngine));
+        _outboxWriter = outboxWriter ?? new RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter(_dbContext);
     }
 
     public async Task<CreateCustomerOrderResult> CreateOrderAsync(
@@ -232,6 +235,25 @@ public sealed class CustomerOrderService : ICustomerOrderService
             nowUtc: nowUtc);
 
         _dbContext.OrderAuditEntries.Add(audit);
+
+        // 8. Enqueue real-time operational outbox event within same transaction
+        _outboxWriter.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: order.Id.Value.ToString(),
+            eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderCreated,
+            data: new RestaurantOrder.Application.Events.OrderCreatedEventData(
+                OrderId: order.Id.Value,
+                DiningSessionId: sessionId.Value,
+                TableId: session.TableId.Value,
+                RoundNumber: order.RoundNumber,
+                OrderSource: "Customer",
+                ItemCount: domainItems.Count,
+                Currency: order.Currency.Code,
+                CreatedAtUtc: nowUtc
+            ),
+            idempotencyKey: $"order-created-{order.Id.Value}",
+            occurredAtUtc: nowUtc);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         if (localTx != null)

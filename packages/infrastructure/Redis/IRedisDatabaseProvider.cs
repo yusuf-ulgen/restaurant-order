@@ -10,4 +10,6 @@ public interface IRedisDatabaseProvider
 {
     Task<IDatabase?> GetDatabaseAsync(CancellationToken ct = default);
     Task<IDatabase> GetRequiredDatabaseAsync(CancellationToken ct = default);
+    Task<ISubscriber?> GetSubscriberAsync(CancellationToken ct = default);
+    Task<ISubscriber> GetRequiredSubscriberAsync(CancellationToken ct = default);
 }

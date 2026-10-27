@@ -46,6 +46,9 @@ public class RestaurantOrderDbContext : DbContext
     public DbSet<RestaurantOrder.Domain.Orders.OrderItem> OrderItems => Set<RestaurantOrder.Domain.Orders.OrderItem>();
     public DbSet<RestaurantOrder.Domain.Orders.OrderItemModifier> OrderItemModifiers => Set<RestaurantOrder.Domain.Orders.OrderItemModifier>();
     public DbSet<RestaurantOrder.Domain.Orders.OrderAuditEntry> OrderAuditEntries => Set<RestaurantOrder.Domain.Orders.OrderAuditEntry>();
+    public DbSet<RestaurantOrder.Domain.Events.OperationalOutboxMessage> OperationalOutbox => Set<RestaurantOrder.Domain.Events.OperationalOutboxMessage>();
+    public DbSet<RestaurantOrder.Domain.Notifications.DeviceRegistration> DeviceRegistrations => Set<RestaurantOrder.Domain.Notifications.DeviceRegistration>();
+    public DbSet<RestaurantOrder.Domain.Notifications.NotificationDelivery> NotificationDeliveries => Set<RestaurantOrder.Domain.Notifications.NotificationDelivery>();
 
     // IAM Entities
     public DbSet<User> Users => Set<User>();
@@ -139,6 +142,9 @@ public class RestaurantOrderDbContext : DbContext
         modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(pr => HasTenant && pr.TenantId == CurrentTenantId);
         modelBuilder.Entity<IdentityNotificationOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
         modelBuilder.Entity<RestaurantOrder.Domain.Catalog.CatalogAvailabilityOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Events.OperationalOutboxMessage>().HasQueryFilter(o => HasTenant && o.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Notifications.DeviceRegistration>().HasQueryFilter(d => HasTenant && d.TenantId == CurrentTenantId);
+        modelBuilder.Entity<RestaurantOrder.Domain.Notifications.NotificationDelivery>().HasQueryFilter(d => HasTenant && d.TenantId == CurrentTenantId);
     }
 
     /// <summary>
@@ -183,6 +189,8 @@ public class RestaurantOrderDbContext : DbContext
         CancellationToken cancellationToken = default)
     {
         var tx = await Database.BeginTransactionAsync(isolationLevel, cancellationToken);
+        try
+        {
         if (Database.IsNpgsql())
         {
             await SetTenantSessionAsync(tenantId, cancellationToken);
@@ -192,6 +200,13 @@ public class RestaurantOrderDbContext : DbContext
             _transactionTenantId = tenantId;
         }
         return new TenantDbContextTransaction(tx, this);
+        }
+        catch
+        {
+            await tx.DisposeAsync();
+            ResetTransactionTenant();
+            throw;
+        }
     }
 
     /// <summary>

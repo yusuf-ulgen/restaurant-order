@@ -7,6 +7,12 @@ import {
   EmptyState,
   AppShell,
   Modal,
+  RealtimeStatusBadge,
+  useRealtimeEvents,
+  useAudioChime,
+  PushNotificationBanner,
+  registerPushDevice,
+  markEventReceivedInForeground,
 } from '@restaurant-order/ui';
 import { TerminalContextDto, UserPrincipalDto } from '@restaurant-order/contracts';
 import { TerminalProvider, useTerminal } from './auth/TerminalContext';
@@ -24,7 +30,45 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
   hasActiveTables = true,
 }) => {
   const [isCallsModalOpen, setIsCallsModalOpen] = useState(false);
+  const [liveNotifications, setLiveNotifications] = useState<
+    Array<{ id: string; title: string; time: string; eventType: string }>
+  >([]);
   const { terminal, staffUser, logoutStaff } = useTerminal();
+  const { isMuted, toggleMute, playChime } = useAudioChime();
+
+  const { status: realtimeStatus } = useRealtimeEvents({
+    enabled: Boolean(staffUser),
+    tenantId: terminal?.tenantId,
+    branchId: terminal?.branchId,
+    onResyncRequired: () => { setLiveNotifications([]); },
+    onEvent: (event, meta) => {
+      markEventReceivedInForeground(event.event_id);
+      if (!meta?.isCatchUp) {
+        playChime();
+      }
+
+      let title = 'Yeni Operasyon Olayı';
+      if (event.event_type === 'order.created') {
+        title = 'Yeni Sipariş Alındı';
+      } else if (event.event_type === 'table.service_requested') {
+        title = 'Masa Servis / Garson Çağrısı';
+      } else if (event.event_type === 'order.item_status_changed') {
+        title = 'Ürün Durumu Güncellendi';
+      } else if (event.event_type === 'menu.item_availability_changed') {
+        title = 'Menü Stok Durumu Değişti';
+      }
+
+      setLiveNotifications((prev) => [
+        {
+          id: event.event_id,
+          title,
+          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          eventType: event.event_type,
+        },
+        ...prev.slice(0, 19),
+      ]);
+    },
+  });
 
   const handleOpenCallsModal = () => setIsCallsModalOpen(true);
   const handleCloseCallsModal = () => setIsCallsModalOpen(false);
@@ -41,8 +85,18 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
         ),
         actions: (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <RealtimeStatusBadge status={realtimeStatus} />
             <Badge variant="primary">{staffUser?.role || 'Garson'}</Badge>
             {terminal && <Badge variant="neutral">{terminal.terminalName}</Badge>}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleMute}
+              title={isMuted ? 'Sesi Aç' : 'Sesi Kapat'}
+              data-testid="chime-mute-toggle"
+            >
+              {isMuted ? '🔇' : '🔔'}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -62,6 +116,11 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
         ],
       }}
     >
+      <PushNotificationBanner
+        onPermissionGranted={async (installationId) => {
+          return registerPushDevice('', undefined, installationId);
+        }}
+      />
       {!hasActiveTables ? (
         <Card padding="md">
           <EmptyState
@@ -100,7 +159,7 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
           <div className="operations-quick-stats">
             <div className="operations-stat-item">
               <span className="operations-stat-label">Bekleyen Çağrı</span>
-              <span className="operations-stat-value">0</span>
+              <span className="operations-stat-value">{liveNotifications.length}</span>
             </div>
             <div className="operations-stat-item">
               <span className="operations-stat-label">Açık Hesaplar</span>
@@ -122,10 +181,35 @@ export const OperationsContent: React.FC<{ hasActiveTables?: boolean }> = ({
         description="Masalardan gelen servis ve hesap çağrıları"
         size="sm"
       >
-        <EmptyState
-          title="Bekleyen Çağrı Yok"
-          description="Şu anda masalardan iletilen açık bir garson veya hesap çağrısı bulunmamaktadır."
-        />
+        {liveNotifications.length === 0 ? (
+          <EmptyState
+            title="Bekleyen Çağrı Yok"
+            description="Şu anda masalardan iletilen açık bir garson veya hesap çağrısı bulunmamaktadır."
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '350px', overflowY: 'auto' }}>
+            {liveNotifications.map((notif) => (
+              <div
+                key={notif.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--ro-color-surface-hover, #f3f4f6)',
+                  border: '1px solid var(--ro-color-border, #e5e7eb)',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px' }}>{notif.title}</div>
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>{notif.time}</div>
+                </div>
+                <Badge variant="primary">{notif.eventType}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </AppShell>
   );

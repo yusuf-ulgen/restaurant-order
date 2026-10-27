@@ -44,7 +44,6 @@ public static class DependencyInjection
 
             if (environment.IsDevelopment())
             {
-                options.EnableSensitiveDataLogging();
                 options.EnableDetailedErrors();
             }
         });
@@ -98,6 +97,7 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Auth.IPlatformSessionStore, RestaurantOrder.Infrastructure.Auth.PostgreSqlPlatformSessionStore>();
         services.AddScoped<RestaurantOrder.Application.Auth.ILoginRateLimiter, RestaurantOrder.Infrastructure.Auth.RedisLoginRateLimiter>();
         services.AddScoped<RestaurantOrder.Application.Auth.ITokenRevocationValidator, RestaurantOrder.Infrastructure.Auth.DistributedTokenRevocationValidator>();
+        services.AddScoped<RestaurantOrder.Application.Auth.IBranchScopeValidator, RestaurantOrder.Infrastructure.Auth.BranchScopeValidator>();
         services.AddScoped<RestaurantOrder.Infrastructure.Auth.IAuthSessionManager, RestaurantOrder.Infrastructure.Auth.AuthSessionManager>();
         services.AddScoped<RestaurantOrder.Application.Auth.IAuthService, RestaurantOrder.Infrastructure.Auth.AuthService>();
 
@@ -140,6 +140,13 @@ public static class DependencyInjection
         services.AddScoped<RestaurantOrder.Application.Orders.ICustomerOrderService, RestaurantOrder.Infrastructure.Orders.CustomerOrderService>();
         services.AddScoped<RestaurantOrder.Application.Orders.IStaffOrderService, RestaurantOrder.Infrastructure.Orders.StaffOrderService>();
         services.AddScoped<RestaurantOrder.Application.Orders.IOrderLifecycleService, RestaurantOrder.Infrastructure.Orders.OrderLifecycleService>();
+
+        // Operational Outbox (Phase 9)
+        services.AddScoped<RestaurantOrder.Application.Events.IOperationalOutboxWriter, RestaurantOrder.Infrastructure.Events.OperationalOutboxWriter>();
+        services.AddSingleton<RestaurantOrder.Application.Events.IRealtimeEventPublisher, RestaurantOrder.Infrastructure.Events.RedisRealtimeEventPublisher>();
+        services.AddScoped<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher, RestaurantOrder.Infrastructure.Events.OperationalOutboxDispatcher>();
+        services.AddScoped<RestaurantOrder.Application.Notifications.IPushNotificationDeliveryStager, RestaurantOrder.Infrastructure.Notifications.PushNotificationDeliveryStager>();
+        services.AddScoped<RestaurantOrder.Application.Notifications.IPushNotificationDispatcher, RestaurantOrder.Infrastructure.Notifications.PushNotificationDispatcher>();
 
         // Identity Notifications & Outbox Infrastructure
         services.AddSingleton<RestaurantOrder.Infrastructure.Auth.IIdentityOutboxPayloadProtector, RestaurantOrder.Infrastructure.Auth.AesGcmIdentityOutboxPayloadProtector>();

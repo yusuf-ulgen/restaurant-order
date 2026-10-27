@@ -168,6 +168,22 @@ public sealed partial class StaffOrderService
 
         _dbContext.OrderAuditEntries.Add(audit);
 
+        // Enqueue real-time item status change event
+        _outboxWriter.EnqueueEvent(
+            tenantId: tenantId.Value,
+            branchId: branchId.Value,
+            aggregateId: order.Id.Value.ToString(),
+            eventType: RestaurantOrder.Application.Events.RealtimeEventTypes.OrderItemStatusChanged,
+            data: new RestaurantOrder.Application.Events.OrderItemStatusChangedEventData(
+                OrderId: order.Id.Value,
+                DiningSessionId: order.DiningSessionId.Value,
+                ItemId: item.Id.Value,
+                NewStatus: "Cancelled",
+                ChangedAtUtc: nowUtc
+            ),
+            idempotencyKey: $"item-cancelled-{order.Id.Value}-{item.Id.Value}-{order.ConcurrencyToken}",
+            occurredAtUtc: nowUtc);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         if (localTx != null)
         {

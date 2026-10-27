@@ -21,17 +21,35 @@ function checkDockerRunning() {
 
 function toDockerVolumePath(p) {
   if (process.platform === 'win32') {
-    return p.replace(/\\/g, '/');
+    const normalized = p.replace(/\\/g, '/');
+    const driveMatch = normalized.match(/^([A-Za-z]):\/(.*)$/);
+    if (driveMatch) {
+      return `${driveMatch[1]}:/${driveMatch[2]}`;
+    }
+    return normalized;
   }
   return p;
+}
+
+async function fetchTextWithTimeout(url) {
+  const controller = new AbortController();
+  // Native fetch'in bağlantısı unref olabilir. Gövde okunana kadar yaşayan
+  // timer hem test yaşam döngüsünü korur hem takılı HTTP probe'u sınırlar.
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return { ok: response.ok, status: response.status, text: await response.text() };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function fetchWithRetry(url, expectedText, maxAttempts = 15, delayMs = 500) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const res = await fetch(url);
+      const res = await fetchTextWithTimeout(url);
       if (res.ok) {
-        const text = await res.text();
+        const text = res.text;
         if (text.includes(expectedText)) {
           return text;
         }
@@ -42,10 +60,10 @@ async function fetchWithRetry(url, expectedText, maxAttempts = 15, delayMs = 500
     await new Promise((r) => setTimeout(r, delayMs));
   }
   // One final attempt to capture failure details
-  const finalRes = await fetch(url);
-  const finalText = await finalRes.text();
+  const finalRes = await fetchTextWithTimeout(url);
+  const finalText = finalRes.text;
   assert.ok(
-    finalText.includes(expectedText),
+    finalRes.ok && finalText.includes(expectedText),
     `Expected response to include '${expectedText}', got '${finalText}' (status: ${finalRes.status})`
   );
   return finalText;

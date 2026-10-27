@@ -53,14 +53,15 @@ FCM de web üzerinde tarayıcının Push API desteğine ve izinlere bağlıdır.
 
 ## Bağımlılıklar ve Uygulama Sırası
 
-Sipariş, masa oturumu ve müşteri QR kimliği henüz tam uygulanmadı. Bildirim altyapısı gerçek olmayan sipariş/masa uçları icat ederek tamamlanmış gösterilmemelidir.
+Faz 9 kapsamında cihaz kaydı (`DeviceRegistration`), yetkili kullanıcı/oturum bağı ve `IPushNotificationTransport` (ADR-0011) üzerinden olay bazlı push tetikleme altyapısı tamamlanmıştır.
 
-1. Sağlayıcı seçimi tamamlandı: FCM. Olay/alıcı eşlemesi aşağıdaki taslaktır; gerçek bağlantılar ilgili alan fazlarında doğrulanır.
-2. Alan/uygulama sınırında kanal ve alıcı politikası, kayıt yaşam döngüsü ve kalıcı gönderim tasarımını belirle.
-3. İlk sunucu uyarlayıcısı ve güvenli yapılandırma #14 kapsamındadır; testte gerçek SDK ve sahte HTTP taşıması kullanılır. Cihaz kaydı ve kalıcı gönderim henüz yoktur.
-4. Personel ve müşteri arayüzlerinde destek/izin durumu, service worker ve uygulama içi bildirimleri ekle.
-5. Gerçek masa/sipariş olayları ilgili fazlarda hazır olduğunda bağla; tenant/şube/oturum yalıtım testleriyle doğrula.
-6. HTTPS test ortamında Android ve iPhone gerçek cihaz denemelerini kaydet. Bunlar yapılmadan gerçek push teslimini doğrulanmış sayma.
+1. Sağlayıcı seçimi tamamlandı: FCM (ADR-0011).
+2. Alan/uygulama sınırında kanal ve alıcı politikası, cihaz kaydı (`DeviceRegistration`) ve kalıcı gönderim tasarımı tamamlandı (`/api/v1/notifications/devices`).
+3. Sunucu uyarlayıcısı ve güvenli yapılandırma uygulandı (`PUSH_PROVIDER=Disabled|Fcm`).
+4. Müşteri ve personel arayüzlerinde canlı SignalR olayları ve Web Audio sesli uyarıları tamamlandı.
+5. Masa oturumu kapanışında müşteri cihaz kaydının otomatik devre dışı bırakılması sağlandı.
+6. Gerçek HTTPS Android ve iOS cihaz teslimi ortam hazırlığı tamamlanana kadar otomatik test taşıması ve `Disabled` modu ile güvenli çalışır.
+
 
 ## İlk Olay ve Alıcı Eşlemesi
 

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { runtimeMenuApi, RuntimeMenuApiError } from '../api/runtimeMenuApi';
 import type { RuntimeMenuReadModel } from '@restaurant-order/contracts';
+import { within } from '@testing-library/react';
 
 const mockRuntimeMenu: RuntimeMenuReadModel = {
   branchId: 'test-branch-id',
@@ -133,6 +134,24 @@ const mockRuntimeMenu: RuntimeMenuReadModel = {
 };
 
 describe('DigitalMenuView (CUST-02)', () => {
+  it('does not replace a fresh realtime snapshot with an aborted initial request error', async () => {
+    let reject!: (error: Error) => void;
+    vi.spyOn(runtimeMenuApi, 'getRuntimeMenu').mockReturnValue(new Promise((_, fail) => { reject = fail; }));
+    const { rerender } = render(<DigitalMenuView branchId="test-branch-id" />);
+    rerender(<DigitalMenuView branchId="test-branch-id" initialMenuData={mockRuntimeMenu} />);
+    await act(async () => { reject(new RuntimeMenuApiError(0, 'generic', 'cancelled request')); });
+    expect(screen.queryByText('cancelled request')).toBeNull();
+    expect(screen.getByTestId('menu-item-card-item-burger-1')).toBeDefined();
+  });
+  it('applies an authoritative menu refresh to an already mounted product card', async () => {
+    const { rerender } = render(<DigitalMenuView branchId="test-branch-id" initialMenuData={mockRuntimeMenu} />);
+    const item = await screen.findByTestId('menu-item-card-item-burger-1');
+    expect(within(item).queryByText(/Tükendi|Stokta Yok/i)).toBeNull();
+    const updated = structuredClone(mockRuntimeMenu);
+    updated.menus[0]!.categories[0]!.items[0]!.isAvailable = false;
+    rerender(<DigitalMenuView branchId="test-branch-id" initialMenuData={updated} />);
+    await waitFor(() => expect(within(item).getByText(/Tükendi|Stokta Yok/i)).toBeDefined());
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(runtimeMenuApi, 'getRuntimeMenu').mockResolvedValue(mockRuntimeMenu);

@@ -15,6 +15,7 @@ public class Worker : BackgroundService
     private readonly IWorkerLeaseManager _leaseManager;
     private readonly IConfiguration _configuration;
     private readonly ILogger<Worker> _logger;
+    private readonly IServiceScopeFactory? _serviceScopeFactory;
 
     public bool IsLeader { get; private set; }
 
@@ -22,12 +23,14 @@ public class Worker : BackgroundService
         IWorkerActivationGuard activationGuard,
         IWorkerLeaseManager leaseManager,
         IConfiguration configuration,
-        ILogger<Worker> logger)
+        ILogger<Worker> logger,
+        IServiceScopeFactory? serviceScopeFactory = null)
     {
         _activationGuard = activationGuard;
         _leaseManager = leaseManager;
         _configuration = configuration;
         _logger = logger;
+        _serviceScopeFactory = serviceScopeFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,12 +39,14 @@ public class Worker : BackgroundService
         var leaseDuration = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_LEASE_TTL_SECONDS", 15));
         var renewInterval = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_LEASE_RENEW_INTERVAL_SECONDS", 5));
         var pollInterval = TimeSpan.FromSeconds(_configuration.GetValue("WORKER_STANDBY_POLL_INTERVAL_SECONDS", 5));
+        var dispatchPollInterval = TimeSpan.FromMilliseconds(_configuration.GetValue("WORKER_DISPATCH_POLL_INTERVAL_MS", 50));
 
         _logger.LogInformation(
             "RestaurantOrder background worker initialized. Slot: '{Slot}', Status: '{Status}', LeaseKey: '{LeaseKey}'.",
             _activationGuard.SlotColor, _activationGuard.Status, leaseKey);
 
         string lastLoggedState = "";
+        DateTimeOffset lastLeaseRenewTime = DateTimeOffset.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -74,12 +79,14 @@ public class Worker : BackgroundService
                 }
 
                 // Slot is active: acquire or renew distributed lease
+                var now = DateTimeOffset.UtcNow;
                 if (!IsLeader)
                 {
                     var acquired = await _leaseManager.TryAcquireLeaseAsync(leaseKey, leaseDuration, stoppingToken);
                     if (acquired)
                     {
                         IsLeader = true;
+                        lastLeaseRenewTime = now;
                         lastLoggedState = "ACTIVE_LEADER";
                         _logger.LogInformation(
                             "[WORKER ACTIVE] Slot '{Slot}' acquired distributed lease '{LeaseKey}'. Leadership is ACTIVE.",
@@ -99,7 +106,7 @@ public class Worker : BackgroundService
                         continue;
                     }
                 }
-                else
+                else if (now - lastLeaseRenewTime >= renewInterval)
                 {
                     // Existing leader: renew lease before expiry
                     var renewed = await _leaseManager.RenewLeaseAsync(leaseKey, leaseDuration, stoppingToken);
@@ -114,10 +121,69 @@ public class Worker : BackgroundService
                         await Task.Delay(pollInterval, stoppingToken);
                         continue;
                     }
+                    lastLeaseRenewTime = now;
                 }
 
-                // Active leader processing loop: work execution happens here
-                await Task.Delay(renewInterval, stoppingToken);
+                int totalProcessed = 0;
+
+                // Active leader processing loop: dispatch operational outbox events and persistent push notifications
+                if (_serviceScopeFactory != null)
+                {
+                    try
+                    {
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        await using var leadership = new LeadershipLeaseScope(_activationGuard, _leaseManager,
+                            leaseKey, leaseDuration, renewInterval, stoppingToken);
+
+                        // 1. Operational Outbox dispatcher
+                        var dispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Events.IOperationalOutboxDispatcher>();
+                        if (dispatcher != null)
+                        {
+                            var dispatched = await dispatcher.DispatchPendingBatchAsync(
+                                25,
+                                leadership.ValidateAsync,
+                                tenantId: null,
+                                ct: leadership.Token);
+                            totalProcessed += dispatched;
+                            if (dispatched > 0)
+                            {
+                                _logger.LogInformation(
+                                    "[WORKER OUTBOX] Dispatched {Count} operational events to Redis broadcast.",
+                                    dispatched);
+                            }
+                        }
+
+                        // 2. Persistent Push Notification dispatcher
+                        var pushDispatcher = scope.ServiceProvider.GetService<RestaurantOrder.Application.Notifications.IPushNotificationDispatcher>();
+                        if (pushDispatcher != null)
+                        {
+                            var pushed = await pushDispatcher.DispatchPendingBatchAsync(
+                                25,
+                                leadership.ValidateAsync,
+                                tenantId: null,
+                                ct: leadership.Token);
+                            totalProcessed += pushed;
+                            if (pushed > 0)
+                            {
+                                _logger.LogInformation(
+                                    "[WORKER PUSH] Dispatched {Count} persistent push deliveries.",
+                                    pushed);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error while dispatching operational outbox or push batch in worker leader loop.");
+                    }
+                }
+
+                if (totalProcessed > 0)
+                {
+                    // If items were processed, immediately drain remaining backlog without delay
+                    continue;
+                }
+
+                await Task.Delay(dispatchPollInterval, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

@@ -192,7 +192,8 @@ public static class StaffEndpoints
                 .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
             var actor = parser.ParsePrincipal(claimsDict);
 
-            TenantId? tenantId = tenantContext.TenantId.HasValue ? new TenantId(tenantContext.TenantId.Value) : null;
+            var verifiedTenantId = actor.TenantId ?? tenantContext.TenantId;
+            TenantId? tenantId = verifiedTenantId.HasValue ? new TenantId(verifiedTenantId.Value) : null;
             var command = new UpdateStaffStatusCommand(id, status, request.BranchId);
 
             try

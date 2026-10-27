@@ -32,7 +32,7 @@ services:
     container_name: restaurant-order-worker-green
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL required}
       REDIS_URL: ${REDIS_URL:?REDIS_URL required}
       DEPLOYMENT_COLOR: green
     networks:

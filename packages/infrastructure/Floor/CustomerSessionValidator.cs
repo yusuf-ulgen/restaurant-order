@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RestaurantOrder.Application.Floor;
@@ -69,22 +70,40 @@ public sealed class CustomerSessionValidator : ICustomerSessionValidator
         bool isActive;
         try
         {
-            await using var tx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
-            var session = await _dbContext.DiningSessions
-                .AsNoTracking()
-                .Where(s => s.TenantId == new TenantId(tenantId) &&
-                            s.BranchId == new BranchId(branchId) &&
-                            s.Id == DiningSessionId.From(tableSessionId))
-                .Select(s => new { s.Status })
-                .FirstOrDefaultAsync(ct);
-
-            if (session == null)
+            IDbContextTransaction? tx = null;
+            if (_dbContext.Database.CurrentTransaction == null)
             {
-                return false;
+                tx = await _dbContext.BeginTenantTransactionAsync(tenantId, cancellationToken: ct);
             }
 
-            isActive = session.Status != DiningSessionStatus.Closed;
-            await tx.CommitAsync(ct);
+            try
+            {
+                var session = await _dbContext.DiningSessions
+                    .AsNoTracking()
+                    .Where(s => s.TenantId == new TenantId(tenantId) &&
+                                s.BranchId == new BranchId(branchId) &&
+                                s.Id == DiningSessionId.From(tableSessionId))
+                    .Select(s => new { s.Status })
+                    .FirstOrDefaultAsync(ct);
+
+                if (session == null)
+                {
+                    return false;
+                }
+
+                isActive = session.Status != DiningSessionStatus.Closed;
+                if (tx != null)
+                {
+                    await tx.CommitAsync(ct);
+                }
+            }
+            finally
+            {
+                if (tx != null)
+                {
+                    await tx.DisposeAsync();
+                }
+            }
         }
         catch (Exception ex)
         {

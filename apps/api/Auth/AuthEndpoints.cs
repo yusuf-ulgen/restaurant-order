@@ -136,12 +136,27 @@ public static class AuthEndpoints
             HttpContext httpContext,
             IAuthService authService,
             IAuthCookieService cookieService,
+            RestaurantOrder.Application.Events.IRealtimeEventPublisher realtimeEventPublisher,
             CancellationToken ct) =>
         {
             var sidStr = httpContext.User.FindFirst(JwtClaimNames.SessionId)?.Value;
+            var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
+            var tenantStr = httpContext.User.FindFirst(JwtClaimNames.TenantId)?.Value;
+
             if (Guid.TryParse(sidStr, out var sessionId))
             {
                 await authService.LogoutAsync(sessionId, ct);
+                if (Guid.TryParse(tenantStr, out var tenantId) && Guid.TryParse(subStr, out var userId))
+                {
+                    try
+                    {
+                        await realtimeEventPublisher.PublishUserInvalidatedAsync(tenantId, userId, sessionId, "logout", ct);
+                    }
+                    catch
+                    {
+                        // Eviction failure logged in publisher
+                    }
+                }
             }
 
             cookieService.ClearAuthCookies(httpContext.Response, httpContext.Request.IsHttps);
@@ -155,12 +170,26 @@ public static class AuthEndpoints
             HttpContext httpContext,
             IAuthService authService,
             IAuthCookieService cookieService,
+            RestaurantOrder.Application.Events.IRealtimeEventPublisher realtimeEventPublisher,
             CancellationToken ct) =>
         {
             var subStr = httpContext.User.FindFirst(JwtClaimNames.Subject)?.Value;
+            var tenantStr = httpContext.User.FindFirst(JwtClaimNames.TenantId)?.Value;
+
             if (Guid.TryParse(subStr, out var userIdGuid))
             {
                 await authService.LogoutAllAsync(new UserId(userIdGuid), ct);
+                if (Guid.TryParse(tenantStr, out var tenantId))
+                {
+                    try
+                    {
+                        await realtimeEventPublisher.PublishUserInvalidatedAsync(tenantId, userIdGuid, null, "logout_all", ct);
+                    }
+                    catch
+                    {
+                        // Eviction failure logged in publisher
+                    }
+                }
             }
 
             cookieService.ClearAuthCookies(httpContext.Response, httpContext.Request.IsHttps);

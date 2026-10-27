@@ -13,5 +13,8 @@
     "@restaurant-order/contracts": "workspace:*",
     "@types/node": "^22.13.9",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.11"
   }
 }

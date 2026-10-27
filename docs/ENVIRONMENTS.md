@@ -40,6 +40,8 @@ geliştirme: ortak entegrasyon; staging: üretim benzeri sentetik ortam;
 | `DEPLOYMENT_COLOR` | Konteyner yuvası rengi (`blue` / `green`)| Staging, Production | Hayır | `blue` / `green` |
 | `ACTIVE_DEPLOYMENT_SLOT`| Trafik/iş için yetkilendirilmiş aktif slot | Staging, Production | Hayır | `blue` / `green` |
 | `DATABASE_URL` | PostgreSQL bağlantı dizesi | Hepsi | Evet (Üretim) | `Host=localhost;Port=5432;...` |
+| `WORKER_DATABASE_URL` | Ayrı worker login rolünün PostgreSQL bağlantısı; API/admin hesabından ayrılır | Worker, tüm ortamlar | Evet | Depo dışı secret; varsayılan yok |
+| `WORKER_RUNTIME_PASSWORD` | Yalnızca worker login bootstrap girdisi | İlk rol kurulumu/parola rotasyonu | Evet | `002_create_worker_login_role.sql` ortamdan okur |
 | `REDIS_URL` | Redis ana bilgisayarı:bağlantı noktası bağlantı dizesi | Hepsi | Evet (Üretim) | `localhost:6379` |
 | `JWT_SECRET` | JWT imzalama için simetrik anahtar | Staging, Production | Evet | `[Secured in Secret Manager]` |
 | `API_PORT` | Arka uç HTTP API dinleme portu | İsteğe bağlı | Hayır | `5000` |

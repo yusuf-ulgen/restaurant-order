@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CustomerSessionDto, RuntimeMenuReadModel, CustomerOrderResponseDto } from '@restaurant-order/contracts';
-import { Card, Button } from '@restaurant-order/ui';
+import {
+  Card,
+  Button,
+  RealtimeStatusBadge,
+  PushNotificationBanner,
+  registerPushDevice,
+} from '@restaurant-order/ui';
 import { DigitalMenuView } from '../components/menu/DigitalMenuView';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { CartSheet } from '../components/cart/CartSheet';
@@ -8,7 +14,10 @@ import { ServiceRequestSheet } from '../components/service/ServiceRequestSheet';
 import { OrderConfirmationSheet } from '../components/cart/OrderConfirmationSheet';
 import { OrderSuccessSheet } from '../components/cart/OrderSuccessSheet';
 import { OrderHistorySheet } from '../components/cart/OrderHistorySheet';
+import { ActiveOrderStatusCard } from '../components/cart/ActiveOrderStatusCard';
 import { runtimeMenuApi } from '../api/runtimeMenuApi';
+import { customerOrderApi } from '../api/customerOrderApi';
+import { useCustomerSessionRealtime } from '../realtime/useCustomerSessionRealtime';
 
 export interface ActiveSessionViewProps {
   session: CustomerSessionDto;
@@ -30,12 +39,39 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [lastPlacedOrder, setLastPlacedOrder] = useState<CustomerOrderResponseDto | null>(null);
+  const [activeOrders, setActiveOrders] = useState<CustomerOrderResponseDto[]>([]);
+  const [orderRefreshKey, setOrderRefreshKey] = useState(0);
   const [runtimeMenuData, setRuntimeMenuData] = useState<RuntimeMenuReadModel | null>(initialMenuData);
   const [isMenuLoading, setIsMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
   const menuRequestIdRef = useRef(0);
+  const orderRequestIdRef = useRef(0);
+  const scopeKey = `${session.tenantId}:${session.branchId}:${session.sessionId}`;
+  const activeScope = useRef(scopeKey);
+  activeScope.current = scopeKey;
+
 
   const cart = useCart();
+
+  const refreshOrders = useCallback(async () => {
+    const requestId = ++orderRequestIdRef.current;
+    const requestedScope = activeScope.current;
+    try {
+      const data = await customerOrderApi.getOrders();
+      if (requestedScope !== activeScope.current || requestId !== orderRequestIdRef.current) return;
+      setActiveOrders([...data].sort((a, b) => b.roundNumber - a.roundNumber));
+      setOrderRefreshKey((prev) => prev + 1);
+    } catch {
+      // Ignore or log error
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.sessionId) {
+      refreshOrders();
+    }
+  }, [session?.sessionId, refreshOrders]);
+
 
   const refreshRuntimeMenu = useCallback(async () => {
     if (!session.branchId) return;
@@ -44,17 +80,28 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
     setMenuError(null);
     try {
       const freshMenu = await runtimeMenuApi.getRuntimeMenu(session.branchId);
-      if (reqId === menuRequestIdRef.current) {
+      if (reqId === menuRequestIdRef.current && activeScope.current === scopeKey) {
         setRuntimeMenuData(freshMenu);
         setIsMenuLoading(false);
       }
     } catch {
-      if (reqId === menuRequestIdRef.current) {
+      if (reqId === menuRequestIdRef.current && activeScope.current === scopeKey) {
         setIsMenuLoading(false);
         setMenuError('Güncel menü bilgisine ulaşılamadı. Lütfen tekrar deneyiniz.');
       }
     }
-  }, [session.branchId]);
+  }, [session.branchId, scopeKey]);
+
+  const { status: realtimeStatus } = useCustomerSessionRealtime({
+    session, onLeaveSession, refreshMenu: refreshRuntimeMenu, refreshOrders,
+    onSnapshot: (menu, orders) => {
+      menuRequestIdRef.current++;
+      orderRequestIdRef.current++;
+      setRuntimeMenuData(menu);
+      setActiveOrders([...orders].sort((a, b) => b.roundNumber - a.roundNumber));
+      setOrderRefreshKey(prev => prev + 1);
+    },
+  });
 
   useEffect(() => {
     if (cart.isCartOpen && session.branchId) {
@@ -89,7 +136,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           }}
           onSessionExpired={onLeaveSession}
           onCallWaiter={() => setIsServiceSheetOpen(true)}
-          initialMenuData={initialMenuData}
+          initialMenuData={runtimeMenuData}
           onAddToCart={(line, policyFingerprint) => cart.addLine(line, policyFingerprint)}
           onMenuLoaded={setRuntimeMenuData}
         />
@@ -105,8 +152,16 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           data-testid="table-overview-tab"
         >
           <div data-testid="session-welcome-view">
+            <PushNotificationBanner
+              onPermissionGranted={async (installationId) => {
+                return registerPushDevice('', undefined, installationId);
+              }}
+            />
             <Card padding="md">
-              <h2 className="customer-card-title">Hoş Geldiniz</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--ro-space-2)' }}>
+                <h2 className="customer-card-title" style={{ margin: 0 }}>Hoş Geldiniz</h2>
+                <RealtimeStatusBadge status={realtimeStatus} data-testid="customer-realtime-badge" />
+              </div>
               <p className="customer-card-text">
                 <strong>Masa {session.tableNumber} ({session.tableName})</strong> için oturumunuz aktif.
                 Menüyü inceleyebilir, ürünleri sepetinize ekleyip sipariş verebilir ve servis talebinde bulunabilirsiniz.
@@ -148,6 +203,8 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
             </div>
           </Card>
           </div>
+
+          <ActiveOrderStatusCard orders={activeOrders} />
         </div>
       )}
 
@@ -182,6 +239,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
         onOrderSuccess={(order) => {
           setLastPlacedOrder(order);
           setIsSuccessOpen(true);
+          refreshOrders();
         }}
         onSessionExpired={onLeaveSession}
         onResolvePriceConflict={handleResolvePriceConflict}
@@ -205,6 +263,7 @@ const ActiveSessionContent: React.FC<ActiveSessionViewProps> = ({
           tableName: session.tableName,
         }}
         onSessionExpired={onLeaveSession}
+        refreshKey={orderRefreshKey}
       />
 
       {/* Service Request Bottom Sheet (CUST-06) */}

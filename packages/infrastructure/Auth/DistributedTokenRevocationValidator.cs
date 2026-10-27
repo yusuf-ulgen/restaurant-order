@@ -142,6 +142,8 @@ public sealed class DistributedTokenRevocationValidator : ITokenRevocationValida
             {
                 var sessionKey = AuthRedisKeyBuilder.SessionActiveCache(_environment.EnvironmentName, sessionId);
                 await db.StringSetAsync(sessionKey, "0", CacheTtl);
+                await db.PublishAsync(StackExchange.Redis.RedisChannel.Literal("restaurant-order:events:auth-invalidated"),
+                    System.Text.Json.JsonSerializer.Serialize(new { session_id = sessionId }));
             }
         }
         catch (Exception ex)
@@ -173,6 +175,8 @@ public sealed class DistributedTokenRevocationValidator : ITokenRevocationValida
                 }
 
                 await db.KeyDeleteAsync(userSessionsKey);
+                await db.PublishAsync(StackExchange.Redis.RedisChannel.Literal("restaurant-order:events:auth-invalidated"),
+                    System.Text.Json.JsonSerializer.Serialize(new { user_id = userId }));
             }
         }
         catch (Exception ex)

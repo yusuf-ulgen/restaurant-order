@@ -8,7 +8,7 @@ Karar: [ADR-0011](./adr/0011-background-push-provider.md). Üst görev [#11](htt
 
 `IPushNotificationTransport`, uygulama katmanında sağlayıcıdan bağımsızdır. `FirebasePushNotificationTransport`, infrastructure içinde sabitlenmiş `FirebaseAdmin` 3.7.0 ile tek Firebase Installation ID (FID) hedefine gönderir. Personel ve müşteri için aynı taşıma kullanılabilir; alıcı seçimi bu katmanın işi değildir.
 
-Kayıt/iptal API'si, veritabanı değişikliği, kalıcı outbox, service worker, tarayıcı izni ve masa/sipariş olay bağlantısı bu ilk parçaya dahil değildir. Herkese açık gönderim ucu ve arka planda otomatik gönderim işi eklenmedi. Mevcut IAM davet/parola sıfırlama bildirimleri ayrı kalır.
+Kayıt/iptal API'si (`/api/v1/notifications/devices`), veritabanı varlığı (`tenancy.device_registrations`), kalıcı outbox ve masa/sipariş olay bağlantısı Faz 9 kapsamında uygulanmış ve entegre edilmiştir. İstemci cihazları yetkili kullanıcı/oturum bağlamıyla kaydedilir ve oturum kapanışında otomatik iptal edilir. Mevcut IAM davet/parola sıfırlama bildirimleri ayrı kalır.
 
 ## Yapılandırma
 
@@ -28,7 +28,7 @@ $env:FCM_PROJECT_ID = '<firebase-project-id>'
 # ADC'yi güvenli ortamınızda sağlayın; kimlik dosyasını depoya kopyalamayın.
 ```
 
-`NOTIFICATION_PROVIDER` değerini Fcm yapmayın: o ayar IAM webhook/outbox içindir. Mevcut `AddInfrastructure` API bileşiminde taşıma kaydedilir; worker henüz bu taşımanın tüketicisi değildir. Sağlayıcı/proje ayarları kayıt sırasında doğrulanır; ADC yalnızca taşıma ilk çözüldüğünde yüklenir. Bu nedenle başlangıç veya health yanıtı Firebase bağlantı/kimlik yetkisi kanıtı değildir. Özelliği geri almak için `PUSH_PROVIDER=Disabled` kullanıp uygulamayı yeniden başlatın.
+`NOTIFICATION_PROVIDER` değerini Fcm yapmayın: o ayar IAM webhook/outbox içindir. `AddInfrastructure` API/worker bileşiminde taşıma kaydedilir; Faz 9 workerı kalıcı teslimat kuyruğunu tüketir. Sağlayıcı/proje ayarları kayıt sırasında doğrulanır; ADC yalnızca taşıma ilk çözüldüğünde yüklenir. Bu nedenle başlangıç veya health yanıtı Firebase bağlantı/kimlik yetkisi kanıtı değildir. Özelliği geri almak için `PUSH_PROVIDER=Disabled` kullanıp uygulamayı yeniden başlatın.
 
 ## Gönderim ve Hata Sözleşmesi
 
@@ -36,15 +36,15 @@ $env:FCM_PROJECT_ID = '<firebase-project-id>'
 - Payload yalnızca opak `event_id`, `expires_at` ve sabit Türkçe genel bildirim içerir. Kişisel bilgi, ürün/masa ayrıntısı, hesap tutarı, kimlik tokenı veya serbest tıklama URL'si alınmaz.
 - Kalan olay süresi aşağı yuvarlanır ve en fazla 60 saniyeyle sınırlandırılır; bir saniyeden az süre kaldıysa sağlayıcı çağrılmaz. Web TTL, Android TTL ve APNs süre sonu birlikte ayarlanır. İstemci daha sonra `expires_at` kontrolü de yapmalıdır; TTL, önceden görüntülenmiş bildirimi geri çekmez.
 - SDK çağrısı en fazla 10 saniye veya kalan olay süresiyle sınırlıdır. Çağıranın iptali aynen yayılır. SDK kendi geçici HTTP tekrarlarını yapabilir; bu katmanda ayrıca gönderim döngüsü yoktur.
-- `ProviderAccepted` cihazın gördüğünü göstermez. Zaman aşımı/geçici hata sonrasında sonuç belirsiz olabilir; tekrar gönderim çift bildirim doğurabilir. Kalıcı, idempotent iş/deneme kaydı ayrı uygulanacaktır.
+- `ProviderAccepted` cihazın gördüğünü göstermez. Zaman aşımı/geçici hata sonrasında sonuç belirsiz olabilir; tekrar gönderim çift bildirim doğurabilir. Faz 9 kalıcı teslimat kaydı, sabit event ID, claim fencing ve süre sonuyla yeniden denemeyi yönetir; dış sağlayıcı için tam bir kez teslim garantisi vermez.
 
 | Sonuç | Sonraki tüketicinin davranışı |
 | :--- | :--- |
 | `Expired` | Yeniden gönderme. |
-| `InvalidRecipient` | Yalnızca `UNREGISTERED`; ilgili kaydı geçersiz kıl. Henüz kalıcı kayıt deposu yoktur. |
+| `InvalidRecipient` | Yalnızca `UNREGISTERED`; claim ve güncel sahiplik doğrulandıktan sonra ilgili kalıcı cihaz kaydını geçersiz kıl. |
 | `ConfigurationFailure` | Yanlış proje/sender veya yetkilendirmeyi düzelt; cihaz kaydını topluca silme. |
 | `PermanentFailure` | Geçersiz mesajı incele; `INVALID_ARGUMENT` tek başına cihaz kaydını silme gerekçesi değildir. |
-| `RetryableFailure` | Kalıcı kuyruk eklendiğinde süre sonuna, deneme sınırına ve üstel gecikmeye göre değerlendir. `RetryAfter` varsa alt sınırdır; kota hatasında en az 60 saniye. Gecikme olayın ömrünü aşıyorsa tekrar etme. |
+| `RetryableFailure` | Kalıcı kuyrukta süre sonu, deneme sınırı ve üstel gecikmeyle yeniden planla. `RetryAfter` varsa alt sınırdır; kota hatasında en az 60 saniye. Süresi dolan olay sonraki claim sırasında gönderilmeden sonlandırılır. |
 
 Taşıma FID veya sağlayıcı hata gövdesini günlüğe yazmaz ve sonuçta döndürmez. Kayıt kimliği doğrulama hatası da ham değeri tekrarlamaz. Bu, çağıranın nesne özelliklerini açıkça günlüğe yazmasına izin vermez.
 
@@ -57,9 +57,17 @@ pnpm verify
 
 Testler gerçek FirebaseAdmin SDK'sını sahte HTTP taşımasıyla çalıştırır; gerçek kimlik bilgisi, Firebase projesi veya cihaz kullanılmaz. FID hedefi, içerik, tüm platform süreleri, hata sınıfları, Retry-After, süre sonu, iptal ve yapılandırma doğrulanır. Bunlar gerçek cihaz teslim testi değildir.
 
-Sonraki adım: personel ve müşteri için sunucunun türettiği sahipliğe bağlı cihaz kaydı/iptali ve kalıcı gönderim tasarımı. Ardından istemci izin/service worker akışı ve gerçek alan olayları. Firebase web SDK sürümü sabitlenmeden eski `getToken` örnekleri kopyalanmaz; seçilen sunucu SDK'sı `Fid` alanını destekler ve HTTP sözleşme testi bunu doğrular. HTTPS test ortamında izinli Android ve iPhone cihazlarında gerçek teslim ayrıca kaydedilir; iOS/iPadOS ana ekran koşulu ve izin reddi senaryosu denenir.
+Faz 9 yerel inceleme düzeltmeleri cihaz kaydı/iptali, kalıcı teslimat ve istemci SDK/service worker akışını içerir. Otomatik doğrulama gerçek FCM cloud teslimi değildir. HTTPS test ortamında izinli Android ve iPhone cihazlarında gerçek teslim ayrıca kaydedilir; iOS/iPadOS ana ekran koşulu ve izin reddi senaryosu denenir.
 
 ## Resmi Kaynaklar
+
+### Tarayıcı Kaydı — 2026-10-27
+
+Firebase JS 13.1 kullanılır. `Messaging.register({vapidKey,serviceWorkerRegistration})` kaydı başlatır; tamamlanan FID `onRegistered` callback'iyle gelir. SDK callback'i ve sunucu cihaz kaydı başarıyla tamamlanmadan banner kapanmaz. Rastgele uygulama `inst_` kimliği veya eski `getToken` sonucu FID değildir. Gerçek FID, Admin SDK'nın `Message.Fid` hedefiyle eşleşir.
+
+İki web uygulaması `/sw.js` kaydeder. `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_VAPID_KEY` public build ayarlarıdır; sunucu servis hesabı değildir. `Dockerfile.web` aynı public build argümanlarını kabul eder. VAPID public anahtarı Firebase projesindeki web push kaydıyla eşleşmelidir. Gerçek değerler uydurulmaz.
+
+İzin zaten verilmişse yeniden açılışta kayıt yenilenir; izin reddi veya sağlayıcı/API hatası temel menü/sipariş akışını engellemez. Logout/unregister sağlayıcı kaydını da kaldırır. Ön planda service worker ikinci OS uyarısı üretmez, HTTP catch-up tetikler. Arka plan metni genel, tıklama rotası `/` olur. Gerçek HTTPS cihaz teslimi bu otomatik testlerin kapsamı değildir; güncel sonuçlar [inceleme kaydındadır](./PHASE-9-REVIEW.md).
 
 2026-10-08 tarihinde kontrol edildi:
 
